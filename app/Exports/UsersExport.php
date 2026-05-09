@@ -48,7 +48,8 @@ class UsersExport implements FromQuery, WithHeadings, WithMapping, ShouldAutoSiz
 
     public function headings(): array
     {
-        return ['Name', 'Email', 'Department', 'Position', 'Branches', 'Is Rotating'];
+        // Changed 'Is Rotating' to 'Status' here
+        return ['Name', 'Email', 'Department', 'Position', 'Branches', 'Status'];
     }
 
     public function map($user): array
@@ -61,7 +62,7 @@ class UsersExport implements FromQuery, WithHeadings, WithMapping, ShouldAutoSiz
             $user->department->name ?? 'Unassigned',
             $user->position->name ?? 'Unassigned',
             $branchNames ?: 'N/A',
-            $user->is_rotating ? 'Yes' : 'No',
+            ucfirst($user->status), // Changed from $user->is_rotating ? 'Yes' : 'No'
         ];
     }
 }

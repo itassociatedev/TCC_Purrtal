@@ -10,7 +10,8 @@ class LoggerService
     public static function log($module, $action, $description, $status = 'success', $userId = null)
     {
         SystemLog::create([
-            'user_id' => $userId ?? auth()->id(),
+            // Use the provided userId, fallback to the authenticated user ID, or explicitly set to null
+            'user_id' => $userId ?? auth()->id() ?? null,
             'module' => $module,
             'action' => $action,
             'description' => $description,

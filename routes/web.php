@@ -2,10 +2,12 @@
 
 use App\Models\Announcement;
 use App\Models\CompanyContent;
+use App\Models\ResourceLink;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Admin\EmployeeController;
 use App\Http\Controllers\Admin\CompanyContentController;
 use App\Http\Controllers\Admin\SystemLogController;
+use App\Http\Controllers\Admin\ResourceLinkController;
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\CheckDutyMealAccess;
 use App\Http\Controllers\Admin\DocumentController;
@@ -61,16 +63,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         $query = App\Models\Announcement::with(['priorityLevel', 'branches'])->latest();
 
         if (!$isGlobalViewer) {
-            // 1. Grab primary branch
             $branchIds = [$user->branch_id];
             
-            // 2. Grab rotating branches
             $rotating = Illuminate\Support\Facades\DB::table('branch_user')
                 ->where('user_id', $user->id)
                 ->pluck('branch_id')
                 ->toArray();
             
-            // 3. Merge and clean the array
             $allowedBranchIds = array_values(array_unique(array_filter(array_merge($branchIds, $rotating))));
 
             \Illuminate\Support\Facades\Log::info('OVERVIEW RENDERED - Security Check:', [
@@ -80,7 +79,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ]);
 
             if (empty($allowedBranchIds)) {
-                $query->where('id', 0); // Safest way to return absolutely nothing
+                $query->where('id', 0); 
             } else {
                 $query->whereHas('branches', function ($q) use ($allowedBranchIds) {
                     $q->whereIn('branches.id', $allowedBranchIds); 
@@ -108,12 +107,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             $rotating = Illuminate\Support\Facades\DB::table('branch_user')->where('user_id', $user->id)->pluck('branch_id')->toArray();
             $allowedBranchIds = array_values(array_unique(array_filter(array_merge($branchIds, $rotating))));
 
-            \Illuminate\Support\Facades\Log::info('DASHBOARD RENDERED - Security Check:', [
-                'user' => $user->name,
-                'role' => $userRole,
-                'allowed_branches' => $allowedBranchIds
-            ]);
-
             if (empty($allowedBranchIds)) {
                 $query->where('id', 0); 
             } else {
@@ -137,13 +130,27 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ]);
     })->name('dashboard.mission-vision');
 
-    // --- RESOURCES LINKS ---
+    // --- UPDATED: RESOURCES LINKS ---
     Route::get('/resources/internal-links', function () {
-        return Inertia::render('Resources/InternalLinks');
+        $links = ResourceLink::where('type', 'internal')
+            ->where('is_active', true)
+            ->orderBy('sort_order', 'asc') // Automatically sort using drag-and-drop order
+            ->get();
+            
+        return Inertia::render('Resources/InternalLinks', [
+            'links' => $links
+        ]);
     })->name('resources.internal');
 
     Route::get('/resources/external-links', function () {
-        return Inertia::render('Resources/ExternalLinks');
+        $links = ResourceLink::where('type', 'external')
+            ->where('is_active', true)
+            ->orderBy('sort_order', 'asc') // Automatically sort using drag-and-drop order
+            ->get();
+            
+        return Inertia::render('Resources/ExternalLinks', [
+            'links' => $links
+        ]);
     })->name('resources.external');
 
     // --- ORGANIZATIONAL CHART (USER VIEW) ---
@@ -166,21 +173,18 @@ Route::middleware('auth')->group(function () {
     ->name('staff.duty-meals.bulk-lock-in');
 
     Route::post('/notifications/{id}/mark-as-read', function (Request $request, $id) {
-    /** @var \App\Models\User $user */
-    $user = $request->user();
+        $user = $request->user();
+        if ($user) {
+            $notification = $user->notifications()->findOrFail($id);
+            $notification->markAsRead();
+        }
+        return back();
+    })->middleware('auth')->name('notifications.read');
 
-    if ($user) {
-        $notification = $user->notifications()->findOrFail($id);
-        $notification->markAsRead();
-    }
-
-    return back();
-})->middleware('auth')->name('notifications.read');
-
-Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
+    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
 });
-Route::get('/notifications/load-more', [NotificationController::class, 'loadMore'])->name('notifications.load-more');
 
+Route::get('/notifications/load-more', [NotificationController::class, 'loadMore'])->name('notifications.load-more');
 
 Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admin')->group(function(){
 
@@ -204,11 +208,8 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
         ]);
     })->name('.dashboard');
 
-    // ==========================================
     // EMPLOYEE MANAGEMENT ROUTES
-    // ==========================================
     Route::get('/employees', [EmployeeController::class, 'index'])->name('.employees');
-    
     Route::post('/positions', [EmployeeController::class, 'storePosition'])->name('.positions.store');
     Route::post('/branches', [EmployeeController::class, 'storeBranch'])->name('.branches.store');
     Route::post('/departments', [EmployeeController::class, 'storeDepartment'])->name('.departments.store');
@@ -263,11 +264,17 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
     Route::put('/documents/{document}', [DocumentController::class, 'update'])->name('.documents.update');
     Route::delete('/documents/{document}', [DocumentController::class, 'destroy'])->name('.documents.destroy');
     
-    // Document Categories Routes
     Route::post('/documents/category', [DocumentController::class, 'storeCategory'])->name('.documents.category.store');
     Route::patch('/documents/category/{id}', [DocumentController::class, 'updateCategory'])->name('.documents.category.update'); 
     Route::delete('/documents/category/{id}', [DocumentController::class, 'destroyCategory'])->name('.documents.category.destroy');
     Route::patch('/documents/category/{id}/toggle-downloadable', [DocumentController::class, 'toggleDownloadable'])->name('.documents.category.toggle-downloadable');
+
+    // RESOURCE LINKS ADMIN ROUTES
+    Route::post('/resource-links/reorder', [ResourceLinkController::class, 'reorder'])->name('.resource-links.reorder');
+    Route::get('/resource-links', [ResourceLinkController::class, 'index'])->name('.resource-links.index');
+    Route::post('/resource-links', [ResourceLinkController::class, 'store'])->name('.resource-links.store');
+    Route::put('/resource-links/{resourceLink}', [ResourceLinkController::class, 'update'])->name('.resource-links.update');
+    Route::delete('/resource-links/{resourceLink}', [ResourceLinkController::class, 'destroy'])->name('.resource-links.destroy');
 });
 
 Route::middleware(['auth'])->group(function () {
@@ -285,44 +292,27 @@ Route::middleware(['guest'])->group(function () {
     Route::get('/link-expired', [LinkExpired::class, 'index'])->name('link.expired');
 });
 
-
-// DUTY MEAL MODULE (Admins & Custodians)
 Route::middleware(['auth', CheckDutyMealAccess::class])->group(function () {
-    
     Route::get('/admin/duty-meals', [DutyMealController::class, 'index'])->name('admin.duty-meals.index');
     Route::get('/admin/duty-meals/create', [DutyMealController::class, 'create'])->name('admin.duty-meals.create');
     Route::post('/admin/duty-meals', [DutyMealController::class, 'store'])->name('admin.duty-meals.store');
-    
-    Route::patch('admin/duty-meals/{id}/update-meals', [DutyMealController::class, 'updateMeals'])
-    ->name('admin.duty-meals.update-meals');
-    // Duty Meal Participant Actions
-    Route::patch('admin/participants/{id}/update-choice', [DutyMealController::class, 'updateParticipantChoice'])
-    ->name('admin.participants.update-choice');
-    
-    Route::patch('admin/participants/{id}/update-shift', [DutyMealController::class, 'updateParticipantShift'])
-    ->name('admin.participants.update-shift');
+    Route::patch('admin/duty-meals/{id}/update-meals', [DutyMealController::class, 'updateMeals'])->name('admin.duty-meals.update-meals');
+    Route::patch('admin/participants/{id}/update-choice', [DutyMealController::class, 'updateParticipantChoice'])->name('admin.participants.update-choice');
+    Route::patch('admin/participants/{id}/update-shift', [DutyMealController::class, 'updateParticipantShift'])->name('admin.participants.update-shift');
     Route::delete('/admin/duty-meals/participants/{id}', [DutyMealController::class, 'removeParticipant'])->name('admin.participants.remove');
     Route::post('/duty-meals/{id}/add-participant', [DutyMealController::class, 'addParticipant'])->name('admin.duty-meals.add-participant');
-
-    //Duty Meal Archives
     Route::get('/duty-meals/archive', [DutyMealController::class, 'archive'])->name('admin.duty-meals.archive');
     Route::delete('/duty-meals/{id}', [DutyMealController::class, 'destroy'])->name('admin.duty-meals.destroy');
     Route::post('/duty-meals/bulk-delete', [DutyMealController::class, 'bulkDelete'])->name('admin.duty-meals.bulk-delete');
-    
-    // NEW: EXPORT DUTY MEALS (Global List)
     Route::get('/admin/duty-meals/export', [DutyMealController::class, 'export'])->name('admin.duty-meals.export');
 });
 
 Route::middleware(['auth'])->group(function(){
-    // --- HR Feedback Form ---
     Route::get('/hr/feedback', [\App\Http\Controllers\HR\FeedbackController::class, 'create'])->name('hr.feedback.create');
     Route::post('/hr/feedback', [\App\Http\Controllers\HR\FeedbackController::class, 'store'])->name('hr.feedback.store');
-
     Route::get('/prpo/status', [PRPOStatusController::class, 'index'])->name('prpo.status.index');
 
     Route::prefix('hr')->name('hr.')->group(function(){
-    
-
         Route::middleware(['role:admin,HRBP,Chief Vet,Operations Manager,Director of Corporate Services and Operations,Marketing Manager,Vet Tech TL,IT TL,Cashier TL,Housekeeping TL,Inventory TL,Clinic Assistant TL,Procurement TL,Auditor TL'])->group(function(){
             Route::get('/manpower-requests/create', [ManpowerRequestController::class, 'create'])->name('manpower-requests.create');
             Route::post('/manpower-requests', [ManpowerRequestController::class, 'store'])->name('manpower-requests.store');
@@ -336,25 +326,21 @@ Route::middleware(['auth'])->group(function(){
             Route::get('/manpower-requests', [ManpowerRequestController::class, 'index'])->name('manpower-requests.index');
             Route::patch('/manpower-requests/{manpowerRequest}/status', [ManpowerRequestController::class, 'updateStatus'])->name('manpower-requests.update-status');
         });
-
     });
-
 });
 
 Route::prefix('prpo')->name('prpo.')->middleware(['auth'])->group(function () {
-
     Route::get('/products', [ProductController::class, 'index'])->name('products.index');
     Route::get('/products/import-template', [ProductController::class, 'downloadTemplate'])->name('products.import-template');
     Route::post('/products/import', [ProductController::class, 'import'])->name('products.import');
     Route::get('/products/export', [ProductController::class, 'export'])->name('products.export');
-
     
     Route::post('/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
     Route::put('/suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
     Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
     Route::patch('/suppliers/{supplier}/toggle-status', [SupplierController::class, 'toggleStatus'])->name('suppliers.toggle-status');
     Route::get('/suppliers/template', [SupplierController::class, 'downloadTemplate'])->name('suppliers.template');
-Route::post('/suppliers/import', [SupplierController::class, 'import'])->name('suppliers.import');
+    Route::post('/suppliers/import', [SupplierController::class, 'import'])->name('suppliers.import');
 
     Route::post('/products', [ProductController::class, 'store'])->name('products.store');
     Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
@@ -364,23 +350,16 @@ Route::post('/suppliers/import', [SupplierController::class, 'import'])->name('s
 
     Route::get('/purchase-request/create', [PurchaseRequestController::class, 'create'])->name('purchase-requests.create');
     Route::post('/purchase-request', [PurchaseRequestController::class, 'store'])->name('purchase-requests.store');
-    Route::put('/purchase-requests/{id}', [PurchaseRequestController::class, 'update'])
-    ->name('purchase-requests.update');
-    
-    
+    Route::put('/purchase-requests/{id}', [PurchaseRequestController::class, 'update'])->name('purchase-requests.update');
     Route::get('/approval-board', [PurchaseRequestController::class, 'approvalBoard'])->name('approval-board');
     Route::patch('/purchase-requests/{purchaseRequest}/status', [PurchaseRequestController::class, 'updateStatus'])->name('purchase-requests.update-status');
 
-    Route::post('/purchase-requests/{purchaseRequest}/generate-pos', [PurchaseOrderController::class, 'generateFromPR'])
-    ->name('purchase-requests.generate-pos');
+    Route::post('/purchase-requests/{purchaseRequest}/generate-pos', [PurchaseOrderController::class, 'generateFromPR'])->name('purchase-requests.generate-pos');
     Route::get('/purchase-orders', [PurchaseOrderController::class, 'index'])->name('purchase-orders.index');
     Route::put('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update'])->name('purchase-orders.update');
 
-    Route::get('/purchase-requests/{purchaseRequest}/print', [PurchaseRequestController::class, 'print'])
-    ->name('purchase-requests.print');
-
-    Route::get('/purchase-orders/{purchaseOrder}/print', [PurchaseOrderController::class, 'print'])
-    ->name('purchase-orders.print');
+    Route::get('/purchase-requests/{purchaseRequest}/print', [PurchaseRequestController::class, 'print'])->name('purchase-requests.print');
+    Route::get('/purchase-orders/{purchaseOrder}/print', [PurchaseOrderController::class, 'print'])->name('purchase-orders.print');
 });
 
 require __DIR__.'/auth.php';

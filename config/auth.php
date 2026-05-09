@@ -94,8 +94,8 @@ return [
         'users' => [
             'provider' => 'users',
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
-            'expire' => 7200, //change it to 60 after May 11, 2026 (Tuesday)
-            'throttle' => 7200, //change it to 60 after May 11, 2026 (Tuesday)
+            'expire' => 7200, //change it to 60 after May 11, 2026 (Monday)
+            'throttle' => 7200, //change it to 60 after May 11, 2026 (Monday)
         ],
     ],
 

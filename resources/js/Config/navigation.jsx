@@ -1,7 +1,5 @@
 // Dashboard Links
-
 export const getDashboardLinks = () => [
-
     {
         label: 'Overview',
         href: route('dashboard'), // Overview gets the main dashboard route now
@@ -22,11 +20,7 @@ export const getDashboardLinks = () => [
         href: route('dashboard.org-chart'), 
         active: route().current('dashboard.org-chart')
     },
-
 ];
-
-
-// Admin Module Links
 
 // Admin Module Links
 export const getAdminLinks = (auth) => {
@@ -86,6 +80,12 @@ export const getAdminLinks = (auth) => {
                 active: route().current('admin.company-content.*'),
             },
             orgChartLink,
+            // 🟢 NEW: RESOURCE LINKS POSITIONED HERE 🟢
+            {
+                label: 'Resource Links',
+                href: route('admin.resource-links.index'),
+                active: route().current('admin.resource-links.*'),
+            },
             {
                 label: 'System Logs & Security',
                 href: route('admin.logs.index'),
@@ -98,9 +98,7 @@ export const getAdminLinks = (auth) => {
     return [];
 };
 
- // Document Repository Links
-
-
+// Document Repository Links
 export const getDocumentSidebarLinks = (categories = [], activeCategory = 'Overview') => {
     return [
         {
@@ -119,13 +117,8 @@ export const getDocumentSidebarLinks = (categories = [], activeCategory = 'Overv
 };
 
 // Duty Meal Module Links
-
-// navigation.jsx
-
-// navigation.jsx
-
 export const getDutyMealLinks = (auth) => {
-    // 🟢 Extract the role safely from the auth object
+    // Extract the role safely from the auth object
     const userRole = auth?.user?.role?.name?.toLowerCase().trim() || '';
     const isAuditor = userRole.includes('audit');
 
@@ -137,7 +130,7 @@ export const getDutyMealLinks = (auth) => {
         }
     ];
     
-    // 🟢 Only inject the "Set Up Roster" link if they are NOT an auditor
+    // Only inject the "Set Up Roster" link if they are NOT an auditor
     if (!isAuditor) {
         links.push({
             label: 'Set Up Roster',
@@ -163,7 +156,6 @@ export const getStaffDutyMealLinks = () => [
     },
 ];
 
-
 export const getHRLinks = (UserRole = 'Employee', auth) => {
     
     const userRole = (auth?.user?.role?.name || '').toLowerCase();
@@ -172,10 +164,10 @@ export const getHRLinks = (UserRole = 'Employee', auth) => {
     // DEFENSIVE STRIPPING: Force string, lowercase it, and trim hidden spaces
     const normalizedRole = String(UserRole).toLowerCase().trim();
 
-    // 🟢 FIX 1: Add 'hrbp' to the isHRAdmin check so they can see HR Admin Overview
+    // FIX 1: Add 'hrbp' to the isHRAdmin check so they can see HR Admin Overview
     const isHRAdmin = normalizedRole === 'admin' || normalizedRole === 'hr' || normalizedRole === 'hrbp' || userPosition === 'human resources';
     
-    // 🟢 STRICT CHECK: ONLY General Accounting allowed!
+    // STRICT CHECK: ONLY General Accounting allowed!
     const isAccounting = normalizedRole === 'general accounting';
 
     // 1. Base links
@@ -203,7 +195,7 @@ export const getHRLinks = (UserRole = 'Employee', auth) => {
         ] : []),
     ];
 
-    // 3. 🟢 THE FIXED MATH 🟢
+    // 3. THE FIXED MATH
     const isAdmin = normalizedRole === 'admin';
     const isHR = normalizedRole === 'hr';
     const isHRBP = normalizedRole === 'hrbp';
@@ -269,7 +261,7 @@ export const getPRPOLinks = (auth) => {
     // Safely grab the role and make it lowercase
     const userRole = auth?.user?.role?.name?.toLowerCase().trim() || '';
     
-    // 🟢 Define exact role clusters
+    // Define exact role clusters
     const isAdminOrDCSO = userRole === 'admin' || userRole.includes('director');
     const isProcurement = userRole.includes('procurement');
     const isInventory = userRole.includes('inventory');

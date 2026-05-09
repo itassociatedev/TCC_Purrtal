@@ -10,14 +10,18 @@ return new class extends Migration
     {
         Schema::table('document_categories', function (Blueprint $table) {
             // New categories are downloadable by default
-            $table->boolean('is_downloadable')->default(true)->after('name'); 
+          if(!Schema::hasColumn('document_categories', 'is_downloadable')) {
+              $table->boolean('is_downloadable')->default(true)->after('name');
+          }
         });
     }
 
     public function down(): void
     {
         Schema::table('document_categories', function (Blueprint $table) {
-            $table->dropColumn('is_downloadable');
+           if(Schema::hasColumn('document_categories', 'is_downloadable')) {
+               $table->dropColumn('is_downloadable');
+           }
         });
     }
 };

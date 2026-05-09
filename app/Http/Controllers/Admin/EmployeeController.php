@@ -340,8 +340,9 @@ class EmployeeController extends Controller
 
     public function sendActivationLink(User $user)
     {
-        if ($user->has_password) {
-            return back()->with('error', 'This account is already active.');
+        // FIX: Check Status instead of checking if password exists
+        if ($user->status !== 'Pending Setup') {
+            return back()->with('error', 'This account is already active. Send a password reset link instead.');
         }
 
         /** @var \Illuminate\Auth\Passwords\PasswordBroker $broker */
@@ -477,7 +478,8 @@ class EmployeeController extends Controller
             foreach ($users as $user) {
                 $token = $broker->createToken($user);
 
-                if ($user->has_password) {
+                // FIX: Check Status instead of checking if password exists
+                if ($user->status !== 'Pending Setup') {
                     $user->notify(new AdminPasswordReset($token));
                     $user->status = 'Password Reset';
                     $user->save();
@@ -487,7 +489,7 @@ class EmployeeController extends Controller
                 
                 $sentCount++;
 
-                // ADDED: Pause script for 1 second between emails to respect Mailtrap rate limits
+                // Pause script for 1 second between emails to respect Mailtrap rate limits
                 if ($sentCount < $users->count()) {
                     sleep(1); 
                 }

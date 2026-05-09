@@ -41,17 +41,38 @@ class AuditObserver
     }
 
     /**
+     * Determine the correct User ID for the log.
+     * Useful for actions performed by users who aren't fully logged in yet.
+     */
+    private function determineUserId(Model $model)
+    {
+        if (auth()->check()) {
+            return auth()->id();
+        }
+
+        // If not logged in, but the model being manipulated is a User, use that User's ID
+        if ($model instanceof \App\Models\User) {
+            return $model->id;
+        }
+
+        return null;
+    }
+
+    /**
      * Handle the Model "created" event.
      */
     public function created(Model $model): void
     {
         // Try to find a name or title to make the log more readable
         $identifier = $model->name ?? $model->title ?? $model->label ?? "a record";
+        $userId = $this->determineUserId($model);
         
         LoggerService::log(
             $this->getModuleName($model), 
             'Create', 
-            "Created $identifier in " . $this->getModuleName($model)
+            "Created $identifier in " . $this->getModuleName($model),
+            'success',
+            $userId
         );
     }
 
@@ -63,6 +84,7 @@ class AuditObserver
         // Check if the record is being "Updated" or if it's specifically a "Status Change"
         $module = $this->getModuleName($model);
         $identifier = $model->name ?? $model->title ?? $model->label ?? "record";
+        $userId = $this->determineUserId($model);
         
         $description = "Updated $identifier in $module";
         
@@ -71,7 +93,7 @@ class AuditObserver
             $description = "Status of $identifier changed to: " . strtoupper($model->status);
         }
 
-        LoggerService::log($module, 'Update', $description, 'warning');
+        LoggerService::log($module, 'Update', $description, 'warning', $userId);
     }
 
     /**
@@ -80,12 +102,14 @@ class AuditObserver
     public function deleted(Model $model): void
     {
         $identifier = $model->name ?? $model->title ?? $model->label ?? "a record";
+        $userId = $this->determineUserId($model);
         
         LoggerService::log(
             $this->getModuleName($model), 
             'Delete', 
             "Deleted $identifier from " . $this->getModuleName($model), 
-            'danger'
+            'danger',
+            $userId
         );
     }
 }

@@ -50,6 +50,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     const [filterDepartment, setFilterDepartment] = useState('');
     const [filterBranch, setFilterBranch] = useState('');
     const [filterPosition, setFilterPosition] = useState('');
+    const [filterStatus, setFilterStatus] = useState('');
 
     // Sorting state
     const [sortField, setSortField] = useState('name');
@@ -79,10 +80,11 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
         }
     };
 
-    // 1. Automatically extract unique Departments, Branches, and Positions for filter dropdowns
+    // 1. Automatically extract unique Departments, Branches, Positions, and Statuses for filter dropdowns
     const uniqueDepartments = [...new Set(users.map(u => u.department?.name).filter(Boolean))].sort();
     const uniqueBranches = [...new Set(users.flatMap(u => u.branches?.map(b => b.name) || []).filter(Boolean))].sort();
     const uniquePositions = [...new Set(users.map(u => u.position?.name).filter(Boolean))].sort();
+    const uniqueStatuses = [...new Set(users.map(u => u.status).filter(Boolean))].sort();
 
     // 2. The Live Filter & Sort Math
     const filteredUsers = [...users]
@@ -111,7 +113,11 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
             const matchesPosition = filterPosition === '' || 
                 employee.position?.name === filterPosition;
 
-            return matchesSearch && matchesDept && matchesBranch && matchesPosition;
+            // Status matches exactly
+            const matchesStatus = filterStatus === '' || 
+                employee.status === filterStatus;
+
+            return matchesSearch && matchesDept && matchesBranch && matchesPosition && matchesStatus;
         })
         .sort((a, b) => {
             const aValue = getSortValue(a, sortField).toLowerCase();
@@ -485,9 +491,9 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
             name: user.name,
             email: user.email,
             password: '',
-            role_id: user.role_id,
-            department_id: user.department_id,
-            position_id: user.position_id,
+            role_id: user.role_id || '',
+            department_id: user.department_id || '',
+            position_id: user.position_id || '',
             device_limit: user.device_limit || 2,
             branch_ids: user.branches ? user.branches.map(b => b.id) : [],
         });
@@ -585,15 +591,15 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     const handleAccountAction = (employee) => {
         setActiveDropdown(null); 
         
-        if (employee.has_password) {
-            router.post(route('employees.send-reset', [employee.id]), {}, {
-                preserveScroll: true,
-                onSuccess: () => triggerToast(`Reset link sent to ${employee.email}`, 'success'),
-            });
-        } else {
+        if (employee.status === 'Pending Setup') {
             router.post(route('employees.send-activation', [employee.id]), {}, {
                 preserveScroll: true,
                 onSuccess: () => triggerToast(`Activation link sent to ${employee.email}`, 'success'),
+            });
+        } else {
+            router.post(route('employees.send-reset', [employee.id]), {}, {
+                preserveScroll: true,
+                onSuccess: () => triggerToast(`Reset link sent to ${employee.email}`, 'success'),
             });
         }
     };
@@ -730,7 +736,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 Edit Roles
                             </button>
 
-                            {/* BULK ACTIONS DROPDOWN (ONLY SHOWS IF USERS ARE SELECTED) */}
+                            {/* BULK ACTIONS DROPDOWN */}
                             {selectedUsers.length > 0 && (
                                 <div className="relative inline-block flex-shrink-0">
                                     <button
@@ -752,9 +758,9 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                             className="absolute left-0 z-50 mt-2 w-56 origin-top-left rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
                                         >
                                             <div className="py-1">
-                                                <button onClick={() => handleBulkAction('password-reset')} className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100">Send Reset / Activation Links</button>
+                                                <button onClick={() => handleBulkAction('password-reset')} className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100">Activation Links / Send Reset</button>
                                                 <button onClick={() => handleBulkAction('device-reset')} className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100">Device Reset</button>
-                                                <button onClick={() => handleBulkAction('toggle-status')} className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100">Enable / Disable Accounts</button>
+                                                <button onClick={() => handleBulkAction('toggle-status')} className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100">Enable / Disable</button>
                                                 <button onClick={() => handleBulkAction('delete')} className="block w-full px-4 py-2 text-left text-sm text-red-600 font-bold hover:bg-red-50">Delete</button>
                                             </div>
                                         </div>
@@ -768,7 +774,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 href={route('admin.employees.export', {
                                     search: filterSearch,
                                     department: filterDepartment,
-                                    branch: filterBranch
+                                    branch: filterBranch,
+                                    status: filterStatus
                                 })}
                                 onClick={() => triggerToast('Preparing export. Download will start shortly...', 'success')}
                                 className="inline-flex items-center rounded-md border border-indigo-200 bg-indigo-50 px-4 py-2 text-xs font-bold uppercase tracking-widest text-indigo-700 shadow-sm hover:bg-indigo-100 transition flex-shrink-0"
@@ -803,8 +810,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                         </div>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row gap-4 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                        <div className="flex-1 relative">
+                    <div className="flex flex-wrap gap-4 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                        <div className="flex-1 min-w-[200px] relative">
                             <input
                                 type="text"
                                 className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm pr-8"
@@ -824,7 +831,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                         </div>
 
                         <select
-                            className="block w-full sm:w-48 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            className="block w-full sm:w-auto rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                             value={filterDepartment}
                             onChange={(e) => setFilterDepartment(e.target.value)}
                         >
@@ -835,7 +842,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                         </select>
 
                         <select
-                            className="block w-full sm:w-48 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            className="block w-full sm:w-auto rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                             value={filterPosition}
                             onChange={(e) => setFilterPosition(e.target.value)}
                         >
@@ -846,13 +853,24 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                         </select>
 
                         <select
-                            className="block w-full sm:w-48 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            className="block w-full sm:w-auto rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                             value={filterBranch}
                             onChange={(e) => setFilterBranch(e.target.value)}
                         >
                             <option value="">All Branches</option>
                             {uniqueBranches.map(branch => (
                                 <option key={branch} value={branch}>{branch}</option>
+                            ))}
+                        </select>
+
+                        <select
+                            className="block w-full sm:w-auto rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            value={filterStatus}
+                            onChange={(e) => setFilterStatus(e.target.value)}
+                        >
+                            <option value="">All Statuses</option>
+                            {uniqueStatuses.map(status => (
+                                <option key={status} value={status}>{status}</option>
                             ))}
                         </select>
                     </div>
@@ -915,7 +933,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     filteredUsers.map((employee) => (
                                         <tr 
                                             key={employee.id} 
-                                            className={`border-b transition-colors ${selectedUsers.includes(employee.id) ? 'bg-indigo-50 hover:bg-indigo-100' : 'bg-white hover:bg-gray-50'}`}
+                                            onClick={() => handleSelect(employee.id)}
+                                            className={`border-b cursor-pointer transition-colors ${selectedUsers.includes(employee.id) ? 'bg-indigo-50 hover:bg-indigo-100' : 'bg-white hover:bg-gray-50'}`}
                                         >
                                             {/* INDIVIDUAL ROW CHECKBOX */}
                                             <td className="px-6 py-4 whitespace-nowrap">
@@ -924,6 +943,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                                     className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer"
                                                     checked={selectedUsers.includes(employee.id)}
                                                     onChange={() => handleSelect(employee.id)}
+                                                    onClick={(e) => e.stopPropagation()}
                                                 />
                                             </td>
                                             <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
@@ -955,7 +975,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                                     employee.status === 'Disabled' ? 'bg-gray-100 text-gray-600 ring-gray-500/20' : 
                                                     employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 ring-red-600/20' : 
                                                     employee.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' : 
-                                                    'bg-yellow-50 text-yellow-800 ring-yellow-600/20'
+                                                    employee.status === 'Pending Setup' ? 'bg-yellow-50 text-yellow-800 ring-yellow-600/20' :
+                                                    'bg-gray-50 text-gray-800 ring-gray-600/20'
                                                 }`}>
                                                     {employee.status}
                                                 </span>
@@ -986,7 +1007,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                                                 handleAccountAction(employee);
                                                             }}
                                                         >
-                                                            {employee.has_password ? 'Password Reset' : 'Activation Link'}
+                                                            {employee.status === 'Pending Setup' ? 'Activation Link' : 'Password Reset'}
                                                         </button>
 
                                                         <Link as="button" className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" onClick={(e) => {
@@ -1046,7 +1067,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 {filteredUsers.map((employee) => (
                                     <div 
                                         key={employee.id} 
-                                        className={`p-4 transition-colors ${selectedUsers.includes(employee.id) ? 'bg-indigo-50' : 'bg-white'}`}
+                                        onClick={() => handleSelect(employee.id)}
+                                        className={`p-4 cursor-pointer transition-colors ${selectedUsers.includes(employee.id) ? 'bg-indigo-50' : 'bg-white'}`}
                                     >
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="flex items-start gap-3 min-w-0">
@@ -1056,6 +1078,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                                     className="mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer flex-shrink-0"
                                                     checked={selectedUsers.includes(employee.id)}
                                                     onChange={() => handleSelect(employee.id)}
+                                                    onClick={(e) => e.stopPropagation()}
                                                 />
                                                 <div>
                                                     <div className="font-medium text-gray-900 break-words">
@@ -1092,7 +1115,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                                                 handleAccountAction(employee);
                                                             }}
                                                         >
-                                                            {employee.has_password ? 'Password Reset' : 'Activation Link'}
+                                                            {employee.status === 'Pending Setup' ? 'Activation Link' : 'Password Reset'}
                                                         </button>
 
                                                         <Link as="button" className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" onClick={(e) => {
@@ -1162,7 +1185,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                                     employee.status === 'Disabled' ? 'bg-gray-100 text-gray-600 ring-gray-500/20' : 
                                                     employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 ring-red-600/20' : 
                                                     employee.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' : 
-                                                    'bg-yellow-50 text-yellow-800 ring-yellow-600/20'
+                                                    employee.status === 'Pending Setup' ? 'bg-yellow-50 text-yellow-800 ring-yellow-600/20' :
+                                                    'bg-gray-50 text-gray-800 ring-gray-600/20'
                                                 }`}>
                                                     {employee.status}
                                                 </span>
@@ -1423,7 +1447,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 <select 
                                     id="edit_role_id" 
                                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" 
-                                    value={editUserData.role_id} 
+                                    value={editUserData.role_id || ''} 
                                     onChange={(e) => {
                                         const newRoleId = e.target.value;
                                         setEditData('role_id', newRoleId);
