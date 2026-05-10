@@ -356,7 +356,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
     };
 
     const handleAction = (id, actionType) => {
-        if (actionType === 'reject' || actionType === 'return_to_inv_tl') {
+        if (actionType === 'reject' || actionType === 'return_to_inv_tl' || actionType === 'return_to_creator') {
             openActionModal(id, actionType);
             return;
         }
@@ -608,9 +608,9 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                                             Approve
                                                         </button>
                                                         
-                                                        {/* 🟢 RESTORED: All three options for Ops Manager */}
+                                                        {/* 🟢 RESTORED & UPDATED: Dynamic Return option for Ops Manager */}
                                                         {pr.status === 'pending_ops_manager' && (
-                                                            <button onClick={() => openActionModal(pr.id, 'return_to_inv_tl')} title="Return to Inv TL" className="inline-flex items-center gap-1.5 rounded-lg bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700 transition-colors hover:bg-orange-100 hover:text-orange-800">
+                                                            <button onClick={() => openActionModal(pr.id, pr.branch === 'Greenhills' ? 'return_to_creator' : 'return_to_inv_tl')} title={pr.branch === 'Greenhills' ? "Return to Inv Assistant" : "Return to Inv TL"} className="inline-flex items-center gap-1.5 rounded-lg bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700 transition-colors hover:bg-orange-100 hover:text-orange-800">
                                                                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
                                                                 Return
                                                             </button>
@@ -716,7 +716,9 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                         </tbody>
                                     </table>
                                 </div>
-                                <div className="px-4 sm:px-12"><TrackingStepper currentStatus={selectedPR.status} type="PR" /></div>
+                                <div className="px-4 sm:px-12">
+                                    <TrackingStepper currentStatus={selectedPR.status} type="PR" branch={selectedPR.branch} />
+                                </div>
                             </div>
 
                             <div className="flex items-center justify-end gap-3 rounded-b-xl border-t bg-gray-50 px-6 py-4 shrink-0">
@@ -731,10 +733,11 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
 
                                 {canApprove(selectedPR) && currentView === 'action_needed' && (
                                     <>
+                                        {/* 🟢 UPDATED: Read-only Modal Ops Manager Return Action */}
                                         {selectedPR.status === 'pending_ops_manager' && (
-                                            <button onClick={() => openActionModal(selectedPR.id, 'return_to_inv_tl')} className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-400 transition-colors">
+                                            <button onClick={() => openActionModal(selectedPR.id, selectedPR.branch === 'Greenhills' ? 'return_to_creator' : 'return_to_inv_tl')} className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-400 transition-colors">
                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
-                                                Return to Inv TL
+                                                {selectedPR.branch === 'Greenhills' ? 'Return to Inv Assistant' : 'Return to Inv TL'}
                                             </button>
                                         )}
                                         <button onClick={() => handleAction(selectedPR.id, 'reject')} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 transition-colors">
@@ -966,12 +969,16 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                     <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
                         <div className={`px-6 py-4 border-b border-gray-200 ${actionModal.actionType === 'reject' ? 'bg-red-50' : 'bg-orange-50'}`}>
                             <h3 className={`text-lg font-bold ${actionModal.actionType === 'reject' ? 'text-red-900' : 'text-orange-900'}`}>
-                                {actionModal.actionType === 'reject' ? 'Reject Purchase Request' : 'Return Request to Inventory TL'}
+                                {actionModal.actionType === 'reject' ? 'Reject Purchase Request' : 
+                                 actionModal.actionType === 'return_to_creator' ? 'Return Request to Inventory Assistant' : 
+                                 'Return Request to Inventory TL'}
                             </h3>
                         </div>
                         <div className="p-6">
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                {actionModal.actionType === 'reject' ? 'Please provide a reason for rejection:' : 'Please provide notes/corrections for the Inventory TL:'}
+                                {actionModal.actionType === 'reject' ? 'Please provide a reason for rejection:' : 
+                                 actionModal.actionType === 'return_to_creator' ? 'Please provide notes/corrections for the Inventory Assistant:' : 
+                                 'Please provide notes/corrections for the Inventory TL:'}
                             </label>
                             <textarea
                                 className={`w-full border-gray-300 rounded-md shadow-sm sm:text-sm ${actionModal.actionType === 'reject' ? 'focus:ring-red-500 focus:border-red-500' : 'focus:ring-orange-500 focus:border-orange-500'}`}

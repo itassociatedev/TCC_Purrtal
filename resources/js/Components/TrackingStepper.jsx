@@ -1,5 +1,5 @@
-export default function TrackingStepper({ currentStatus, type = 'PR' }) {
-    // 1. Define the updated workflow steps
+export default function TrackingStepper({ currentStatus, type = 'PR', branch }) {
+    // 1. Define the base workflow steps
     const prWorkflow = [
         { key: 'pending_inv_tl', label: 'Inv. TL Approval' },
         { key: 'pending_ops_manager', label: 'Ops Manager Approval' },
@@ -12,9 +12,15 @@ export default function TrackingStepper({ currentStatus, type = 'PR' }) {
         { key: 'approved', label: 'PO Finalized' }
     ];
 
-    const workflow = type === 'PR' ? prWorkflow : poWorkflow;
+    // 2. Select the base workflow
+    let workflow = type === 'PR' ? prWorkflow : poWorkflow;
+
+    // 🟢 NEW: Dynamically remove the 'pending_inv_tl' step if the branch is Greenhills
+    if (type === 'PR' && branch === 'Greenhills') {
+        workflow = workflow.filter(step => step.key !== 'pending_inv_tl');
+    }
     
-    // 2. Identify where we are in the workflow
+    // 3. Identify where we are in the workflow
     const isRejected = ['rejected', 'cancelled'].includes(currentStatus);
     const currentIndex = workflow.findIndex(step => step.key === currentStatus);
 
@@ -47,7 +53,7 @@ export default function TrackingStepper({ currentStatus, type = 'PR' }) {
                     }
 
                     return (
-                        <span key={index} className={`flex items-center gap-2 px-3 py-2 rounded-lg border shadow-sm transition-colors ${index === currentIndex && !isRejected ? 'bg-white border-gray-300 ring-1 ring-gray-200' : 'bg-gray-50 border-gray-200'}`}>
+                        <span key={step.key} className={`flex items-center gap-2 px-3 py-2 rounded-lg border shadow-sm transition-colors ${index === currentIndex && !isRejected ? 'bg-white border-gray-300 ring-1 ring-gray-200' : 'bg-gray-50 border-gray-200'}`}>
                             <span className={`h-3 w-3 rounded-full ${dotColor}`}></span> 
                             <span className={textColor}>{step.label}</span>
                         </span>

@@ -230,56 +230,71 @@ class PurchaseRequestController extends Controller
     // =====================================================================
     public function updateStatus(Request $request, PurchaseRequest $purchaseRequest)
     {
+        // 🟢 UPDATED: Allow 'return_to_creator' as a valid action
         $validated = $request->validate([
-            'action' => 'required|in:approve,reject,cancel,return_to_inv_tl',
-            'rejection_reason' => 'required_if:action,reject|required_if:action,return_to_inv_tl|nullable|string'
+            'action' => 'required|in:approve,reject,cancel,return_to_inv_tl,return_to_creator',
+            'rejection_reason' => 'required_if:action,reject|required_if:action,return_to_inv_tl|required_if:action,return_to_creator|nullable|string'
         ]);
 
         $isGreenhills = $purchaseRequest->branch === 'Greenhills';
 
-        // 🟢 1. Handle Return to Inv TL 
+        // 🟢 1. Handle Return to Inv TL (Standard Branch)
         if ($validated['action'] === 'return_to_inv_tl') {
             $purchaseRequest->status = 'pending_inv_tl';
             $purchaseRequest->rejection_reason = $validated['rejection_reason']; 
             
-            // Dynamic messaging based on branch
-            $returnTarget = $isGreenhills ? 'Inventory Assistant' : 'Inventory TL';
-            $message = "Purchase request returned to {$returnTarget} for corrections.";
+            $message = "Purchase request returned to Inventory TL for corrections.";
             
             $purchaseRequest->save();
             
             // --- RETURN NOTIFICATION LOGIC ---
             $notifyList = collect();
 
-            // Fetch Inventory TLs and Assistants for this specific branch
+            // Fetch Inventory TLs for this specific branch
             $invTeam = User::whereHas('role', function ($q) {
-                $q->where('name', 'like', '%Inventory TL%')
-                  ->orWhere('name', 'like', '%Inventory Assist%');
+                $q->where('name', 'like', '%Inventory TL%');
             })->whereHas('branches', function ($q) use ($purchaseRequest) {
                 $q->where('name', $purchaseRequest->branch);
             })->get();
 
             $notifyList = $notifyList->merge($invTeam);
 
-            // Fetch the CC'd user
-            if ($purchaseRequest->cc_user_id) {
-                $ccUser = User::find($purchaseRequest->cc_user_id);
-                if ($ccUser) {
-                    $notifyList->push($ccUser);
-                }
-            }
-
-            // Remove duplicates
-            $notifyList = $notifyList->unique('id');
-
             // Send the alert
             if ($notifyList->isNotEmpty()) {
-                $alertMessage = "PR from {$purchaseRequest->department} ({$purchaseRequest->branch}) was returned to {$returnTarget} for corrections.";
+                $alertMessage = "PR from {$purchaseRequest->department} ({$purchaseRequest->branch}) was returned to Inventory TL for corrections.";
                 \Illuminate\Support\Facades\Notification::send($notifyList, new PendingApprovalNotification($purchaseRequest, $alertMessage));
             }
 
             return back()->with('success', $message);
         }
+
+        // 🟢 1.5 Handle Return to Creator (Greenhills Assistant)
+        if ($validated['action'] === 'return_to_creator') {
+             // In your system, an assistant needs it to be in "pending_inv_tl" status to edit it again
+            $purchaseRequest->status = 'pending_inv_tl';
+            $purchaseRequest->rejection_reason = $validated['rejection_reason']; 
+            $message = "Purchase request returned to the Greenhills Inventory Assistant for corrections.";
+            
+            $purchaseRequest->save();
+
+            // Send Notification directly to Assistants
+            $notifyList = collect();
+            $assistants = User::whereHas('role', function ($q) {
+                $q->where('name', 'like', '%Inventory Assist%');
+            })->whereHas('branches', function ($q) use ($purchaseRequest) {
+                $q->where('name', $purchaseRequest->branch);
+            })->get();
+
+            $notifyList = $notifyList->merge($assistants);
+            
+            if ($notifyList->isNotEmpty()) {
+                $alertMessage = "Your PR from {$purchaseRequest->department} ({$purchaseRequest->branch}) was returned by the Ops Manager for corrections.";
+                \Illuminate\Support\Facades\Notification::send($notifyList->unique('id'), new PendingApprovalNotification($purchaseRequest, $alertMessage));
+            }
+
+            return back()->with('success', $message);
+        }
+
 
         // 🟢 2. Handle Approve
         if ($validated['action'] === 'approve') {
@@ -296,40 +311,9 @@ class PurchaseRequestController extends Controller
             $purchaseRequest->status = 'cancelled';
             $message = 'Purchase request has been cancelled.';
             
-        // 🟢 4. Handle Complete Rejection (Or Intercept for Greenhills Return)
+        // 🟢 4. Handle Complete Rejection 
         } else {
-            
-            // 🟢 INTERCEPT REJECT: If Greenhills OM rejects it, turn it into a Return to the Requestor
-            if ($isGreenhills && $purchaseRequest->status === 'pending_ops_manager') {
-                $purchaseRequest->status = 'pending_inv_tl'; // Sets it so Assistant can edit it again
-                $purchaseRequest->rejection_reason = $validated['rejection_reason'];
-                $message = 'Purchase request returned to the Greenhills Inventory Assistant for corrections.';
-                
-                $purchaseRequest->save();
-
-                // Send Notification directly to Assistants
-                $notifyList = collect();
-                $assistants = User::whereHas('role', function ($q) {
-                    $q->where('name', 'like', '%Inventory Assist%');
-                })->whereHas('branches', function ($q) use ($purchaseRequest) {
-                    $q->where('name', $purchaseRequest->branch);
-                })->get();
-
-                $notifyList = $notifyList->merge($assistants);
-                if ($purchaseRequest->cc_user_id) {
-                    $ccUser = User::find($purchaseRequest->cc_user_id);
-                    if ($ccUser) $notifyList->push($ccUser);
-                }
-
-                if ($notifyList->isNotEmpty()) {
-                    $alertMessage = "Your PR from {$purchaseRequest->department} ({$purchaseRequest->branch}) was returned by the Ops Manager for corrections.";
-                    \Illuminate\Support\Facades\Notification::send($notifyList->unique('id'), new PendingApprovalNotification($purchaseRequest, $alertMessage));
-                }
-
-                return back()->with('success', $message);
-            }
-
-            // Standard Rejection for other branches
+            // Standard Rejection
             $purchaseRequest->status = 'rejected';
             $purchaseRequest->rejection_reason = $validated['rejection_reason'];
             $message = 'Purchase request has been rejected.';

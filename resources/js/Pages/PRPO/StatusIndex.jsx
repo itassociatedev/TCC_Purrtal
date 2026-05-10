@@ -426,6 +426,7 @@ export default function StatusIndex({ auth, requests }) {
                                 <TrackingStepper 
                                     currentStatus={selectedDoc.status} 
                                     type={modalView} 
+                                    branch={selectedDoc.branch}
                                 />
                             </div>
 
