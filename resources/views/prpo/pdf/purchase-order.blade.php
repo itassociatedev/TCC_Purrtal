@@ -167,7 +167,7 @@
                     <div class="sig-block">
                         <div class="sig-line"></div>
                         <div class="sig-title">Approved By</div>
-                        <div class="sig-name">Director of Corporate Services</div>
+                        <div class="sig-name">Director of Corporate Services and Operations </div>
                     </div>
                 </div>
             </td>
