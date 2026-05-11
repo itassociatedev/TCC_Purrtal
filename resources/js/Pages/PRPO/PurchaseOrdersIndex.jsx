@@ -62,6 +62,8 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
     const userRole = auth.user.role?.name?.toLowerCase() || '';
     const isDCSO = ['director of corporate services and operations', 'admin'].includes(userRole);
     const isProcurement = ['procurement assist', 'procurement tl', 'admin'].includes(userRole);
+    // 🟢 ADDED: Specific check for Procurement Assistant to restrict submission
+    const isProcurementAssistant = userRole.includes('procurement assist');
 
     const [selectedPO, setSelectedPO] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -77,7 +79,6 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
     const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
     const [rejectReason, setRejectReason] = useState('');
 
-    // 🟢 ADDED: setError and clearErrors extracted from useForm
     const { data, setData, processing, reset, errors, setError, clearErrors } = useForm({
         delivery_date: '',
         payment_terms: '',
@@ -116,7 +117,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
         setRemovedItemIds([]); 
         setSelectedItemIds([]);
         setDiscountType('amount');
-        clearErrors(); // 🟢 Clear any lingering errors on open
+        clearErrors(); 
         
         const formattedDeliveryDate = po.delivery_date ? po.delivery_date.split('T')[0] : '';
 
@@ -175,7 +176,6 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
     };
 
     const confirmSave = (newStatus) => {
-        // 🟢 REPLACED: Removed alert() and used Inertia's built in setError
         if (newStatus === 'pending_approval' && (!data.no_of_quotations || data.no_of_quotations <= 0)) {
             setError('no_of_quotations', 'You must provide the Number of Quotations before submitting for approval.');
             return;
@@ -526,7 +526,6 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                                                 <input type="text" disabled={selectedPO.status !== 'drafted'} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100" value={data.ship_to} onChange={e => setData('ship_to', e.target.value)} />
                                             </div>
                                             
-                                            {/* 🟢 REPLACED: Use Inertia setError to show inline error message */}
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700">No. of Quotations <span className="text-red-500">*</span></label>
                                                 <input 
@@ -633,7 +632,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                                                                 </tr>
                                                             ))}
                                                             {activeItems.length === 0 && (
-                                                                <tr><td colSpan={selectedPO.status === 'drafted' ? "6" : "5"} className="px-4 py-8 text-center text-gray-500 italic">No active items remain in this Purchase Order.</td></tr>
+                                                                <tr><td colSpan={selectedPO.status === 'drafted' ? "7" : "5"} className="px-4 py-8 text-center text-gray-500 italic">No active items remain in this Purchase Order.</td></tr>
                                                             )}
                                                         </tbody>
                                                     </table>
@@ -731,7 +730,11 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                                 {modalView === 'PO' && selectedPO.status === 'drafted' && isProcurement && (
                                     <>
                                         <button onClick={() => confirmSave('drafted')} disabled={processing} className="w-full sm:w-auto rounded-md bg-white border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50">Save Draft</button>
-                                        <button onClick={() => confirmSave('pending_approval')} disabled={processing} className="w-full sm:w-auto rounded-md bg-indigo-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">Submit for DCSO Approval</button>
+                                        
+                                        {/* 🟢 ADDED: Only render the submit button if the user is NOT a Procurement Assistant */}
+                                        {!isProcurementAssistant && (
+                                            <button onClick={() => confirmSave('pending_approval')} disabled={processing} className="w-full sm:w-auto rounded-md bg-indigo-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">Submit for DCSO Approval</button>
+                                        )}
                                     </>
                                 )}
 

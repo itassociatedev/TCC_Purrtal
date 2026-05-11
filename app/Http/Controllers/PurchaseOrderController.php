@@ -77,6 +77,14 @@ class PurchaseOrderController extends Controller
     // =====================================================================
     public function update(Request $request, PurchaseOrder $purchaseOrder)
     {
+        $userRole = strtolower(trim(Auth::user()->role->name ?? ''));
+        $requestedStatus = $request->input('status');
+
+        // 🟢 SECURITY CHECK: Procurement Assistants can ONLY save as drafted
+        if (str_contains($userRole, 'procurement assist') && $requestedStatus !== 'drafted') {
+            return back()->withErrors(['status' => 'Procurement Assistants are only authorized to Save Drafts. Please contact your TL to submit.']);
+        }
+
         $validated = $request->validate([
             'delivery_date' => 'nullable|date',
             'payment_terms' => 'nullable|string|max:255',
