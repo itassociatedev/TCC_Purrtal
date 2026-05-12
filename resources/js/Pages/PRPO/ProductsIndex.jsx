@@ -641,6 +641,15 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 border-b border-gray-100 pb-4">
                         <h2 className="text-lg font-bold text-gray-900">Manage Suppliers</h2>
                         <div className="flex items-center gap-2">
+                            {/* 🟢 NEW EXPORT BUTTON ADDED HERE */}
+                            <a 
+                                href={route('prpo.suppliers.export')} 
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-green-700 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 transition-colors shadow-sm"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+                                Export Excel
+                            </a>
+
                             <a 
                                 href={route('prpo.suppliers.template')} 
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md hover:bg-indigo-100 transition-colors"

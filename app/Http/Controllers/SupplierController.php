@@ -4,9 +4,19 @@ namespace App\Http\Controllers;
 
 use App\Models\Supplier;
 use Illuminate\Http\Request;
+use App\Exports\SuppliersExport; // Added for Export
+use Maatwebsite\Excel\Facades\Excel; // Added for Excel
 
 class SupplierController extends Controller
 {
+    /**
+     * Export the suppliers list to Excel.
+     */
+    public function export()
+    {
+        return Excel::download(new SuppliersExport, 'suppliers_list.xlsx');
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -43,7 +53,6 @@ class SupplierController extends Controller
             $supplier->delete();
             return back()->with('success', 'Supplier deleted successfully.');
         } catch (\Illuminate\Database\QueryException $e) {
-            // Error code 23000 is a foreign key constraint violation
             if ($e->getCode() == 23000) {
                 return back()->withErrors(['error' => 'Cannot delete supplier. There are still products assigned to it.']);
             }
@@ -56,17 +65,11 @@ class SupplierController extends Controller
         try {
             if ($supplier->status === 'Disabled') {
                 $supplier->update(['status' => null]);
-                
-                // 🟢 CASCADE: Re-enable all products handled by this supplier
                 $supplier->products()->update(['status' => null]);
-                
                 $message = "Supplier '{$supplier->name}' and all their products have been re-enabled.";
             } else {
                 $supplier->update(['status' => 'Disabled']);
-                
-                // 🟢 CASCADE: Disable all products handled by this supplier
                 $supplier->products()->update(['status' => 'Disabled']);
-                
                 $message = "Supplier '{$supplier->name}' and all their products have been disabled.";
             }
 
@@ -111,13 +114,11 @@ class SupplierController extends Controller
         $skippedCount = 0;
 
         while (($row = fgetcsv($handle)) !== false) {
-            // Check if the required 'name' field is empty
             if (empty(trim($row[0]))) {
                 $skippedCount++;
                 continue;
             }
 
-            // Check if the supplier already exists to prevent duplicates
             $exists = Supplier::where('name', trim($row[0]))->exists();
             if ($exists) {
                 $skippedCount++;
