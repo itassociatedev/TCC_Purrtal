@@ -335,6 +335,10 @@ Route::prefix('prpo')->name('prpo.')->middleware(['auth'])->group(function () {
     Route::post('/products/import', [ProductController::class, 'import'])->name('products.import');
     Route::get('/products/export', [ProductController::class, 'export'])->name('products.export');
     
+    // 🟢 ADDED: BULK ACTION ROUTES FOR SUPPLIERS
+    Route::post('/suppliers/batch-destroy', [SupplierController::class, 'batchDestroy'])->name('suppliers.batch-destroy');
+    Route::post('/suppliers/batch-toggle-status', [SupplierController::class, 'batchToggleStatus'])->name('suppliers.batch-toggle-status');
+
     Route::post('/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
     Route::put('/suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
     Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');

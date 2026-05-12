@@ -744,7 +744,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                             e.stopPropagation();
                                             setBulkDropdownOpen(!bulkDropdownOpen);
                                         }}
-                                        className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white shadow-sm hover:bg-indigo-500 transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                        className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white shadow-sm hover:bg-indigo-50 transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                                     >
                                         Bulk Actions ({selectedUsers.length})
                                         <svg className="-mr-1 ml-2 h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -1424,6 +1424,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                 </form>
             </Modal>
 
+            {/* EDIT USER MODAL */}
             <Modal show={isEditUserModalOpen} onClose={closeEditUserModal} maxWidth="2xl">
                 <form onSubmit={submitEditUser} className="p-6">
                     <h2 className="mb-6 text-lg font-medium text-gray-900">Edit Employee</h2>
@@ -1498,9 +1499,17 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 <InputError message={editErrors.department_id} className="mt-2" />
                             </div>
 
+                            {/* 🟢 THE FIX IS RIGHT HERE! */}
                             <div className="mt-4">
                                 <InputLabel htmlFor="edit_position" value="Position" />
-                                <select id="edit_position" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={editUserData.position_id} onChange={(e) => setEditData('position_id', e.target.value)} required disabled={!editUserData.department_id}>
+                                <select 
+                                    id="edit_position" 
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" 
+                                    value={editUserData.position_id} 
+                                    onChange={(e) => setEditData('position_id', e.target.value)} 
+                                    required 
+                                    disabled={!editUserData.department_id}
+                                >
                                     <option value="" disabled>Select Position</option>
                                     {filteredEditPositions.map((pos) => <option key={pos.id} value={pos.id}>{pos.name}</option>)}
                                 </select>

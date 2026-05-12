@@ -472,7 +472,10 @@ class EmployeeController extends Controller
 
         try {
             $users = User::whereIn('id', $request->ids)->get();
+            
+            /** @var \Illuminate\Auth\Passwords\PasswordBroker $broker */
             $broker = Password::broker();
+            
             $sentCount = 0;
 
             foreach ($users as $user) {

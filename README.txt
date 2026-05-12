@@ -91,3 +91,6 @@ If a "maatwebsite" error is encountered, do the following.
 3. Press Crtl+F then type "extension=gd"
 4. remove the semicolon (;)
 5. Run the composer update again
+
+If an "+ CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException + FullyQualifiedErrorId : RedirectionNotSupported" error occured, run this command:
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
