@@ -13,7 +13,7 @@ import { useEffect, useMemo, useState } from 'react';
 export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
 
     const PRPOLinks = getPRPOLinks(auth);
-    
+    //
     // 🟢 DEFINE READ-ONLY STATE
     const userRole = auth.user.role?.name?.toLowerCase().trim() || '';
     const isInventory = userRole.includes('inventory');
