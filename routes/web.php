@@ -134,7 +134,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/resources/internal-links', function () {
         $links = ResourceLink::where('type', 'internal')
             ->where('is_active', true)
-            ->orderBy('sort_order', 'asc') // Automatically sort using drag-and-drop order
+            ->orderBy('sort_order', 'asc') 
             ->get();
             
         return Inertia::render('Resources/InternalLinks', [
@@ -145,7 +145,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/resources/external-links', function () {
         $links = ResourceLink::where('type', 'external')
             ->where('is_active', true)
-            ->orderBy('sort_order', 'asc') // Automatically sort using drag-and-drop order
+            ->orderBy('sort_order', 'asc') 
             ->get();
             
         return Inertia::render('Resources/ExternalLinks', [
@@ -335,23 +335,25 @@ Route::prefix('prpo')->name('prpo.')->middleware(['auth'])->group(function () {
     Route::post('/products/import', [ProductController::class, 'import'])->name('products.import');
     Route::get('/products/export', [ProductController::class, 'export'])->name('products.export');
     
-    // 🟢 ADDED: BULK ACTION ROUTES FOR SUPPLIERS
+    // --- SUPPLIER ROUTES ---
+    Route::get('/suppliers/export', [SupplierController::class, 'export'])->name('suppliers.export');
+    Route::get('/suppliers/template', [SupplierController::class, 'downloadTemplate'])->name('suppliers.template');
+    Route::post('/suppliers/import', [SupplierController::class, 'import'])->name('suppliers.import');
     Route::post('/suppliers/batch-destroy', [SupplierController::class, 'batchDestroy'])->name('suppliers.batch-destroy');
     Route::post('/suppliers/batch-toggle-status', [SupplierController::class, 'batchToggleStatus'])->name('suppliers.batch-toggle-status');
-
     Route::post('/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
     Route::put('/suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
     Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
     Route::patch('/suppliers/{supplier}/toggle-status', [SupplierController::class, 'toggleStatus'])->name('suppliers.toggle-status');
-    Route::get('/suppliers/template', [SupplierController::class, 'downloadTemplate'])->name('suppliers.template');
-    Route::post('/suppliers/import', [SupplierController::class, 'import'])->name('suppliers.import');
 
+    // --- PRODUCT ROUTES ---
     Route::post('/products', [ProductController::class, 'store'])->name('products.store');
     Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
     Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
     Route::post('/products/batch-destroy', [ProductController::class, 'batchDestroy'])->name('products.batch-destroy');
     Route::patch('/products/{product}/toggle-status', [ProductController::class, 'toggleStatus'])->name('products.toggle-status');
 
+    // --- PR/PO WORKFLOW ---
     Route::get('/purchase-request/create', [PurchaseRequestController::class, 'create'])->name('purchase-requests.create');
     Route::post('/purchase-request', [PurchaseRequestController::class, 'store'])->name('purchase-requests.store');
     Route::put('/purchase-requests/{id}', [PurchaseRequestController::class, 'update'])->name('purchase-requests.update');
