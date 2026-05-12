@@ -16,15 +16,19 @@ const MealCard = ({ meal, selection, onSelectionChange }) => {
     const currentSite = isStrictlyLocked ? (meal.site || '') : (selection?.site || '');
     const currentNote = isStrictlyLocked ? (meal.custom_request || '') : (selection?.custom_request || '');
 
+    // Auto-clear comment when 'main' or 'alt' is selected so hidden data doesn't submit
+    useEffect(() => {
+        if ((currentChoice === 'main' || currentChoice === 'alt') && currentNote !== '') {
+            onSelectionChange(meal.participant_id, 'custom_request', '');
+        }
+    }, [currentChoice]);
+
     // Dynamically change label and placeholder based on current selection
-    let noteLabel = "Optional Request / Add-ons";
+    let noteLabel = "Optional Request";
     let inputPlaceholder = "e.g., Extra Rice or 2 Bananas";
 
-    if (currentChoice === 'main' || currentChoice === 'alt') {
-        noteLabel = "Add-ons";
-        inputPlaceholder = "e.g., Extra Rice";
-    } else if (currentChoice === 'special') {
-        noteLabel = "Request";
+    if (currentChoice === 'special') {
+        noteLabel = "Special Request";
         inputPlaceholder = "e.g., 2 Bananas, 2 Eggs";
     }
 
@@ -179,31 +183,46 @@ const MealCard = ({ meal, selection, onSelectionChange }) => {
                     </div>
                 )}
 
-                {/* REQUEST INPUT BOX */}
+                {/* REQUEST INPUT BOX OR SELECTED MEAL CONFIRMATION */}
                 <div className="mt-auto">
-                    <label className="flex items-center text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">
-                        <svg className="w-3.5 h-3.5 mr-1.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                        {noteLabel}
-                        {/* Show red asterisk if the field is currently required */}
-                        {currentChoice === 'special' && (
-                            <span className="text-rose-500 ml-1 text-sm leading-none">*</span>
-                        )}
-                    </label>
-                    <input 
-                        type="text" 
-                        placeholder={inputPlaceholder}
-                        className={`w-full text-sm py-3 px-4 bg-slate-50 border rounded-xl shadow-sm focus:bg-white focus:ring-4 transition-all font-medium placeholder-slate-400 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 ${
-                            currentChoice === 'special' && !currentNote.trim()
-                            ? 'border-amber-300 focus:border-amber-400 focus:ring-amber-500/10' 
-                            : 'border-slate-200 focus:border-indigo-400 focus:ring-indigo-500/10'
-                        }`}
-                        value={currentNote}
-                        onChange={(e) => onSelectionChange(meal.participant_id, 'custom_request', e.target.value)}
-                        disabled={isStrictlyLocked}
-                        required={currentChoice === 'special'}
-                    />
+                    {/* IF MAIN/ALT IS CHOSEN -OR- IF SPECIAL IS CHOSEN AND LOCKED: Hide input, show message */}
+                    {(currentChoice === 'main' || currentChoice === 'alt' || (isStrictlyLocked && currentChoice === 'special')) ? (
+                        <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 flex items-start gap-3 animate-fade-in-up">
+                            <svg className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                            </svg>
+                            <p className="text-sm font-medium text-emerald-800 leading-snug">
+                                Your meal on <strong>{formatAppDate(meal.duty_date, system?.timezone, { month: 'long', day: 'numeric' })}</strong> is <strong>{currentChoice === 'main' ? meal.main_meal : currentChoice === 'alt' ? meal.alt_meal : currentNote}</strong>.
+                            </p>
+                        </div>
+                    ) : (
+                        /* OTHERWISE: Show the input field so they can type their special request */
+                        <>
+                            <label className="flex items-center text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">
+                                <svg className="w-3.5 h-3.5 mr-1.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                                {noteLabel}
+                                {/* Show red asterisk if the field is currently required */}
+                                {currentChoice === 'special' && (
+                                    <span className="text-rose-500 ml-1 text-sm leading-none">*</span>
+                                )}
+                            </label>
+                            <input 
+                                type="text" 
+                                placeholder={inputPlaceholder}
+                                className={`w-full text-sm py-3 px-4 bg-slate-50 border rounded-xl shadow-sm focus:bg-white focus:ring-4 transition-all font-medium placeholder-slate-400 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed ${
+                                    currentChoice === 'special' && !currentNote.trim()
+                                    ? 'border-amber-300 focus:border-amber-400 focus:ring-amber-500/10' 
+                                    : 'border-slate-200 focus:border-indigo-400 focus:ring-indigo-500/10'
+                                }`}
+                                value={currentNote}
+                                onChange={(e) => onSelectionChange(meal.participant_id, 'custom_request', e.target.value)}
+                                disabled={isStrictlyLocked}
+                                required={currentChoice === 'special'}
+                            />
+                        </>
+                    )}
                 </div>
             </div>
         </div>
