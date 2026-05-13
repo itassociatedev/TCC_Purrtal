@@ -57,15 +57,12 @@ class EmployeeController extends Controller
         ]);
         
         try {
-            // Check if the assigned role is an Admin
-            $role = Role::find($request->role_id);
-            $isAdmin = $role && (strtolower($role->name) === 'admin' || strtolower($role->name) === 'super admin');
+            // Check if the PERSON CREATING the user is an Admin
+            $actorRole = Auth::user()->role ? strtolower(Auth::user()->role->name) : '';
+            $isActorAdmin = ($actorRole === 'admin' || $actorRole === 'super admin');
             
-            // Force device limit to max 2 if not an Admin
-            $device_limit = $request->device_limit;
-            if (!$isAdmin && $device_limit > 2) {
-                $device_limit = 2;
-            }
+            // If they are an Admin, respect their input. Otherwise, default to 2.
+            $device_limit = $isActorAdmin && $request->filled('device_limit') ? $request->device_limit : 2;
 
             $user = User::create([
                 'name' => trim($request->name),
@@ -243,26 +240,25 @@ class EmployeeController extends Controller
         ]);
 
         try {
-            // Check if the assigned role is an Admin
-            $role = Role::find($request->role_id);
-            $isAdmin = $role && (strtolower($role->name) === 'admin' || strtolower($role->name) === 'super admin');
-            
-            // Force device limit to max 2 if not an Admin
-            $device_limit = $request->device_limit;
-            if (!$isAdmin && $device_limit > 2) {
-                $device_limit = 2;
-            }
+            $actorRole = Auth::user()->role ? strtolower(Auth::user()->role->name) : '';
+            $isActorAdmin = ($actorRole === 'admin' || $actorRole === 'super admin');
 
-           $user->update([
+            $updateData = [
                 'name' => trim($request->name),
                 'email' => trim($request->email),
                 'role_id' => $request->role_id,
                 'department_id' => $request->department_id,
                 'position_id' => $request->position_id,
-                'device_limit'=> $device_limit, 
-                'branch_id' => $request->branch_ids[0], 
+                'branch_id' => $request->branch_ids[0] ?? null, 
                 'is_rotating'=> count($request->branch_ids) > 1,
-            ]);
+            ];
+
+            // Only append the device limit to the update array if the actor is an admin
+            if ($isActorAdmin && $request->filled('device_limit')) {
+                $updateData['device_limit'] = $request->device_limit;
+            }
+
+            $user->update($updateData);
 
             $user->branches()->sync($request->branch_ids);
 
@@ -313,8 +309,12 @@ class EmployeeController extends Controller
 
     public function export(Request $request)
     {
+        // 🟢 Capture all filters passed from EmployeeManagement.jsx
+        $filters = $request->only(['search', 'department', 'branch', 'position', 'status']);
+
+        // Pass the array of filters directly to your UsersExport class
         return Excel::download(
-            new UsersExport($request->search, $request->department, $request->branch), 
+            new UsersExport($filters), 
             'employees_export_' . now()->format('Ymd_His') . '.xlsx'
         );
     }
@@ -501,6 +501,33 @@ class EmployeeController extends Controller
             return back()->with('success', "Activation/Reset links sent to {$sentCount} selected employees.");
         } catch (\Exception $e) {
             return back()->with('error', 'Failed to send bulk links: ' . $e->getMessage());
+        }
+    }
+
+    // 🟢 NEW METHOD FOR BULK UPDATING DEVICE LIMITS
+    public function bulkUpdateDeviceLimit(Request $request)
+    {
+        // 1. Kick out non-admins immediately
+        $actorRole = Auth::user()->role ? strtolower(Auth::user()->role->name) : '';
+        if ($actorRole !== 'admin' && $actorRole !== 'super admin') {
+            return back()->with('error', 'Unauthorized: Only Admins can bulk update device limits.');
+        }
+
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:users,id',
+            'limit' => 'required|integer|min:1'
+        ]);
+
+        try {
+            // 2. Perform a much faster, direct database bulk update
+            User::whereIn('id', $request->ids)->update([
+                'device_limit' => $request->limit
+            ]);
+
+            return back()->with('success', "Device limit updated for " . count($request->ids) . " selected employees.");
+        } catch (\Exception $e) {
+            return back()->with('error', 'Failed to update device limits: ' . $e->getMessage());
         }
     }
 }

@@ -13,34 +13,51 @@ class UsersExport implements FromQuery, WithHeadings, WithMapping, ShouldAutoSiz
 {
     use Exportable;
 
-    protected $search, $department, $branch;
+    protected $filters;
 
-    public function __construct($search = null, $department = null, $branch = null)
+    // Receive the array of filters from the Controller
+    public function __construct($filters = [])
     {
-        $this->search = $search;
-        $this->department = $department;
-        $this->branch = $branch;
+        $this->filters = $filters;
     }
 
     public function query()
     {
+        // Start the query and eager load relationships
         $query = User::with(['department', 'position', 'branches'])->latest();
 
-        if ($this->search) {
+        // 1. Filter by Search Query (Name or Email)
+        if (!empty($this->filters['search'])) {
             $query->where(function ($q) {
-                $q->where('name', 'LIKE', '%' . $this->search . '%')
-                  ->orWhere('email', 'LIKE', '%' . $this->search . '%');
+                $q->where('name', 'LIKE', '%' . $this->filters['search'] . '%')
+                  ->orWhere('email', 'LIKE', '%' . $this->filters['search'] . '%');
             });
         }
-        if ($this->department) {
+
+        // 2. Filter by Department
+        if (!empty($this->filters['department'])) {
             $query->whereHas('department', function ($q) {
-                $q->where('name', $this->department);
+                $q->where('name', $this->filters['department']);
             });
         }
-        if ($this->branch) {
-            $query->whereHas('branches', function ($q) {
-                $q->where('name', $this->branch);
+
+        // 3. Filter by Position (Added)
+        if (!empty($this->filters['position'])) {
+            $query->whereHas('position', function ($q) {
+                $q->where('name', $this->filters['position']);
             });
+        }
+
+        // 4. Filter by Branch
+        if (!empty($this->filters['branch'])) {
+            $query->whereHas('branches', function ($q) {
+                $q->where('name', $this->filters['branch']);
+            });
+        }
+
+        // 5. Filter by Status (Added - e.g., "Pending Setup")
+        if (!empty($this->filters['status'])) {
+            $query->where('status', $this->filters['status']);
         }
 
         return $query;
@@ -48,7 +65,6 @@ class UsersExport implements FromQuery, WithHeadings, WithMapping, ShouldAutoSiz
 
     public function headings(): array
     {
-        // Changed 'Is Rotating' to 'Status' here
         return ['Name', 'Email', 'Department', 'Position', 'Branches', 'Status'];
     }
 
@@ -62,7 +78,7 @@ class UsersExport implements FromQuery, WithHeadings, WithMapping, ShouldAutoSiz
             $user->department->name ?? 'Unassigned',
             $user->position->name ?? 'Unassigned',
             $branchNames ?: 'N/A',
-            ucfirst($user->status), // Changed from $user->is_rotating ? 'Yes' : 'No'
+            ucfirst($user->status),
         ];
     }
 }

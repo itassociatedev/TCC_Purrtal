@@ -221,6 +221,8 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
     Route::patch('/users/{user}/toggle-status', [EmployeeController::class, 'toggleStatus'])->name('.users.toggle-status');
 
     Route::post('/users/bulk-send-links', [EmployeeController::class, 'bulkSendLinks'])->name('.users.bulk-send-links');
+    // 🟢 NEW BULK DEVICE LIMIT ROUTE ADDED HERE
+    Route::patch('/users/bulk-device-limit', [EmployeeController::class, 'bulkUpdateDeviceLimit'])->name('.users.bulk-update-device-limit');
     Route::patch('/users/bulk-reset-device', [EmployeeController::class, 'bulkResetDevice'])->name('.users.bulk-reset-device');
     Route::patch('/users/bulk-toggle-status', [EmployeeController::class, 'bulkToggleStatus'])->name('.users.bulk-toggle-status');
     Route::delete('/users/bulk-destroy', [EmployeeController::class, 'bulkDestroy'])->name('.users.bulk-destroy');
