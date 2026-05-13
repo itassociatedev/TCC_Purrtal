@@ -775,6 +775,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     search: filterSearch,
                                     department: filterDepartment,
                                     branch: filterBranch,
+                                    position: filterPosition, // Added position to export URL
                                     status: filterStatus
                                 })}
                                 onClick={() => triggerToast('Preparing export. Download will start shortly...', 'success')}

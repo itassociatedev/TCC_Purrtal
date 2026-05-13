@@ -313,8 +313,12 @@ class EmployeeController extends Controller
 
     public function export(Request $request)
     {
+        // 🟢 Capture all filters passed from EmployeeManagement.jsx
+        $filters = $request->only(['search', 'department', 'branch', 'position', 'status']);
+
+        // Pass the array of filters directly to your UsersExport class
         return Excel::download(
-            new UsersExport($request->search, $request->department, $request->branch), 
+            new UsersExport($filters), 
             'employees_export_' . now()->format('Ymd_His') . '.xlsx'
         );
     }
