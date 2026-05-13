@@ -16,6 +16,10 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
     const adminLinks = getAdminLinks(auth);
 
+    // 🟢 Check if the currently logged-in user is an Admin
+    const currentUserRole = auth.user?.role?.name?.toLowerCase() || '';
+    const isCurrentUserAdmin = currentUserRole === 'admin' || currentUserRole === 'super admin';
+
     // Helper to manually trigger the global toast
     const triggerToast = (message, type = 'success') => {
         window.dispatchEvent(new CustomEvent('flash-toast', { detail: { message, type } }));
@@ -80,6 +84,13 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
         }
     };
 
+    // 🟢 BULLETPROOF UNIQUE IDENTIFIER (Safe against missing IDs)
+    const getEmployeeKey = (emp) => {
+        if (!emp) return Math.random().toString();
+        if (emp.id) return emp.id.toString();
+        return `fallback-${emp.email || emp.name || Math.random()}`;
+    };
+
     // 1. Automatically extract unique Departments, Branches, Positions, and Statuses for filter dropdowns
     const uniqueDepartments = [...new Set(users.map(u => u.department?.name).filter(Boolean))].sort();
     const uniqueBranches = [...new Set(users.flatMap(u => u.branches?.map(b => b.name) || []).filter(Boolean))].sort();
@@ -91,7 +102,6 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
         .filter(employee => {
             const searchTerm = filterSearch.trim().toLowerCase();
 
-            // Search matches name, email, department, position, or branch
             const matchesSearch = searchTerm === '' ||
                 (employee.name || '').toLowerCase().includes(searchTerm) ||
                 (employee.email || '').toLowerCase().includes(searchTerm) ||
@@ -101,21 +111,10 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                     (b.name || '').toLowerCase().includes(searchTerm)
                 ));
 
-            // Department matches exactly
-            const matchesDept = filterDepartment === '' ||
-                employee.department?.name === filterDepartment;
-
-            // Branch matches if the employee is assigned to it
-            const matchesBranch = filterBranch === '' ||
-                (employee.branches && employee.branches.some(b => b.name === filterBranch));
-
-            // Position matches exactly
-            const matchesPosition = filterPosition === '' || 
-                employee.position?.name === filterPosition;
-
-            // Status matches exactly
-            const matchesStatus = filterStatus === '' || 
-                employee.status === filterStatus;
+            const matchesDept = filterDepartment === '' || employee.department?.name === filterDepartment;
+            const matchesBranch = filterBranch === '' || (employee.branches && employee.branches.some(b => b.name === filterBranch));
+            const matchesPosition = filterPosition === '' || employee.position?.name === filterPosition;
+            const matchesStatus = filterStatus === '' || employee.status === filterStatus;
 
             return matchesSearch && matchesDept && matchesBranch && matchesPosition && matchesStatus;
         })
@@ -133,18 +132,11 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
     const renderHeaderSortButton = (field) => {
         const isActive = sortField === field;
-
-        const upClass =
-            isActive && sortDirection === 'asc' ? 'text-gray-900' : 'text-gray-300';
-        const downClass =
-            isActive && sortDirection === 'desc' ? 'text-gray-900' : 'text-gray-300';
+        const upClass = isActive && sortDirection === 'asc' ? 'text-gray-900' : 'text-gray-300';
+        const downClass = isActive && sortDirection === 'desc' ? 'text-gray-900' : 'text-gray-300';
 
         return (
-            <button
-                type="button"
-                onClick={() => toggleSort(field)}
-                className="ml-2 inline-flex items-center justify-center hover:opacity-80 transition"
-            >
+            <button type="button" onClick={() => toggleSort(field)} className="ml-2 inline-flex items-center justify-center hover:opacity-80 transition">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" className="w-4 h-4">
                     <g className={upClass} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M7 17V7" />
@@ -165,6 +157,17 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     const [selectedUsers, setSelectedUsers] = useState([]);
     const [bulkDropdownOpen, setBulkDropdownOpen] = useState(false);
 
+    // BULK DEVICE LIMIT STATE
+    const [isBulkLimitModalOpen, setBulkLimitModalOpen] = useState(false);
+    
+    const {
+        data: bulkLimitData,
+        setData: setBulkLimitData,
+        patch: patchBulkLimit,
+        processing: bulkLimitProcessing,
+        reset: resetBulkLimit
+    } = useForm({ limit: 2, ids: [] });
+
     // Close bulk dropdown when clicking outside
     useEffect(() => {
         const closeDropdown = () => setBulkDropdownOpen(false);
@@ -174,7 +177,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
     const handleSelectAll = (e) => {
         if (e.target.checked) {
-            setSelectedUsers(filteredUsers.map(u => u.id));
+            setSelectedUsers(filteredUsers.map(getEmployeeKey));
         } else {
             setSelectedUsers([]);
         }
@@ -186,62 +189,214 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
         );
     };
 
-    // Correctly routes bulk actions with Inertia's data constraints
+    // 🟢 EXTRACT FULL OBJECTS FOR THE TABLES
+    const selectedObjects = users.filter((u) => u && selectedUsers.includes(getEmployeeKey(u)));
+    const unselectedFilteredUsers = filteredUsers.filter((u) => u && !selectedUsers.includes(getEmployeeKey(u)));
+
+    // Generate Display Names for Modals
+    let displayNames = '';
+    if (selectedObjects.length > 0) {
+        if (selectedObjects.length <= 5) {
+            displayNames = selectedObjects.map(u => u.name).join(', ');
+        } else {
+            displayNames = selectedObjects.slice(0, 5).map(u => u.name).join(', ') + ` and ${selectedObjects.length - 5} others`;
+        }
+    }
+
+    // ==========================================
+    // ACTION HANDLERS (Must be defined before Rows)
+    // ==========================================
+    const confirmDeviceReset = (employee) => {
+        setActiveDropdown(null);
+        setConfirmDialog({
+            isOpen: true,
+            title: 'Reset Device Connection',
+            message: `Are you sure you want to reset the device connection for ${employee.name}? They will be required to re-authenticate.`,
+            confirmText: 'Reset Device',
+            confirmColor: 'bg-yellow-600 hover:bg-yellow-500',
+            onConfirm: () => {
+                router.patch(route('admin.users.reset-device', [employee.id]), {}, {
+                    preserveScroll: true,
+                    onSuccess: () => closeConfirmModal(),
+                });
+            }
+        });
+    };
+
+    const confirmDeleteUser = (employee) => {
+        setActiveDropdown(null);
+        setConfirmDialog({
+            isOpen: true,
+            title: 'Delete Employee',
+            message: `Are you absolutely sure you want to permanently delete ${employee.name}? This action cannot be undone.`,
+            confirmText: 'Delete Employee',
+            confirmColor: 'bg-red-600 hover:bg-red-500',
+            onConfirm: () => {
+                router.delete(route('admin.users.destroy', [employee.id]), {
+                    preserveScroll: true,
+                    onSuccess: () => closeConfirmModal(),
+                });
+            }
+        });
+    };
+
+    const confirmToggleStatus = (employee) => {
+        setActiveDropdown(null);
+        const isDisabling = employee.status !== 'Disabled';
+        
+        setConfirmDialog({
+            isOpen: true,
+            title: isDisabling ? 'Disable Account' : 'Enable Account',
+            message: isDisabling 
+                ? `Are you sure you want to disable access for ${employee.name}? They will immediately be locked out of the system.`
+                : `Are you sure you want to re-enable access for ${employee.name}?`,
+            confirmText: isDisabling ? 'Disable Account' : 'Enable Account',
+            confirmColor: isDisabling ? 'bg-red-600 hover:bg-red-500' : 'bg-green-600 hover:bg-green-500',
+            onConfirm: () => {
+                router.patch(route('admin.users.toggle-status', [employee.id]), {}, {
+                    preserveScroll: true,
+                    onSuccess: () => closeConfirmModal(),
+                });
+            }
+        });
+    };
+
+    const handleAccountAction = (employee) => {
+        setActiveDropdown(null); 
+        if (employee.status === 'Pending Setup') {
+            router.post(route('employees.send-activation', [employee.id]), {}, {
+                preserveScroll: true,
+                onSuccess: () => triggerToast(`Activation link sent to ${employee.email}`, 'success'),
+            });
+        } else {
+            router.post(route('employees.send-reset', [employee.id]), {}, {
+                preserveScroll: true,
+                onSuccess: () => triggerToast(`Reset link sent to ${employee.email}`, 'success'),
+            });
+        }
+    };
+
+    const confirmDeleteRole = (role) => {
+        setConfirmDialog({
+            isOpen: true,
+            title: 'Delete System Role',
+            message: `Are you sure you want to permanently delete the ${role.name} role?\n\nThis may strip access from users currently holding this role.`,
+            confirmText: 'Delete Role',
+            confirmColor: 'bg-red-600 hover:bg-red-500',
+            onConfirm: () => {
+                router.delete(route('admin.roles.destroy', [role.id]), {
+                    preserveScroll: true,
+                    onSuccess: () => closeConfirmModal(),
+                });
+            }
+        });
+    };
+
+    const confirmDeleteDepartment = (department) => {
+        setConfirmDialog({
+            isOpen: true,
+            title: 'Delete Department',
+            message: `Are you sure you want to permanently delete the ${department.name} department?\n\nThis may affect employees currently assigned to it.`,
+            confirmText: 'Delete Department',
+            confirmColor: 'bg-red-600 hover:bg-red-500',
+            onConfirm: () => {
+                router.delete(route('admin.departments.destroy', [department.id]), {
+                    preserveScroll: true,
+                    onSuccess: () => closeConfirmModal(),
+                });
+            }
+        });
+    };
+
+    const confirmDeletePosition = (position) => {
+        setConfirmDialog({
+            isOpen: true,
+            title: 'Delete Position',
+            message: `Are you sure you want to permanently delete the ${position.name} position?\n\nThis may affect employees currently assigned to it.`,
+            confirmText: 'Delete Position',
+            confirmColor: 'bg-red-600 hover:bg-red-500',
+            onConfirm: () => {
+                router.delete(route('admin.positions.destroy', [position.id]), {
+                    preserveScroll: true,
+                    onSuccess: () => closeConfirmModal(),
+                });
+            }
+        });
+    };
+
+    const confirmDeleteBranch = (branch) => {
+        setConfirmDialog({
+            isOpen: true,
+            title: 'Delete Branch',
+            message: `Are you sure you want to permanently delete the ${branch.name} branch?\n\nThis may affect employees currently assigned to it.`,
+            confirmText: 'Delete Branch',
+            confirmColor: 'bg-red-600 hover:bg-red-500',
+            onConfirm: () => {
+                router.delete(route('admin.branches.destroy', [branch.id]), {
+                    preserveScroll: true,
+                    onSuccess: () => closeConfirmModal(),
+                });
+            }
+        });
+    };
+
+    // Bulk Actions handler
     const handleBulkAction = (action) => {
         setBulkDropdownOpen(false);
         
         let title = '';
-        let message = '';
+        let messageText = '';
         let confirmText = '';
         let confirmColor = '';
         let routeName = '';
         let method = 'post';
 
         switch(action) {
+            case 'change-limit':
+                setBulkLimitData({ limit: 2, ids: selectedUsers });
+                setBulkLimitModalOpen(true);
+                return; 
             case 'password-reset':
                 title = 'Send Password/Activation Links';
-                message = `Are you sure you want to send account links to ${selectedUsers.length} selected employees?`;
+                messageText = `Are you sure you want to send account links to the following ${selectedObjects.length} employee(s): ${displayNames}?`;
                 confirmText = 'Send Links';
                 confirmColor = 'bg-blue-600 hover:bg-blue-500';
                 routeName = 'admin.users.bulk-send-links';
                 break;
             case 'device-reset':
                 title = 'Bulk Device Reset';
-                message = `Are you sure you want to reset the device connection for ${selectedUsers.length} selected employees? They will be required to re-authenticate.`;
+                messageText = `Are you sure you want to reset the device connection for the following ${selectedObjects.length} employee(s): ${displayNames}? They will be required to re-authenticate.`;
                 confirmText = 'Reset Devices';
                 confirmColor = 'bg-yellow-600 hover:bg-yellow-500';
                 routeName = 'admin.users.bulk-reset-device';
                 method = 'patch';
                 break;
             case 'toggle-status':
-                // Smart Status Detection
-                const selectedObjects = users.filter(u => selectedUsers.includes(u.id));
                 const allAreDisabled = selectedObjects.every(u => u.status === 'Disabled');
                 const allAreActive = selectedObjects.every(u => u.status !== 'Disabled');
 
                 if (allAreDisabled) {
                     title = 'Bulk Enable Accounts';
-                    message = `Are you sure you want to enable access for ${selectedUsers.length} selected employee(s)?`;
+                    messageText = `Are you sure you want to enable access for the following ${selectedObjects.length} employee(s): ${displayNames}?`;
                     confirmText = 'ENABLE ACCOUNTS';
                     confirmColor = 'bg-green-600 hover:bg-green-500';
                 } else if (allAreActive) {
                     title = 'Bulk Disable Accounts';
-                    message = `Are you sure you want to disable access for ${selectedUsers.length} selected employee(s)?`;
+                    messageText = `Are you sure you want to disable access for the following ${selectedObjects.length} employee(s): ${displayNames}?`;
                     confirmText = 'DISABLE ACCOUNTS';
                     confirmColor = 'bg-red-600 hover:bg-red-500';
                 } else {
                     title = 'Bulk Toggle Status';
-                    message = `Are you sure you want to toggle the status for ${selectedUsers.length} selected employee(s)? (Active accounts will become Disabled, and Disabled accounts will become Active).`;
+                    messageText = `Are you sure you want to toggle the status for the following ${selectedObjects.length} employee(s): ${displayNames}? (Active accounts will become Disabled, and Disabled accounts will become Active).`;
                     confirmText = 'TOGGLE STATUSES';
                     confirmColor = 'bg-orange-600 hover:bg-orange-500';
                 }
-
                 routeName = 'admin.users.bulk-toggle-status';
                 method = 'patch';
                 break;
             case 'delete':
                 title = 'Bulk Delete Employees';
-                message = `Are you absolutely sure you want to permanently delete ${selectedUsers.length} selected employees? This action cannot be undone.`;
+                messageText = `Are you absolutely sure you want to permanently delete the following ${selectedObjects.length} employee(s): ${displayNames}? This action cannot be undone.`;
                 confirmText = 'Delete Employees';
                 confirmColor = 'bg-red-600 hover:bg-red-500';
                 routeName = 'admin.users.bulk-destroy';
@@ -254,31 +409,273 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
         setConfirmDialog({
             isOpen: true,
             title,
-            message,
+            message: messageText, // MUST BE PURE STRING TO PREVENT REACT CRASH
             confirmText,
             confirmColor,
             onConfirm: () => {
-                // Determine structure based on HTTP method requirements in Inertia
                 if (method === 'delete') {
                     router.delete(route(routeName), {
                         data: { ids: selectedUsers },
                         preserveScroll: true,
-                        onSuccess: () => {
-                            closeConfirmModal();
-                            setSelectedUsers([]);
-                        }
+                        onSuccess: () => { closeConfirmModal(); setSelectedUsers([]); }
                     });
                 } else {
                     router[method](route(routeName), { ids: selectedUsers }, {
                         preserveScroll: true,
-                        onSuccess: () => {
-                            closeConfirmModal();
-                            setSelectedUsers([]);
-                        }
+                        onSuccess: () => { closeConfirmModal(); setSelectedUsers([]); }
                     });
                 }
             }
         });
+    };
+
+    const submitBulkLimit = (e) => {
+        e.preventDefault();
+        patchBulkLimit(route('admin.users.bulk-update-device-limit'), {
+            preserveScroll: true,
+            onSuccess: () => {
+                setBulkLimitModalOpen(false);
+                setSelectedUsers([]);
+                resetBulkLimit();
+            }
+        });
+    };
+
+    // ==========================================
+    // EXTRACTED RENDER METHODS FOR THE TABLE ROWS
+    // ==========================================
+    const [activeDropdown, setActiveDropdown] = useState(null);
+
+    const renderDesktopRow = (employee, isSelected) => {
+        const uniqueKey = getEmployeeKey(employee);
+        return (
+            <tr 
+                key={`desktop-${uniqueKey}`} 
+                onClick={() => handleSelect(uniqueKey)}
+                className={`border-b cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50/80 hover:bg-indigo-100' : 'bg-white hover:bg-gray-50'}`}
+            >
+                <td className="px-6 py-4 whitespace-nowrap">
+                    <input
+                        type="checkbox"
+                        className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer"
+                        checked={isSelected}
+                        onChange={() => handleSelect(uniqueKey)}
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                </td>
+                <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
+                    {employee.name}
+                    <div className="text-xs text-gray-500 mt-0.5">{employee.email}</div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                    {employee.department?.name ? <span className="text-gray-900">{employee.department.name}</span> : <span className="text-gray-400 italic">Unassigned</span>}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                    {employee.position?.name ? <span className="text-gray-900 font-medium">{employee.position.name}</span> : <span className="text-gray-400 italic">Unassigned</span>}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                    {employee.branches && employee.branches.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                            {employee.branches.map((branch) => (
+                                <span key={branch.id} className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                                    {branch.name}
+                                </span>
+                            ))}
+                        </div>
+                    ) : (
+                        <span className="text-gray-400 italic">N/A</span>
+                    )}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${
+                        employee.status === 'Disabled' ? 'bg-gray-100 text-gray-600 ring-gray-500/20' : 
+                        employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 ring-red-600/20' : 
+                        employee.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' : 
+                        employee.status === 'Pending Setup' ? 'bg-yellow-50 text-yellow-800 ring-yellow-600/20' :
+                        'bg-gray-50 text-gray-800 ring-gray-600/20'
+                    }`}>
+                        {employee.status}
+                    </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-center relative">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveDropdown(activeDropdown === uniqueKey ? null : uniqueKey);
+                        }}
+                        className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-gray-200 focus:outline-none transition-colors"
+                    >
+                        <img src={settingsIcon} alt="Settings" className="h-5 w-5 opacity-70 hover:opacity-100" />
+                    </button>
+
+                    {activeDropdown === uniqueKey && (
+                        <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute right-8 top-10 z-50 w-36 overflow-hidden rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5"
+                        >
+                            <button 
+                                className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors"
+                                onClick={(e) => {
+                                    e.preventDefault(); e.stopPropagation(); handleAccountAction(employee);
+                                }}
+                            >
+                                {employee.status === 'Pending Setup' ? 'Activation Link' : 'Password Reset'}
+                            </button>
+                            <Link as="button" className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" onClick={(e) => {
+                                e.preventDefault(); e.stopPropagation(); openEditUserModal(employee);
+                            }}>
+                                Edit
+                            </Link>
+                            <Link as="button" className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" onClick={(e) => {
+                                e.preventDefault(); e.stopPropagation(); confirmDeviceReset(employee);
+                            }}>
+                                Device Reset
+                            </Link>
+                            <button 
+                                className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" 
+                                onClick={(e) => {
+                                    e.preventDefault(); e.stopPropagation(); confirmToggleStatus(employee);
+                                }}
+                            >
+                                {employee.status === 'Disabled' ? 'Enable Account' : 'Disable Account'}
+                            </button>
+                            <Link as="button" method="delete" className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" onClick={(e) => {
+                                e.preventDefault(); e.stopPropagation(); confirmDeleteUser(employee);
+                            }}>
+                                Delete
+                            </Link>
+                        </div>
+                    )}
+                </td>
+            </tr>
+        );
+    };
+
+    const renderMobileRow = (employee, isSelected) => {
+        const uniqueKey = getEmployeeKey(employee);
+        return (
+            <div 
+                key={`mobile-${uniqueKey}`} 
+                onClick={() => handleSelect(uniqueKey)}
+                className={`p-4 cursor-pointer transition-colors border-b border-gray-100 ${isSelected ? 'bg-indigo-50/80' : 'bg-white'}`}
+            >
+                <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                        <input
+                            type="checkbox"
+                            className="mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer flex-shrink-0"
+                            checked={isSelected}
+                            onChange={() => handleSelect(uniqueKey)}
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                        <div>
+                            <div className="font-medium text-gray-900 break-words">
+                                {employee.name}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-0.5 break-all">
+                                {employee.email}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="relative shrink-0">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveDropdown(activeDropdown === uniqueKey ? null : uniqueKey);
+                            }}
+                            className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-gray-200 focus:outline-none transition-colors"
+                        >
+                            <img src={settingsIcon} alt="Settings" className="h-5 w-5 opacity-70 hover:opacity-100" />
+                        </button>
+
+                        {activeDropdown === uniqueKey && (
+                            <div
+                                onClick={(e) => e.stopPropagation()}
+                                className="absolute right-0 top-10 z-50 w-56 overflow-hidden rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5"
+                            >
+                                <button 
+                                    className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors"
+                                    onClick={(e) => {
+                                        e.preventDefault(); e.stopPropagation(); handleAccountAction(employee);
+                                    }}
+                                >
+                                    {employee.status === 'Pending Setup' ? 'Activation Link' : 'Password Reset'}
+                                </button>
+                                <Link as="button" className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" onClick={(e) => {
+                                    e.preventDefault(); e.stopPropagation(); openEditUserModal(employee);
+                                }}>
+                                    Edit
+                                </Link>
+                                <Link as="button" className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" onClick={(e) => {
+                                    e.preventDefault(); e.stopPropagation(); confirmDeviceReset(employee);
+                                }}>
+                                    Device Reset
+                                </Link>
+                                <button 
+                                    className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" 
+                                    onClick={(e) => {
+                                        e.preventDefault(); e.stopPropagation(); confirmToggleStatus(employee);
+                                    }}
+                                >
+                                    {employee.status === 'Disabled' ? 'Enable Account' : 'Disable Account'}
+                                </button>
+                                <Link as="button" method="delete" className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" onClick={(e) => {
+                                    e.preventDefault(); e.stopPropagation(); confirmDeleteUser(employee);
+                                }}>
+                                    Delete
+                                </Link>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                    <div>
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Department</div>
+                        <div className="mt-1 text-sm text-gray-900">
+                            {employee.department?.name ? employee.department.name : <span className="text-gray-400 italic">Unassigned</span>}
+                        </div>
+                    </div>
+                    <div>
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Position</div>
+                        <div className="mt-1 text-sm text-gray-900">
+                            {employee.position?.name ? employee.position.name : <span className="text-gray-400 italic">Unassigned</span>}
+                        </div>
+                    </div>
+                    <div>
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Branch</div>
+                        <div className="mt-1">
+                            {employee.branches && employee.branches.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                    {employee.branches.map((branch) => (
+                                        <span key={branch.id} className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                                            {branch.name}
+                                        </span>
+                                    ))}
+                                </div>
+                            ) : (
+                                <span className="text-sm text-gray-400 italic">N/A</span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mt-3">Status</div>
+                    <div className="mt-1">
+                        <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${
+                            employee.status === 'Disabled' ? 'bg-gray-100 text-gray-600 ring-gray-500/20' : 
+                            employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 ring-red-600/20' : 
+                            employee.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' : 
+                            employee.status === 'Pending Setup' ? 'bg-yellow-50 text-yellow-800 ring-yellow-600/20' :
+                            'bg-gray-50 text-gray-800 ring-gray-600/20'
+                        }`}>
+                            {employee.status}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     // ==========================================
@@ -342,7 +739,6 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     // ==========================================
     // For Edit Positions
     // ==========================================
-    const [activeDropdown, setActiveDropdown] = useState(null);
     const [isPositionModalOpen, setPositionModalOpen] = useState(false);
 
     const { 
@@ -530,144 +926,6 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
         (pos) => pos.department_id === parseInt(editUserData.department_id)
     );
 
-    // ==========================================
-    // ACTION HANDLERS (Reset, Disable, Delete)
-    // ==========================================
-    const confirmDeviceReset = (employee) => {
-        setActiveDropdown(null);
-        setConfirmDialog({
-            isOpen: true,
-            title: 'Reset Device Connection',
-            message: `Are you sure you want to reset the device connection for ${employee.name}? \n\nThey will be required to re-authenticate.`,
-            confirmText: 'Reset Device',
-            confirmColor: 'bg-yellow-600 hover:bg-yellow-500',
-            onConfirm: () => {
-                router.patch(route('admin.users.reset-device', [employee.id]), {}, {
-                    preserveScroll: true,
-                    onSuccess: () => closeConfirmModal(),
-                });
-            }
-        });
-    };
-
-    const confirmDeleteUser = (employee) => {
-        setActiveDropdown(null);
-        setConfirmDialog({
-            isOpen: true,
-            title: 'Delete Employee',
-            message: `Are you absolutely sure you want to permanently delete ${employee.name}? \n\nThis action cannot be undone.`,
-            confirmText: 'Delete Employee',
-            confirmColor: 'bg-red-600 hover:bg-red-500',
-            onConfirm: () => {
-                router.delete(route('admin.users.destroy', [employee.id]), {
-                    preserveScroll: true,
-                    onSuccess: () => closeConfirmModal(),
-                });
-            }
-        });
-    };
-
-    const confirmToggleStatus = (employee) => {
-        setActiveDropdown(null);
-        const isDisabling = employee.status !== 'Disabled';
-        
-        setConfirmDialog({
-            isOpen: true,
-            title: isDisabling ? 'Disable Account' : 'Enable Account',
-            message: isDisabling 
-                ? `Are you sure you want to disable access for ${employee.name}? \n\nThey will immediately be locked out of the system.`
-                : `Are you sure you want to re-enable access for ${employee.name}?`,
-            confirmText: isDisabling ? 'Disable Account' : 'Enable Account',
-            confirmColor: isDisabling ? 'bg-red-600 hover:bg-red-500' : 'bg-green-600 hover:bg-green-500',
-            onConfirm: () => {
-                router.patch(route('admin.users.toggle-status', [employee.id]), {}, {
-                    preserveScroll: true,
-                    onSuccess: () => closeConfirmModal(),
-                });
-            }
-        });
-    };
-
-    const handleAccountAction = (employee) => {
-        setActiveDropdown(null); 
-        
-        if (employee.status === 'Pending Setup') {
-            router.post(route('employees.send-activation', [employee.id]), {}, {
-                preserveScroll: true,
-                onSuccess: () => triggerToast(`Activation link sent to ${employee.email}`, 'success'),
-            });
-        } else {
-            router.post(route('employees.send-reset', [employee.id]), {}, {
-                preserveScroll: true,
-                onSuccess: () => triggerToast(`Reset link sent to ${employee.email}`, 'success'),
-            });
-        }
-    };
-
-    const confirmDeleteRole = (role) => {
-        setConfirmDialog({
-            isOpen: true,
-            title: 'Delete System Role',
-            message: `Are you sure you want to permanently delete the ${role.name} role?\n\nThis may strip access from users currently holding this role.`,
-            confirmText: 'Delete Role',
-            confirmColor: 'bg-red-600 hover:bg-red-500',
-            onConfirm: () => {
-                router.delete(route('admin.roles.destroy', [role.id]), {
-                    preserveScroll: true,
-                    onSuccess: () => closeConfirmModal(),
-                });
-            }
-        });
-    };
-
-    const confirmDeleteDepartment = (department) => {
-        setConfirmDialog({
-            isOpen: true,
-            title: 'Delete Department',
-            message: `Are you sure you want to permanently delete the ${department.name} department?\n\nThis may affect employees currently assigned to it.`,
-            confirmText: 'Delete Department',
-            confirmColor: 'bg-red-600 hover:bg-red-500',
-            onConfirm: () => {
-                router.delete(route('admin.departments.destroy', [department.id]), {
-                    preserveScroll: true,
-                    onSuccess: () => closeConfirmModal(),
-                });
-            }
-        });
-    };
-
-    const confirmDeletePosition = (position) => {
-        setConfirmDialog({
-            isOpen: true,
-            title: 'Delete Position',
-            message: `Are you sure you want to permanently delete the ${position.name} position?\n\nThis may affect employees currently assigned to it.`,
-            confirmText: 'Delete Position',
-            confirmColor: 'bg-red-600 hover:bg-red-500',
-            onConfirm: () => {
-                router.delete(route('admin.positions.destroy', [position.id]), {
-                    preserveScroll: true,
-                    onSuccess: () => closeConfirmModal(),
-                });
-            }
-        });
-    };
-
-    const confirmDeleteBranch = (branch) => {
-        setConfirmDialog({
-            isOpen: true,
-            title: 'Delete Branch',
-            message: `Are you sure you want to permanently delete the ${branch.name} branch?\n\nThis may affect employees currently assigned to it.`,
-            confirmText: 'Delete Branch',
-            confirmColor: 'bg-red-600 hover:bg-red-500',
-            onConfirm: () => {
-                router.delete(route('admin.branches.destroy', [branch.id]), {
-                    preserveScroll: true,
-                    onSuccess: () => closeConfirmModal(),
-                });
-            }
-        });
-    };
-
     const { processing: importProcessing, reset: resetImport } = useForm({
         import_file: null,
     });
@@ -738,7 +996,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
                             {/* BULK ACTIONS DROPDOWN */}
                             {selectedUsers.length > 0 && (
-                                <div className="relative inline-block flex-shrink-0">
+                                <div className="relative inline-block flex-shrink-0 ml-2">
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -758,6 +1016,10 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                             className="absolute left-0 z-50 mt-2 w-56 origin-top-left rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
                                         >
                                             <div className="py-1">
+                                                {/* PROTECTED BULK CHANGE LIMIT OPTION */}
+                                                {isCurrentUserAdmin && (
+                                                    <button onClick={() => handleBulkAction('change-limit')} className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100">Change Device Limit</button>
+                                                )}
                                                 <button onClick={() => handleBulkAction('password-reset')} className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100">Activation Links / Send Reset</button>
                                                 <button onClick={() => handleBulkAction('device-reset')} className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100">Device Reset</button>
                                                 <button onClick={() => handleBulkAction('toggle-status')} className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100">Enable / Disable</button>
@@ -775,7 +1037,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     search: filterSearch,
                                     department: filterDepartment,
                                     branch: filterBranch,
-                                    position: filterPosition, // Added position to export URL
+                                    position: filterPosition,
                                     status: filterStatus
                                 })}
                                 onClick={() => triggerToast('Preparing export. Download will start shortly...', 'success')}
@@ -877,13 +1139,13 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-1 min-h-0 flex flex-col md:overflow-hidden">
-                    {/* Desktop Table */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-1 min-h-0 flex flex-col md:overflow-hidden relative">
+                    
+                    {/* 🟢 DESKTOP TABLE */}
                     <div className="hidden md:block overflow-x-auto overflow-y-auto flex-1 relative">
-                        <table className="min-w-full divide-y divide-gray-200 text-left text-sm text-gray-500">
-                            <thead className="bg-gray-50 sticky top-0 z-10 border-b border-gray-200 shadow-sm text-xs uppercase text-gray-700">
+                        <table className="min-w-full divide-y divide-gray-200 text-left text-sm text-gray-500 relative">
+                            <thead className="bg-gray-50 sticky top-0 z-20 border-b border-gray-200 shadow-sm text-xs uppercase text-gray-700">
                                 <tr>
-                                    {/* SELECT ALL CHECKBOX */}
                                     <th scope="col" className="px-6 py-3 w-10">
                                         <input
                                             type="checkbox"
@@ -918,135 +1180,50 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                             {renderHeaderSortButton('status')}
                                         </div>
                                     </th>
-
                                     <th scope="col" className="px-6 py-3 bg-gray-50 font-bold tracking-wider text-center w-20">Action</th>
                                 </tr>
                             </thead>
 
                             <tbody className="bg-white divide-y divide-gray-200">
-                                {filteredUsers.length === 0 ? (
+                                
+                                {/* 🟢 GROUP 1: SELECTED USERS PINNED TO THE TOP OF THE TABLE */}
+                                {selectedObjects.length > 0 && (
+                                    <>
+                                        <tr className="bg-indigo-100 border-b border-indigo-200">
+                                            <td colSpan="7" className="px-6 py-2 text-xs font-bold text-indigo-800 uppercase tracking-wider shadow-sm">
+                                                Selected For Bulk Actions ({selectedObjects.length})
+                                            </td>
+                                        </tr>
+                                        {selectedObjects.map(employee => renderDesktopRow(employee, true))}
+                                        
+                                        {unselectedFilteredUsers.length > 0 && (
+                                            <tr className="bg-gray-100 border-b border-gray-200">
+                                                <td colSpan="7" className="px-6 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider shadow-sm">
+                                                    Other Filtered Employees
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </>
+                                )}
+
+                                {/* 🟢 GROUP 2: NORMAL UNSELECTED USERS */}
+                                {unselectedFilteredUsers.map(employee => renderDesktopRow(employee, false))}
+
+                                {/* NO RESULTS */}
+                                {selectedObjects.length === 0 && unselectedFilteredUsers.length === 0 && (
                                     <tr>
                                         <td colSpan="7" className="px-6 py-12 text-center text-gray-500 font-medium">
                                             No employees found.
                                         </td>
                                     </tr>
-                                ) : (
-                                    filteredUsers.map((employee) => (
-                                        <tr 
-                                            key={employee.id} 
-                                            onClick={() => handleSelect(employee.id)}
-                                            className={`border-b cursor-pointer transition-colors ${selectedUsers.includes(employee.id) ? 'bg-indigo-50 hover:bg-indigo-100' : 'bg-white hover:bg-gray-50'}`}
-                                        >
-                                            {/* INDIVIDUAL ROW CHECKBOX */}
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <input
-                                                    type="checkbox"
-                                                    className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer"
-                                                    checked={selectedUsers.includes(employee.id)}
-                                                    onChange={() => handleSelect(employee.id)}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                />
-                                            </td>
-                                            <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
-                                                {employee.name}
-                                                <div className="text-xs text-gray-500 mt-0.5">{employee.email}</div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                {employee.department?.name ? <span className="text-gray-900">{employee.department.name}</span> : <span className="text-gray-400 italic">Unassigned</span>}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                {employee.position?.name ? <span className="text-gray-900 font-medium">{employee.position.name}</span> : <span className="text-gray-400 italic">Unassigned</span>}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                {employee.branches && employee.branches.length > 0 ? (
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {employee.branches.map((branch) => (
-                                                            <span key={branch.id} className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700 ring-1 ring-inset ring-blue-700/10">
-                                                                {branch.name}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-gray-400 italic">N/A</span>
-                                                )}
-                                            </td>
-
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${
-                                                    employee.status === 'Disabled' ? 'bg-gray-100 text-gray-600 ring-gray-500/20' : 
-                                                    employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 ring-red-600/20' : 
-                                                    employee.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' : 
-                                                    employee.status === 'Pending Setup' ? 'bg-yellow-50 text-yellow-800 ring-yellow-600/20' :
-                                                    'bg-gray-50 text-gray-800 ring-gray-600/20'
-                                                }`}>
-                                                    {employee.status}
-                                                </span>
-                                            </td>
-
-                                            <td className="px-6 py-4 whitespace-nowrap text-center relative">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setActiveDropdown(activeDropdown === employee.id ? null : employee.id);
-                                                    }}
-                                                    className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-gray-200 focus:outline-none transition-colors"
-                                                >
-                                                    <img src={settingsIcon} alt="Settings" className="h-5 w-5 opacity-70 hover:opacity-100" />
-                                                </button>
-
-                                                {activeDropdown === employee.id && (
-                                                    <div
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        className="absolute right-8 top-10 z-50 w-36 overflow-hidden rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5"
-                                                    >
-
-                                                        <button 
-                                                            className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors"
-                                                            onClick={(e) => {
-                                                                e.preventDefault(); 
-                                                                e.stopPropagation(); 
-                                                                handleAccountAction(employee);
-                                                            }}
-                                                        >
-                                                            {employee.status === 'Pending Setup' ? 'Activation Link' : 'Password Reset'}
-                                                        </button>
-
-                                                        <Link as="button" className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" onClick={(e) => {
-                                                            e.preventDefault(); e.stopPropagation(); openEditUserModal(employee);
-                                                        }}>
-                                                            Edit
-                                                        </Link>
-                                                        <Link as="button" className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" onClick={(e) => {
-                                                            e.preventDefault(); e.stopPropagation(); confirmDeviceReset(employee);
-                                                        }}>
-                                                            Device Reset
-                                                        </Link>
-                                                        <button 
-                                                            className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" 
-                                                            onClick={(e) => {
-                                                                e.preventDefault(); e.stopPropagation(); confirmToggleStatus(employee);
-                                                            }}
-                                                        >
-                                                            {employee.status === 'Disabled' ? 'Enable Account' : 'Disable Account'}
-                                                        </button>
-                                                        <Link as="button" method="delete" className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" onClick={(e) => {
-                                                            e.preventDefault(); e.stopPropagation(); confirmDeleteUser(employee);
-                                                        }}>
-                                                            Delete
-                                                        </Link>
-                                                    </div>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))
                                 )}
+
                             </tbody>
                         </table>
                     </div>
 
-                    {/* Mobile View */}
+                    {/* 🟢 MOBILE VIEW */}
                     <div className="md:hidden">
-                        {/* MOBILE SELECT ALL BAR */}
                         {filteredUsers.length > 0 && (
                             <div className="p-4 bg-gray-50 border-b border-gray-200 flex items-center">
                                 <input
@@ -1055,146 +1232,36 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     checked={filteredUsers.length > 0 && selectedUsers.length === filteredUsers.length}
                                     onChange={handleSelectAll}
                                 />
-                                <span className="text-sm font-medium text-gray-700">Select All Filtered</span>
+                                <span className="text-sm font-medium text-gray-700 truncate w-full pr-2">
+                                    {selectedUsers.length > 0 ? `${selectedUsers.length} Selected` : 'Select All Filtered'}
+                                </span>
                             </div>
                         )}
 
-                        {filteredUsers.length === 0 ? (
+                        {selectedObjects.length === 0 && unselectedFilteredUsers.length === 0 ? (
                             <div className="px-4 py-12 text-center text-gray-500 font-medium">
                                 No employees found.
                             </div>
                         ) : (
-                            <div className="divide-y divide-gray-200">
-                                {filteredUsers.map((employee) => (
-                                    <div 
-                                        key={employee.id} 
-                                        onClick={() => handleSelect(employee.id)}
-                                        className={`p-4 cursor-pointer transition-colors ${selectedUsers.includes(employee.id) ? 'bg-indigo-50' : 'bg-white'}`}
-                                    >
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div className="flex items-start gap-3 min-w-0">
-                                                {/* MOBILE ROW CHECKBOX */}
-                                                <input
-                                                    type="checkbox"
-                                                    className="mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer flex-shrink-0"
-                                                    checked={selectedUsers.includes(employee.id)}
-                                                    onChange={() => handleSelect(employee.id)}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                />
-                                                <div>
-                                                    <div className="font-medium text-gray-900 break-words">
-                                                        {employee.name}
-                                                    </div>
-                                                    <div className="text-xs text-gray-500 mt-0.5 break-all">
-                                                        {employee.email}
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="relative shrink-0">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setActiveDropdown(activeDropdown === employee.id ? null : employee.id);
-                                                    }}
-                                                    className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-gray-200 focus:outline-none transition-colors"
-                                                >
-                                                    <img src={settingsIcon} alt="Settings" className="h-5 w-5 opacity-70 hover:opacity-100" />
-                                                </button>
-
-                                                {activeDropdown === employee.id && (
-                                                    <div
-                                                        onClick={(e) => e.stopPropagation()}
-                                                        className="absolute right-0 top-10 z-50 w-56 overflow-hidden rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5"
-                                                    >
-
-                                                        <button 
-                                                            className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors"
-                                                            onClick={(e) => {
-                                                                e.preventDefault(); 
-                                                                e.stopPropagation(); 
-                                                                handleAccountAction(employee);
-                                                            }}
-                                                        >
-                                                            {employee.status === 'Pending Setup' ? 'Activation Link' : 'Password Reset'}
-                                                        </button>
-
-                                                        <Link as="button" className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" onClick={(e) => {
-                                                            e.preventDefault(); e.stopPropagation(); openEditUserModal(employee);
-                                                        }}>
-                                                            Edit
-                                                        </Link>
-                                                        <Link as="button" className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" onClick={(e) => {
-                                                            e.preventDefault(); e.stopPropagation(); confirmDeviceReset(employee);
-                                                        }}>
-                                                            Device Reset
-                                                        </Link>
-                                                        <button 
-                                                            className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" 
-                                                            onClick={(e) => {
-                                                                e.preventDefault(); e.stopPropagation(); confirmToggleStatus(employee);
-                                                            }}
-                                                        >
-                                                            {employee.status === 'Disabled' ? 'Enable Account' : 'Disable Account'}
-                                                        </button>
-                                                        <Link as="button" method="delete" className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" onClick={(e) => {
-                                                            e.preventDefault(); e.stopPropagation(); confirmDeleteUser(employee);
-                                                        }}>
-                                                            Delete
-                                                        </Link>
-                                                    </div>
-                                                )}
-                                            </div>
+                            <div className="flex flex-col">
+                                {/* 🟢 GROUP 1: SELECTED USERS PINNED TO TOP (MOBILE) */}
+                                {selectedObjects.length > 0 && (
+                                    <>
+                                        <div className="bg-indigo-100 px-4 py-2 border-b border-indigo-200 text-xs font-bold text-indigo-800 uppercase tracking-wider">
+                                            Selected for Bulk Actions ({selectedObjects.length})
                                         </div>
+                                        {selectedObjects.map(employee => renderMobileRow(employee, true))}
+                                        
+                                        {unselectedFilteredUsers.length > 0 && (
+                                            <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                                Other Filtered Employees
+                                            </div>
+                                        )}
+                                    </>
+                                )}
 
-                                        <div className="mt-4 space-y-3">
-                                            <div>
-                                                <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Department</div>
-                                                <div className="mt-1 text-sm text-gray-900">
-                                                    {employee.department?.name ? employee.department.name : <span className="text-gray-400 italic">Unassigned</span>}
-                                                </div>
-                                            </div>
-
-                                            <div>
-                                                <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Position</div>
-                                                <div className="mt-1 text-sm text-gray-900">
-                                                    {employee.position?.name ? employee.position.name : <span className="text-gray-400 italic">Unassigned</span>}
-                                                </div>
-                                            </div>
-
-                                            <div>
-                                                <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Branch</div>
-                                                <div className="mt-1">
-                                                    {employee.branches && employee.branches.length > 0 ? (
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {employee.branches.map((branch) => (
-                                                                <span key={branch.id} className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700 ring-1 ring-inset ring-blue-700/10">
-                                                                    {branch.name}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-sm text-gray-400 italic">N/A</span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mt-3">Status</div>
-                                            <div className="mt-1">
-                                                <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${
-                                                    employee.status === 'Disabled' ? 'bg-gray-100 text-gray-600 ring-gray-500/20' : 
-                                                    employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 ring-red-600/20' : 
-                                                    employee.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' : 
-                                                    employee.status === 'Pending Setup' ? 'bg-yellow-50 text-yellow-800 ring-yellow-600/20' :
-                                                    'bg-gray-50 text-gray-800 ring-gray-600/20'
-                                                }`}>
-                                                    {employee.status}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
+                                {/* 🟢 GROUP 2: NORMAL UNSELECTED USERS (MOBILE) */}
+                                {unselectedFilteredUsers.map(employee => renderMobileRow(employee, false))}
                             </div>
                         )}
                     </div>
@@ -1339,13 +1406,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     id="role_id" 
                                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" 
                                     value={userData.role_id} 
-                                    onChange={(e) => {
-                                        const newRoleId = e.target.value;
-                                        setUserData('role_id', newRoleId);
-                                        if (!isAdminRole(newRoleId) && userData.device_limit > 2) {
-                                            setUserData('device_limit', 2);
-                                        }
-                                    }} 
+                                    onChange={(e) => setUserData('role_id', e.target.value)} 
                                     required
                                 >
                                     <option value="" disabled>Select Role</option>
@@ -1362,20 +1423,14 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     id="device_limit" 
                                     type="number" 
                                     min="1" 
-                                    max={!isAdminRole(userData.role_id) ? "2" : ""} 
-                                    className="mt-1 block w-full" 
+                                    className={`mt-1 block w-full ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`} 
                                     value={userData.device_limit} 
-                                    onChange={(e) => {
-                                        let val = parseInt(e.target.value);
-                                        if (!isAdminRole(userData.role_id) && val > 2) {
-                                            val = 2;
-                                        }
-                                        setUserData('device_limit', val || '');
-                                    }} 
+                                    onChange={(e) => setUserData('device_limit', e.target.value)} 
                                     required 
+                                    disabled={!isCurrentUserAdmin}
                                 />
-                                {!isAdminRole(userData.role_id) && userData.role_id !== '' && (
-                                    <p className="mt-1 text-xs text-orange-500">Non-admin roles are limited to a maximum of 2 devices.</p>
+                                {!isCurrentUserAdmin && (
+                                    <p className="mt-1 text-xs text-orange-500">Only Admins can adjust device limits.</p>
                                 )}
                                 <InputError message={userErrors.device_limit} className="mt-2" />
                             </div>
@@ -1417,7 +1472,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                     </div>
 
                     <div className="mt-6 flex justify-end">
-                        <SecondaryButton onClick={closeUserModal}>Cancel</SecondaryButton>
+                        <SecondaryButton type="button" onClick={closeUserModal}>Cancel</SecondaryButton>
                         <PrimaryButton className="ms-3" disabled={userProcessing}>
                             Create Employee
                         </PrimaryButton>
@@ -1450,13 +1505,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     id="edit_role_id" 
                                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" 
                                     value={editUserData.role_id || ''} 
-                                    onChange={(e) => {
-                                        const newRoleId = e.target.value;
-                                        setEditData('role_id', newRoleId);
-                                        if (!isAdminRole(newRoleId) && editUserData.device_limit > 2) {
-                                            setEditData('device_limit', 2);
-                                        }
-                                    }} 
+                                    onChange={(e) => setEditData('role_id', e.target.value)} 
                                     required
                                 >
                                     <option value="" disabled>Select Role</option>
@@ -1471,20 +1520,14 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     id="edit_device_limit" 
                                     type="number" 
                                     min="1" 
-                                    max={!isAdminRole(editUserData.role_id) ? "2" : ""} 
-                                    className="mt-1 block w-full" 
+                                    className={`mt-1 block w-full ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`} 
                                     value={editUserData.device_limit} 
-                                    onChange={(e) => {
-                                        let val = parseInt(e.target.value);
-                                        if (!isAdminRole(editUserData.role_id) && val > 2) {
-                                            val = 2;
-                                        }
-                                        setEditData('device_limit', val || '');
-                                    }} 
+                                    onChange={(e) => setEditData('device_limit', e.target.value)} 
                                     required 
+                                    disabled={!isCurrentUserAdmin}
                                 />
-                                {!isAdminRole(editUserData.role_id) && (
-                                    <p className="mt-1 text-xs text-orange-500">Non-admin roles are limited to a maximum of 2 devices.</p>
+                                {!isCurrentUserAdmin && (
+                                    <p className="mt-1 text-xs text-orange-500">Only Admins can adjust device limits.</p>
                                 )}
                                 <InputError message={editErrors.device_limit} className="mt-2" />
                             </div>
@@ -1500,7 +1543,6 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 <InputError message={editErrors.department_id} className="mt-2" />
                             </div>
 
-                            {/* 🟢 THE FIX IS RIGHT HERE! */}
                             <div className="mt-4">
                                 <InputLabel htmlFor="edit_position" value="Position" />
                                 <select 
@@ -1533,7 +1575,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                     </div>
 
                     <div className="mt-6 flex justify-end">
-                        <SecondaryButton onClick={closeEditUserModal}>Cancel</SecondaryButton>
+                        <SecondaryButton type="button" onClick={closeEditUserModal}>Cancel</SecondaryButton>
                         <PrimaryButton className="ms-3" disabled={editProcessing}>
                             Save Changes
                         </PrimaryButton>
@@ -1560,7 +1602,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             {departments.map((dept) => (
                                 <li key={dept.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
                                     <span className="text-sm text-gray-800">{dept.name}</span>
-                                    <button onClick={() => confirmDeleteDepartment(dept)} className="text-xs font-medium text-red-600 hover:text-red-900">
+                                    <button type="button" onClick={() => confirmDeleteDepartment(dept)} className="text-xs font-medium text-red-600 hover:text-red-900">
                                         Delete
                                     </button>
                                 </li>
@@ -1572,7 +1614,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                     </div>
 
                     <div className="mt-6 flex justify-end">
-                        <SecondaryButton onClick={closeDepartmentModal}>Close</SecondaryButton>
+                        <SecondaryButton type="button" onClick={closeDepartmentModal}>Close</SecondaryButton>
                     </div>
                 </div>
             </Modal>
@@ -1596,7 +1638,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             {roles.map((role) => (
                                 <li key={role.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
                                     <span className="text-sm text-gray-800 capitalize">{role.name}</span>
-                                    <button onClick={() => confirmDeleteRole(role)} className="text-xs font-medium text-red-600 hover:text-red-900">
+                                    <button type="button" onClick={() => confirmDeleteRole(role)} className="text-xs font-medium text-red-600 hover:text-red-900">
                                         Delete
                                     </button>
                                 </li>
@@ -1608,9 +1650,39 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                     </div>
 
                     <div className="mt-6 flex justify-end">
-                        <SecondaryButton onClick={closeRoleModal}>Close</SecondaryButton>
+                        <SecondaryButton type="button" onClick={closeRoleModal}>Close</SecondaryButton>
                     </div>
                 </div>
+            </Modal>
+
+            {/* BULK CHANGE DEVICE LIMIT MODAL */}
+            <Modal show={isBulkLimitModalOpen} onClose={() => setBulkLimitModalOpen(false)} maxWidth="md">
+                <form onSubmit={submitBulkLimit} className="p-6">
+                    <h2 className="mb-4 text-lg font-medium text-gray-900">Bulk Change Device Limit</h2>
+                    <p className="mb-4 text-sm text-gray-600">
+                        Set a new device limit for the following {selectedObjects.length} employee(s): {displayNames}
+                    </p>
+
+                    <div>
+                        <InputLabel htmlFor="bulk_limit" value="Device Login Limit" />
+                        <TextInput
+                            id="bulk_limit"
+                            type="number"
+                            min="1"
+                            className="mt-1 block w-full"
+                            value={bulkLimitData.limit}
+                            onChange={(e) => setBulkLimitData('limit', e.target.value)}
+                            required
+                        />
+                    </div>
+
+                    <div className="mt-6 flex justify-end">
+                        <SecondaryButton type="button" onClick={() => setBulkLimitModalOpen(false)}>Cancel</SecondaryButton>
+                        <PrimaryButton className="ms-3" disabled={bulkLimitProcessing}>
+                            Save Changes
+                        </PrimaryButton>
+                    </div>
+                </form>
             </Modal>
 
             <ConfirmModal
