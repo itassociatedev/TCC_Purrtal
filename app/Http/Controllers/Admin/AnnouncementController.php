@@ -19,14 +19,14 @@ class AnnouncementController extends Controller
 {
     public function index()
     {
-        $announcement = Announcement::with('branches', 'priorityLevel')->latest()->get();
+        $announcements = Announcement::with(['branches', 'priorityLevel', 'comments.user'])->latest()->get();
 
         $branches = Branch::all();
 
         $priorities = PriorityLevel::all();
 
         return Inertia::render('Admin/Announcements', [
-            'announcements' => $announcement,
+            'announcements' => $announcements,
             'branches' => $branches,
             'priorities' => $priorities,
         ]);

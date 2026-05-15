@@ -23,6 +23,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'is_comment_banned',
         'role_id',
         'branch_id',
         'is_rotating',

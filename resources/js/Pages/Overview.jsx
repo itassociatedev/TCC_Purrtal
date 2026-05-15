@@ -4,6 +4,7 @@ import SidebarLayout from '@/Layouts/SidebarLayout';
 import { formatAppDate } from '@/Utils/date';
 import { Head, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
+import AnnouncementComments from '@/Components/AnnouncementComments';
 
 export default function Overview({ auth, announcements, contents }) {
     const dashboardLinks = getDashboardLinks();
@@ -296,7 +297,7 @@ export default function Overview({ auth, announcements, contents }) {
                                                         <div
                                                             key={item.id}
                                                             onClick={() => openAnnouncementModal(item)}
-                                                            className="announcement-card relative flex h-[430px] cursor-pointer flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-md transition-all hover:-translate-y-1 hover:shadow-lg"
+                                                            className="announcement-card relative flex h-[500px] cursor-pointer flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-md transition-all hover:-translate-y-1 hover:shadow-lg"
                                                             style={{
                                                                 '--badge-solid-bg': solidBadgeStyle.backgroundColor,
                                                                 '--badge-solid-text': solidBadgeStyle.color,
@@ -344,18 +345,80 @@ export default function Overview({ auth, announcements, contents }) {
                                                                 )}
                                                                 <div className="absolute inset-0 h-14 bg-gradient-to-b from-black/30 to-transparent z-10 pointer-events-none"></div>
                                                             </div>
+                                                
+                                                            {/* Main text container */}
+                                                            <div className="flex min-h-0 flex-1 flex-col pt-5 px-5 pb-0">
+                                                                
+                                                                {/* Group the Announcement Text */}
+                                                                <div className="flex flex-col mb-4">
+                                                                    <h4 className="mb-1 pr-12 break-words text-lg font-bold leading-tight text-gray-900 line-clamp-2">
+                                                                        {item.title}
+                                                                    </h4>
+                                                                    <p className="mb-3 text-[11px] font-medium uppercase tracking-tighter text-gray-500 shrink-0">
+                                                                        By {item.author} • {formatAppDate(item.created_at, system?.timezone)}
+                                                                    </p>
+                                                                    
+                                                                    {/* 🔥 FIXED: Removed 'overflow-hidden' and 'line-clamp-2' to show the WHOLE text! */}
+                                                                    <p className="whitespace-pre-wrap break-words border-l-2 border-gray-100 pl-3 text-sm leading-relaxed text-gray-600 italic">
+                                                                        {getTwoSentencePreview(item.content)}
+                                                                    </p>
+                                                                </div>
 
-                                                            <div className="flex min-h-0 flex-1 flex-col p-5">
-                                                                <h4 className="mb-1 pr-12 break-words text-lg font-bold leading-tight text-gray-900 line-clamp-2">
-                                                                    {item.title}
-                                                                </h4>
-                                                                <p className="mb-3 text-[11px] font-medium uppercase tracking-tighter text-gray-500">
-                                                                    By {item.author} • {formatAppDate(item.created_at, system?.timezone)}
-                                                                </p>
-                                                                <p className="flex-1 overflow-hidden whitespace-pre-wrap break-words border-l-2 border-gray-100 pl-3 text-sm leading-relaxed text-gray-600 italic">
-                                                                    {getTwoSentencePreview(item.content)}
-                                                                </p>
+                                                                {/* 🔥 FIXED: Removed the empty <div className="mt-auto"></div> spacer that was causing the huge gap */}
+
+                                                                {/* 🔥 COMMENT PREVIEW BOX 🔥 */}
+                                                                {/* mt-auto pushes this to the bottom safely without forcing an empty gap if the text is long */}
+                                                                <div className="mt-auto shrink-0 border-t border-gray-200 bg-gray-50 -mx-5 px-5 pt-3 pb-4 rounded-b-lg">
+                                                                    {/* 1. Show "View all" if there are multiple comments */}
+                                                                    {item.comments?.length > 1 && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation(); 
+                                                                                openAnnouncementModal(item);
+                                                                            }}
+                                                                            className="text-[11px] font-semibold text-gray-500 hover:text-indigo-600 mb-1.5 transition-colors w-full text-left"
+                                                                        >
+                                                                            View all {item.comments.length} comments...
+                                                                        </button>
+                                                                    )}
+
+                                                                    {/* 2. Show only the LATEST comment */}
+                                                                    {item.comments?.length > 0 ? (
+                                                                        item.comments.slice(-1).map((comment) => (
+                                                                            <div 
+                                                                                key={comment.id} 
+                                                                                className="flex flex-col cursor-pointer transition-colors group w-full" 
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation(); 
+                                                                                    openAnnouncementModal(item);
+                                                                                }}
+                                                                            >
+                                                                                <div className="font-bold text-[11px] text-gray-800 group-hover:text-indigo-600 transition-colors">
+                                                                                    {comment.user?.name || 'Unknown User'}
+                                                                                </div>
+                                                                                <div className="text-xs text-gray-600 w-full line-clamp-2 break-words mt-0.5 leading-relaxed">
+                                                                                    {comment.content}
+                                                                                </div>
+                                                                            </div>
+                                                                        ))
+                                                                    ) : (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation(); 
+                                                                                openAnnouncementModal(item);
+                                                                            }}
+                                                                            className="text-xs text-gray-500 hover:text-indigo-600 transition-colors w-full text-left py-1"
+                                                                        >
+                                                                            Leave a comment...
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                                {/* --------------------------------------------- */}
+
                                                             </div>
+
                                                         </div>
                                                     );
                                                 })}
@@ -613,6 +676,11 @@ export default function Overview({ auth, announcements, contents }) {
                             {/* Text Content */}
                             <div className="prose max-w-none text-gray-700 whitespace-pre-wrap leading-relaxed">
                                 {selectedAnnouncement.content}
+                                <AnnouncementComments 
+                                announcement={
+                                    allAnnouncements.find(a => a.id === selectedAnnouncement.id) || selectedAnnouncement
+                                } 
+                            />
                             </div>
 
                             {/* Attachment */}

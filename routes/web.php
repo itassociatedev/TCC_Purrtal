@@ -60,7 +60,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         $userRole = strtolower(trim($user->role->name ?? ''));
         $isGlobalViewer = $userRole === 'admin' || str_contains($userRole, 'director');
 
-        $query = App\Models\Announcement::with(['priorityLevel', 'branches'])->latest();
+        $query = App\Models\Announcement::with(['priorityLevel', 'branches', 'comments.user'])->latest();
 
         if (!$isGlobalViewer) {
             $branchIds = [$user->branch_id];
@@ -100,7 +100,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         $userRole = strtolower(trim($user->role->name ?? ''));
         $isGlobalViewer = $userRole === 'admin' || str_contains($userRole, 'director');
 
-        $query = App\Models\Announcement::with(['priorityLevel', 'branches'])->latest();
+        $query = App\Models\Announcement::with(['priorityLevel', 'branches', 'comments.user'])->latest();
 
         if (!$isGlobalViewer) {
             $branchIds = [$user->branch_id];
@@ -219,12 +219,14 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
     Route::put('/users/{user}', [EmployeeController::class, 'updateUser'])->name('.users.update');
     Route::patch('/users/{user}/reset-device', [EmployeeController::class, 'resetDevice'])->name('.users.reset-device');
     Route::patch('/users/{user}/toggle-status', [EmployeeController::class, 'toggleStatus'])->name('.users.toggle-status');
+    Route::patch('/users/{user}/toggle-comment-ban', [EmployeeController::class, 'toggleCommentBan'])->name('.users.toggle-comment-ban');
 
     Route::post('/users/bulk-send-links', [EmployeeController::class, 'bulkSendLinks'])->name('.users.bulk-send-links');
     // 🟢 NEW BULK DEVICE LIMIT ROUTE ADDED HERE
     Route::patch('/users/bulk-device-limit', [EmployeeController::class, 'bulkUpdateDeviceLimit'])->name('.users.bulk-update-device-limit');
     Route::patch('/users/bulk-reset-device', [EmployeeController::class, 'bulkResetDevice'])->name('.users.bulk-reset-device');
     Route::patch('/users/bulk-toggle-status', [EmployeeController::class, 'bulkToggleStatus'])->name('.users.bulk-toggle-status');
+    Route::patch('/users/bulk-toggle-comment-ban', [EmployeeController::class, 'bulkToggleCommentBan'])->name('.users.bulk-toggle-comment-ban');
     Route::delete('/users/bulk-destroy', [EmployeeController::class, 'bulkDestroy'])->name('.users.bulk-destroy');
     
     Route::delete('/users/{user}', [EmployeeController::class, 'destroy'])->name('.users.destroy');
@@ -282,6 +284,10 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
 Route::middleware(['auth'])->group(function () {
     Route::post('/employees/{user}/send-activation', [EmployeeController::class, 'sendActivationLink'])->name('employees.send-activation');
     Route::post('/employees/{user}/send-reset', [EmployeeController::class, 'sendResetLink'])->name('employees.send-reset');
+    Route::post('/announcements/{announcement}/comments', [\App\Http\Controllers\CommentController::class, 'store'])
+    ->name('announcements.comments.store');
+    Route::delete('/comments/{comment}', [\App\Http\Controllers\CommentController::class, 'destroy'])
+        ->name('comments.destroy');
 });
 
 Route::middleware(['guest'])->group(function () {

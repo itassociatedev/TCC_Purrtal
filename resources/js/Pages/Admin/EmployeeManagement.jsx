@@ -402,6 +402,31 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                 routeName = 'admin.users.bulk-destroy';
                 method = 'delete';
                 break;
+
+            case 'toggle-comment-ban':
+                const allAreBanned = selectedObjects.every(u => u.is_comment_banned);
+                const allAreAllowed = selectedObjects.every(u => !u.is_comment_banned);
+
+                if (allAreBanned) {
+                    title = 'Bulk Unban Comments';
+                    messageText = `Are you sure you want to restore commenting privileges for the following ${selectedObjects.length} employee(s): ${displayNames}?`;
+                    confirmText = 'UNBAN COMMENTS';
+                    confirmColor = 'bg-green-600 hover:bg-green-500';
+                } else if (allAreAllowed) {
+                    title = 'Bulk Ban from Comments';
+                    messageText = `Are you sure you want to restrict commenting for the following ${selectedObjects.length} employee(s): ${displayNames}?`;
+                    confirmText = 'BAN COMMENTS';
+                    confirmColor = 'bg-red-600 hover:bg-red-500';
+                } else {
+                    title = 'Bulk Toggle Comment Restrictions';
+                    messageText = `Are you sure you want to toggle the comment ban status for the following ${selectedObjects.length} employee(s): ${displayNames}? (Restricted accounts will be unbanned, and active accounts will be banned).`;
+                    confirmText = 'TOGGLE RESTRICTIONS';
+                    confirmColor = 'bg-orange-600 hover:bg-orange-500';
+                }
+                routeName = 'admin.users.bulk-toggle-comment-ban';
+                method = 'patch';
+                break;
+
             default:
                 return;
         }
@@ -539,6 +564,21 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             >
                                 {employee.status === 'Disabled' ? 'Enable Account' : 'Disable Account'}
                             </button>
+
+                            <button
+                                className={`block w-full px-4 py-2 text-left text-sm font-medium transition-colors ${employee.is_comment_banned ? 'text-green-600 hover:bg-green-50' : 'text-orange-600 hover:bg-orange-50'}`}
+                                onClick={(e) => {
+                                    e.preventDefault(); 
+                                    e.stopPropagation();
+                                    if (confirm(`Are you sure you want to ${employee.is_comment_banned ? 'unban' : 'ban'} ${employee.name} from commenting?`)) {
+                                        router.patch(route('admin.users.toggle-comment-ban', employee.id), {}, { preserveScroll: true });
+                                        setActiveDropdown(null); // Close the dropdown after clicking
+                                    }
+                                }}
+                            >
+                                {employee.is_comment_banned ? 'Unban Comments' : 'Ban Comments'}
+                            </button>
+
                             <Link as="button" method="delete" className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" onClick={(e) => {
                                 e.preventDefault(); e.stopPropagation(); confirmDeleteUser(employee);
                             }}>
@@ -620,6 +660,21 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 >
                                     {employee.status === 'Disabled' ? 'Enable Account' : 'Disable Account'}
                                 </button>
+
+                                <button
+                                    className={`block w-full px-4 py-2 text-left text-sm font-medium transition-colors ${employee.is_comment_banned ? 'text-green-600 hover:bg-green-50' : 'text-orange-600 hover:bg-orange-50'}`}
+                                    onClick={(e) => {
+                                        e.preventDefault(); 
+                                        e.stopPropagation();
+                                        if (confirm(`Are you sure you want to ${employee.is_comment_banned ? 'unban' : 'ban'} ${employee.name} from commenting?`)) {
+                                            router.patch(route('admin.users.toggle-comment-ban', employee.id), {}, { preserveScroll: true });
+                                            setActiveDropdown(null); // Close the dropdown after clicking
+                                        }
+                                    }}
+                                >
+                                    {employee.is_comment_banned ? 'Unban Comments' : 'Ban Comments'}
+                                </button>
+                            
                                 <Link as="button" method="delete" className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" onClick={(e) => {
                                     e.preventDefault(); e.stopPropagation(); confirmDeleteUser(employee);
                                 }}>
@@ -1023,6 +1078,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                                 <button onClick={() => handleBulkAction('password-reset')} className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100">Activation Links / Send Reset</button>
                                                 <button onClick={() => handleBulkAction('device-reset')} className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100">Device Reset</button>
                                                 <button onClick={() => handleBulkAction('toggle-status')} className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100">Enable / Disable</button>
+                                                <button onClick={() => handleBulkAction('toggle-comment-ban')} className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100">Ban / Unban Comments</button>
                                                 <button onClick={() => handleBulkAction('delete')} className="block w-full px-4 py-2 text-left text-sm text-red-600 font-bold hover:bg-red-50">Delete</button>
                                             </div>
                                         </div>

@@ -7,6 +7,7 @@ import SidebarLayout from '@/Layouts/SidebarLayout';
 import { formatAppDate } from '@/Utils/date';
 import { Head, usePage } from '@inertiajs/react';
 import { useMemo, useRef, useState } from 'react';
+import AnnouncementComments from '@/Components/AnnouncementComments';
 
 export default function Dashboard({ auth, announcements, priorities = [] }) {
     const dashboardLinks = getDashboardLinks();
@@ -491,6 +492,11 @@ export default function Dashboard({ auth, announcements, priorities = [] }) {
                                     </a>
                                 </div>
                             )}
+
+                            <div className="mt-8 border-t border-gray-200 pt-4">
+                                <AnnouncementComments announcement={selectedAnnouncement} />
+                            </div>
+                            
                         </div>
 
                         {/* ✅ SOLID FIXED FOOTER (Never scrolls, text cuts off cleanly above it) */}

@@ -530,4 +530,35 @@ class EmployeeController extends Controller
             return back()->with('error', 'Failed to update device limits: ' . $e->getMessage());
         }
     }
+
+    //Unbanning users from commenting (if they were auto-banned by the profanity filter)
+    public function toggleCommentBan(User $user)
+    {
+        // Flip the boolean status
+        $user->update([
+            'is_comment_banned' => !$user->is_comment_banned
+        ]);
+
+        $status = $user->is_comment_banned ? 'restricted from commenting' : 'allowed to comment';
+        return back()->with('success', "User has been {$status}.");
+    }
+
+    public function bulkToggleCommentBan(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:users,id'
+        ]);
+
+        $users = User::whereIn('id', $request->ids)->get();
+
+        foreach ($users as $user) {
+            // Flip the current ban status
+            $user->update([
+                'is_comment_banned' => !$user->is_comment_banned
+            ]);
+        }
+
+        return back()->with('success', 'Comment restrictions updated for selected users.');
+    }
 }

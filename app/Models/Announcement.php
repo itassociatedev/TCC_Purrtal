@@ -29,4 +29,9 @@ class Announcement extends Model
     {
         return $this->belongsTo(PriorityLevel::class, 'priority_level_id');
     }
+
+    public function comments()
+    {
+        return $this->hasMany(Comment::class)->latest(); 
+    }
 }

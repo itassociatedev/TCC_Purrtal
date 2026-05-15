@@ -9,6 +9,7 @@ import { getAdminLinks } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import AnnouncementComments from '@/Components/AnnouncementComments';
 
 export default function Announcements({ auth, announcements = [], branches = [], priorities = [] }) {
     const adminLinks = getAdminLinks(auth);
@@ -1319,6 +1320,11 @@ export default function Announcements({ auth, announcements = [], branches = [],
                             />
                             <InputError message={editErrors.attachment} className="mt-2" />
                         </div>
+                    </div>
+
+                    <div className="mt-8 border-t pt-4 mb-4">
+                        <h3 className="text-lg font-bold text-gray-800 mb-2">Manage Comments</h3>
+                        <AnnouncementComments announcement={editData} />
                     </div>
 
                     <div className="mt-6 flex justify-end">
