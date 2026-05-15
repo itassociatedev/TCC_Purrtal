@@ -191,6 +191,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
     // ==========================================
     const [isSupplierModalOpen, setSupplierModalOpen] = useState(false);
     const [editingSupplier, setEditingSupplier] = useState(null);
+    const [supplierSearchQuery, setSupplierSearchQuery] = useState(''); // 🟢 NEW STATE FOR SEARCH
 
     const { data: supData, setData: setSupData, post: postSup, put: putSup, processing: supProcessing, errors: supErrors, reset: resetSup, clearErrors: clearSupErrors } = useForm({ 
         name: '',
@@ -203,6 +204,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
     const closeSupplierModal = () => {
         setSupplierModalOpen(false);
         setEditingSupplier(null);
+        setSupplierSearchQuery(''); // Reset search query on close
         clearSupErrors();
         resetSup();
     };
@@ -268,6 +270,17 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
             }
         });
     };
+
+    // 🟢 FILTERING LOGIC FOR SUPPLIERS
+    const filteredSuppliers = useMemo(() => {
+        if (!supplierSearchQuery) return suppliers;
+        const searchLower = supplierSearchQuery.toLowerCase();
+        return suppliers.filter(supplier =>
+            supplier.name?.toLowerCase().includes(searchLower) ||
+            supplier.contact_person?.toLowerCase().includes(searchLower) ||
+            supplier.tin?.toLowerCase().includes(searchLower)
+        );
+    }, [suppliers, supplierSearchQuery]);
 
     const confirmToggleProductStatus = (product) => {
         setActiveDropdown(null);
@@ -731,9 +744,22 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                     </form>
 
                     <h3 className="text-sm font-semibold text-gray-700 mb-2">Existing Suppliers</h3>
+                    
+                    {/* 🟢 NEW SEARCH INPUT ADDED HERE */}
+                    <div className="mb-3">
+                        <TextInput
+                            type="text"
+                            placeholder="Search suppliers by name, contact, or TIN..."
+                            value={supplierSearchQuery}
+                            onChange={(e) => setSupplierSearchQuery(e.target.value)}
+                            className="block w-full text-sm border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                        />
+                    </div>
+
                     <div className="max-h-60 overflow-y-auto rounded-md border border-gray-200">
                         <ul className="divide-y divide-gray-200">
-                            {suppliers.map((sup) => (
+                            {/* 🟢 UPDATED TO RENDER filteredSuppliers INSTEAD OF suppliers */}
+                            {filteredSuppliers.map((sup) => (
                                 <li key={sup.id} className={`flex items-center justify-between p-3 transition-colors ${sup.status === 'Disabled' ? 'bg-gray-100/50' : 'hover:bg-gray-50'}`}>
                                     
                                     <div className="flex flex-col">
@@ -760,7 +786,11 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                                     </div>
                                 </li>
                             ))}
-                            {suppliers.length === 0 && <li className="p-4 text-sm text-gray-500 text-center">No suppliers found.</li>}
+                            {filteredSuppliers.length === 0 && (
+                                <li className="p-4 text-sm text-gray-500 text-center">
+                                    {supplierSearchQuery ? 'No suppliers match your search.' : 'No suppliers found.'}
+                                </li>
+                            )}
                         </ul>
                     </div>
 
