@@ -32,7 +32,7 @@ class AnnouncementController extends Controller
         ]);
     }
 
-    // ✅ FIXED: Renamed this back to "store" instead of "update"
+    // ✅ FIXED: Renamed this back to "store" instead of "update" on function
     public function store(Request $request)
     {
         $validated = $request->validate([
