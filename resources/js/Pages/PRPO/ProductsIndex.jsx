@@ -192,7 +192,16 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
     const [isSupplierModalOpen, setSupplierModalOpen] = useState(false);
     const [editingSupplier, setEditingSupplier] = useState(null);
     const [supplierSearchQuery, setSupplierSearchQuery] = useState(''); // 🟢 NEW STATE FOR SEARCH
+    const [selectedSupplierIds, setSelectedSupplierIds] = useState([]);
 
+    const handleBulkSupplierDelete = () => {
+        if (confirm(`Are you sure you want to delete ${selectedSupplierIds.length} suppliers?`)) {
+            router.post(route('prpo.suppliers.batch-destroy'), { ids: selectedSupplierIds }, {
+                onSuccess: () => setSelectedSupplierIds([]) // clear selection on success
+            });
+        }
+    };
+    
     const { data: supData, setData: setSupData, post: postSup, put: putSup, processing: supProcessing, errors: supErrors, reset: resetSup, clearErrors: clearSupErrors } = useForm({ 
         name: '',
         contact_person: '',
@@ -207,6 +216,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
         setSupplierSearchQuery(''); // Reset search query on close
         clearSupErrors();
         resetSup();
+        setSelectedSupplierIds([]); // Reset checkboxes on close
     };
 
     const submitSupplier = (e) => {
@@ -745,32 +755,78 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
 
                     <h3 className="text-sm font-semibold text-gray-700 mb-2">Existing Suppliers</h3>
                     
-                    {/* 🟢 NEW SEARCH INPUT ADDED HERE */}
-                    <div className="mb-3">
-                        <TextInput
-                            type="text"
-                            placeholder="Search suppliers by name, contact, or TIN..."
-                            value={supplierSearchQuery}
-                            onChange={(e) => setSupplierSearchQuery(e.target.value)}
-                            className="block w-full text-sm border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
-                        />
+                    {/* 🟢 NEW CHECKBOX & ACTION BAR ADDED HERE */}
+                    <div className="flex items-center justify-between gap-4 mb-4 bg-white p-3 rounded shadow-sm border border-gray-200">
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    id="selectAllSuppliers"
+                                    className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer"
+                                    checked={filteredSuppliers.length > 0 && selectedSupplierIds.length === filteredSuppliers.length}
+                                    onChange={(e) => {
+                                        if (e.target.checked) {
+                                            setSelectedSupplierIds(filteredSuppliers.map(s => s.id));
+                                        } else {
+                                            setSelectedSupplierIds([]);
+                                        }
+                                    }}
+                                />
+                                <label htmlFor="selectAllSuppliers" className="text-sm font-medium text-gray-700 cursor-pointer">Select All</label>
+                            </div>
+
+                            {selectedSupplierIds.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={handleBulkSupplierDelete}
+                                    className="bg-red-600 text-white px-3 py-1.5 text-xs rounded shadow-sm hover:bg-red-700 transition font-semibold"
+                                >
+                                    Delete Selected ({selectedSupplierIds.length})
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="w-1/2 min-w-[200px]">
+                            <TextInput
+                                type="text"
+                                placeholder="Search suppliers by name, contact, or TIN..."
+                                value={supplierSearchQuery}
+                                onChange={(e) => setSupplierSearchQuery(e.target.value)}
+                                className="block w-full text-sm border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                            />
+                        </div>
                     </div>
 
                     <div className="max-h-60 overflow-y-auto rounded-md border border-gray-200">
                         <ul className="divide-y divide-gray-200">
-                            {/* 🟢 UPDATED TO RENDER filteredSuppliers INSTEAD OF suppliers */}
                             {filteredSuppliers.map((sup) => (
                                 <li key={sup.id} className={`flex items-center justify-between p-3 transition-colors ${sup.status === 'Disabled' ? 'bg-gray-100/50' : 'hover:bg-gray-50'}`}>
                                     
-                                    <div className="flex flex-col">
-                                        <span className={`text-sm font-semibold ${sup.status === 'Disabled' ? 'text-gray-400' : 'text-gray-800'}`}>
-                                            {sup.name}
-                                            {sup.status === 'Disabled' && (
-                                                <span className="ml-2 text-[10px] uppercase font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded">
-                                                    Disabled
-                                                </span>
-                                            )}
-                                        </span>
+                                    <div className="flex items-center gap-3">
+                                        {/* 🟢 INDIVIDUAL CHECKBOX FOR SUPPLIER */}
+                                        <input
+                                            type="checkbox"
+                                            className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer"
+                                            checked={selectedSupplierIds.includes(sup.id)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setSelectedSupplierIds([...selectedSupplierIds, sup.id]);
+                                                } else {
+                                                    setSelectedSupplierIds(selectedSupplierIds.filter(id => id !== sup.id));
+                                                }
+                                            }}
+                                        />
+                                        
+                                        <div className="flex flex-col">
+                                            <span className={`text-sm font-semibold ${sup.status === 'Disabled' ? 'text-gray-400' : 'text-gray-800'}`}>
+                                                {sup.name}
+                                                {sup.status === 'Disabled' && (
+                                                    <span className="ml-2 text-[10px] uppercase font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded">
+                                                        Disabled
+                                                    </span>
+                                                )}
+                                            </span>
+                                        </div>
                                     </div>
 
                                     <div className="flex gap-3 items-center">

@@ -60,6 +60,37 @@ class SupplierController extends Controller
         }
     }
 
+    public function batchDestroy(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:suppliers,id',
+        ]);
+
+        $deletedCount = 0;
+        $failedCount = 0;
+
+        foreach ($request->ids as $id) {
+            try {
+                $supplier = Supplier::find($id);
+                if ($supplier) {
+                    $supplier->delete();
+                    $deletedCount++;
+                }
+            } catch (\Illuminate\Database\QueryException $e) {
+                // Code 23000 means there's a foreign key constraint (products are tied to it)
+                if ($e->getCode() == '23000') {
+                    $failedCount++;
+                }
+            }
+        }
+
+        if ($failedCount > 0) {
+            return back()->with('error', "Deleted {$deletedCount} suppliers, but {$failedCount} could not be deleted because they have products assigned to them.");
+        }
+
+        return back()->with('success', "Successfully deleted {$deletedCount} suppliers.");
+    }
     public function toggleStatus(Supplier $supplier)
     {
         try {
