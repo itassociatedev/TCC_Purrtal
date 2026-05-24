@@ -24,7 +24,7 @@ export default function AdminDashboard({ auth, totalActiveEmployees = 0, totalBr
                     {/* Welcome Card */}
                     <div className="mb-6 overflow-hidden bg-white shadow-sm sm:rounded-lg border-l-4 border-red-500">
                         <div className="p-6 text-gray-900">
-                            <h3 className="text-lg font-bold">Welcome, System Administt</h3>
+                            <h3 className="text-lg font-bold">Welcome, System Administrator</h3>
                             <p className="mt-1 text-sm text-gray-600">
                                 You have full access to all modules and employee records.
                             </p>
