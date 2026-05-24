@@ -219,7 +219,7 @@ export default function Dashboard({ auth, announcements, priorities = [] }) {
                 <div className="mx-auto w-full max-w-[96rem] sm:px-2 lg:px-4 2xl:max-w-[112rem]">
                     
                     <div className="mb-6 flex items-center justify-between">
-                        <h3 className="text-lg font-bold text-gray-700 uppercase tracking-wide">All Announcement</h3>
+                        <h3 className="text-lg font-bold text-gray-700 uppercase tracking-wide">All Announcements</h3>
                         <span className="text-xs text-gray-400 italic md:hidden">Swipe to see more &rarr;</span>
                     </div>
 
