@@ -190,7 +190,7 @@ export default function Dashboard({ auth, announcements, priorities = [] }) {
             activeModule="General"
             sidebarLinks={dashboardLinks}
             headerClassName="mx-auto mb-1 w-full max-w-[96rem] sm:mb-6 2xl:max-w-[112rem]"
-            header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Announcement</h2>}
+            header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Announcements</h2>}
         >
             <Head title="Announcements" />
 
@@ -219,7 +219,7 @@ export default function Dashboard({ auth, announcements, priorities = [] }) {
                 <div className="mx-auto w-full max-w-[96rem] sm:px-2 lg:px-4 2xl:max-w-[112rem]">
                     
                     <div className="mb-6 flex items-center justify-between">
-                        <h3 className="text-lg font-bold text-gray-700 uppercase tracking-wide">All Announcements</h3>
+                        <h3 className="text-lg font-bold text-gray-700 uppercase tracking-wide">All Announcement</h3>
                         <span className="text-xs text-gray-400 italic md:hidden">Swipe to see more &rarr;</span>
                     </div>
 
