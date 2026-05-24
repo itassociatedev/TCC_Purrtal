@@ -200,7 +200,7 @@ export default function Documents({ auth, documents = [], categories = [], depar
                         onChange={(e) => setFilterDepartment(e.target.value)}
                         className="block w-full sm:w-48 py-2 pl-3 pr-10 border border-gray-300 rounded-lg leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition duration-150 ease-in-out text-gray-600"
                     >
-                        <option value="">All Departme</option>
+                        <option value="">All Departments</option>
                         {departments.map(dep => (
                             <option key={dep.id} value={dep.id}>{dep.name}</option>
                         ))}
