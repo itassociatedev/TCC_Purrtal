@@ -1,3 +1,4 @@
+import AnnouncementComments from '@/Components/AnnouncementComments';
 import InputLabel from '@/Components/InputLabel';
 import Modal from '@/Components/Modal';
 import SecondaryButton from '@/Components/SecondaryButton';
@@ -7,7 +8,6 @@ import SidebarLayout from '@/Layouts/SidebarLayout';
 import { formatAppDate } from '@/Utils/date';
 import { Head, usePage } from '@inertiajs/react';
 import { useMemo, useRef, useState } from 'react';
-import AnnouncementComments from '@/Components/AnnouncementComments';
 
 export default function Dashboard({ auth, announcements, priorities = [] }) {
     const dashboardLinks = getDashboardLinks();
@@ -190,7 +190,7 @@ export default function Dashboard({ auth, announcements, priorities = [] }) {
             activeModule="General"
             sidebarLinks={dashboardLinks}
             headerClassName="mx-auto mb-1 w-full max-w-[96rem] sm:mb-6 2xl:max-w-[112rem]"
-            header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Announcements</h2>}
+            header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Announcement</h2>}
         >
             <Head title="Announcements" />
 
