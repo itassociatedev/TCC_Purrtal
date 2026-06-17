@@ -256,14 +256,6 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
     Route::put('/announcements/priority/{priority}', [AnnouncementController::class, 'updatePriority'])->name('.announcements.priority.update');
     Route::delete('/announcements/priority/{priority}', [AnnouncementController::class, 'destroyPriority'])->name('.announcements.priority.destroy');
 
-    Route::post('/org-chart/asset', [OrgChartController::class, 'storeAsset'])->name('.org-chart.asset.store');
-    Route::get('/org-chart', [OrgChartController::class, 'index'])->name('.org-chart.index');
-    Route::post('/org-chart/structure', [OrgChartController::class, 'saveStructure'])->name('.org-chart.structure.save'); 
-    Route::post('/org-chart', [OrgChartController::class, 'store'])->name('.org-chart.store');
-    Route::put('/org-chart/{member}', [OrgChartController::class, 'update'])->name('.org-chart.update');
-    Route::post('/org-chart/reorder', [OrgChartController::class, 'reorder'])->name('.org-chart.reorder'); 
-    Route::delete('/org-chart/{member}', [OrgChartController::class, 'destroy'])->name('.org-chart.destroy');
-
     Route::post('/documents', [DocumentController::class, 'store'])->name('.documents.store');
     Route::put('/documents/{document}', [DocumentController::class, 'update'])->name('.documents.update');
     Route::delete('/documents/{document}', [DocumentController::class, 'destroy'])->name('.documents.destroy');
@@ -280,6 +272,18 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
     Route::put('/resource-links/{resourceLink}', [ResourceLinkController::class, 'update'])->name('.resource-links.update');
     Route::delete('/resource-links/{resourceLink}', [ResourceLinkController::class, 'destroy'])->name('.resource-links.destroy');
 });
+
+// HR OrgChart Access
+Route::middleware(['auth', 'role:admin,HRBP,HR Business Partner'])->prefix('admin')->name('admin')->group(function(){
+    Route::post('/org-chart/asset', [OrgChartController::class, 'storeAsset'])->name('.org-chart.asset.store');
+    Route::get('/org-chart', [OrgChartController::class, 'index'])->name('.org-chart.index');
+    Route::post('/org-chart/structure', [OrgChartController::class, 'saveStructure'])->name('.org-chart.structure.save'); 
+    Route::post('/org-chart', [OrgChartController::class, 'store'])->name('.org-chart.store');
+    Route::put('/org-chart/{member}', [OrgChartController::class, 'update'])->name('.org-chart.update');
+    Route::post('/org-chart/reorder', [OrgChartController::class, 'reorder'])->name('.org-chart.reorder'); 
+    Route::delete('/org-chart/{member}', [OrgChartController::class, 'destroy'])->name('.org-chart.destroy');
+});
+
 
 Route::middleware(['auth'])->group(function () {
     Route::post('/employees/{user}/send-activation', [EmployeeController::class, 'sendActivationLink'])->name('employees.send-activation');
