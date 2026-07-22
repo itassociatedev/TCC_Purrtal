@@ -1,4 +1,5 @@
 <?php
+// Purchase request controller: manage PR lifecycle
 
 namespace App\Http\Controllers;
 
@@ -52,6 +53,13 @@ class PurchaseRequestController extends Controller
     // =====================================================================
    public function store(Request $request)
     {
+        // 🔐 ACL CHECK: Verify user can CREATE purchase_requests
+        // Permission Hierarchy: Full = Create/Edit/Delete, Edit = Create/Approve/Reject
+        $user = Auth::user();
+        if (!$user->canCreateModule('purchase_requests')) {
+            abort(403, 'You do not have permission to create purchase requests.');
+        }
+
         $validated = $request->validate([
             'branch' => 'required|string|max:255',
             'department' => 'required|string|max:255',
@@ -230,7 +238,28 @@ class PurchaseRequestController extends Controller
     // =====================================================================
     public function updateStatus(Request $request, PurchaseRequest $purchaseRequest)
     {
-        // 🟢 UPDATED: Allow 'return_to_creator' as a valid action
+        // 🔐 ACL CHECK: Verify user can APPROVE/REJECT purchase_requests
+        // Permission Hierarchy: Full + Edit can approve/reject
+        $user = Auth::user();
+        $action = $request->input('action');
+        
+        // Determine which permission is needed based on action
+        if (in_array($action, ['approve'], true)) {
+            if (!$user->canApproveModule('purchase_requests')) {
+                abort(403, 'You do not have permission to approve purchase requests.');
+            }
+        } elseif (in_array($action, ['reject', 'return_to_inv_tl', 'return_to_creator'], true)) {
+            if (!$user->canRejectModule('purchase_requests')) {
+                abort(403, 'You do not have permission to reject purchase requests.');
+            }
+        } elseif ($action === 'cancel') {
+            // Cancel typically requires full permission
+            if (!$user->canDeleteModule('purchase_requests')) {
+                abort(403, 'You do not have permission to cancel purchase requests.');
+            }
+        }
+
+        // �🟢 UPDATED: Allow 'return_to_creator' as a valid action
         $validated = $request->validate([
             'action' => 'required|in:approve,reject,cancel,return_to_inv_tl,return_to_creator',
             'rejection_reason' => 'required_if:action,reject|required_if:action,return_to_inv_tl|required_if:action,return_to_creator|nullable|string'
@@ -334,6 +363,13 @@ class PurchaseRequestController extends Controller
 
     public function update(Request $request, $id)
     {
+        // 🔐 ACL CHECK: Verify user can EDIT purchase_requests (not just approve)
+        // Permission Hierarchy: Full only can edit existing requests
+        $user = Auth::user();
+        if (!$user->canEditModule('purchase_requests')) {
+            abort(403, 'You do not have permission to update purchase requests.');
+        }
+
         $pr = PurchaseRequest::findOrFail($id);
 
         $validated = $request->validate([

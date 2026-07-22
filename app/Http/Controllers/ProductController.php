@@ -1,4 +1,5 @@
 <?php
+// Controller: products endpoints and import/export
 
 namespace App\Http\Controllers;
 
@@ -10,11 +11,18 @@ use App\Imports\ProductsImport;
 use App\Exports\ProductsExport;
 use Maatwebsite\Excel\Facades\Excel;
 
+// Product controller: product CRUD, import/export, status toggling
 class ProductController extends Controller
 {
 
     public function index()
     {
+        // List products and suppliers for the frontend ProductsIndex view
+        $user = auth()->user();
+        if (!$user || !$user->canViewModule('products')) {
+            abort(403, 'You do not have permission to view the Products Masterlist.');
+        }
+
         // 1. Fetch products with their linked suppliers
         $products = Product::with('supplier')->latest()->get();
         
@@ -33,6 +41,14 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
+        // Create product: validate input and enforce create permission
+        // 🔐 ACL CHECK: Verify user can CREATE products
+        // Permission Hierarchy: Full + Edit can create
+        $user = auth()->user();
+        if (!$user->canCreateModule('products')) {
+            abort(403, 'You do not have permission to add products.');
+        }
+
         $validated = $request->validate([
             'supplier_id' => 'required|exists:suppliers,id',
             'name' => 'required|string|max:255',
@@ -48,6 +64,14 @@ class ProductController extends Controller
 
 public function update(Request $request, Product $product)
     {
+        // Update product: validate input and enforce edit permission
+        // 🔐 ACL CHECK: Verify user can EDIT products
+        // Permission Hierarchy: Full only can edit
+        $user = auth()->user();
+        if (!$user->canEditModule('products')) {
+            abort(403, 'You do not have permission to update products.');
+        }
+
         $validated = $request->validate([
             'supplier_id' => 'required|exists:suppliers,id',
             'name' => 'required|string|max:255',
@@ -63,6 +87,14 @@ public function update(Request $request, Product $product)
 
     public function destroy(Product $product)
     {
+        // Delete single product: permission-guarded removal
+        // 🔐 ACL CHECK: Verify user can DELETE products
+        // Permission Hierarchy: Full only can delete
+        $user = auth()->user();
+        if (!$user->canDeleteModule('products')) {
+            abort(403, 'You do not have permission to delete products.');
+        }
+
         $product->delete();
 
         return back()->with('success', 'Product deleted successfully.');
@@ -70,6 +102,14 @@ public function update(Request $request, Product $product)
 
     public function batchDestroy(Request $request)
     {
+        // Batch delete: remove multiple products by IDs
+        // 🔐 ACL CHECK: Verify user can DELETE products
+        // Permission Hierarchy: Full only can delete
+        $user = auth()->user();
+        if (!$user->canDeleteModule('products')) {
+            abort(403, 'You do not have permission to delete products.');
+        }
+
         $request->validate([
             'ids'   => 'required|array',
             'ids.*' => 'exists:products,id',
@@ -82,6 +122,7 @@ public function update(Request $request, Product $product)
 
     public function import(Request $request)
     {
+        // Import products from uploaded spreadsheet (XLSX/CSV)
         $request->validate([
             'import_file' => 'required|mimes:xlsx,csv,xls|max:10240', // Max 10MB
         ]);
@@ -97,13 +138,12 @@ public function update(Request $request, Product $product)
 
     public function downloadTemplate()
     {
+        // Provide a downloadable CSV template for product imports
         return response()->streamDownload(function () {
             $file = fopen('php://output', 'w');
             
-            // 🟢 FIXED: Added 'unit' to the headers
+            // Template headers and example row
             fputcsv($file, ['supplier_name', 'product_name', 'unit', 'details', 'price']);
-            
-            // 🟢 FIXED: Added 'BOX' as the example unit
             fputcsv($file, ['Example Supplier Inc.', 'Paracetamol 500mg', 'BOX', 'Box of 100 tablets', '150.50']);
             
             fclose($file);
@@ -112,6 +152,7 @@ public function update(Request $request, Product $product)
 
     public function export(Request $request)
     {
+        // Export products to an Excel file, optionally filtered by supplier/search
         $supplierId = $request->input('supplier_id');
         $search = $request->input('search');
         
@@ -122,6 +163,13 @@ public function update(Request $request, Product $product)
 
     public function toggleStatus(Product $product)
     {
+        // Toggle product status between active and Disabled (permission-guarded)
+        // 🔐 ACL CHECK: Verify user can edit products module
+        $user = auth()->user();
+        if (!$user->canEditModule('products')) {
+            abort(403, 'You do not have permission to modify product status.');
+        }
+
         try {
             if ($product->status === 'Disabled') {
                 $product->update(['status' => null]);

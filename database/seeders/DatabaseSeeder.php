@@ -1,8 +1,11 @@
 <?php
+// Seeds initial database data including roles and default users
 
-namespace Database\Seeders;
+namespace Database\\Seeders;
 
 use App\Models\User;
+use Database\Seeders\InternRoleSeeder;
+use Database\Seeders\UserAccountsSeeder;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -20,6 +23,11 @@ class DatabaseSeeder extends Seeder
         User::factory()->create([
             'name' => 'Test User',
             'email' => 'test@example.com',
+        ]);
+
+        $this->call([
+            InternRoleSeeder::class,
+            UserAccountsSeeder::class,
         ]);
     }
 }

@@ -1,5 +1,5 @@
 import Modal from '@/Components/Modal';
-import { getHRLinks } from '@/Config/navigation';
+import { getHRLinks, canViewModule, canApproveModule } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, router } from '@inertiajs/react';
 import { useMemo, useState } from 'react'; // 🟢 ADDED useMemo
@@ -7,6 +7,19 @@ import { useMemo, useState } from 'react'; // 🟢 ADDED useMemo
 export default function AccountingApprovals({ auth, requests }) {
     const currentRole = auth.user?.role?.name || 'Guest';
     const HRLinks = getHRLinks(currentRole, auth);
+    if (!canViewModule(auth, 'form_2316_approvals')) {
+        return (
+            <SidebarLayout activeModule="HR" sidebarLinks={HRLinks}>
+                <Head title="Access Denied" />
+                <div className="py-12 max-w-4xl mx-auto sm:px-6 lg:px-8">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+                        <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+                        <p className="text-gray-600">You do not have permission to view this section.</p>
+                    </div>
+                </div>
+            </SidebarLayout>
+        );
+    }
     
     const requestList = requests || [];
 
@@ -61,10 +74,11 @@ export default function AccountingApprovals({ auth, requests }) {
     // --- RELEASE MODAL STATE ---
     const [isReleaseModalOpen, setIsReleaseModalOpen] = useState(false);
     const [releasingId, setReleasingId] = useState(null);
+    const canApprove = canApproveModule(auth, 'form_2316_approvals');
 
     // --- ACTION HANDLER ---
     const handleAction = (id, actionStatus) => {
-        if (actionStatus === 'Released') {
+        if (actionStatus === 'Released' && canApprove) {
             setReleasingId(id);
             setIsReleaseModalOpen(true);
             return;
@@ -72,6 +86,12 @@ export default function AccountingApprovals({ auth, requests }) {
     };
 
     const submitRelease = () => {
+        if (!canApprove || releasingId === null) {
+            setIsReleaseModalOpen(false);
+            setReleasingId(null);
+            return;
+        }
+
         router.patch(route('hr.accounting.update', releasingId), {
             status: 'Released'
         }, {
@@ -204,14 +224,18 @@ export default function AccountingApprovals({ auth, requests }) {
                                                     onClick={(e) => e.stopPropagation()}
                                                 >
                                                     {req.status === 'General Accounting' ? (
-                                                        <div className="flex justify-end gap-2">
-                                                            <button
-                                                                onClick={() => handleAction(req.id, 'Released')}
-                                                                className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-500 transition-colors shadow-sm"
-                                                            >
-                                                                Release
-                                                            </button>
-                                                        </div>
+                                                        canApprove ? (
+                                                            <div className="flex justify-end gap-2">
+                                                                <button
+                                                                    onClick={() => handleAction(req.id, 'Released')}
+                                                                    className="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-500 transition-colors shadow-sm"
+                                                                >
+                                                                    Release
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-gray-400 text-xs italic font-medium">View Only</span>
+                                                        )
                                                     ) : (
                                                         <span className="text-gray-400 text-xs italic font-medium">Processed</span>
                                                     )}

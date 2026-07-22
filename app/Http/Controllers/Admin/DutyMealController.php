@@ -1,4 +1,5 @@
 <?php
+// Duty meal scheduling, participants and approval handling
 
 namespace App\Http\Controllers\Admin;
 
@@ -25,6 +26,24 @@ class DutyMealController extends Controller
     
     public function index()
     {
+        $user = Auth::user();
+
+        // 🔐 INTELLIGENT PERMISSION-BASED REDIRECT
+        // If user has overview access, show overview
+        // Otherwise redirect to the first section they have access to
+        if (!$user->canViewModule('duty_meal')) {
+            // User doesn't have overview access - redirect to first available section
+            if ($user->canViewModule('duty_meal_setup_roster')) {
+                return redirect()->route('admin.duty-meals.create');
+            } elseif ($user->canViewModule('duty_meal_archive')) {
+                return redirect()->route('admin.duty-meals.archive');
+            } else {
+                // No access to any duty meal section
+                return redirect()->route('dashboard')
+                    ->with('error', 'You do not have permission to access the Duty Meal module.');
+            }
+        }
+
         $today = now()->startOfDay();
         
         // 🟢 NEW LOGIC: Lock the whole group if the FIRST day is within 3 days
@@ -99,8 +118,6 @@ class DutyMealController extends Controller
                 ->where('choice', 'none')
                 ->update(['choice' => 'main']);
         }
-
-        $user = Auth::user();
         
         $allowedBranchIds = $user->branches->pluck('id')->push($user->branch_id)->filter()->unique();
 
@@ -156,7 +173,8 @@ class DutyMealController extends Controller
 
         // 🟢 HARD BLOCK FOR AUDITORS
         if (str_contains($userRole, 'audit')) {
-            abort(403, 'Auditors are not permitted to set up duty meal rosters.');
+            return redirect()->route('dashboard')
+                ->with('error', 'Auditors are not permitted to set up duty meal rosters.');
         }
 
         $allowedBranchIds = $user->branches->pluck('id')->push($user->branch_id)->filter()->unique();
@@ -206,7 +224,8 @@ class DutyMealController extends Controller
 
         // 🟢 HARD BLOCK FOR AUDITORS
         if (str_contains($userRole, 'audit')) {
-            abort(403, 'Auditors are not permitted to create duty meal rosters.');
+            return redirect()->route('dashboard')
+                ->with('error', 'Auditors are not permitted to create duty meal rosters.');
         }
 
         $validated = $request->validate([

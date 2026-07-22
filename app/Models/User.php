@@ -1,4 +1,5 @@
 <?php
+// User model with ACL helper methods and relationships
 
 namespace App\Models;
 
@@ -23,6 +24,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'image_path',
+        'email_verified_at',
         'is_comment_banned',
         'role_id',
         'branch_id',
@@ -116,5 +119,182 @@ class User extends Authenticatable
     public function role()
     {
         return $this->belongsTo(Role::class);
+    }
+
+    public function getAllowedModulesForUser(): array
+    {
+        if (!$this->role) {
+            return [];
+        }
+
+        $adminAcls = $this->role->relationLoaded('adminAcls')
+            ? $this->role->adminAcls
+            : $this->role->adminAcls()->get();
+
+        $permissions = $adminAcls
+            ->filter(fn ($acl) => strtolower(trim($acl->permission_level)) !== 'no_access')
+            ->pluck('module')
+            ->map(fn ($module) => trim(strtolower($module)))
+            ->values()
+            ->all();
+
+        if (empty($permissions) && strtolower(trim($this->role->name)) === strtolower(trim(config('admin-acl.superadmin_role', 'admin')))) {
+            return array_map('strtolower', array_keys(config('admin-acl.modules', [])));
+        }
+
+        return $permissions;
+    }
+
+    public function aclPermissionForModule(string $module): string
+    {
+        if (!$this->role) {
+            return 'no_access';
+        }
+
+        $normalizedModule = strtolower(trim($module));
+
+        if ($this->role->relationLoaded('adminAcls')) {
+            $acl = $this->role->adminAcls
+                ->first(fn ($entry) => strtolower(trim($entry->module)) === $normalizedModule);
+        } else {
+            $acl = $this->role->adminAcls()
+                ->whereRaw('LOWER(TRIM(module)) = ?', [$normalizedModule])
+                ->first();
+        }
+
+        if ($acl) {
+            return strtolower(trim($acl->permission_level));
+        }
+
+        if (strtolower(trim($this->role->name)) === strtolower(trim(config('admin-acl.superadmin_role', 'admin')))) {
+            return 'full';
+        }
+
+        return 'no_access';
+    }
+
+    protected function resolveAclPermissionLevel(string $module): string
+    {
+        $permission = $this->aclPermissionForModule($module);
+        if (!$this->isHrChildModule($module)) {
+            return $permission;
+        }
+
+        $overviewPermission = $this->aclPermissionForModule('hr_overview');
+
+        return $this->higherPermissionLevel($permission, $overviewPermission);
+    }
+
+    protected function higherPermissionLevel(string $a, string $b): string
+    {
+        $levels = [
+            'no_access' => 0,
+            'view' => 1,
+            'edit' => 2,
+            'full' => 3,
+        ];
+
+        $aIndex = $levels[$a] ?? 0;
+        $bIndex = $levels[$b] ?? 0;
+
+        return array_search(max($aIndex, $bIndex), $levels, true) ?: 'no_access';
+    }
+
+    protected function isHrChildModule(string $module): bool
+    {
+        return in_array($module, [
+            'documents',
+            'form_2316_approvals',
+            'manpower_requests_form',
+            'approval_board_hr',
+            'feedback_form',
+        ], true);
+    }
+
+    public function canAccessModule(string $module): bool
+    {
+        return $this->resolveAclPermissionLevel($module) !== 'no_access';
+    }
+
+    /**
+     * 🔐 PERMISSION HIERARCHY - Following clear ACL structure
+     * 
+     * Full = Create / Edit / Delete / Admin
+     * Edit = Create, Approve, Reject (NOT Delete)
+     * View = Request and View only (Read-only)
+     * None = No access
+     */
+
+    /**
+     * Can user VIEW data for this module?
+     * Returns true for: 'full', 'edit', 'view'
+     */
+    public function canViewModule(string $module): bool
+    {
+        $permission = $this->resolveAclPermissionLevel($module);
+
+        return in_array($permission, ['full', 'edit', 'view'], true);
+    }
+
+    /**
+     * Can user CREATE/REQUEST in this module?
+     * Returns true for: 'full', 'edit'
+     * (NOT for 'view' - view-only users cannot create)
+     */
+    public function canCreateModule(string $module): bool
+    {
+        return in_array($this->aclPermissionForModule($module), ['full', 'edit'], true);
+    }
+
+    /**
+     * Can user EDIT data in this module?
+     * Returns true for: 'full', 'edit'
+     */
+    public function canEditModule(string $module): bool
+    {
+        return in_array($this->aclPermissionForModule($module), ['full', 'edit'], true);
+    }
+
+    /**
+     * Can user APPROVE requests in this module?
+     * Returns true for: 'full', 'edit'
+     */
+    public function canApproveModule(string $module): bool
+    {
+        $permission = $this->resolveAclPermissionLevel($module);
+
+        return in_array($permission, ['full', 'edit'], true);
+    }
+
+    /**
+     * Can user REJECT requests in this module?
+     * Returns true for: 'full', 'edit'
+     */
+    public function canRejectModule(string $module): bool
+    {
+        return in_array($this->aclPermissionForModule($module), ['full', 'edit'], true);
+    }
+
+    /**
+     * Can user DELETE data in this module?
+     * Returns true for: 'full' only
+     */
+    public function canDeleteModule(string $module): bool
+    {
+        return $this->aclPermissionForModule($module) === 'full';
+    }
+
+    /**
+     * Can user perform ADMIN functions in this module?
+     * Returns true for: 'full' only
+     */
+    public function canAdminModule(string $module): bool
+    {
+        return $this->aclPermissionForModule($module) === 'full';
+    }
+
+    public function hasPermission(string $permission): bool
+    {
+        return $this->canAccessModule($permission);
     }
 }

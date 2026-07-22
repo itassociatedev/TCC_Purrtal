@@ -4,6 +4,7 @@ import FlashMessage from '@/Components/FlashMessage';
 import { Link, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { useEffect, useState } from 'react';
+import { hasHRModuleAccess, moduleHasAccess, hasPermission, canViewModuleCard } from '@/Config/navigation';
 
 export default function SidebarLayout({
     header,
@@ -14,20 +15,70 @@ export default function SidebarLayout({
 }) {
     const { auth } = usePage().props;
 
-    // ✅ SAFE VARIABLE: Uses optional chaining (?.) and a fallback string ('')
-    const userRole = auth.user?.role?.name?.toLowerCase().trim() || '';
+    const hasAnyAdminPermission = () => [
+        'admin_overview',
+        'announcements',
+        'employees',
+        'company_content',
+        'org_chart',
+        'resource_links',
+        'system_logs',
+        'access_control',
+    ].some((permission) => hasPermission(auth, permission));
 
-    const allowedPRRoles = [
-    'procurement assist', 
-    'procurement tl', 
-    'director of corporate services and operations', 
-    'admin', 
-    'operations manager', 
-    'inventory assist', 
-    'inventory tl'
+    const getFirstAdminRoute = () => {
+        if (hasPermission(auth, 'admin_overview')) {
+            return route('admin.dashboard');
+        }
+        if (hasPermission(auth, 'announcements')) {
+            return route('admin.announcements.index');
+        }
+        if (hasPermission(auth, 'employees')) {
+            return route('admin.employees');
+        }
+        if (hasPermission(auth, 'company_content')) {
+            return route('admin.company-content.index');
+        }
+        if (hasPermission(auth, 'org_chart')) {
+            return route('admin.org-chart.index');
+        }
+        if (hasPermission(auth, 'resource_links')) {
+            return route('admin.resource-links.index');
+        }
+        if (hasPermission(auth, 'system_logs')) {
+            return route('admin.logs.index');
+        }
+        if (hasPermission(auth, 'access_control')) {
+            return route('admin.access-control.index');
+        }
+
+        return route('admin.dashboard');
+    };
+
+    const prpoPermissions = [
+        'products',
+        'purchase_requests',
+        'approval_board',
+        'purchase_orders',
+        'prpo_status',
     ];
 
-    const canCreatePR = allowedPRRoles.includes(userRole);
+    const hasAnyPrpoPermission = () => prpoPermissions.some((permission) => hasPermission(auth, permission));
+    const getFirstPrpoRoute = () => {
+        if (hasPermission(auth, 'purchase_requests')) {
+            return route('prpo.purchase-requests.create');
+        }
+        if (hasPermission(auth, 'products')) {
+            return route('prpo.products.index');
+        }
+        if (hasPermission(auth, 'approval_board')) {
+            return route('prpo.approval-board');
+        }
+        if (hasPermission(auth, 'purchase_orders')) {
+            return route('prpo.purchase-orders.index');
+        }
+        return route('prpo.status.index');
+    };
     
     // 🟢 Store notifications and count in local state
     const [localNotifications, setLocalNotifications] = useState(auth.notifications || []);
@@ -221,6 +272,12 @@ export default function SidebarLayout({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v2h8z" />
             </svg>
         ),
+        'Access Control': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 10-8 0v4a2 2 0 00-2 2v5a2 2 0 002 2h8a2 2 0 002-2v-5a2 2 0 00-2-2zm-6 0V7a2 2 0 114 0v4H10z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h.01" />
+            </svg>
+        ),
         'HR Admin Overview': (
             <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -317,6 +374,15 @@ export default function SidebarLayout({
             return customDocumentCategoryIcon;
         }
 
+        if (link.icon === 'key') {
+            return (
+                <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 10-6 0 3 3 0 006 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 11h2a2 2 0 012 2v2a2 2 0 01-2 2h-2l-3 3-3-3H9a2 2 0 01-2-2v-2a2 2 0 012-2h6z" />
+                </svg>
+            );
+        }
+
         const IconComponent = typeof link.icon === 'function' ? link.icon : null;
 
         if (IconComponent) {
@@ -391,30 +457,34 @@ export default function SidebarLayout({
                                 Quick Links
                             </div>
                             <ul className="space-y-2">
-                                <li>
-                                    <Link
-                                        href={route('staff.duty-meals.index')}
-                                        className="flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                                    >
-                                        <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 5l7 7-7 7" />
-                                        </svg>
-                                        Duty Meal
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link
-                                        href={route('admin.documents.index')}
-                                        className="flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                                    >
-                                        <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 2h8l4 4v14a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 2v4h8" />
-                                        </svg>
-                                        Document Repository
-                                    </Link>
-                                </li>
+                                {canViewModuleCard(auth, 'duty_meal') && (
+                                    <li>
+                                        <Link
+                                            href={route('staff.duty-meals.index')}
+                                            className="flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                                        >
+                                            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 5l7 7-7 7" />
+                                            </svg>
+                                            Duty Meal
+                                        </Link>
+                                    </li>
+                                )}
+                                {canViewModuleCard(auth, 'documents') && (
+                                    <li>
+                                        <Link
+                                            href={route('admin.documents.index')}
+                                            className="flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                                        >
+                                            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 2h8l4 4v14a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 2v4h8" />
+                                            </svg>
+                                            Document Repository
+                                        </Link>
+                                    </li>
+                                )}
                             </ul>
                         </div>
                     )}
@@ -622,24 +692,27 @@ export default function SidebarLayout({
                             </Dropdown.Trigger>
 
                             <Dropdown.Content>
-                                {['admin', 'director of corporate services and operations', 'hr business partner', 'human resources business partner', 'hrbp', 'hr assistant', 'human resources assistant'].includes(userRole) && (
-                                    <Dropdown.Link 
-                                      href={
-                                      ['hr business partner', 'human resources business partner', 'hrbp', 'hr assistant', 'human resources assistant'].includes(userRole) 
-                                         ? route('admin.announcements.index'): route('admin.dashboard')}>
-                                         Admin Module
-                                     </Dropdown.Link>
-                                )}
-                                <Dropdown.Link href={route('hr.index')}>HR Module</Dropdown.Link>
-                                
-                                <Dropdown.Link href={canCreatePR ? route('prpo.purchase-requests.create') : route('prpo.status.index')}>
-                                 PR/PO Module
-                                </Dropdown.Link>
-                                
-                                {['admin', 'duty meal custodian', 'Director of Corporate Services and Operations', 'Housekeeping TL', 'Auditor TL', 'Audit Assistant'].includes(user?.role?.name) && (
-                                    <Dropdown.Link href={route('admin.duty-meals.index')}>Duty Meal Module</Dropdown.Link>
-                                )}
-                            </Dropdown.Content>
+                                    {hasAnyAdminPermission() && (
+                                        <Dropdown.Link href={getFirstAdminRoute()}>
+                                            Admin Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                    {/* HR Module: show only when user has HR-related permissions or is Admin */}
+                                    { hasHRModuleAccess(auth) && (
+                                        <Dropdown.Link href={route('hr.index')}>HR Module</Dropdown.Link>
+                                    ) }
+
+                                    { moduleHasAccess(usePage().props.auth, 'prpo_') && (
+                                        <Dropdown.Link href={getFirstPrpoRoute()}>
+                                            PR/PO Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                    { (canViewModuleCard(auth, 'duty_meal') || canViewModuleCard(auth, 'duty_meal_archive') || canViewModuleCard(auth, 'duty_meal_setup_roster')) && (
+                                        <Dropdown.Link href={route('admin.duty-meals.index')}>Duty Meal Module</Dropdown.Link>
+                                    )}
+                                </Dropdown.Content>
                         </Dropdown>
 
                         {/* User Dropdown */}

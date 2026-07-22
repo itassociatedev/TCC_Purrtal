@@ -1,4 +1,5 @@
 <?php
+// Document repository management (upload, tagging, access)
 
 namespace App\Http\Controllers\Admin;
 
@@ -60,6 +61,12 @@ class DocumentController extends Controller
     }
 
     public function store(Request $request){
+        // 🔐 ACL CHECK: Verify user can edit documents module
+        $user = Auth::user();
+        if (!$user->canEditModule('documents')) {
+            abort(403, 'You do not have permission to upload documents.');
+        }
+
         $request->validate([
             'title' => 'required|string|max:255',
             'category' => 'required|string|max:255',
@@ -100,6 +107,12 @@ class DocumentController extends Controller
 
     public function destroy(Document $document)
     {
+        // 🔐 ACL CHECK: Verify user can delete documents module
+        $user = Auth::user();
+        if (!$user->canDeleteModule('documents')) {
+            abort(403, 'You do not have permission to delete documents.');
+        }
+
         try {
             if (Storage::disk('local')->exists($document->file_path)) {
                 Storage::disk('local')->delete($document->file_path);
@@ -117,6 +130,12 @@ class DocumentController extends Controller
 
     public function storeCategory(Request $request)
     {
+        // 🔐 ACL CHECK: Verify user can edit documents module
+        $user = Auth::user();
+        if (!$user->canEditModule('documents')) {
+            abort(403, 'You do not have permission to manage document categories.');
+        }
+
         $request->validate([
             'name' => 'required|string|max:50|unique:document_categories,name',
         ]);
@@ -128,6 +147,12 @@ class DocumentController extends Controller
 
     public function destroyCategory($id)
     {
+        // 🔐 ACL CHECK: Verify user can delete documents module
+        $user = Auth::user();
+        if (!$user->canDeleteModule('documents')) {
+            abort(403, 'You do not have permission to manage document categories.');
+        }
+
         try {
             $category = DocumentCategory::findOrFail($id);
 
@@ -147,6 +172,12 @@ class DocumentController extends Controller
     }
     public function updateCategory(Request $request, $id)
     {
+        // 🔐 ACL CHECK: Verify user can edit documents module
+        $user = Auth::user();
+        if (!$user->canEditModule('documents')) {
+            abort(403, 'You do not have permission to manage document categories.');
+        }
+
         $request->validate([
             'name' => 'required|string|max:50|unique:document_categories,name,' . $id,
         ]);
@@ -162,9 +193,14 @@ class DocumentController extends Controller
         }
     }
 
-    // --- NEW FUNCTION: Toggle Downloadable status for a Category ---
     public function toggleDownloadable(Request $request, $id)
     {
+        // 🔐 ACL CHECK: Verify user can edit documents module
+        $user = Auth::user();
+        if (!$user->canEditModule('documents')) {
+            abort(403, 'You do not have permission to manage document categories.');
+        }
+
         $request->validate([
             'is_downloadable' => 'required|boolean',
         ]);
@@ -203,6 +239,12 @@ class DocumentController extends Controller
     
     public function update(Request $request, Document $document)
     {
+        // 🔐 ACL CHECK: Verify user can edit documents module
+        $user = Auth::user();
+        if (!$user->canEditModule('documents')) {
+            abort(403, 'You do not have permission to edit documents.');
+        }
+
         $request->validate([
             'title' => 'required|string|max:255',
             'category' => 'required|string|max:255',

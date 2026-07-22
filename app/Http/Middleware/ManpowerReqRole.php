@@ -1,4 +1,5 @@
 <?php
+// Role middleware for manpower requests (restrict route by role)
 
 namespace App\Http\Middleware;
 
@@ -28,7 +29,8 @@ class ManpowerReqRole
             return $next($request);
         }
 
-        // 3. If they don't match, block them with a 403 error
-        abort(403, 'Unauthorized. You do not have the required permissions to access this page.');
+        // 3. If they don't match, redirect with a flash error so the UI can show a toast.
+        return redirect()->route('dashboard')
+            ->with('error', 'Unauthorized. You do not have the required permissions to access this page.');
     }
 }

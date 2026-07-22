@@ -1,4 +1,5 @@
 <?php
+// Purchase order controller: PO creation and management
 
 namespace App\Http\Controllers;
 
@@ -23,12 +24,13 @@ class PurchaseOrderController extends Controller
     // =====================================================================
     public function index(Request $request)
     {
-        $userRole = strtolower(trim(Auth::user()->role->name ?? ''));
-        $allowedRoles = ['procurement assist', 'procurement tl', 'director of corporate services and operations', 'admin', 'operations manager', 'inventory assist', 'inventory tl'];
-        
-        if (!in_array($userRole, $allowedRoles)) {
+        $user = Auth::user();
+
+        if (!$user || !$user->canViewModule('purchase_orders')) {
             abort(403, 'Unauthorized Action. Only authorized personnel can access the PO Dashboard.');
         }
+
+        $userRole = strtolower(trim($user->role->name ?? ''));
 
         // 🟢 1. Define who gets restricted to the "My Request" tab
         $restrictedRoles = ['operations manager', 'inventory assist', 'inventory tl'];
@@ -77,6 +79,13 @@ class PurchaseOrderController extends Controller
     // =====================================================================
     public function update(Request $request, PurchaseOrder $purchaseOrder)
     {
+        // 🔐 ACL CHECK: Verify user can EDIT purchase_orders
+        // Permission Hierarchy: Full only can edit
+        $user = Auth::user();
+        if (!$user->canEditModule('purchase_orders')) {
+            abort(403, 'You do not have permission to update purchase orders.');
+        }
+
         $userRole = strtolower(trim(Auth::user()->role->name ?? ''));
         $requestedStatus = $request->input('status');
 
@@ -212,6 +221,13 @@ class PurchaseOrderController extends Controller
 
     public function generateFromPR(Request $request, PurchaseRequest $purchaseRequest)
     {
+        // 🔐 ACL CHECK: Verify user can CREATE purchase_orders
+        // Permission Hierarchy: Full + Edit can create
+        $user = Auth::user();
+        if (!$user->canCreateModule('purchase_orders')) {
+            abort(403, 'You do not have permission to generate purchase orders.');
+        }
+
         $userRole = strtolower(trim(Auth::user()->role->name ?? ''));
         $allowedRoles = ['procurement assist', 'procurement tl', 'director of corporate services and operations', 'admin'];
         

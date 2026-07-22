@@ -1,4 +1,5 @@
 <?php
+// Admin announcements management and notification dispatch
 
 namespace App\Http\Controllers\Admin;
 
@@ -35,6 +36,11 @@ class AnnouncementController extends Controller
     // ✅ FIXED: Renamed this back to "store" instead of "update" on function
     public function store(Request $request)
     {
+        $user = Auth::user();
+        if (!$user?->canEditModule('announcements')) {
+            abort(403, 'You do not have permission to post announcements.');
+        }
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'author' => 'required|string|max:255',
@@ -86,6 +92,11 @@ class AnnouncementController extends Controller
 
     public function update(Request $request, Announcement $announcement)
     {
+        $user = Auth::user();
+        if (!$user?->canEditModule('announcements')) {
+            abort(403, 'You do not have permission to edit announcements.');
+        }
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'author' => 'required|string|max:255',
@@ -128,6 +139,11 @@ class AnnouncementController extends Controller
 
     public function destroy(Announcement $announcement)
     {
+        $user = Auth::user();
+        if (!$user?->canDeleteModule('announcements')) {
+            abort(403, 'You do not have permission to delete announcements.');
+        }
+
         try{
             if($announcement->image_path){
                 Storage::disk('public')->delete($announcement->image_path);
@@ -143,6 +159,11 @@ class AnnouncementController extends Controller
 
     public function storePriority(Request $request)
     {
+        $user = Auth::user();
+        if (!$user?->canEditModule('announcements')) {
+            abort(403, 'You do not have permission to manage announcement priorities.');
+        }
+
         $request->validate([
             'name' => 'required|string|max:50|unique:priority_levels,name',
             'color' => 'required|string|max:7',
@@ -157,6 +178,11 @@ class AnnouncementController extends Controller
 
     public function updatePriority(Request $request, PriorityLevel $priority)
     {
+        $user = Auth::user();
+        if (!$user?->canEditModule('announcements')) {
+            abort(403, 'You do not have permission to manage announcement priorities.');
+        }
+
         $request->validate([
             'name' => 'required|string|max:50|unique:priority_levels,name,' . $priority->id,
             'color' => 'required|string|max:7',
@@ -169,6 +195,11 @@ class AnnouncementController extends Controller
 
     public function destroyPriority(PriorityLevel $priority)
     {
+        $user = Auth::user();
+        if (!$user?->canEditModule('announcements')) {
+            abort(403, 'You do not have permission to delete announcement priorities.');
+        }
+
         try {
             $priority->delete();
             return back()->with('success', 'Category deleted successfully!');
