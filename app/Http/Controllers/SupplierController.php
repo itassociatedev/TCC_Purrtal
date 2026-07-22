@@ -1,14 +1,28 @@
 <?php
+// Supplier controller: supplier CRUD and lookup endpoints
 
 namespace App\Http\Controllers;
 //
 use App\Models\Supplier;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use App\Exports\SuppliersExport; // Added for Export
 use Maatwebsite\Excel\Facades\Excel; // Added for Excel
 
 class SupplierController extends Controller
 {
+    /**
+     * Display suppliers list.
+     */
+    public function index()
+    {
+        $suppliers = Supplier::orderBy('name')->get();
+
+        return Inertia::render('PRPO/SuppliersIndex', [
+            'suppliers' => $suppliers,
+        ]);
+    }
+
     /**
      * Export the suppliers list to Excel.
      */
@@ -19,6 +33,13 @@ class SupplierController extends Controller
 
     public function store(Request $request)
     {
+        // 🔐 ACL CHECK: Verify user can CREATE suppliers
+        // Permission Hierarchy: Full + Edit can create
+        $user = auth()->user();
+        if (!$user->canCreateModule('suppliers')) {
+            abort(403, 'You do not have permission to add suppliers.');
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:suppliers,name',
             'contact_person' => 'nullable|string|max:255', 
@@ -34,6 +55,13 @@ class SupplierController extends Controller
 
     public function update(Request $request, Supplier $supplier)
     {
+        // 🔐 ACL CHECK: Verify user can EDIT suppliers
+        // Permission Hierarchy: Full only can edit
+        $user = auth()->user();
+        if (!$user->canEditModule('suppliers')) {
+            abort(403, 'You do not have permission to update suppliers.');
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:suppliers,name,' . $supplier->id,
             'contact_person' => 'nullable|string|max:255', 
@@ -49,6 +77,13 @@ class SupplierController extends Controller
 
     public function destroy(Supplier $supplier)
     {
+        // 🔐 ACL CHECK: Verify user can DELETE suppliers
+        // Permission Hierarchy: Full only can delete
+        $user = auth()->user();
+        if (!$user->canDeleteModule('suppliers')) {
+            abort(403, 'You do not have permission to delete suppliers.');
+        }
+
         try {
             $supplier->delete();
             return back()->with('success', 'Supplier deleted successfully.');
@@ -62,6 +97,13 @@ class SupplierController extends Controller
 
     public function batchDestroy(Request $request)
     {
+        // 🔐 ACL CHECK: Verify user can DELETE suppliers
+        // Permission Hierarchy: Full only can delete
+        $user = auth()->user();
+        if (!$user->canDeleteModule('suppliers')) {
+            abort(403, 'You do not have permission to delete suppliers.');
+        }
+
         $request->validate([
             'ids' => 'required|array',
             'ids.*' => 'exists:suppliers,id',
@@ -93,6 +135,13 @@ class SupplierController extends Controller
     }
     public function toggleStatus(Supplier $supplier)
     {
+        // 🔐 ACL CHECK: Verify user can EDIT suppliers
+        // Permission Hierarchy: Full only can edit/modify
+        $user = auth()->user();
+        if (!$user->canEditModule('suppliers')) {
+            abort(403, 'You do not have permission to modify supplier status.');
+        }
+
         try {
             if ($supplier->status === 'Disabled') {
                 $supplier->update(['status' => null]);

@@ -5,13 +5,15 @@ import Modal from '@/Components/Modal';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
 import TextInput from '@/Components/TextInput';
-import { getAdminLinks } from '@/Config/navigation';
+import { getAdminLinks, canEditModule, canDeleteModule } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, router, useForm } from '@inertiajs/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 export default function CompanyContent({ auth, contents = [], contentTypes = [] }) {
     const adminLinks = getAdminLinks(auth);
+    const canManageContent = canEditModule(auth, 'company_content');
+    const canDeleteContent = canDeleteModule(auth, 'company_content');
 
     const FRAME_RATIO_CLASS = 'aspect-[16/9] w-full';
     const DEFAULT_ZOOM = 1;
@@ -914,13 +916,15 @@ export default function CompanyContent({ auth, contents = [], contentTypes = [] 
                         <p className="text-gray-600">
                             Manage the Mission, Vision, story posts, and company identity content.
                         </p>
-                        <button
-                            type="button"
-                            onClick={openAddModal}
-                            className="rounded-md bg-gray-800 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-gray-700"
-                        >
-                            + Add Content
-                        </button>
+                        {canManageContent && (
+                            <button
+                                type="button"
+                                onClick={openAddModal}
+                                className="rounded-md bg-gray-800 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-gray-700"
+                            >
+                                + Add Content
+                            </button>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -972,20 +976,26 @@ export default function CompanyContent({ auth, contents = [], contentTypes = [] 
                                         />
 
                                         <div className="mt-auto flex justify-end gap-3 border-t pt-3">
-                                            <button
-                                                type="button"
-                                                onClick={() => openEditModal(item)}
-                                                className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                                            >
-                                                Edit
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => confirmDeleteContent(item)}
-                                                className="text-sm font-medium text-red-600 hover:text-red-800"
-                                            >
-                                                Delete
-                                            </button>
+                                            {canManageContent && (
+                                                <>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openEditModal(item)}
+                                                        className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => canDeleteContent && confirmDeleteContent(item)}
+                                                        disabled={!canDeleteContent}
+                                                        className={`text-sm font-medium ${canDeleteContent ? 'text-red-600 hover:text-red-800' : 'text-red-300 cursor-not-allowed'}`}
+                                                        title={canDeleteContent ? 'Delete content' : 'Full permission required to delete content'}
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

@@ -1,6 +1,6 @@
 import ConfirmModal from '@/Components/ConfirmModal';
 import TrackingStepper from '@/Components/TrackingStepper';
-import { getPRPOLinks } from '@/Config/navigation';
+import { getPRPOLinks, canUserBypassViewMode, hasElevatedPermission, isUserAdmin } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -601,14 +601,14 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                         
                                         <td className="whitespace-nowrap px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-2">
-                                                {canApprove(pr) && currentView === 'action_needed' && (
+                                                {canApprove(pr) && (canUserBypassViewMode(auth, 'purchase_requests') || currentView === 'action_needed') && (
                                                     <>
                                                         <button onClick={() => handleAction(pr.id, 'approve')} title="Approve Request" className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-bold text-green-700 transition-colors hover:bg-green-100 hover:text-green-800">
                                                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
                                                             Approve
                                                         </button>
                                                         
-                                                        {/* 🟢 RESTORED & UPDATED: Dynamic Return option for Ops Manager */}
+                                                        {/* 🟢 RESTORED & UPDATED: Dynamic Return option for Ops Manager - Now works for elevated users outside action_needed view */}
                                                         {pr.status === 'pending_ops_manager' && (
                                                             <button onClick={() => openActionModal(pr.id, pr.branch === 'Greenhills' ? 'return_to_creator' : 'return_to_inv_tl')} title={pr.branch === 'Greenhills' ? "Return to Inv Assistant" : "Return to Inv TL"} className="inline-flex items-center gap-1.5 rounded-lg bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700 transition-colors hover:bg-orange-100 hover:text-orange-800">
                                                                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
@@ -724,16 +724,17 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                             <div className="flex items-center justify-end gap-3 rounded-b-xl border-t bg-gray-50 px-6 py-4 shrink-0">
                                 <button onClick={closeModal} className="text-sm font-semibold text-gray-700 hover:text-gray-900 px-4 py-2 border border-gray-300 rounded-md bg-white hover:bg-gray-100">Close Window</button>
                                 
-                                {isInvTL && selectedPR.status === 'pending_inv_tl' && currentView === 'action_needed' && (
+                                {/* 🔐 PERMISSION OVERRIDE: Allow edit/approve/reject if user has elevated permissions OR currentView is 'action_needed' */}
+                                {isInvTL && selectedPR.status === 'pending_inv_tl' && (canUserBypassViewMode(auth, 'purchase_requests') || currentView === 'action_needed') && (
                                     <button onClick={openEditModal} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 transition-colors">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" /></svg>
                                         Edit Request
                                     </button>
                                 )}
 
-                                {canApprove(selectedPR) && currentView === 'action_needed' && (
+                                {canApprove(selectedPR) && (canUserBypassViewMode(auth, 'purchase_requests') || currentView === 'action_needed') && (
                                     <>
-                                        {/* 🟢 UPDATED: Read-only Modal Ops Manager Return Action */}
+                                        {/* 🟢 UPDATED: Read-only Modal Ops Manager Return Action - Now works even outside action_needed view for admins */}
                                         {selectedPR.status === 'pending_ops_manager' && (
                                             <button onClick={() => openActionModal(selectedPR.id, selectedPR.branch === 'Greenhills' ? 'return_to_creator' : 'return_to_inv_tl')} className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-400 transition-colors">
                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>

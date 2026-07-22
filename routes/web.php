@@ -4,6 +4,7 @@ use App\Models\Announcement;
 use App\Models\CompanyContent;
 use App\Models\ResourceLink;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\Admin\EmployeeController;
 use App\Http\Controllers\Admin\CompanyContentController;
 use App\Http\Controllers\Admin\SystemLogController;
@@ -16,6 +17,7 @@ use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Admin\DutyMealController;
 use App\Http\Controllers\Admin\OrgChartController;
+use App\Http\Controllers\Admin\AccessControlController;
 use App\Http\Controllers\HrRequestController;
 use App\Http\Controllers\HR\ManpowerRequestController;
 use App\Http\Controllers\ProductController;
@@ -156,8 +158,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // --- ORGANIZATIONAL CHART (USER VIEW) ---
     Route::get('/dashboard/org-chart', [OrgChartController::class, 'userIndex'])->name('dashboard.org-chart');
 
-    Route::get('/admin/documents', [DocumentController::class, 'index'])->name('admin.documents.index');
-    Route::get('/documents/{document}/view/{filename?}', [DocumentController::class, 'show'])->name('documents.show');
+    Route::get('/admin/documents', [DocumentController::class, 'index'])
+        ->middleware('auth', 'admin_acl:documents')
+        ->name('admin.documents.index');
+
+    Route::get('/documents/{document}/view/{filename?}', [DocumentController::class, 'show'])
+        ->middleware('auth', 'admin_acl:documents')
+        ->name('documents.show');
 });
 
 
@@ -165,6 +172,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // 🔐 PERMISSION REFRESH ROUTES: Allow users to refresh permissions without logging out
+    Route::post('/permissions/refresh', [PermissionController::class, 'refreshPermissions'])->name('permissions.refresh');
+    Route::post('/permissions/clear-session-cache', [PermissionController::class, 'clearSessionCache'])->name('permissions.clear-session-cache');
 
     // Staff Duty Meal Routes
     Route::get('/my-duty-meals', [\App\Http\Controllers\Staff\DutyMealController::class, 'index'])->name('staff.duty-meals.index');
@@ -281,6 +292,15 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
     Route::delete('/resource-links/{resourceLink}', [ResourceLinkController::class, 'destroy'])->name('.resource-links.destroy');
 });
 
+// ACCESS CONTROL MODULE (Admin only)
+Route::middleware(['auth', 'admin_acl:access_control'])->prefix('admin')->name('admin')->group(function(){
+    Route::get('/access-control', [AccessControlController::class, 'index'])->name('.access-control.index');
+    Route::post('/access-control/permission', [AccessControlController::class, 'updatePermission'])->name('.access-control.update-permission');
+    Route::post('/access-control/bulk-update', [AccessControlController::class, 'bulkUpdate'])->name('.access-control.bulk-update');
+    Route::post('/access-control/reset', [AccessControlController::class, 'reset'])->name('.access-control.reset');
+    Route::get('/access-control/export', [AccessControlController::class, 'export'])->name('.access-control.export');
+});
+
 Route::middleware(['auth'])->group(function () {
     Route::post('/employees/{user}/send-activation', [EmployeeController::class, 'sendActivationLink'])->name('employees.send-activation');
     Route::post('/employees/{user}/send-reset', [EmployeeController::class, 'sendResetLink'])->name('employees.send-reset');
@@ -316,21 +336,26 @@ Route::middleware(['auth', CheckDutyMealAccess::class])->group(function () {
 });
 
 Route::middleware(['auth'])->group(function(){
-    Route::get('/hr/feedback', [\App\Http\Controllers\HR\FeedbackController::class, 'create'])->name('hr.feedback.create');
-    Route::post('/hr/feedback', [\App\Http\Controllers\HR\FeedbackController::class, 'store'])->name('hr.feedback.store');
+    Route::get('/hr/feedback', [\App\Http\Controllers\HR\FeedbackController::class, 'create'])
+        ->middleware('admin_acl:feedback_form')
+        ->name('hr.feedback.create');
+    Route::post('/hr/feedback', [\App\Http\Controllers\HR\FeedbackController::class, 'store'])
+        ->middleware('admin_acl:feedback_form')
+        ->name('hr.feedback.store');
     Route::get('/prpo/status', [PRPOStatusController::class, 'index'])->name('prpo.status.index');
 
     Route::prefix('hr')->name('hr.')->group(function(){
-        Route::middleware(['role:admin,HRBP,Chief Vet,Operations Manager,Director of Corporate Services and Operations,Marketing Manager,Vet Tech TL,IT TL,Cashier TL,Housekeeping TL,Inventory TL,Clinic Assistant TL,Procurement TL,Auditor TL'])->group(function(){
+        // Dynamic ACL protection for HR modules instead of hardcoded role names
+        Route::middleware(['auth', 'admin_acl:manpower_requests_form'])->group(function(){
             Route::get('/manpower-requests/create', [ManpowerRequestController::class, 'create'])->name('manpower-requests.create');
             Route::post('/manpower-requests', [ManpowerRequestController::class, 'store'])->name('manpower-requests.store');
         });
 
-        Route::middleware(['role:admin,HR,HRBP'])->group(function () {
+        Route::middleware(['auth', 'admin_acl:feedback_form'])->group(function () {
             Route::get('/feedback-submissions', [\App\Http\Controllers\HR\FeedbackController::class, 'index'])->name('feedback.index');
         });
         
-        Route::middleware(['role:admin,HR,HRBP,Director of Corporate Services and Operations,Chief Vet,Operations Manager,Marketing Manager,Vet Tech TL,IT TL,Cashier TL,Housekeeping TL,Inventory TL,Clinic Assistant TL,Procurement TL,Auditor TL'])->group(function () {
+        Route::middleware(['auth', 'admin_acl:approval_board_hr'])->group(function () {
             Route::get('/manpower-requests', [ManpowerRequestController::class, 'index'])->name('manpower-requests.index');
             Route::patch('/manpower-requests/{manpowerRequest}/status', [ManpowerRequestController::class, 'updateStatus'])->name('manpower-requests.update-status');
         });
@@ -338,42 +363,57 @@ Route::middleware(['auth'])->group(function(){
 });
 
 Route::prefix('prpo')->name('prpo.')->middleware(['auth'])->group(function () {
-    Route::get('/products', [ProductController::class, 'index'])->name('products.index');
+    Route::get('/products', [ProductController::class, 'index'])->middleware('admin_acl:products')->name('products.index');
     Route::get('/products/import-template', [ProductController::class, 'downloadTemplate'])->name('products.import-template');
     Route::post('/products/import', [ProductController::class, 'import'])->name('products.import');
     Route::get('/products/export', [ProductController::class, 'export'])->name('products.export');
-    
-    // --- SUPPLIER ROUTES ---
-    Route::get('/suppliers/export', [SupplierController::class, 'export'])->name('suppliers.export');
-    Route::get('/suppliers/template', [SupplierController::class, 'downloadTemplate'])->name('suppliers.template');
-    Route::post('/suppliers/import', [SupplierController::class, 'import'])->name('suppliers.import');
-    Route::post('/suppliers/batch-destroy', [SupplierController::class, 'batchDestroy'])->name('suppliers.batch-destroy');
-    Route::post('/suppliers/batch-toggle-status', [SupplierController::class, 'batchToggleStatus'])->name('suppliers.batch-toggle-status');
-    Route::post('/suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
-    Route::put('/suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
-    Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
-    Route::patch('/suppliers/{supplier}/toggle-status', [SupplierController::class, 'toggleStatus'])->name('suppliers.toggle-status');
 
-    // --- PRODUCT ROUTES ---
-    Route::post('/products', [ProductController::class, 'store'])->name('products.store');
-    Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
-    Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
-    Route::post('/products/batch-destroy', [ProductController::class, 'batchDestroy'])->name('products.batch-destroy');
-    Route::patch('/products/{product}/toggle-status', [ProductController::class, 'toggleStatus'])->name('products.toggle-status');
+    Route::get('/suppliers/export', [SupplierController::class, 'export'])
+        ->middleware('admin_acl:suppliers')
+        ->name('suppliers.export');
+    Route::get('/suppliers/import-template', [SupplierController::class, 'downloadTemplate'])
+        ->middleware('admin_acl:suppliers')
+        ->name('suppliers.template');
+    Route::post('/suppliers/import', [SupplierController::class, 'import'])
+        ->middleware('admin_acl:suppliers')
+        ->name('suppliers.import');
+    Route::post('/suppliers', [SupplierController::class, 'store'])
+        ->middleware('admin_acl:suppliers')
+        ->name('suppliers.store');
+    Route::put('/suppliers/{supplier}', [SupplierController::class, 'update'])
+        ->middleware('admin_acl:suppliers')
+        ->name('suppliers.update');
+    Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy'])
+        ->middleware('admin_acl:suppliers')
+        ->name('suppliers.destroy');
+    Route::post('/suppliers/batch-destroy', [SupplierController::class, 'batchDestroy'])
+        ->middleware('admin_acl:suppliers')
+        ->name('suppliers.batch-destroy');
+    Route::patch('/suppliers/{supplier}/toggle-status', [SupplierController::class, 'toggleStatus'])
+        ->middleware('admin_acl:suppliers')
+        ->name('suppliers.toggle-status');
+    
+    // 🔐 PROTECTED: Product CRUD operations require 'edit' permission
+    Route::post('/products', [ProductController::class, 'store'])->middleware('admin_acl:products')->name('products.store');
+    Route::put('/products/{product}', [ProductController::class, 'update'])->middleware('admin_acl:products')->name('products.update');
+    Route::delete('/products/{product}', [ProductController::class, 'destroy'])->middleware('admin_acl:products')->name('products.destroy');
+    Route::post('/products/batch-destroy', [ProductController::class, 'batchDestroy'])->middleware('admin_acl:products')->name('products.batch-destroy');
+    Route::patch('/products/{product}/toggle-status', [ProductController::class, 'toggleStatus'])->middleware('admin_acl:products')->name('products.toggle-status');
 
     // --- PR/PO WORKFLOW ---
     Route::get('/purchase-request/create', [PurchaseRequestController::class, 'create'])->name('purchase-requests.create');
-    Route::post('/purchase-request', [PurchaseRequestController::class, 'store'])->name('purchase-requests.store');
-    Route::put('/purchase-requests/{id}', [PurchaseRequestController::class, 'update'])->name('purchase-requests.update');
+    Route::post('/purchase-request', [PurchaseRequestController::class, 'store'])->middleware('admin_acl:purchase_requests')->name('purchase-requests.store');
+    Route::put('/purchase-requests/{id}', [PurchaseRequestController::class, 'update'])->middleware('admin_acl:purchase_requests')->name('purchase-requests.update');
     Route::get('/approval-board', [PurchaseRequestController::class, 'approvalBoard'])->name('approval-board');
-    Route::patch('/purchase-requests/{purchaseRequest}/status', [PurchaseRequestController::class, 'updateStatus'])->name('purchase-requests.update-status');
+    Route::patch('/purchase-requests/{purchaseRequest}/status', [PurchaseRequestController::class, 'updateStatus'])->middleware('admin_acl:purchase_requests')->name('purchase-requests.update-status');
 
-    Route::post('/purchase-requests/{purchaseRequest}/generate-pos', [PurchaseOrderController::class, 'generateFromPR'])->name('purchase-requests.generate-pos');
-    Route::get('/purchase-orders', [PurchaseOrderController::class, 'index'])->name('purchase-orders.index');
-    Route::put('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update'])->name('purchase-orders.update');
+    Route::post('/purchase-requests/{purchaseRequest}/generate-pos', [PurchaseOrderController::class, 'generateFromPR'])->middleware('admin_acl:purchase_orders')->name('purchase-requests.generate-pos');
+    Route::get('/purchase-orders', [PurchaseOrderController::class, 'index'])->middleware('admin_acl:purchase_orders')->name('purchase-orders.index');
+    Route::put('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update'])->middleware('admin_acl:purchase_orders')->name('purchase-orders.update');
 
     Route::get('/purchase-requests/{purchaseRequest}/print', [PurchaseRequestController::class, 'print'])->name('purchase-requests.print');
     Route::get('/purchase-orders/{purchaseOrder}/print', [PurchaseOrderController::class, 'print'])->name('purchase-orders.print');
+    Route::get('/prpo/status', [PRPOStatusController::class, 'index'])->name('status.index');
 });
 
 require __DIR__.'/auth.php';
