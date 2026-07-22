@@ -223,6 +223,27 @@ const aclDefaultPermissions = {
     'Set Up Roster': 'NONE',
     'Duty meal Archive': 'NONE',
   },
+  HR: {
+    'Admin Overview': 'NONE',
+    'Announcements & Notices': 'FULL',
+    'Employee Management': 'NONE',
+    'Company Content Management': 'FULL',
+    'Organizational Directory': 'NONE',
+    'Resource Links': 'NONE',
+    'System Logs & Security': 'NONE',
+    'Document Requests': 'FULL',
+    'Form 2316 Approval': 'NONE',
+    'Manpower Request Form': 'FULL',
+    'Approval Board': 'FULL',
+    'Feedback Form': 'FULL',
+    'PR Form': 'NONE',
+    'PR Approval Board': 'VIEW(CC)',
+    'PO Generation': 'NONE',
+    'Products Masterlist': 'NONE',
+    'Duty Meal Overview': 'NONE',
+    'Set Up Roster': 'NONE',
+    'Duty meal Archive': 'NONE',
+  },
   'HR Assistant': {
     'Admin Overview': 'NONE',
     'Announcements & Notices': 'FULL',
@@ -664,6 +685,7 @@ const POSITION_ORDER = [
     'Admin',
     'DCSO',
     'HRBP',
+    'HR',
     'HR Assistant',
     'Operations Manager',
     'Chief Vet',
@@ -935,6 +957,10 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
         return rn === pn || abbrev === pn || pn.includes(abbrev) || abbrev.includes(pn);
     };
 
+    const getAccessControlPermissionForRole = (roleName) => {
+        return isAdminOrDcsORoleName(roleName) ? 'full' : 'no_access';
+    };
+
     const handleResetToDefault = (positionName) => {
         const defaults = DEFAULT_MATRIX[positionName] || DEFAULT_ACL_SETTINGS[positionName];
         if (!positionName || !defaults) {
@@ -949,6 +975,8 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
                 return;
             }
 
+            let hasAccessControl = false;
+
             Object.entries(defaults).forEach(([displayModuleName, defaultValue]) => {
                 const moduleKey = getModuleKeyByDisplayName(displayModuleName);
                 if (!moduleKey) {
@@ -956,13 +984,28 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
                     return;
                 }
 
-                const newLevel = normalizeDefaultPermission(defaultValue);
+                if (moduleKey === 'access_control') {
+                    hasAccessControl = true;
+                }
+
+                const newLevel = moduleKey === 'access_control'
+                    ? getAccessControlPermissionForRole(role.name)
+                    : normalizeDefaultPermission(defaultValue);
+
                 permissionsArray.push({
                     role_id: role.id,
                     module: moduleKey,
                     permission_level: newLevel,
                 });
             });
+
+            if (!hasAccessControl) {
+                permissionsArray.push({
+                    role_id: role.id,
+                    module: 'access_control',
+                    permission_level: getAccessControlPermissionForRole(role.name),
+                });
+            }
         });
 
         return { permissionsArray, missingModules };

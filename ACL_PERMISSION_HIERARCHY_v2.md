@@ -224,6 +224,14 @@ canAdminModule(auth, 'module_key')       // Full only → true
 
 ---
 
+### **Access Control Reset Permissions** (`access_control`)
+
+| Module / Role | Admin | DCSO | HRBP | HR | HR Assistant | Operations Manager | Chief Vet | Vet Tech TL | Clinic Assistant TL | Cashier TL | Inventory TL | Inventory Assistant | Housekeeping TL | Marketing Manager | Procurement TL | Procurement Assistant | Auditor TL | Audit Assist | General Accounting | IT TL | Duty Meal Custodian | Employee | Intern |
+|---------------|-------|------|------|----|--------------|-------------------|----------|------------|---------------------|-----------|-------------|---------------------|------------------|------------------|----------------|----------------------|-----------|--------------|--------------------|------|---------------------|----------|--------|
+| `access_control` | Full | Full | None | None | None | None | None | None | None | None | None | None | None | None | None | None | None | None | None | None | None | None | None |
+
+---
+
 ## 🛡️ Backend Controller Updates Summary
 
 ### **ProductController**

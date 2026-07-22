@@ -74,6 +74,8 @@ return [
         ],
         'access_control' => [
             'admin',
+            'director of corporate services and operations',
+            'director of corporate sales and operations',
         ],
         'form_2316_approvals' => [
             'admin',
