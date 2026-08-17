@@ -313,6 +313,11 @@ const MODULE_GROUPS = {
         'system_logs',
         'access_control',
     ],
+    attendance: [
+        'attendance_overview',
+        'setup_schedule',
+        'schedule_view',
+    ]
 };
 
 export const getModulePermissionCount = (auth, prefixOrGroup) => {

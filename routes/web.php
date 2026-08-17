@@ -34,6 +34,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use App\Http\Controllers\AttendanceController;
 
 Route::get('/', function () {
     return Inertia::render('Auth/Login', []);
@@ -414,6 +415,14 @@ Route::prefix('prpo')->name('prpo.')->middleware(['auth'])->group(function () {
     Route::get('/purchase-requests/{purchaseRequest}/print', [PurchaseRequestController::class, 'print'])->name('purchase-requests.print');
     Route::get('/purchase-orders/{purchaseOrder}/print', [PurchaseOrderController::class, 'print'])->name('purchase-orders.print');
     Route::get('/prpo/status', [PRPOStatusController::class, 'index'])->name('status.index');
+});
+
+// --- ATTENDANCE MODULE NI MARX HAHAHAHAH ---
+Route::prefix('attendance')->middleware(['auth'])->group(function () {
+    Route::get('/overview', [AttendanceController::class, 'overview'])->name('attendance.overview');
+    Route::get('/setup-schedule', [AttendanceController::class, 'setupSchedule'])->name('attendance.setup-schedule');
+    Route::get('/schedule-view', [AttendanceController::class, 'scheduleView'])->name('attendance.schedule-view');
+    Route::get('/calendar', [AttendanceController::class, 'calendar'])->name('attendance.calendar');
 });
 
 require __DIR__.'/auth.php';
