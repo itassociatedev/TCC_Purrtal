@@ -18,7 +18,7 @@ export default function Overview() {
         >
             <div className="rounded-lg bg-white p-6 shadow-sm">
                 <h3 className="text-lg font-bold text-gray-800">Attendance Module Groundwork</h3>
-                <p className="mt-2 text-gray-600">This module is successfully connected to the main system.</p>
+                <p className="mt-2 text-gray-600">Analytics goes here.</p>
             </div>
         </SidebarLayout>
     );

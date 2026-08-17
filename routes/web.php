@@ -425,4 +425,6 @@ Route::prefix('attendance')->middleware(['auth'])->group(function () {
     Route::get('/calendar', [AttendanceController::class, 'calendar'])->name('attendance.calendar');
 });
 
+Route::post('/setup-schedule', [AttendanceController::class, 'storeSchedule'])->name('attendance.setup-schedule.store');
+
 require __DIR__.'/auth.php';

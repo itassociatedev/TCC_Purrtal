@@ -297,4 +297,9 @@ class User extends Authenticatable
     {
         return $this->canAccessModule($permission);
     }
+
+    public function schedule()
+    {
+        return $this->hasOne(Schedule::class);
+    }
 }
