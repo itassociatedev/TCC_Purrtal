@@ -186,8 +186,8 @@ class DutyMealController extends Controller
             ->orderBy('name')
             ->get();
 
-       
-        $employees = User::with(['branches', 'department:id,name'])
+        // 🟢 NEW: Added 'schedules' and 'scheduleOverrides' to the relationships!
+        $employees = User::with(['branches', 'department:id,name', 'schedules', 'scheduleOverrides'])
             ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
                 $query->where(function ($q) use ($allowedBranchIds) {
                     $q->whereIn('branch_id', $allowedBranchIds)
@@ -202,6 +202,26 @@ class DutyMealController extends Controller
             ->map(function ($emp) {
                 $emp->assigned_branch_ids = $emp->branches->pluck('id')->toArray();
                 unset($emp->branches); 
+                
+                // 🟢 NEW: Map out the schedules strictly for the React frontend
+                $emp->mapped_schedules = $emp->schedules->map(function ($sch) {
+                    return [
+                        'start_date' => $sch->start_date,
+                        'end_date' => $sch->end_date,
+                        'shift_type' => $sch->shift_type,
+                        'off_days' => $sch->off_days ?? [],
+                    ];
+                })->toArray();
+                
+                $emp->mapped_overrides = $emp->scheduleOverrides->keyBy(function($item) {
+                    return \Carbon\Carbon::parse($item->date)->format('Y-m-d');
+                })->map(function ($override) {
+                    return [
+                        'is_off_day' => (bool) $override->is_off_day,
+                        'shift_type' => $override->shift_type,
+                    ];
+                })->toArray();
+
                 return $emp;
             });
 
