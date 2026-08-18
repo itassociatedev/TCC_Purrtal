@@ -256,11 +256,11 @@ export default function Calendar({ employees = [] }) {
                         ))}
                     </div>
 
-                    {/* Strict Aspect Ratio Grid */}
-                    <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
+                    {/* 🟢 FIXED: gridAutoRows set to minmax(110px, auto) to allow safe expansion for heavy text without crushing it */}
+                    <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gridAutoRows: 'minmax(110px, auto)' }}>
                         {monthDays.map((slot, index) => {
                             if (slot.isPadding) {
-                                return <div key={`padding-${index}`} className="w-full aspect-square xl:aspect-[4/3] rounded-md border border-gray-100 bg-gray-50/50"></div>;
+                                return <div key={`padding-${index}`} className="h-full w-full rounded-md border border-gray-100 bg-gray-50/50"></div>;
                             }
 
                             const { isOff, shiftType, startTime, endTime, isOverride } = getShiftDetails(activeEmployee, slot.dateString, slot.dayName);
@@ -268,15 +268,15 @@ export default function Calendar({ employees = [] }) {
                             return (
                                 <div 
                                     key={`day-${slot.dayNum}`} 
-                                    className={`w-full aspect-square xl:aspect-[4/3] flex flex-col rounded-md border p-1.5 sm:p-2.5 shadow-sm transition-colors overflow-hidden ${
+                                    className={`h-full w-full flex flex-col rounded-md border p-1.5 sm:p-2.5 shadow-sm transition-colors ${
                                         !activeEmployee ? 'border-gray-100 bg-white' :
                                         isOverride ? 'border-amber-200 bg-amber-50/30' : 
                                         'border-gray-200 bg-white hover:bg-gray-50'
                                     }`}
                                 >
                                     <div className="flex justify-between items-start">
-                                        <span className={`text-sm font-semibold ${isOverride ? 'text-amber-700' : 'text-gray-700'}`}>{slot.dayNum}</span>
-                                        {isOverride && <span className="text-[9px] font-bold text-amber-500 uppercase tracking-wider bg-amber-100 px-1.5 py-0.5 rounded shadow-sm">Modified</span>}
+                                        <span className={`text-xs sm:text-sm font-semibold ${isOverride ? 'text-amber-700' : 'text-gray-700'}`}>{slot.dayNum}</span>
+                                        {isOverride && <span className="text-[8px] sm:text-[9px] font-bold text-amber-500 uppercase tracking-wider bg-amber-100 px-1 sm:px-1.5 py-0.5 rounded shadow-sm">Modified</span>}
                                     </div>
 
                                     {activeEmployee ? (

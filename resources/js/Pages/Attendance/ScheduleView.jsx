@@ -315,6 +315,7 @@ export default function ScheduleView({ employees = [] }) {
                 {/* ================= BATCH VIEW ================= */}
                 {viewMode === 'batch' && (
                     <div className="space-y-6">
+                        {/* Batch Header Content Removed For Brevity (unchanged) */}
                         <div className="flex flex-col gap-4 border-b pb-4 lg:flex-row lg:items-end lg:justify-between">
                             <div>
                                 <h3 className="text-lg font-bold text-gray-800">Batch Timetable Overview</h3>
@@ -572,10 +573,15 @@ export default function ScheduleView({ employees = [] }) {
                                 ))}
                             </div>
 
-                            <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
+                            {/* 🟢 FIXED: gridAutoRows set to minmax(110px, auto) allows rows to dynamically expand without hiding data */}
+                            <div 
+                                className="grid gap-1.5" 
+                                style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gridAutoRows: 'minmax(110px, auto)' }}
+                            >
                                 {monthDays.map((slot, index) => {
+                                    
                                     if (slot.isPadding) {
-                                        return <div key={`padding-${index}`} className="w-full aspect-square xl:aspect-[4/3] rounded-md border border-gray-100 bg-gray-50/50"></div>;
+                                        return <div key={`padding-${index}`} className="h-full w-full rounded-md border border-gray-100 bg-gray-50/50"></div>;
                                     }
 
                                     const { isOff, shiftType, startTime, endTime, isOverride } = getShiftDetails(singleEmployee, slot.dateString, slot.dayName);
@@ -585,7 +591,7 @@ export default function ScheduleView({ employees = [] }) {
                                         <div 
                                             key={`day-${slot.dayNum}`} 
                                             onClick={() => singleEmployee && toggleCellSelection(singleEmployee.id, slot.dateString)}
-                                            className={`w-full aspect-square xl:aspect-[4/3] flex flex-col rounded-md border p-1.5 sm:p-2.5 shadow-sm transition-colors overflow-hidden ${
+                                            className={`h-full w-full flex flex-col rounded-md border p-1.5 sm:p-2.5 shadow-sm transition-colors ${
                                                 !singleEmployee ? 'border-gray-100 bg-white' :
                                                 isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500 cursor-pointer' : 
                                                 isOverride ? 'border-amber-200 bg-amber-50/30 hover:bg-amber-50 cursor-pointer' : 
@@ -593,8 +599,8 @@ export default function ScheduleView({ employees = [] }) {
                                             }`}
                                         >
                                             <div className="flex justify-between items-start pointer-events-none">
-                                                <span className={`text-sm font-semibold ${isOverride ? 'text-amber-700' : 'text-gray-700'}`}>{slot.dayNum}</span>
-                                                {isOverride && <span className="text-[9px] font-bold text-amber-500 uppercase tracking-wider bg-amber-100 px-1.5 py-0.5 rounded shadow-sm">Modified</span>}
+                                                <span className={`text-xs sm:text-sm font-semibold ${isOverride ? 'text-amber-700' : 'text-gray-700'}`}>{slot.dayNum}</span>
+                                                {isOverride && <span className="text-[8px] sm:text-[9px] font-bold text-amber-500 uppercase tracking-wider bg-amber-100 px-1 sm:px-1.5 py-0.5 rounded shadow-sm">Modified</span>}
                                             </div>
 
                                             {singleEmployee && (
