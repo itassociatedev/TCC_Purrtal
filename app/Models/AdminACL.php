@@ -94,6 +94,11 @@ class AdminACL extends Model
             'purchase_requests' => 'Purchase Requests',
             'approval_board' => 'Approval Board',
             'purchase_orders' => 'Purchase Orders',
+            // 🟢 ADDED: Attendance Modules
+            'attendance_overview' => 'Attendance Overview',
+            'attendance_setup' => 'Setup Schedule',
+            'attendance_schedule_view' => 'Schedule View',
+            'attendance_calendar' => 'Calendar',
         ];
     }
 
@@ -125,6 +130,13 @@ class AdminACL extends Model
                 'duty_meal' => 'Duty Meal Management',
                 'duty_meal_setup_roster' => 'Set Up Roster',
                 'duty_meal_archive' => 'Duty Meal Archive',
+            ],
+            // 🟢 ADDED: Attendance Group
+            'Attendance Module' => [
+                'attendance_overview' => 'Attendance Overview',
+                'attendance_setup' => 'Setup Schedule',
+                'attendance_schedule_view' => 'Schedule View',
+                'attendance_calendar' => 'Calendar',
             ],
             'PR/PO Module' => [
                 'products' => 'Products Masterlist',
