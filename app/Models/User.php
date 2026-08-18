@@ -302,4 +302,10 @@ class User extends Authenticatable
     {
         return $this->hasOne(Schedule::class);
     }
+
+    // override sched
+    public function scheduleOverrides()
+    {
+        return $this->hasMany(ScheduleOverride::class);
+    }
 }

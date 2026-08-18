@@ -10,7 +10,45 @@ use App\Models\Schedule;
 class AttendanceController extends Controller
 {
     public function overview() { return Inertia::render('Attendance/Overview'); }
-    public function scheduleView() { return Inertia::render('Attendance/ScheduleView'); }
+    
+    
+    public function scheduleView()
+    {
+        // 🟢 Added 'scheduleOverrides' to the with() array
+        $employees = User::with(['department', 'schedule', 'scheduleOverrides'])
+            ->whereIn('status', ['Active', 'Password reset'])
+            ->orderBy('name', 'asc')
+            ->get()
+            ->map(function ($user) {
+                return [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'department' => $user->department ? $user->department->name : 'Unassigned',
+                    'shift_type' => $user->schedule->shift_type ?? 'No Shift Assigned',
+                    'start_time' => $user->schedule ? date('g:i A', strtotime($user->schedule->start_time)) : null,
+                    'end_time' => $user->schedule ? date('g:i A', strtotime($user->schedule->end_time)) : null,
+                    'off_days' => $user->schedule && $user->schedule->off_days ? $user->schedule->off_days : [],
+                    
+                    // 🟢 Format the overrides into a dictionary keyed by date (e.g., '2026-08-17')
+                    'overrides' => $user->scheduleOverrides->keyBy(function($item) {
+                        return \Carbon\Carbon::parse($item->date)->format('Y-m-d');
+                    })->map(function ($override) {
+                        return [
+                            'is_off_day' => (bool) $override->is_off_day,
+                            'shift_type' => $override->shift_type,
+                            'start_time' => $override->start_time ? date('g:i A', strtotime($override->start_time)) : null,
+                            'end_time' => $override->end_time ? date('g:i A', strtotime($override->end_time)) : null,
+                        ];
+                    })->toArray(),
+                ];
+            });
+
+        return Inertia::render('Attendance/ScheduleView', [
+            'employees' => $employees
+        ]);
+    }
+    
+    
     public function calendar() { return Inertia::render('Attendance/Calendar'); }
 
     // 🟢 UPDATED: Fetch real data for the table
@@ -80,5 +118,33 @@ class AttendanceController extends Controller
         }
 
         return redirect()->back()->with('success', 'Schedule updated successfully.');
+    }
+
+    public function storeOverride(Request $request)
+    {
+        $request->validate([
+            'cells' => 'required|array', // Array of { employee_id, date }
+            'is_off_day' => 'required|boolean',
+            'shift_start' => 'nullable',
+            'shift_end' => 'nullable',
+            'shift_type' => 'nullable|string',
+        ]);
+
+        foreach ($request->cells as $cell) {
+            \App\Models\ScheduleOverride::updateOrCreate(
+                [
+                    'user_id' => $cell['employee_id'],
+                    'date' => $cell['date'],
+                ],
+                [
+                    'is_off_day' => $request->is_off_day,
+                    'shift_type' => $request->is_off_day ? null : $request->shift_type,
+                    'start_time' => $request->is_off_day ? null : $request->shift_start,
+                    'end_time' => $request->is_off_day ? null : $request->shift_end,
+                ]
+            );
+        }
+
+        return redirect()->back()->with('success', 'Daily overrides applied successfully.');
     }
 }

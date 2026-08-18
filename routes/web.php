@@ -426,5 +426,6 @@ Route::prefix('attendance')->middleware(['auth'])->group(function () {
 });
 
 Route::post('/setup-schedule', [AttendanceController::class, 'storeSchedule'])->name('attendance.setup-schedule.store');
+Route::post('/schedule-override', [AttendanceController::class, 'storeOverride'])->name('attendance.schedule-override.store');
 
 require __DIR__.'/auth.php';

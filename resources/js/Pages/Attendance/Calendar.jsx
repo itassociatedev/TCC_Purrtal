@@ -17,7 +17,7 @@ export default function Calendar() {
             header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Calendar</h2>}
         >
             <div className="rounded-lg bg-white p-6 shadow-sm">
-                <h3 className="text-lg font-bold text-gray-800">Monthly Calendar</h3>
+                <h3 className="text-lg font-bold text-gray-800">Calendar</h3>
                 <p className="mt-2 text-gray-600">The visual calendar representation of schedules and attendance goes here.</p>
             </div>
         </SidebarLayout>
