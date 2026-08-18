@@ -99,7 +99,9 @@ export default function Overview({ employees = [] }) {
     // ==========================================
     const [selectedDate, setSelectedDate] = useState(getTodayString());
     const [rosterSearch, setRosterSearch] = useState('');
-    const [rosterDept, setRosterDept] = useState('');
+    
+    // 🟢 Global Department Filter State
+    const [globalDept, setGlobalDept] = useState('');
 
     const uniqueDepartments = useMemo(() => {
         return [...new Set(employees.map(e => (typeof e.department === 'object' ? e.department?.name : e.department) || 'Unassigned'))]
@@ -108,14 +110,23 @@ export default function Overview({ employees = [] }) {
     }, [employees]);
 
     // ==========================================
-    // REAL-TIME DATA CRUNCHING (Based on Selected Date)
+    // REAL-TIME DATA CRUNCHING
     // ==========================================
     const viewingDateObj = new Date(selectedDate.split('-')[0], selectedDate.split('-')[1] - 1, selectedDate.split('-')[2]);
     const viewingDisplay = viewingDateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     const viewingDayName = viewingDateObj.toLocaleDateString('en-US', { weekday: 'long' });
     const currentCutoff = getCutoffValueForDate(viewingDateObj);
 
-    // Crunch numbers using useMemo so it only recalculates when the selected date or employee list changes
+    // 🟢 1. Filter the entire employee pool globally based on the selected department
+    const globallyFilteredEmployees = useMemo(() => {
+        if (!globalDept) return employees;
+        return employees.filter(emp => {
+            const deptName = typeof emp.department === 'object' ? emp.department?.name : emp.department || 'Unassigned';
+            return deptName === globalDept;
+        });
+    }, [employees, globalDept]);
+
+    // 🟢 2. Calculate EVERYTHING strictly using the Globally Filtered Employees
     const analytics = useMemo(() => {
         let scheduledCount = 0;
         let offDutyCount = 0;
@@ -125,14 +136,14 @@ export default function Overview({ employees = [] }) {
         let roster = [];
         let weeklyCounts = getWeekDates(selectedDate);
 
-        employees.forEach(emp => {
-            // 1. Compliance Check based on the selected date's cut-off period
+        globallyFilteredEmployees.forEach(emp => {
+            // Compliance Check based on the selected date's cut-off period
             const hasActiveCutoffSchedule = emp.schedules?.some(sch => currentCutoff.start >= sch.start_date && currentCutoff.end <= sch.end_date);
             if (!hasActiveCutoffSchedule) {
                 unassignedStaff.push(emp);
             }
 
-            // 2. Roster Check for the specifically selected day
+            // Roster Check for the specifically selected day
             const details = getShiftDetails(emp, selectedDate, viewingDayName);
             
             if (details.isOverride) activeOverridesCount++;
@@ -154,7 +165,7 @@ export default function Overview({ employees = [] }) {
                 }
             }
 
-            // 3. Weekly Schedule Summary Count
+            // Weekly Schedule Summary Count
             weeklyCounts.forEach((day, index) => {
                 const dayDetails = getShiftDetails(emp, day.dateString, day.dayName);
                 if (dayDetails.shiftType && !dayDetails.isOff) {
@@ -167,16 +178,14 @@ export default function Overview({ employees = [] }) {
         roster.sort((a, b) => (a.isOff === b.isOff) ? 0 : a.isOff ? 1 : -1);
 
         return { scheduledCount, offDutyCount, activeOverridesCount, specialDutiesCount, unassignedStaff, roster, weeklyCounts };
-    }, [employees, selectedDate, viewingDayName, currentCutoff]);
+    }, [globallyFilteredEmployees, selectedDate, viewingDayName, currentCutoff]);
 
-    // Apply Filters to Roster
+    // 🟢 3. The Roster Table only needs to apply the local Name Search now
     const filteredRoster = useMemo(() => {
         return analytics.roster.filter(emp => {
-            const matchesSearch = rosterSearch === '' || emp.name.toLowerCase().includes(rosterSearch.toLowerCase());
-            const matchesDept = rosterDept === '' || emp.deptName === rosterDept;
-            return matchesSearch && matchesDept;
+            return rosterSearch === '' || emp.name.toLowerCase().includes(rosterSearch.toLowerCase());
         });
-    }, [analytics.roster, rosterSearch, rosterDept]);
+    }, [analytics.roster, rosterSearch]);
 
 
     const renderShiftBadge = (shiftType, isOffDay) => {
@@ -194,32 +203,54 @@ export default function Overview({ employees = [] }) {
             activeModule="Attendance"
             sidebarLinks={attendanceLinks}
             header={
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <h2 className="text-xl font-semibold leading-tight text-gray-800">Attendance Overview</h2>
+                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-xl font-semibold leading-tight text-gray-800">Attendance Overview</h2>
+                        <span className="hidden sm:inline-block px-2.5 py-1 rounded bg-indigo-50 text-xs font-bold text-indigo-700 border border-indigo-100">
+                            {viewingDisplay}
+                        </span>
+                    </div>
                     
-                    {/* 🟢 NEW: Date Selector */}
-                    <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 p-1 shadow-sm">
-                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-2 hidden sm:block">Viewing:</label>
-                        <input 
-                            type="date" 
-                            className="border-none bg-transparent py-1.5 text-sm font-semibold text-indigo-700 focus:ring-0 cursor-pointer"
-                            value={selectedDate}
-                            onChange={e => setSelectedDate(e.target.value)}
-                        />
-                        <div className="w-px h-6 bg-gray-200 mx-1"></div>
-                        <button 
-                            onClick={() => setSelectedDate(getTodayString())}
-                            className="rounded px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-100 hover:text-indigo-600 transition-colors"
-                        >
-                            Today
-                        </button>
+                    {/* 🟢 GLOBAL FILTERS: Department & Date Selector */}
+                    <div className="flex flex-col sm:flex-row items-center gap-3">
+                        
+                        <div className="w-full sm:w-auto relative">
+                            <select 
+                                className="block w-full sm:w-[220px] rounded-md border-gray-300 py-1.5 pl-3 pr-10 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white cursor-pointer font-medium text-gray-700"
+                                value={globalDept}
+                                onChange={e => setGlobalDept(e.target.value)}
+                            >
+                                <option value="">All Departments</option>
+                                {uniqueDepartments.map(dept => (
+                                    <option key={dept} value={dept}>{dept}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="w-full sm:w-auto flex items-center gap-2 bg-white rounded-lg border border-gray-300 p-1 shadow-sm">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-2 hidden sm:block">Viewing:</label>
+                            <input 
+                                type="date" 
+                                className="w-full sm:w-auto border-none bg-transparent py-1.5 text-sm font-semibold text-indigo-700 focus:ring-0 cursor-pointer"
+                                value={selectedDate}
+                                onChange={e => setSelectedDate(e.target.value)}
+                            />
+                            <div className="w-px h-6 bg-gray-200 mx-1 hidden sm:block"></div>
+                            <button 
+                                onClick={() => setSelectedDate(getTodayString())}
+                                className="rounded px-3 py-1.5 text-xs font-bold text-gray-600 hover:bg-gray-100 hover:text-indigo-600 transition-colors"
+                            >
+                                Today
+                            </button>
+                        </div>
+
                     </div>
                 </div>
             }
         >
             <div className="space-y-6">
                 
-                {/* ================= SUMMARY CARDS ================= */}
+                {/* ================= KPI CARDS ================= */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-4 opacity-10">
@@ -243,7 +274,7 @@ export default function Overview({ employees = [] }) {
                         <div className="absolute top-0 right-0 p-4 opacity-10">
                             <svg className="w-16 h-16 text-purple-600" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
                         </div>
-                        <dt className="truncate text-sm font-medium text-gray-500">Graveyard/Straight</dt>
+                        <dt className="truncate text-sm font-medium text-gray-500">Special Duties (Grave/Straight)</dt>
                         <dd className="mt-2 text-3xl font-black tracking-tight text-gray-900">{analytics.specialDutiesCount}</dd>
                     </div>
 
@@ -261,7 +292,7 @@ export default function Overview({ employees = [] }) {
                     <div className="border-b border-gray-200 bg-gray-50/50 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
                             <h3 className="text-base font-bold text-gray-900">Weekly Schedule Summary</h3>
-                            <p className="text-xs text-gray-500 mt-1">Total headcount scheduled to work each day (excluding off days).</p>
+                            <p className="text-xs text-gray-500 mt-1">Total headcount scheduled to work each day {globalDept && <span className="font-bold text-indigo-600">in {globalDept}</span>}.</p>
                         </div>
                         <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                             Week of {analytics.weeklyCounts[0]?.displayDate} – {analytics.weeklyCounts[6]?.displayDate}
@@ -300,32 +331,20 @@ export default function Overview({ employees = [] }) {
                                 <p className="text-xs text-gray-500 mt-1">Everyone actively assigned to a schedule for the selected date.</p>
                             </div>
                             
-                            {/* Roster Filters */}
-                            <div className="flex flex-col sm:flex-row items-center gap-2">
-                                <select 
-                                    className="w-full sm:w-auto rounded-md border-gray-300 py-1.5 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                    value={rosterDept}
-                                    onChange={e => setRosterDept(e.target.value)}
-                                >
-                                    <option value="">All Departments</option>
-                                    {uniqueDepartments.map(dept => (
-                                        <option key={dept} value={dept}>{dept}</option>
-                                    ))}
-                                </select>
-                                <div className="relative w-full sm:w-48">
-                                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
-                                        <svg className="h-3.5 w-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                        </svg>
-                                    </div>
-                                    <input 
-                                        type="text" 
-                                        placeholder="Search name..." 
-                                        className="w-full rounded-md border-gray-300 py-1.5 pl-8 pr-3 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                        value={rosterSearch}
-                                        onChange={e => setRosterSearch(e.target.value)}
-                                    />
+                            {/* Roster Name Search (Local Filter) */}
+                            <div className="relative w-full sm:w-48">
+                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
+                                    <svg className="h-3.5 w-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
                                 </div>
+                                <input 
+                                    type="text" 
+                                    placeholder="Search name..." 
+                                    className="w-full rounded-md border-gray-300 py-1.5 pl-8 pr-3 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                    value={rosterSearch}
+                                    onChange={e => setRosterSearch(e.target.value)}
+                                />
                             </div>
                         </div>
                         
@@ -370,8 +389,8 @@ export default function Overview({ employees = [] }) {
                                     <svg className="h-12 w-12 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                     </svg>
-                                    <h3 className="text-sm font-bold text-gray-900">No Roster Data</h3>
-                                    <p className="mt-1 text-sm text-gray-500">There are no employees scheduled for the selected date.</p>
+                                    <h3 className="text-sm font-bold text-gray-900">No Match Found</h3>
+                                    <p className="mt-1 text-sm text-gray-500">No employees match your current filters.</p>
                                 </div>
                             )}
                         </div>
@@ -411,7 +430,7 @@ export default function Overview({ employees = [] }) {
                                         <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
                                     </div>
                                     <h3 className="text-sm font-bold text-gray-900">All Clear!</h3>
-                                    <p className="mt-1 text-sm text-gray-500">100% of your active staff have schedules assigned for this date's cut-off.</p>
+                                    <p className="mt-1 text-sm text-gray-500">100% of the active staff in this scope have schedules assigned.</p>
                                 </div>
                             )}
                         </div>
