@@ -15,7 +15,7 @@ export default function ScheduleView({ employees = [] }) {
     useEffect(() => setMounted(true), []);
 
     // ==========================================
-    // OVERRIDE & MASTER CUT-OFF LOGIC
+    // OVERRIDE LOGIC & HELPERS
     // ==========================================
     const [selectedCells, setSelectedCells] = useState([]);
     const [showOverrideModal, setShowOverrideModal] = useState(false);
@@ -255,12 +255,12 @@ export default function ScheduleView({ employees = [] }) {
     }, [employees]);
 
     const renderShiftBadge = (shiftType, isOffDay) => {
-        if (isOffDay) return <span className="inline-flex rounded border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 shadow-sm">Off Day</span>;
+        if (isOffDay) return <span className="inline-flex rounded border border-gray-200 bg-gray-100 px-2 py-1 text-[10px] sm:text-xs font-medium text-gray-600 shadow-sm">Off Day</span>;
         switch (shiftType) {
-            case 'Day Shift': return <span className="inline-flex rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 shadow-sm">Day Shift</span>;
-            case 'Straight Duty': return <span className="inline-flex rounded bg-green-50 px-2 py-1 text-xs font-medium text-green-700 shadow-sm">Straight Duty</span>;
-            case 'Graveyard Shift': return <span className="inline-flex rounded bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 shadow-sm">Graveyard Shift</span>;
-            default: return <span className="inline-flex rounded border border-gray-100 bg-gray-50 px-2 py-1 text-xs font-medium text-gray-400">No Shift</span>;
+            case 'Day Shift': return <span className="inline-flex rounded bg-blue-50 px-2 py-1 text-[10px] sm:text-xs font-medium text-blue-700 shadow-sm">Day Shift</span>;
+            case 'Straight Duty': return <span className="inline-flex rounded bg-green-50 px-2 py-1 text-[10px] sm:text-xs font-medium text-green-700 shadow-sm">Straight Duty</span>;
+            case 'Graveyard Shift': return <span className="inline-flex rounded bg-purple-50 px-2 py-1 text-[10px] sm:text-xs font-medium text-purple-700 shadow-sm">Graveyard Shift</span>;
+            default: return <span className="inline-flex rounded border border-gray-100 bg-gray-50 px-2 py-1 text-[10px] sm:text-xs font-medium text-gray-400">No Shift</span>;
         }
     };
 
@@ -562,14 +562,20 @@ export default function ScheduleView({ employees = [] }) {
                         </div>
 
                         <div className="w-full">
-                            <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
+                            
+                            {/* 🟢 FIXED: High-contrast Dark Grey Headers */}
+                            <div className="grid gap-1.5 mb-1.5" style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
                                 {daysOfWeekSunToSat.map(d => (
-                                    <div key={`header-${d}`} className="bg-white py-2 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">{d}</div>
+                                    <div key={`header-${d}`} className="rounded-md bg-gray-600 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider shadow-sm">
+                                        {d}
+                                    </div>
                                 ))}
+                            </div>
 
+                            <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
                                 {monthDays.map((slot, index) => {
                                     if (slot.isPadding) {
-                                        return <div key={`padding-${index}`} className="h-[120px] rounded-md border border-gray-100 bg-gray-50"></div>;
+                                        return <div key={`padding-${index}`} className="w-full aspect-square xl:aspect-[4/3] rounded-md border border-gray-100 bg-gray-50/50"></div>;
                                     }
 
                                     const { isOff, shiftType, startTime, endTime, isOverride } = getShiftDetails(singleEmployee, slot.dateString, slot.dayName);
@@ -579,7 +585,7 @@ export default function ScheduleView({ employees = [] }) {
                                         <div 
                                             key={`day-${slot.dayNum}`} 
                                             onClick={() => singleEmployee && toggleCellSelection(singleEmployee.id, slot.dateString)}
-                                            className={`h-[120px] flex flex-col rounded-md border p-2.5 shadow-sm transition-colors ${
+                                            className={`w-full aspect-square xl:aspect-[4/3] flex flex-col rounded-md border p-1.5 sm:p-2.5 shadow-sm transition-colors overflow-hidden ${
                                                 !singleEmployee ? 'border-gray-100 bg-white' :
                                                 isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500 cursor-pointer' : 
                                                 isOverride ? 'border-amber-200 bg-amber-50/30 hover:bg-amber-50 cursor-pointer' : 
@@ -592,10 +598,10 @@ export default function ScheduleView({ employees = [] }) {
                                             </div>
 
                                             {singleEmployee && (
-                                                <div className="mt-2 flex flex-col items-center gap-1.5 pointer-events-none">
+                                                <div className="mt-1 sm:mt-2 flex flex-col items-center justify-center flex-1 gap-1 sm:gap-1.5 pointer-events-none">
                                                     {renderShiftBadge(shiftType, isOff)}
                                                     {!isOff && startTime && endTime && (
-                                                        <span className={`text-[10px] font-medium leading-tight font-mono text-center ${isOverride ? 'text-amber-700' : 'text-gray-500'}`}>
+                                                        <span className={`text-[9px] sm:text-[10px] font-medium leading-tight font-mono text-center ${isOverride ? 'text-amber-700' : 'text-gray-500'}`}>
                                                             {startTime}<br/>|<br/>{endTime}
                                                         </span>
                                                     )}
