@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useForm } from '@inertiajs/react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 
-export default function ScheduleView({ employees = [] }) {
+export default function ScheduleView({ employees = [], branches = [] }) {
     const attendanceLinks = [
         { label: 'Attendance Overview', href: route('attendance.overview'), active: route().current('attendance.overview') },
         { label: 'Setup Schedule', href: route('attendance.setup-schedule'), active: route().current('attendance.setup-schedule') },
@@ -136,6 +136,7 @@ export default function ScheduleView({ employees = [] }) {
     // ==========================================
     const [selectedBatchIds, setSelectedBatchIds] = useState([]);
     const [batchDeptFilter, setBatchDeptFilter] = useState('');
+    const [batchBranchFilter, setBatchBranchFilter] = useState(''); // 🟢 NEW
     const [batchSearch, setBatchSearch] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [weekOffset, setWeekOffset] = useState(0);
@@ -169,14 +170,23 @@ export default function ScheduleView({ employees = [] }) {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    // 🟢 UPDATED: Filter by Branch securely
     const availableEmployeesForPicker = useMemo(() => {
         return employees.filter(emp => {
             if (selectedBatchIds.includes(emp.id)) return false;
-            if (batchSearch.trim() !== '') return emp.name.toLowerCase().includes(batchSearch.toLowerCase());
-            if (batchDeptFilter !== '') return (typeof emp.department === 'object' ? emp.department?.name : emp.department)?.toLowerCase() === batchDeptFilter.toLowerCase();
+            if (batchSearch.trim() !== '' && !emp.name.toLowerCase().includes(batchSearch.toLowerCase())) return false;
+            if (batchDeptFilter !== '' && (typeof emp.department === 'object' ? emp.department?.name : emp.department)?.toLowerCase() !== batchDeptFilter.toLowerCase()) return false;
+            
+            if (batchBranchFilter !== '') {
+                const selectedBranchId = Number(batchBranchFilter);
+                const matchesBranch = Number(emp.branch_id) === selectedBranchId || 
+                    (emp.assigned_branch_ids && emp.assigned_branch_ids.includes(selectedBranchId));
+                if (!matchesBranch) return false;
+            }
+
             return true;
         });
-    }, [employees, selectedBatchIds, batchSearch, batchDeptFilter]);
+    }, [employees, selectedBatchIds, batchSearch, batchDeptFilter, batchBranchFilter]);
 
     const batchEmployeesList = useMemo(() => {
         return employees.filter(e => selectedBatchIds.includes(e.id));
@@ -193,6 +203,7 @@ export default function ScheduleView({ employees = [] }) {
     // ==========================================
     const [singleEmployeeId, setSingleEmployeeId] = useState('');
     const [singleDeptFilter, setSingleDeptFilter] = useState('');
+    const [singleBranchFilter, setSingleBranchFilter] = useState(''); // 🟢 NEW
     const [singleSearch, setSingleSearch] = useState('');
     const [isSingleDropdownOpen, setIsSingleDropdownOpen] = useState(false);
     const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
@@ -210,14 +221,21 @@ export default function ScheduleView({ employees = [] }) {
         return () => document.removeEventListener('mousedown', handleClickOutsideSingle);
     }, []);
 
+    // 🟢 UPDATED: Filter by Branch securely
     const availableSingleEmployees = useMemo(() => {
         return employees.filter(emp => {
             const deptName = typeof emp.department === 'object' ? emp.department?.name : emp.department;
             const matchesDept = singleDeptFilter === '' || (deptName || 'Unassigned').toLowerCase() === singleDeptFilter.toLowerCase();
             const matchesSearch = singleSearch.trim() === '' || emp.name.toLowerCase().includes(singleSearch.toLowerCase());
-            return matchesDept && matchesSearch;
+            
+            const selectedBranchId = Number(singleBranchFilter);
+            const matchesBranch = singleBranchFilter === '' || 
+                Number(emp.branch_id) === selectedBranchId || 
+                (emp.assigned_branch_ids && emp.assigned_branch_ids.includes(selectedBranchId));
+
+            return matchesDept && matchesSearch && matchesBranch;
         });
-    }, [employees, singleDeptFilter, singleSearch]);
+    }, [employees, singleDeptFilter, singleSearch, singleBranchFilter]);
 
     const singleEmployee = useMemo(() => {
         if (!singleEmployeeId) return null;
@@ -331,11 +349,21 @@ export default function ScheduleView({ employees = [] }) {
 
                             <div className="flex flex-col gap-2">
                                 <span className="text-xs font-semibold text-gray-500">Add Staff to View:</span>
-                                <div className="flex flex-wrap items-center gap-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    
                                     <select
-                                        className="rounded-md border-gray-300 py-1.5 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                        className="rounded-md border-gray-300 py-1.5 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-32"
+                                        value={batchBranchFilter}
+                                        onChange={e => { setBatchBranchFilter(e.target.value); setBatchSearch(''); setIsDropdownOpen(true); }}
+                                    >
+                                        <option value="">All Branches</option>
+                                        {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                    </select>
+
+                                    <select
+                                        className="rounded-md border-gray-300 py-1.5 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-36"
                                         value={batchDeptFilter}
-                                        onChange={e => { setBatchDeptFilter(e.target.value); if (e.target.value) setBatchSearch(''); setIsDropdownOpen(true); }}
+                                        onChange={e => { setBatchDeptFilter(e.target.value); setBatchSearch(''); setIsDropdownOpen(true); }}
                                     >
                                         <option value="">All Departments</option>
                                         {uniqueDepartments.map(dept => <option key={dept} value={dept}>{dept}</option>)}
@@ -351,9 +379,9 @@ export default function ScheduleView({ employees = [] }) {
                                             <input
                                                 type="text"
                                                 placeholder="Search by name..."
-                                                className="block w-64 rounded-md border-gray-300 py-1.5 pl-9 pr-3 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                                className="block w-48 lg:w-64 rounded-md border-gray-300 py-1.5 pl-9 pr-3 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                                                 value={batchSearch}
-                                                onChange={e => { setBatchSearch(e.target.value); if (e.target.value) setBatchDeptFilter(''); setIsDropdownOpen(true); }}
+                                                onChange={e => { setBatchSearch(e.target.value); setIsDropdownOpen(true); }}
                                                 onFocus={() => setIsDropdownOpen(true)}
                                             />
                                         </div>
@@ -462,9 +490,26 @@ export default function ScheduleView({ employees = [] }) {
                             <div className="flex flex-wrap items-center gap-4">
                                 
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Department Filter</label>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Branch</label>
                                     <select
-                                        className="block rounded-md border-gray-300 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 min-w-[150px]"
+                                        className="block rounded-md border-gray-300 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 min-w-[120px]"
+                                        value={singleBranchFilter}
+                                        onChange={e => { 
+                                            setSingleBranchFilter(e.target.value); 
+                                            setSingleEmployeeId(''); 
+                                            setSingleSearch('');
+                                            setSelectedCells([]); 
+                                        }}
+                                    >
+                                        <option value="">All Branches</option>
+                                        {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Department</label>
+                                    <select
+                                        className="block rounded-md border-gray-300 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 min-w-[140px]"
                                         value={singleDeptFilter}
                                         onChange={e => { 
                                             setSingleDeptFilter(e.target.value); 
@@ -481,7 +526,7 @@ export default function ScheduleView({ employees = [] }) {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Search & Select Employee</label>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Search Employee</label>
                                     <div className="relative rounded-md shadow-sm" ref={singleDropdownRef}>
                                         <div className="relative flex items-center">
                                             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -492,7 +537,7 @@ export default function ScheduleView({ employees = [] }) {
                                             <input
                                                 type="text"
                                                 placeholder="Search by name..."
-                                                className="block w-64 rounded-md border-gray-300 py-1.5 pl-9 pr-3 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                                className="block w-48 lg:w-64 rounded-md border-gray-300 py-1.5 pl-9 pr-3 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                                                 value={singleSearch}
                                                 onChange={e => { setSingleSearch(e.target.value); setIsSingleDropdownOpen(true); }}
                                                 onFocus={() => setIsSingleDropdownOpen(true)}
@@ -530,24 +575,22 @@ export default function ScheduleView({ employees = [] }) {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Month</label>
-                                    <select
-                                        className="block rounded-md border-gray-300 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                        value={currentMonth}
-                                        onChange={e => setCurrentMonth(parseInt(e.target.value))}
-                                    >
-                                        {monthNames.map((m, idx) => <option key={m} value={idx}>{m}</option>)}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Year</label>
-                                    <input
-                                        type="number"
-                                        className="block w-24 rounded-md border-gray-300 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                        value={currentYear}
-                                        onChange={e => setCurrentYear(parseInt(e.target.value))}
-                                    />
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Month / Year</label>
+                                    <div className="flex gap-2">
+                                        <select
+                                            className="block w-28 rounded-md border-gray-300 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                            value={currentMonth}
+                                            onChange={e => setCurrentMonth(parseInt(e.target.value))}
+                                        >
+                                            {monthNames.map((m, idx) => <option key={m} value={idx}>{m}</option>)}
+                                        </select>
+                                        <input
+                                            type="number"
+                                            className="block w-20 rounded-md border-gray-300 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                            value={currentYear}
+                                            onChange={e => setCurrentYear(parseInt(e.target.value))}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                             

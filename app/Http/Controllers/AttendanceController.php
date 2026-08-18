@@ -6,163 +6,194 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\User;
 use App\Models\Schedule;
+use App\Models\Branch;
+use Illuminate\Support\Facades\Auth;
 
 class AttendanceController extends Controller
 {
+    /**
+     * 🟢 HELPER: Secures all Attendance queries using Role-Based Branch Isolation.
+     */
+    private function getBaseQueryAndBranches()
+    {
+        $user = Auth::user();
+        
+        // Build the allowed branch IDs array (Primary Branch + Secondary Branches)
+        $allowedBranchIds = $user->branches->pluck('id')->push($user->branch_id)->filter()->unique();
+
+        // Fetch Branches (Admins get all, Managers get assigned)
+        $branches = Branch::select('id', 'name')
+            ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
+                $query->whereIn('id', $allowedBranchIds);
+            })
+            ->orderBy('name')
+            ->get();
+
+        // Build the isolated Employee query
+        $query = User::with(['department', 'schedules', 'scheduleOverrides', 'branches'])
+            ->whereIn('status', ['Active', 'Password reset'])
+            ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
+                $query->where(function ($q) use ($allowedBranchIds) {
+                    $q->whereIn('branch_id', $allowedBranchIds)
+                      ->orWhereHas('branches', function ($pivotQuery) use ($allowedBranchIds) {
+                          $pivotQuery->whereIn('branch_id', $allowedBranchIds);
+                      });
+                });
+            })
+            ->orderBy('name', 'asc');
+
+        return [$query, $branches];
+    }
+
     public function overview()
     {
-        // 🟢 Fetch all active employees, their cut-off schedules, and their daily overrides
-        $employees = User::with(['department', 'schedules', 'scheduleOverrides'])
-            ->whereIn('status', ['Active', 'Password reset'])
-            ->orderBy('name', 'asc')
-            ->get()
-            ->map(function ($user) {
-                return [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'department' => $user->department ? $user->department->name : 'Unassigned',
-                    'schedules' => $user->schedules->map(function ($sch) {
-                        return [
-                            'start_date' => $sch->start_date,
-                            'end_date' => $sch->end_date,
-                            'shift_type' => $sch->shift_type,
-                            'off_days' => $sch->off_days ?? [],
-                            'start_time' => $sch->start_time ? date('g:i A', strtotime($sch->start_time)) : null,
-                            'end_time' => $sch->end_time ? date('g:i A', strtotime($sch->end_time)) : null,
-                        ];
-                    })->toArray(),
-                    'overrides' => $user->scheduleOverrides->keyBy(function($item) {
-                        return \Carbon\Carbon::parse($item->date)->format('Y-m-d');
-                    })->map(function ($override) {
-                        return [
-                            'is_off_day' => (bool) $override->is_off_day,
-                            'shift_type' => $override->shift_type,
-                            'start_time' => $override->start_time ? date('g:i A', strtotime($override->start_time)) : null,
-                            'end_time' => $override->end_time ? date('g:i A', strtotime($override->end_time)) : null,
-                        ];
-                    })->toArray(),
-                ];
-            });
+        list($query, $branches) = $this->getBaseQueryAndBranches();
+
+        $employees = $query->get()->map(function ($user) {
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'branch_id' => $user->branch_id,
+                'assigned_branch_ids' => $user->branches->pluck('id')->toArray(),
+                'department' => $user->department ? $user->department->name : 'Unassigned',
+                'schedules' => $user->schedules->map(function ($sch) {
+                    return [
+                        'start_date' => $sch->start_date,
+                        'end_date' => $sch->end_date,
+                        'shift_type' => $sch->shift_type,
+                        'off_days' => $sch->off_days ?? [],
+                        'start_time' => $sch->start_time ? date('g:i A', strtotime($sch->start_time)) : null,
+                        'end_time' => $sch->end_time ? date('g:i A', strtotime($sch->end_time)) : null,
+                    ];
+                })->toArray(),
+                'overrides' => $user->scheduleOverrides->keyBy(function($item) {
+                    return \Carbon\Carbon::parse($item->date)->format('Y-m-d');
+                })->map(function ($override) {
+                    return [
+                        'is_off_day' => (bool) $override->is_off_day,
+                        'shift_type' => $override->shift_type,
+                        'start_time' => $override->start_time ? date('g:i A', strtotime($override->start_time)) : null,
+                        'end_time' => $override->end_time ? date('g:i A', strtotime($override->end_time)) : null,
+                    ];
+                })->toArray(),
+            ];
+        });
 
         return Inertia::render('Attendance/Overview', [
-            'employees' => $employees
+            'employees' => $employees,
+            'branches' => $branches
         ]);
     }
-    
     
     public function scheduleView()
     {
-        // 🟢 Load 'schedules' (plural) to pull all cut-off periods for the employee
-        $employees = User::with(['department', 'schedules', 'scheduleOverrides'])
-            ->whereIn('status', ['Active', 'Password reset'])
-            ->orderBy('name', 'asc')
-            ->get()
-            ->map(function ($user) {
-                return [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'department' => $user->department ? $user->department->name : 'Unassigned',
-                    
-                    // 🟢 Map out ALL cut-off schedules for the user
-                    'schedules' => $user->schedules->map(function ($sch) {
-                        return [
-                            'start_date' => $sch->start_date,
-                            'end_date' => $sch->end_date,
-                            'shift_type' => $sch->shift_type,
-                            'off_days' => $sch->off_days ?? [],
-                            'start_time' => $sch->start_time ? date('g:i A', strtotime($sch->start_time)) : null,
-                            'end_time' => $sch->end_time ? date('g:i A', strtotime($sch->end_time)) : null,
-                        ];
-                    })->toArray(),
-                    
-                    'overrides' => $user->scheduleOverrides->keyBy(function($item) {
-                        return \Carbon\Carbon::parse($item->date)->format('Y-m-d');
-                    })->map(function ($override) {
-                        return [
-                            'is_off_day' => (bool) $override->is_off_day,
-                            'shift_type' => $override->shift_type,
-                            'start_time' => $override->start_time ? date('g:i A', strtotime($override->start_time)) : null,
-                            'end_time' => $override->end_time ? date('g:i A', strtotime($override->end_time)) : null,
-                        ];
-                    })->toArray(),
-                ];
-            });
+        list($query, $branches) = $this->getBaseQueryAndBranches();
+
+        $employees = $query->get()->map(function ($user) {
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'branch_id' => $user->branch_id,
+                'assigned_branch_ids' => $user->branches->pluck('id')->toArray(),
+                'department' => $user->department ? $user->department->name : 'Unassigned',
+                'schedules' => $user->schedules->map(function ($sch) {
+                    return [
+                        'start_date' => $sch->start_date,
+                        'end_date' => $sch->end_date,
+                        'shift_type' => $sch->shift_type,
+                        'off_days' => $sch->off_days ?? [],
+                        'start_time' => $sch->start_time ? date('g:i A', strtotime($sch->start_time)) : null,
+                        'end_time' => $sch->end_time ? date('g:i A', strtotime($sch->end_time)) : null,
+                    ];
+                })->toArray(),
+                'overrides' => $user->scheduleOverrides->keyBy(function($item) {
+                    return \Carbon\Carbon::parse($item->date)->format('Y-m-d');
+                })->map(function ($override) {
+                    return [
+                        'is_off_day' => (bool) $override->is_off_day,
+                        'shift_type' => $override->shift_type,
+                        'start_time' => $override->start_time ? date('g:i A', strtotime($override->start_time)) : null,
+                        'end_time' => $override->end_time ? date('g:i A', strtotime($override->end_time)) : null,
+                    ];
+                })->toArray(),
+            ];
+        });
 
         return Inertia::render('Attendance/ScheduleView', [
-            'employees' => $employees
+            'employees' => $employees,
+            'branches' => $branches
         ]);
     }
     
-    
     public function calendar()
     {
-        $employees = User::with(['department', 'schedules', 'scheduleOverrides'])
-            ->whereIn('status', ['Active', 'Password reset'])
-            ->orderBy('name', 'asc')
-            ->get()
-            ->map(function ($user) {
-                return [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'department' => $user->department ? $user->department->name : 'Unassigned',
-                    'schedules' => $user->schedules->map(function ($sch) {
-                        return [
-                            'start_date' => $sch->start_date,
-                            'end_date' => $sch->end_date,
-                            'shift_type' => $sch->shift_type,
-                            'off_days' => $sch->off_days ?? [],
-                            'start_time' => $sch->start_time ? date('g:i A', strtotime($sch->start_time)) : null,
-                            'end_time' => $sch->end_time ? date('g:i A', strtotime($sch->end_time)) : null,
-                        ];
-                    })->toArray(),
-                    'overrides' => $user->scheduleOverrides->keyBy(function($item) {
-                        return \Carbon\Carbon::parse($item->date)->format('Y-m-d');
-                    })->map(function ($override) {
-                        return [
-                            'is_off_day' => (bool) $override->is_off_day,
-                            'shift_type' => $override->shift_type,
-                            'start_time' => $override->start_time ? date('g:i A', strtotime($override->start_time)) : null,
-                            'end_time' => $override->end_time ? date('g:i A', strtotime($override->end_time)) : null,
-                        ];
-                    })->toArray(),
-                ];
-            });
+        list($query, $branches) = $this->getBaseQueryAndBranches();
+
+        $employees = $query->get()->map(function ($user) {
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'branch_id' => $user->branch_id,
+                'assigned_branch_ids' => $user->branches->pluck('id')->toArray(),
+                'department' => $user->department ? $user->department->name : 'Unassigned',
+                'schedules' => $user->schedules->map(function ($sch) {
+                    return [
+                        'start_date' => $sch->start_date,
+                        'end_date' => $sch->end_date,
+                        'shift_type' => $sch->shift_type,
+                        'off_days' => $sch->off_days ?? [],
+                        'start_time' => $sch->start_time ? date('g:i A', strtotime($sch->start_time)) : null,
+                        'end_time' => $sch->end_time ? date('g:i A', strtotime($sch->end_time)) : null,
+                    ];
+                })->toArray(),
+                'overrides' => $user->scheduleOverrides->keyBy(function($item) {
+                    return \Carbon\Carbon::parse($item->date)->format('Y-m-d');
+                })->map(function ($override) {
+                    return [
+                        'is_off_day' => (bool) $override->is_off_day,
+                        'shift_type' => $override->shift_type,
+                        'start_time' => $override->start_time ? date('g:i A', strtotime($override->start_time)) : null,
+                        'end_time' => $override->end_time ? date('g:i A', strtotime($override->end_time)) : null,
+                    ];
+                })->toArray(),
+            ];
+        });
 
         return Inertia::render('Attendance/Calendar', [
-            'employees' => $employees
+            'employees' => $employees,
+            'branches' => $branches
         ]);
     }
 
     // 🟢 UPDATED: Fetch real data for the table
     public function setupSchedule()
     {
-        // 🟢 Notice we are now loading 'schedules' (plural)
-        $employees = User::with(['department', 'schedules'])
-            ->whereIn('status', ['Active', 'Password reset'])
-            ->orderBy('name', 'asc')
-            ->get()
-            ->map(function ($user) {
-                return [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'department' => $user->department ? $user->department->name : 'Unassigned',
-                    // 🟢 Map out all schedules for the user
-                    'schedules' => $user->schedules->map(function ($sch) {
-                        return [
-                            'start_date' => $sch->start_date,
-                            'end_date' => $sch->end_date,
-                            'shift_type' => $sch->shift_type,
-                            'off_days' => $sch->off_days ? implode(', ', $sch->off_days) : 'None',
-                            'raw_off_days' => $sch->off_days ?? [],
-                            'start_time' => date('H:i', strtotime($sch->start_time)),
-                            'end_time' => date('H:i', strtotime($sch->end_time)),
-                        ];
-                    })->toArray(),
-                ];
-            });
+        list($query, $branches) = $this->getBaseQueryAndBranches();
+
+        $employees = $query->get()->map(function ($user) {
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'branch_id' => $user->branch_id,
+                'assigned_branch_ids' => $user->branches->pluck('id')->toArray(),
+                'department' => $user->department ? $user->department->name : 'Unassigned',
+                'schedules' => $user->schedules->map(function ($sch) {
+                    return [
+                        'start_date' => $sch->start_date,
+                        'end_date' => $sch->end_date,
+                        'shift_type' => $sch->shift_type,
+                        'off_days' => $sch->off_days ? implode(', ', $sch->off_days) : 'None',
+                        'raw_off_days' => $sch->off_days ?? [],
+                        'start_time' => date('H:i', strtotime($sch->start_time)),
+                        'end_time' => date('H:i', strtotime($sch->end_time)),
+                    ];
+                })->toArray(),
+            ];
+        });
 
         return Inertia::render('Attendance/SetupSchedule', [
-            'employees' => $employees
+            'employees' => $employees,
+            'branches' => $branches
         ]);
     }
 
@@ -172,7 +203,7 @@ class AttendanceController extends Controller
             'employee_id' => 'required_without:employee_ids|nullable|exists:users,id',
             'employee_ids' => 'required_without:employee_id|nullable|array',
             'employee_ids.*' => 'exists:users,id',
-            'cutoff_period' => 'required|string', // 🟢 Added cutoff validation
+            'cutoff_period' => 'required|string', 
             'shift_start' => 'required',
             'shift_end' => 'required',
             'shift_type' => 'required|string',
@@ -194,7 +225,7 @@ class AttendanceController extends Controller
             Schedule::updateOrCreate(
                 [
                     'user_id' => $id,
-                    'start_date' => $startDate, // 🟢 Tie it to this specific cutoff!
+                    'start_date' => $startDate,
                     'end_date' => $endDate
                 ],
                 [
@@ -212,7 +243,7 @@ class AttendanceController extends Controller
     public function storeOverride(Request $request)
     {
         $request->validate([
-            'cells' => 'required|array', // Array of { employee_id, date }
+            'cells' => 'required|array', 
             'is_off_day' => 'required|boolean',
             'shift_start' => 'nullable',
             'shift_end' => 'nullable',

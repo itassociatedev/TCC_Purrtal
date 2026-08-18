@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { usePage } from '@inertiajs/react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 
-export default function Calendar({ employees = [] }) {
+export default function Calendar({ employees = [], branches = [] }) {
     // Grab the currently authenticated user
     const { auth } = usePage().props;
     const authUserId = auth?.user?.id ? auth.user.id.toString() : '';
@@ -19,6 +19,7 @@ export default function Calendar({ employees = [] }) {
     // ==========================================
     // Automatically select the logged-in user by default
     const [selectedEmployeeId, setSelectedEmployeeId] = useState(authUserId);
+    const [branchFilter, setBranchFilter] = useState(''); // 🟢 NEW
     const [searchQuery, setSearchQuery] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     
@@ -92,11 +93,19 @@ export default function Calendar({ employees = [] }) {
         return employees.find(e => e.id.toString() === selectedEmployeeId) || null;
     }, [employees, selectedEmployeeId]);
 
+    // 🟢 UPDATED: Secure Branch Filtering
     const filteredEmployees = useMemo(() => {
-        return employees.filter(emp => 
-            searchQuery.trim() === '' || emp.name.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-    }, [employees, searchQuery]);
+        return employees.filter(emp => {
+            const matchesSearch = searchQuery.trim() === '' || emp.name.toLowerCase().includes(searchQuery.toLowerCase());
+            
+            const selectedBranchId = Number(branchFilter);
+            const matchesBranch = branchFilter === '' || 
+                Number(emp.branch_id) === selectedBranchId || 
+                (emp.assigned_branch_ids && emp.assigned_branch_ids.includes(selectedBranchId));
+
+            return matchesSearch && matchesBranch;
+        });
+    }, [employees, searchQuery, branchFilter]);
 
     // Core shift logic (identifies overrides vs master schedules)
     const getShiftDetails = (emp, dateString, dayName) => {
@@ -187,6 +196,19 @@ export default function Calendar({ employees = [] }) {
 
                     {/* Employee Selector & "View My Schedule" */}
                     <div className="flex items-center gap-3">
+                        
+                        {/* 🟢 NEW: Branch Dropdown */}
+                        <select
+                            className="block w-36 rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white"
+                            value={branchFilter}
+                            onChange={e => setBranchFilter(e.target.value)}
+                        >
+                            <option value="">All Branches</option>
+                            {branches.map(b => (
+                                <option key={b.id} value={b.id}>{b.name}</option>
+                            ))}
+                        </select>
+
                         <div className="relative rounded-md shadow-sm" ref={dropdownRef}>
                             <div className="relative flex items-center">
                                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
@@ -197,7 +219,7 @@ export default function Calendar({ employees = [] }) {
                                 <input
                                     type="text"
                                     placeholder={activeEmployee ? activeEmployee.name : "Search employee..."}
-                                    className={`block w-64 rounded-md border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-indigo-500 focus:ring-indigo-500 ${activeEmployee ? 'font-semibold text-indigo-700 bg-indigo-50 border-indigo-200' : ''}`}
+                                    className={`block w-56 lg:w-64 rounded-md border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-indigo-500 focus:ring-indigo-500 ${activeEmployee ? 'font-semibold text-indigo-700 bg-indigo-50 border-indigo-200' : ''}`}
                                     value={searchQuery}
                                     onChange={e => { setSearchQuery(e.target.value); setIsDropdownOpen(true); }}
                                     onFocus={() => setIsDropdownOpen(true)}
@@ -236,6 +258,7 @@ export default function Calendar({ employees = [] }) {
                             onClick={() => {
                                 setSelectedEmployeeId(authUserId);
                                 setSearchQuery('');
+                                setBranchFilter(''); // Reset branch so user can see themselves
                             }}
                             className="rounded-md bg-indigo-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 transition-colors"
                         >

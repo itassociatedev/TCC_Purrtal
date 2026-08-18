@@ -86,7 +86,7 @@ const getWeekDates = (targetDateString) => {
     return days;
 };
 
-export default function Overview({ employees = [] }) {
+export default function Overview({ employees = [], branches = [] }) {
     const attendanceLinks = [
         { label: 'Attendance Overview', href: route('attendance.overview'), active: route().current('attendance.overview') },
         { label: 'Setup Schedule', href: route('attendance.setup-schedule'), active: route().current('attendance.setup-schedule') },
@@ -100,8 +100,9 @@ export default function Overview({ employees = [] }) {
     const [selectedDate, setSelectedDate] = useState(getTodayString());
     const [rosterSearch, setRosterSearch] = useState('');
     
-    // 🟢 Global Department Filter State
+    // 🟢 Global Filter States
     const [globalDept, setGlobalDept] = useState('');
+    const [globalBranch, setGlobalBranch] = useState('');
 
     const uniqueDepartments = useMemo(() => {
         return [...new Set(employees.map(e => (typeof e.department === 'object' ? e.department?.name : e.department) || 'Unassigned'))]
@@ -117,14 +118,20 @@ export default function Overview({ employees = [] }) {
     const viewingDayName = viewingDateObj.toLocaleDateString('en-US', { weekday: 'long' });
     const currentCutoff = getCutoffValueForDate(viewingDateObj);
 
-    // 🟢 1. Filter the entire employee pool globally based on the selected department
+    // 🟢 1. Filter the entire employee pool globally based on selected department AND branch
     const globallyFilteredEmployees = useMemo(() => {
-        if (!globalDept) return employees;
         return employees.filter(emp => {
             const deptName = typeof emp.department === 'object' ? emp.department?.name : emp.department || 'Unassigned';
-            return deptName === globalDept;
+            const matchesDept = globalDept === '' || deptName === globalDept;
+
+            const selectedBranchId = Number(globalBranch);
+            const matchesBranch = globalBranch === '' || 
+                Number(emp.branch_id) === selectedBranchId || 
+                (emp.assigned_branch_ids && emp.assigned_branch_ids.includes(selectedBranchId));
+
+            return matchesDept && matchesBranch;
         });
-    }, [employees, globalDept]);
+    }, [employees, globalDept, globalBranch]);
 
     // 🟢 2. Calculate EVERYTHING strictly using the Globally Filtered Employees
     const analytics = useMemo(() => {
@@ -211,12 +218,23 @@ export default function Overview({ employees = [] }) {
                         </span>
                     </div>
                     
-                    {/* 🟢 GLOBAL FILTERS: Department & Date Selector */}
+                    {/* 🟢 GLOBAL FILTERS: Branch, Department & Date Selector */}
                     <div className="flex flex-col sm:flex-row items-center gap-3">
                         
-                        <div className="w-full sm:w-auto relative">
+                        <div className="w-full sm:w-auto flex gap-2">
                             <select 
-                                className="block w-full sm:w-[220px] rounded-md border-gray-300 py-1.5 pl-3 pr-10 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white cursor-pointer font-medium text-gray-700"
+                                className="block w-full sm:w-[150px] rounded-md border-gray-300 py-1.5 pl-3 pr-8 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white cursor-pointer font-medium text-gray-700"
+                                value={globalBranch}
+                                onChange={e => setGlobalBranch(e.target.value)}
+                            >
+                                <option value="">All Branches</option>
+                                {branches.map(b => (
+                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                ))}
+                            </select>
+
+                            <select 
+                                className="block w-full sm:w-[160px] rounded-md border-gray-300 py-1.5 pl-3 pr-8 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white cursor-pointer font-medium text-gray-700"
                                 value={globalDept}
                                 onChange={e => setGlobalDept(e.target.value)}
                             >

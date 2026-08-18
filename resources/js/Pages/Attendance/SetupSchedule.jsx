@@ -52,7 +52,7 @@ const getCurrentCutoffValue = () => {
     }
 };
 
-export default function SetupSchedule({ employees = [] }) {
+export default function SetupSchedule({ employees = [], branches = [] }) {
     const attendanceLinks = [
         { label: 'Attendance Overview', href: route('attendance.overview'), active: route().current('attendance.overview') },
         { label: 'Setup Schedule', href: route('attendance.setup-schedule'), active: route().current('attendance.setup-schedule') },
@@ -65,6 +65,8 @@ export default function SetupSchedule({ employees = [] }) {
 
     const [searchTerm, setSearchTerm] = useState('');
     const [departmentFilter, setDepartmentFilter] = useState('');
+    const [branchFilter, setBranchFilter] = useState(''); // 🟢 NEW
+    
     const [showModal, setShowModal] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     
@@ -230,11 +232,18 @@ export default function SetupSchedule({ employees = [] }) {
         return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
     };
 
+    // 🟢 UPDATED FILTERING: Now respects the Branch dropdown securely
     const filteredEmployees = employees.filter((emp) => {
         const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase());
         const deptName = emp.department?.name || emp.department || ''; 
         const matchesDept = departmentFilter === '' || deptName.toLowerCase() === departmentFilter.toLowerCase();
-        return matchesSearch && matchesDept;
+        
+        const selectedBranchId = Number(branchFilter);
+        const matchesBranch = branchFilter === '' || 
+            Number(emp.branch_id) === selectedBranchId || 
+            (emp.assigned_branch_ids && emp.assigned_branch_ids.includes(selectedBranchId));
+
+        return matchesSearch && matchesDept && matchesBranch;
     });
 
     return (
@@ -272,7 +281,6 @@ export default function SetupSchedule({ employees = [] }) {
                             ))}
                         </select>
                         
-                        {/* 🟢 NEW: Current Cutoff Button */}
                         <button 
                             onClick={() => setSelectedCutoff(getCurrentCutoffValue())}
                             className="rounded-md border border-indigo-200 bg-indigo-100 px-4 py-2 text-sm font-semibold text-indigo-700 shadow-sm transition-colors hover:bg-indigo-200"
@@ -284,6 +292,33 @@ export default function SetupSchedule({ employees = [] }) {
 
                 <div className="border-b border-gray-200 p-4 sm:flex sm:items-center sm:justify-between">
                     <div className="flex flex-1 gap-4">
+                        
+                        <div className="w-full max-w-[150px]">
+                            <select
+                                className="block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                                value={branchFilter}
+                                onChange={(e) => setBranchFilter(e.target.value)}
+                            >
+                                <option value="">All Branches</option>
+                                {branches.map(b => (
+                                    <option key={b.id} value={b.id}>{b.name}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="w-full max-w-[160px]">
+                            <select
+                                className="block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                                value={departmentFilter}
+                                onChange={(e) => setDepartmentFilter(e.target.value)}
+                            >
+                                <option value="">All Departments</option>
+                                {uniqueDepartments.map(dept => (
+                                    <option key={dept} value={dept}>{dept}</option>
+                                ))}
+                            </select>
+                        </div>
+
                         <div className="w-full max-w-xs relative">
                             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                                 <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
@@ -299,18 +334,6 @@ export default function SetupSchedule({ employees = [] }) {
                             />
                         </div>
 
-                        <div className="w-full max-w-xs">
-                            <select
-                                className="block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                                value={departmentFilter}
-                                onChange={(e) => setDepartmentFilter(e.target.value)}
-                            >
-                                <option value="">All Departments</option>
-                                {uniqueDepartments.map(dept => (
-                                    <option key={dept} value={dept}>{dept}</option>
-                                ))}
-                            </select>
-                        </div>
                     </div>
                     
                     <div className="mt-3 sm:ml-4 sm:mt-0">
