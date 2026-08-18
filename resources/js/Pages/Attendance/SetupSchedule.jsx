@@ -1,6 +1,56 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useForm } from '@inertiajs/react'; 
 import SidebarLayout from '@/Layouts/SidebarLayout';
+
+// 🟢 HELPER: Generates the 6-20 and 21-5 cutoff periods automatically
+const generateCutoffPeriods = () => {
+    const periods = [];
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    for (let i = -2; i <= 3; i++) {
+        const targetDate = new Date(year, month + i, 1);
+        const y = targetDate.getFullYear();
+        const m = targetDate.getMonth();
+        
+        const prevM = m === 0 ? 11 : m - 1;
+        const prevY = m === 0 ? y - 1 : y;
+
+        // Period 1: 21st to 5th
+        const val1 = `${prevY}-${String(prevM + 1).padStart(2, '0')}-21|${y}-${String(m + 1).padStart(2, '0')}-05`;
+        const label1 = `${monthNames[prevM]} 21, ${prevY} - ${monthNames[m]} 05, ${y}`;
+
+        // Period 2: 6th to 20th
+        const val2 = `${y}-${String(m + 1).padStart(2, '0')}-06|${y}-${String(m + 1).padStart(2, '0')}-20`;
+        const label2 = `${monthNames[m]} 06, ${y} - ${monthNames[m]} 20, ${y}`;
+
+        periods.push({ label: label1, value: val1 });
+        periods.push({ label: label2, value: val2 });
+    }
+    return periods;
+};
+
+// 🟢 HELPER: Determines which cutoff we are currently in based on today's date
+const getCurrentCutoffValue = () => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = today.getMonth();
+    const d = today.getDate();
+    const prevM = m === 0 ? 11 : m - 1;
+    const prevY = m === 0 ? y - 1 : y;
+
+    if (d >= 6 && d <= 20) {
+        return `${y}-${String(m + 1).padStart(2, '0')}-06|${y}-${String(m + 1).padStart(2, '0')}-20`;
+    } else if (d > 20) {
+        const nextM = m === 11 ? 0 : m + 1;
+        const nextY = m === 11 ? y + 1 : y;
+        return `${y}-${String(m + 1).padStart(2, '0')}-21|${nextY}-${String(nextM + 1).padStart(2, '0')}-05`;
+    } else {
+        return `${prevY}-${String(prevM + 1).padStart(2, '0')}-21|${y}-${String(m + 1).padStart(2, '0')}-05`;
+    }
+};
 
 export default function SetupSchedule({ employees = [] }) {
     const attendanceLinks = [
@@ -10,25 +60,31 @@ export default function SetupSchedule({ employees = [] }) {
         { label: 'Calendar', href: route('attendance.calendar'), active: route().current('attendance.calendar') },
     ];
 
-    // --- STATES ---
+    const cutoffPeriodsList = useMemo(() => generateCutoffPeriods(), []);
+    const [selectedCutoff, setSelectedCutoff] = useState(getCurrentCutoffValue());
+
     const [searchTerm, setSearchTerm] = useState('');
     const [departmentFilter, setDepartmentFilter] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     
-    // Batch Update States
     const [selectedEmployees, setSelectedEmployees] = useState([]);
     const [isBatchMode, setIsBatchMode] = useState(false);
 
-    // Form State
     const { data, setData, post, processing, reset } = useForm({
         employee_id: '',
         employee_ids: [],
+        cutoff_period: selectedCutoff,
         shift_start: '',
         shift_end: '',
         shift_type: '',
         rest_days: []
     });
+
+    // Ensure the form always submits the schedule for the cutoff you are currently viewing
+    useEffect(() => {
+        setData('cutoff_period', selectedCutoff);
+    }, [selectedCutoff]);
 
     const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -45,25 +101,30 @@ export default function SetupSchedule({ employees = [] }) {
         { value: "06:00-15:00", label: "6:00AM - 3:00PM (06:00-15:00)" },
         { value: "07:00-16:00", label: "7:00AM - 4:00PM (07:00-16:00)" },
         { value: "09:30-18:30", label: "9:30AM - 6:30PM (09:30-18:30)" },
-        { value: "21:00-06:00", label: "9:00PM - 6:00AM (21:00-06:00)" }
+        { value: "21:00-06:00", label: "9:00PM - 6:00AM (Graveyard Shift)" },
+        { value: "07:00-23:00", label: "7:00AM - 11:00PM (Straight Duty)" },
+        { value: "08:00-00:00", label: "8:00AM - 12:00AM (Straight Duty)" }
     ];
 
-    // --- LOGIC HELPERS ---
-
-    // 🟢 DYNAMIC DEPARTMENTS: Extract unique departments from the data
     const uniqueDepartments = [...new Set(employees.map(emp => emp.department?.name || emp.department || 'Unassigned'))]
         .filter(dept => dept !== 'Unassigned')
         .sort();
 
-    // 🟢 SHIFT CATEGORIZATION: Automatically decides shift type based on start time
-    const determineShiftType = (start) => {
-        const hour = parseInt(start.split(':')[0], 10);
-        if (hour >= 21 || hour < 5) return 'Graveyard Shift';
-        if (hour >= 11 && hour <= 14) return 'Straight Shift';
+    const determineShiftType = (start, end) => {
+        if (start === "21:00" && end === "06:00") return 'Graveyard Shift';
+
+        const startH = parseInt(start.split(':')[0], 10);
+        const startM = parseInt(start.split(':')[1], 10);
+        const endH = parseInt(end.split(':')[0], 10);
+        const endM = parseInt(end.split(':')[1], 10);
+
+        let totalHours = endH - startH + (endM - startM) / 60;
+        if (totalHours < 0) totalHours += 24; 
+
+        if (totalHours >= 15) return 'Straight Duty';
+
         return 'Day Shift';
     };
-
-    // --- HANDLERS ---
 
     const handleCheckboxChange = (e) => {
         const { value, checked } = e.target;
@@ -74,42 +135,42 @@ export default function SetupSchedule({ employees = [] }) {
         }
     };
 
-    // 🟢 SELECT ALL
     const handleSelectAll = (e) => {
-        if (e.target.checked) {
-            setSelectedEmployees(filteredEmployees.map(emp => emp.id));
-        } else {
-            setSelectedEmployees([]);
-        }
+        if (e.target.checked) setSelectedEmployees(filteredEmployees.map(emp => emp.id));
+        else setSelectedEmployees([]);
     };
 
-    // 🟢 SELECT SINGLE ROW
     const handleSelectOne = (e, id) => {
-        if (e.target.checked) {
-            setSelectedEmployees([...selectedEmployees, id]);
-        } else {
-            setSelectedEmployees(selectedEmployees.filter(empId => empId !== id));
-        }
+        if (e.target.checked) setSelectedEmployees([...selectedEmployees, id]);
+        else setSelectedEmployees(selectedEmployees.filter(empId => empId !== id));
     };
 
     const handleAddSchedule = () => {
         reset();
+        setData('cutoff_period', selectedCutoff);
         setIsEditMode(false); 
         setIsBatchMode(false);
         setShowModal(true);
     };
 
-    // 🟢 BATCH UPDATE
     const handleBatchUpdate = () => {
         if (selectedEmployees.length === 0) {
             alert("Please select at least one employee from the table.");
             return;
         }
         reset();
+        setData('cutoff_period', selectedCutoff);
         setIsBatchMode(true);
         setIsEditMode(false);
         setData('employee_ids', selectedEmployees);
         setShowModal(true);
+    };
+
+    // 🟢 HELPER: Extracts the schedule that specifically applies to the currently viewed cutoff
+    const getActiveSchedule = (emp) => {
+        if (!emp.schedules || emp.schedules.length === 0) return null;
+        const [start, end] = selectedCutoff.split('|');
+        return emp.schedules.find(s => s.start_date === start && s.end_date === end) || null;
     };
 
     const handleEditSchedule = (emp) => {
@@ -117,19 +178,23 @@ export default function SetupSchedule({ employees = [] }) {
         setIsBatchMode(false);
         setShowModal(true);
 
-        if (emp.schedule) {
+        const activeSchedule = getActiveSchedule(emp);
+
+        if (activeSchedule) {
             setData({
                 employee_id: emp.id,
                 employee_ids: [],
-                shift_start: emp.schedule.start_time || '',
-                shift_end: emp.schedule.end_time || '',
-                shift_type: emp.schedule.shift_type || '',
-                rest_days: emp.schedule.raw_off_days || []
+                cutoff_period: selectedCutoff,
+                shift_start: activeSchedule.start_time || '',
+                shift_end: activeSchedule.end_time || '',
+                shift_type: activeSchedule.shift_type || '',
+                rest_days: activeSchedule.raw_off_days || []
             });
         } else {
             setData({
                 employee_id: emp.id,
                 employee_ids: [],
+                cutoff_period: selectedCutoff,
                 shift_start: '',
                 shift_end: '',
                 shift_type: '',
@@ -143,24 +208,22 @@ export default function SetupSchedule({ employees = [] }) {
         post(route('attendance.setup-schedule.store'), {
             onSuccess: () => {
                 setShowModal(false); 
-                setSelectedEmployees([]); // Clear selections after successful save
+                setSelectedEmployees([]); 
                 reset(); 
             }
         });
     };
 
-    // --- DISPLAY HELPERS ---
-
     const getShiftBadge = (shiftType) => {
         switch (shiftType) {
             case 'Day Shift':
                 return <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">Day Shift</span>;
-            case 'Straight Shift':
-                return <span className="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">Straight Shift</span>;
+            case 'Straight Duty':
+                return <span className="inline-flex items-center rounded-md bg-green-50 px-2 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">Straight Duty</span>;
             case 'Graveyard Shift':
                 return <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 ring-1 ring-inset ring-purple-700/10">Graveyard Shift</span>;
             default:
-                return <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">No Shift Assigned</span>;
+                return <span className="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">No Schedule Set</span>;
         }
     };
 
@@ -193,6 +256,24 @@ export default function SetupSchedule({ employees = [] }) {
             }
         >
             <div className="rounded-lg bg-white shadow-sm">
+                
+                {/* 🟢 NEW: Cut-off Period Selector Bar */}
+                <div className="bg-indigo-50 border-b border-indigo-100 p-4 flex items-center justify-between rounded-t-lg">
+                    <div>
+                        <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider">Viewing Cut-off Period:</span>
+                        <p className="text-xs text-indigo-600 mt-0.5">Schedules shown below apply only to the selected dates.</p>
+                    </div>
+                    <select
+                        className="block w-72 rounded-md border-indigo-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm font-semibold text-indigo-900 bg-white shadow-sm"
+                        value={selectedCutoff}
+                        onChange={(e) => setSelectedCutoff(e.target.value)}
+                    >
+                        {cutoffPeriodsList.map(period => (
+                            <option key={period.value} value={period.value}>{period.label}</option>
+                        ))}
+                    </select>
+                </div>
+
                 <div className="border-b border-gray-200 p-4 sm:flex sm:items-center sm:justify-between">
                     <div className="flex flex-1 gap-4">
                         <div className="w-full max-w-xs relative">
@@ -220,7 +301,6 @@ export default function SetupSchedule({ employees = [] }) {
                                 {uniqueDepartments.map(dept => (
                                     <option key={dept} value={dept}>{dept}</option>
                                 ))}
-                                <option value="Unassigned">Unassigned</option>
                             </select>
                         </div>
                     </div>
@@ -254,7 +334,7 @@ export default function SetupSchedule({ employees = [] }) {
                                 </th>
                                 <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-3">Employee</th>
                                 <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Department</th>
-                                <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Shift</th>
+                                <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Assigned Shift</th>
                                 <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Off Days</th>
                                 <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
                                     <span className="sr-only">Actions</span>
@@ -263,43 +343,48 @@ export default function SetupSchedule({ employees = [] }) {
                         </thead>
                         <tbody className="divide-y divide-gray-200 bg-white">
                             {filteredEmployees.length > 0 ? (
-                                filteredEmployees.map((emp) => (
-                                    <tr key={emp.id} className={selectedEmployees.includes(emp.id) ? "bg-blue-50" : "hover:bg-gray-50"}>
-                                        <td className="relative px-4 sm:w-12 sm:px-6">
-                                            <input 
-                                                type="checkbox" 
-                                                className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer" 
-                                                checked={selectedEmployees.includes(emp.id)}
-                                                onChange={(e) => handleSelectOne(e, emp.id)}
-                                            />
-                                        </td>
-                                        <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-3">
-                                            <div className="flex items-center">
-                                                <div className="h-8 w-8 flex-shrink-0 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">
-                                                    {getInitials(emp.name)}
+                                filteredEmployees.map((emp) => {
+                                    // 🟢 Dynamically fetch the schedule for this specific row based on the Cutoff
+                                    const activeSchedule = getActiveSchedule(emp);
+                                    
+                                    return (
+                                        <tr key={emp.id} className={selectedEmployees.includes(emp.id) ? "bg-blue-50" : "hover:bg-gray-50"}>
+                                            <td className="relative px-4 sm:w-12 sm:px-6">
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="absolute left-4 top-1/2 -mt-2 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer" 
+                                                    checked={selectedEmployees.includes(emp.id)}
+                                                    onChange={(e) => handleSelectOne(e, emp.id)}
+                                                />
+                                            </td>
+                                            <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-3">
+                                                <div className="flex items-center">
+                                                    <div className="h-8 w-8 flex-shrink-0 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">
+                                                        {getInitials(emp.name)}
+                                                    </div>
+                                                    <div className="ml-4">{emp.name}</div>
                                                 </div>
-                                                <div className="ml-4">{emp.name}</div>
-                                            </div>
-                                        </td>
-                                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                            {emp.department?.name || emp.department || 'Unassigned'}
-                                        </td>
-                                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                            {getShiftBadge(emp.schedule?.shift_type || null)}
-                                        </td>
-                                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                                            {emp.schedule?.off_days || 'None set'}
-                                        </td>
-                                        <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                                            <button 
-                                                onClick={() => handleEditSchedule(emp)}
-                                                className="text-indigo-600 hover:text-indigo-900 font-bold"
-                                            >
-                                                Edit
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
+                                            </td>
+                                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                                                {emp.department?.name || emp.department || 'Unassigned'}
+                                            </td>
+                                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                                                {getShiftBadge(activeSchedule?.shift_type || null)}
+                                            </td>
+                                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                                                {activeSchedule?.off_days || 'None set'}
+                                            </td>
+                                            <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                                                <button 
+                                                    onClick={() => handleEditSchedule(emp)}
+                                                    className="text-indigo-600 hover:text-indigo-900 font-bold"
+                                                >
+                                                    {activeSchedule ? 'Edit' : 'Assign'}
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             ) : (
                                 <tr>
                                     <td colSpan="6" className="py-12 text-center text-sm text-gray-500">
@@ -327,27 +412,25 @@ export default function SetupSchedule({ employees = [] }) {
                                 
                                 <form onSubmit={submit} className="space-y-6">
                                     
+                                    {/* Modal Target Cutoff Display */}
+                                    <div className="mb-4 rounded-md bg-indigo-50 p-4 border border-indigo-100">
+                                        <p className="text-sm text-indigo-700">
+                                            This schedule will be assigned for the <strong className="font-bold">
+                                            {cutoffPeriodsList.find(c => c.value === data.cutoff_period)?.label}
+                                            </strong> cut-off period.
+                                        </p>
+                                    </div>
+
                                     {isBatchMode ? (
                                         <div className="mb-4 rounded-md bg-blue-50 p-4 border border-blue-100">
-                                            <div className="flex">
-                                                <div className="flex-shrink-0">
-                                                    <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd" />
-                                                    </svg>
-                                                </div>
-                                                <div className="ml-3 flex-1 md:flex md:justify-between">
-                                                    <p className="text-sm text-blue-700">You are assigning this schedule to <strong>{selectedEmployees.length} employees</strong>.</p>
-                                                </div>
-                                            </div>
+                                            <p className="text-sm text-blue-700">Assigning schedule to <strong>{selectedEmployees.length} employees</strong>.</p>
                                         </div>
                                     ) : (
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700">Employee</label>
                                             <select 
                                                 className={`mt-1 block w-full rounded-md shadow-sm sm:text-sm ${
-                                                    isEditMode 
-                                                        ? 'bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed' 
-                                                        : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 bg-white'
+                                                    isEditMode ? 'bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed' : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 bg-white'
                                                 }`}
                                                 value={data.employee_id}
                                                 onChange={e => setData('employee_id', e.target.value)}
@@ -369,7 +452,7 @@ export default function SetupSchedule({ employees = [] }) {
                                             value={data.shift_start && data.shift_end ? `${data.shift_start}-${data.shift_end}` : ''}
                                             onChange={e => {
                                                 const [start, end] = e.target.value.split('-');
-                                                const type = determineShiftType(start); 
+                                                const type = determineShiftType(start, end); 
                                                 setData(prev => ({ 
                                                     ...prev, 
                                                     shift_start: start, 

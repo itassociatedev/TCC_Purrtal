@@ -11,9 +11,11 @@ export default function ScheduleView({ employees = [] }) {
     ];
 
     const [viewMode, setViewMode] = useState('batch');
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
 
     // ==========================================
-    // OVERRIDE LOGIC & HELPERS
+    // OVERRIDE & MASTER CUT-OFF LOGIC
     // ==========================================
     const [selectedCells, setSelectedCells] = useState([]);
     const [showOverrideModal, setShowOverrideModal] = useState(false);
@@ -39,18 +41,32 @@ export default function ScheduleView({ employees = [] }) {
         { value: "06:00-15:00", label: "6:00AM - 3:00PM (06:00-15:00)" },
         { value: "07:00-16:00", label: "7:00AM - 4:00PM (07:00-16:00)" },
         { value: "09:30-18:30", label: "9:30AM - 6:30PM (09:30-18:30)" },
-        { value: "21:00-06:00", label: "9:00PM - 6:00AM (21:00-06:00)" }
+        { value: "21:00-06:00", label: "9:00PM - 6:00AM (Graveyard Shift)" },
+        { value: "07:00-23:00", label: "7:00AM - 11:00PM (Straight Duty)" },
+        { value: "08:00-00:00", label: "8:00AM - 12:00AM (Straight Duty)" }
     ];
 
-    const determineShiftType = (start) => {
-        const hour = parseInt(start.split(':')[0], 10);
-        if (hour >= 21 || hour < 5) return 'Graveyard Shift';
-        if (hour >= 11 && hour <= 14) return 'Straight Shift';
+    const determineShiftType = (start, end) => {
+        if (start === "21:00" && end === "06:00") return 'Graveyard Shift';
+
+        const startH = parseInt(start.split(':')[0], 10);
+        const startM = parseInt(start.split(':')[1], 10);
+        const endH = parseInt(end.split(':')[0], 10);
+        const endM = parseInt(end.split(':')[1], 10);
+
+        let totalHours = endH - startH + (endM - startM) / 60;
+        if (totalHours < 0) totalHours += 24; 
+
+        if (totalHours >= 15) return 'Straight Duty';
+
         return 'Day Shift';
     };
 
+    // 🟢 UPDATED: Core logic that enforces the Cut-off Periods!
     const getShiftDetails = (emp, dateString, dayName) => {
         if (!emp) return { isOff: false, shiftType: null, startTime: null, endTime: null, isOverride: false };
+        
+        // 1. Priority check: Does this exact date have a manual override?
         const override = emp.overrides?.[dateString];
         if (override) {
             return {
@@ -61,11 +77,29 @@ export default function ScheduleView({ employees = [] }) {
                 isOverride: true 
             };
         }
+
+        // 2. Check Cut-off Schedules: Does the calendar date fall between ANY of the employee's assigned cut-off ranges?
+        const activeSchedule = emp.schedules?.find(sch => {
+            return dateString >= sch.start_date && dateString <= sch.end_date;
+        });
+
+        // If a cut-off schedule applies to this date, render it.
+        if (activeSchedule) {
+            return {
+                isOff: activeSchedule.off_days?.includes(dayName),
+                shiftType: activeSchedule.shift_type,
+                startTime: activeSchedule.start_time,
+                endTime: activeSchedule.end_time,
+                isOverride: false
+            };
+        }
+
+        // 3. Fallback: If the date is outside of any assigned cut-off period, it remains empty.
         return {
-            isOff: emp.off_days?.includes(dayName),
-            shiftType: emp.shift_type,
-            startTime: emp.start_time,
-            endTime: emp.end_time,
+            isOff: false,
+            shiftType: null,
+            startTime: null,
+            endTime: null,
             isOverride: false
         };
     };
@@ -159,16 +193,31 @@ export default function ScheduleView({ employees = [] }) {
     // ==========================================
     const [singleEmployeeId, setSingleEmployeeId] = useState('');
     const [singleDeptFilter, setSingleDeptFilter] = useState('');
+    const [singleSearch, setSingleSearch] = useState('');
+    const [isSingleDropdownOpen, setIsSingleDropdownOpen] = useState(false);
     const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
     const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 
-    const singleFilteredEmployees = useMemo(() => {
-        if (!singleDeptFilter) return employees;
+    const singleDropdownRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutsideSingle = (event) => {
+            if (singleDropdownRef.current && !singleDropdownRef.current.contains(event.target)) {
+                setIsSingleDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutsideSingle);
+        return () => document.removeEventListener('mousedown', handleClickOutsideSingle);
+    }, []);
+
+    const availableSingleEmployees = useMemo(() => {
         return employees.filter(emp => {
             const deptName = typeof emp.department === 'object' ? emp.department?.name : emp.department;
-            return (deptName || 'Unassigned').toLowerCase() === singleDeptFilter.toLowerCase();
+            const matchesDept = singleDeptFilter === '' || (deptName || 'Unassigned').toLowerCase() === singleDeptFilter.toLowerCase();
+            const matchesSearch = singleSearch.trim() === '' || emp.name.toLowerCase().includes(singleSearch.toLowerCase());
+            return matchesDept && matchesSearch;
         });
-    }, [employees, singleDeptFilter]);
+    }, [employees, singleDeptFilter, singleSearch]);
 
     const singleEmployee = useMemo(() => {
         if (!singleEmployeeId) return null;
@@ -209,7 +258,7 @@ export default function ScheduleView({ employees = [] }) {
         if (isOffDay) return <span className="inline-flex rounded border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 shadow-sm">Off Day</span>;
         switch (shiftType) {
             case 'Day Shift': return <span className="inline-flex rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 shadow-sm">Day Shift</span>;
-            case 'Straight Shift': return <span className="inline-flex rounded bg-green-50 px-2 py-1 text-xs font-medium text-green-700 shadow-sm">Straight Shift</span>;
+            case 'Straight Duty': return <span className="inline-flex rounded bg-green-50 px-2 py-1 text-xs font-medium text-green-700 shadow-sm">Straight Duty</span>;
             case 'Graveyard Shift': return <span className="inline-flex rounded bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 shadow-sm">Graveyard Shift</span>;
             default: return <span className="inline-flex rounded border border-gray-100 bg-gray-50 px-2 py-1 text-xs font-medium text-gray-400">No Shift</span>;
         }
@@ -240,8 +289,7 @@ export default function ScheduleView({ employees = [] }) {
                 </div>
             }
         >
-            {/* 🟢 FIXED: Removed createPortal. Applied strict inline fixed styling to forcefully stick to the browser window */}
-            {selectedCells.length > 0 && (
+            {mounted && selectedCells.length > 0 && (
                 <div 
                     className="flex items-center gap-6 rounded-xl bg-indigo-600 px-6 py-4 text-white shadow-2xl transition-all animate-fade-in-up"
                     style={{ position: 'fixed', bottom: '2rem', right: '2rem', zIndex: 9999 }}
@@ -376,7 +424,6 @@ export default function ScheduleView({ employees = [] }) {
                                                     
                                                     return (
                                                         <td key={day.dateString} className="px-1 py-1.5 align-middle">
-                                                            {/* 🟢 FIXED: Batch View cells now feature identical consistent sizes, borders, and rounded corners to the Single view */}
                                                             <div 
                                                                 onClick={() => toggleCellSelection(emp.id, day.dateString)}
                                                                 className={`min-h-[85px] w-full flex flex-col justify-center items-center gap-1.5 rounded-md border p-2 shadow-sm transition-colors cursor-pointer relative ${
@@ -414,13 +461,14 @@ export default function ScheduleView({ employees = [] }) {
                             <div className="flex flex-wrap items-center gap-4">
                                 
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500">Department Filter</label>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Department Filter</label>
                                     <select
-                                        className="mt-1 rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 min-w-[150px]"
+                                        className="block rounded-md border-gray-300 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 min-w-[150px]"
                                         value={singleDeptFilter}
                                         onChange={e => { 
                                             setSingleDeptFilter(e.target.value); 
                                             setSingleEmployeeId(''); 
+                                            setSingleSearch('');
                                             setSelectedCells([]); 
                                         }}
                                     >
@@ -432,25 +480,58 @@ export default function ScheduleView({ employees = [] }) {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500">Select Employee</label>
-                                    <select
-                                        className="mt-1 rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 min-w-[200px]"
-                                        value={singleEmployeeId}
-                                        onChange={e => { setSingleEmployeeId(e.target.value); setSelectedCells([]); }}
-                                    >
-                                        <option value="" disabled>-- Select an Employee --</option>
-                                        {singleFilteredEmployees.map(emp => (
-                                            <option key={emp.id} value={emp.id}>
-                                                {emp.name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Search & Select Employee</label>
+                                    <div className="relative rounded-md shadow-sm" ref={singleDropdownRef}>
+                                        <div className="relative flex items-center">
+                                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                                <svg className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
+                                                </svg>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                placeholder="Search by name..."
+                                                className="block w-64 rounded-md border-gray-300 py-1.5 pl-9 pr-3 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                                value={singleSearch}
+                                                onChange={e => { setSingleSearch(e.target.value); setIsSingleDropdownOpen(true); }}
+                                                onFocus={() => setIsSingleDropdownOpen(true)}
+                                            />
+                                        </div>
+
+                                        {isSingleDropdownOpen && (
+                                            <div className="absolute left-0 z-20 mt-1 max-h-60 w-72 overflow-y-auto rounded-md border border-gray-100 bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5">
+                                                {availableSingleEmployees.length > 0 ? (
+                                                    availableSingleEmployees.map(emp => {
+                                                        const empDept = typeof emp.department === 'object' ? emp.department?.name : emp.department;
+                                                        const isSelected = singleEmployeeId === emp.id.toString();
+                                                        return (
+                                                            <button
+                                                                key={emp.id}
+                                                                onClick={() => {
+                                                                    setSingleEmployeeId(emp.id.toString());
+                                                                    setSelectedCells([]);
+                                                                    setSingleSearch('');
+                                                                    setIsSingleDropdownOpen(false);
+                                                                }}
+                                                                className={`w-full text-left px-4 py-2 text-xs flex items-center justify-between transition-colors ${isSelected ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-700 hover:bg-indigo-50 hover:text-indigo-900'}`}
+                                                            >
+                                                                <span className="font-medium">{emp.name} {isSelected && <span className="text-[10px] ml-1 text-indigo-500 font-normal">(Selected)</span>}</span>
+                                                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${isSelected ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>{empDept || 'Unassigned'}</span>
+                                                            </button>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    <div className="px-4 py-3 text-xs text-gray-400 italic text-center">No matching employees found.</div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500">Month</label>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Month</label>
                                     <select
-                                        className="mt-1 rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                        className="block rounded-md border-gray-300 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                                         value={currentMonth}
                                         onChange={e => setCurrentMonth(parseInt(e.target.value))}
                                     >
@@ -459,10 +540,10 @@ export default function ScheduleView({ employees = [] }) {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500">Year</label>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Year</label>
                                     <input
                                         type="number"
-                                        className="mt-1 w-24 rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                        className="block w-24 rounded-md border-gray-300 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                                         value={currentYear}
                                         onChange={e => setCurrentYear(parseInt(e.target.value))}
                                     />
@@ -472,8 +553,10 @@ export default function ScheduleView({ employees = [] }) {
                             <div className="text-left lg:text-right bg-gray-50 p-3 rounded-lg border border-gray-100 min-w-[250px]">
                                 <h4 className="text-sm font-bold text-gray-800">{singleEmployee?.name || 'No Employee Selected'}</h4>
                                 <div className="mt-1 text-xs text-gray-600 flex flex-col gap-0.5">
-                                    <span>Type: <span className="font-semibold text-gray-800">{singleEmployee?.shift_type || '---'}</span></span>
-                                    <span>Time: <span className="font-mono text-gray-800">{singleEmployee?.start_time || '--'} - {singleEmployee?.end_time || '--'}</span></span>
+                                    <span className="font-medium text-gray-500">
+                                        {singleEmployee ? (typeof singleEmployee.department === 'object' ? singleEmployee.department?.name : singleEmployee.department || 'Unassigned') : 'Select an employee'}
+                                    </span>
+                                    {singleEmployee && <span className="text-indigo-600 italic mt-1 font-medium">Schedules vary by cut-off dates.</span>}
                                 </div>
                             </div>
                         </div>
@@ -563,7 +646,7 @@ export default function ScheduleView({ employees = [] }) {
                                                 value={overrideData.shift_start && overrideData.shift_end ? `${overrideData.shift_start}-${overrideData.shift_end}` : ''}
                                                 onChange={e => {
                                                     const [start, end] = e.target.value.split('-');
-                                                    const type = determineShiftType(start); 
+                                                    const type = determineShiftType(start, end); 
                                                     setOverrideData(prev => ({ ...prev, shift_start: start, shift_end: end, shift_type: type }));
                                                 }}
                                                 required

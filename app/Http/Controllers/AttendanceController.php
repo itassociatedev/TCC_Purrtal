@@ -14,8 +14,8 @@ class AttendanceController extends Controller
     
     public function scheduleView()
     {
-        // 🟢 Added 'scheduleOverrides' to the with() array
-        $employees = User::with(['department', 'schedule', 'scheduleOverrides'])
+        // 🟢 Load 'schedules' (plural) to pull all cut-off periods for the employee
+        $employees = User::with(['department', 'schedules', 'scheduleOverrides'])
             ->whereIn('status', ['Active', 'Password reset'])
             ->orderBy('name', 'asc')
             ->get()
@@ -24,12 +24,19 @@ class AttendanceController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'department' => $user->department ? $user->department->name : 'Unassigned',
-                    'shift_type' => $user->schedule->shift_type ?? 'No Shift Assigned',
-                    'start_time' => $user->schedule ? date('g:i A', strtotime($user->schedule->start_time)) : null,
-                    'end_time' => $user->schedule ? date('g:i A', strtotime($user->schedule->end_time)) : null,
-                    'off_days' => $user->schedule && $user->schedule->off_days ? $user->schedule->off_days : [],
                     
-                    // 🟢 Format the overrides into a dictionary keyed by date (e.g., '2026-08-17')
+                    // 🟢 Map out ALL cut-off schedules for the user
+                    'schedules' => $user->schedules->map(function ($sch) {
+                        return [
+                            'start_date' => $sch->start_date,
+                            'end_date' => $sch->end_date,
+                            'shift_type' => $sch->shift_type,
+                            'off_days' => $sch->off_days ?? [],
+                            'start_time' => $sch->start_time ? date('g:i A', strtotime($sch->start_time)) : null,
+                            'end_time' => $sch->end_time ? date('g:i A', strtotime($sch->end_time)) : null,
+                        ];
+                    })->toArray(),
+                    
                     'overrides' => $user->scheduleOverrides->keyBy(function($item) {
                         return \Carbon\Carbon::parse($item->date)->format('Y-m-d');
                     })->map(function ($override) {
@@ -54,7 +61,8 @@ class AttendanceController extends Controller
     // 🟢 UPDATED: Fetch real data for the table
     public function setupSchedule()
     {
-        $employees = User::with(['department', 'schedule'])
+        // 🟢 Notice we are now loading 'schedules' (plural)
+        $employees = User::with(['department', 'schedules'])
             ->whereIn('status', ['Active', 'Password reset'])
             ->orderBy('name', 'asc')
             ->get()
@@ -63,14 +71,18 @@ class AttendanceController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'department' => $user->department ? $user->department->name : 'Unassigned',
-                    'schedule' => $user->schedule ? [
-                        'shift_type' => $user->schedule->shift_type,
-                        'off_days' => $user->schedule->off_days ? implode(', ', $user->schedule->off_days) : 'None',
-                        // 🟢 NEW: Send raw data for the Edit Modal to use
-                        'raw_off_days' => $user->schedule->off_days ?? [],
-                        'start_time' => date('H:i', strtotime($user->schedule->start_time)),
-                        'end_time' => date('H:i', strtotime($user->schedule->end_time)),
-                    ] : null,
+                    // 🟢 Map out all schedules for the user
+                    'schedules' => $user->schedules->map(function ($sch) {
+                        return [
+                            'start_date' => $sch->start_date,
+                            'end_date' => $sch->end_date,
+                            'shift_type' => $sch->shift_type,
+                            'off_days' => $sch->off_days ? implode(', ', $sch->off_days) : 'None',
+                            'raw_off_days' => $sch->off_days ?? [],
+                            'start_time' => date('H:i', strtotime($sch->start_time)),
+                            'end_time' => date('H:i', strtotime($sch->end_time)),
+                        ];
+                    })->toArray(),
                 ];
             });
 
@@ -79,14 +91,13 @@ class AttendanceController extends Controller
         ]);
     }
 
-    // 🟢 NEW: Handles the React form submission
     public function storeSchedule(Request $request)
     {
-        // 🟢 UPDATED: Conditionally validate either a single ID or a batch array of IDs
         $request->validate([
             'employee_id' => 'required_without:employee_ids|nullable|exists:users,id',
             'employee_ids' => 'required_without:employee_id|nullable|array',
             'employee_ids.*' => 'exists:users,id',
+            'cutoff_period' => 'required|string', // 🟢 Added cutoff validation
             'shift_start' => 'required',
             'shift_end' => 'required',
             'shift_type' => 'required|string',
@@ -94,30 +105,33 @@ class AttendanceController extends Controller
         ]);
 
         $employeeIds = $request->employee_ids ?: [$request->employee_id];
+        
+        // Split the "YYYY-MM-DD|YYYY-MM-DD" string from React
+        list($startDate, $endDate) = explode('|', $request->cutoff_period);
 
-        // 🟢 NEW: Define the standard Monday to Sunday chronology order
         $weekOrder = ['Monday' => 1, 'Tuesday' => 2, 'Wednesday' => 3, 'Thursday' => 4, 'Friday' => 5, 'Saturday' => 6, 'Sunday' => 7];
-        
         $sortedRestDays = $request->rest_days ?? [];
-        
-        // Sort the days based on the week order array
         usort($sortedRestDays, function ($a, $b) use ($weekOrder) {
             return ($weekOrder[$a] ?? 0) <=> ($weekOrder[$b] ?? 0);
         });
 
         foreach ($employeeIds as $id) {
             Schedule::updateOrCreate(
-                ['user_id' => $id],
+                [
+                    'user_id' => $id,
+                    'start_date' => $startDate, // 🟢 Tie it to this specific cutoff!
+                    'end_date' => $endDate
+                ],
                 [
                     'shift_type' => $request->shift_type,
                     'start_time' => $request->shift_start,
                     'end_time' => $request->shift_end,
-                    'off_days' => $sortedRestDays, // 🟢 Save the chronologically sorted array
+                    'off_days' => $sortedRestDays,
                 ]
             );
         }
 
-        return redirect()->back()->with('success', 'Schedule updated successfully.');
+        return redirect()->back()->with('success', 'Schedule updated for the cut-off period.');
     }
 
     public function storeOverride(Request $request)

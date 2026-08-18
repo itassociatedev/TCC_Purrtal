@@ -14,7 +14,9 @@ class Schedule extends Model
         'shift_type',
         'start_time',
         'end_time',
-        'off_days'
+        'off_days',
+        'start_date', 
+        'end_date'
     ];
 
     // Automatically converts the JSON array to a PHP array when we load it
