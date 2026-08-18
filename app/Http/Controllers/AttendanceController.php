@@ -9,7 +9,45 @@ use App\Models\Schedule;
 
 class AttendanceController extends Controller
 {
-    public function overview() { return Inertia::render('Attendance/Overview'); }
+    public function overview()
+    {
+        // 🟢 Fetch all active employees, their cut-off schedules, and their daily overrides
+        $employees = User::with(['department', 'schedules', 'scheduleOverrides'])
+            ->whereIn('status', ['Active', 'Password reset'])
+            ->orderBy('name', 'asc')
+            ->get()
+            ->map(function ($user) {
+                return [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'department' => $user->department ? $user->department->name : 'Unassigned',
+                    'schedules' => $user->schedules->map(function ($sch) {
+                        return [
+                            'start_date' => $sch->start_date,
+                            'end_date' => $sch->end_date,
+                            'shift_type' => $sch->shift_type,
+                            'off_days' => $sch->off_days ?? [],
+                            'start_time' => $sch->start_time ? date('g:i A', strtotime($sch->start_time)) : null,
+                            'end_time' => $sch->end_time ? date('g:i A', strtotime($sch->end_time)) : null,
+                        ];
+                    })->toArray(),
+                    'overrides' => $user->scheduleOverrides->keyBy(function($item) {
+                        return \Carbon\Carbon::parse($item->date)->format('Y-m-d');
+                    })->map(function ($override) {
+                        return [
+                            'is_off_day' => (bool) $override->is_off_day,
+                            'shift_type' => $override->shift_type,
+                            'start_time' => $override->start_time ? date('g:i A', strtotime($override->start_time)) : null,
+                            'end_time' => $override->end_time ? date('g:i A', strtotime($override->end_time)) : null,
+                        ];
+                    })->toArray(),
+                ];
+            });
+
+        return Inertia::render('Attendance/Overview', [
+            'employees' => $employees
+        ]);
+    }
     
     
     public function scheduleView()
@@ -56,7 +94,44 @@ class AttendanceController extends Controller
     }
     
     
-    public function calendar() { return Inertia::render('Attendance/Calendar'); }
+    public function calendar()
+    {
+        $employees = User::with(['department', 'schedules', 'scheduleOverrides'])
+            ->whereIn('status', ['Active', 'Password reset'])
+            ->orderBy('name', 'asc')
+            ->get()
+            ->map(function ($user) {
+                return [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'department' => $user->department ? $user->department->name : 'Unassigned',
+                    'schedules' => $user->schedules->map(function ($sch) {
+                        return [
+                            'start_date' => $sch->start_date,
+                            'end_date' => $sch->end_date,
+                            'shift_type' => $sch->shift_type,
+                            'off_days' => $sch->off_days ?? [],
+                            'start_time' => $sch->start_time ? date('g:i A', strtotime($sch->start_time)) : null,
+                            'end_time' => $sch->end_time ? date('g:i A', strtotime($sch->end_time)) : null,
+                        ];
+                    })->toArray(),
+                    'overrides' => $user->scheduleOverrides->keyBy(function($item) {
+                        return \Carbon\Carbon::parse($item->date)->format('Y-m-d');
+                    })->map(function ($override) {
+                        return [
+                            'is_off_day' => (bool) $override->is_off_day,
+                            'shift_type' => $override->shift_type,
+                            'start_time' => $override->start_time ? date('g:i A', strtotime($override->start_time)) : null,
+                            'end_time' => $override->end_time ? date('g:i A', strtotime($override->end_time)) : null,
+                        ];
+                    })->toArray(),
+                ];
+            });
+
+        return Inertia::render('Attendance/Calendar', [
+            'employees' => $employees
+        ]);
+    }
 
     // 🟢 UPDATED: Fetch real data for the table
     public function setupSchedule()
