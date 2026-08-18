@@ -81,7 +81,6 @@ export default function SetupSchedule({ employees = [] }) {
         rest_days: []
     });
 
-    // Ensure the form always submits the schedule for the cutoff you are currently viewing
     useEffect(() => {
         setData('cutoff_period', selectedCutoff);
     }, [selectedCutoff]);
@@ -166,7 +165,6 @@ export default function SetupSchedule({ employees = [] }) {
         setShowModal(true);
     };
 
-    // 🟢 HELPER: Extracts the schedule that specifically applies to the currently viewed cutoff
     const getActiveSchedule = (emp) => {
         if (!emp.schedules || emp.schedules.length === 0) return null;
         const [start, end] = selectedCutoff.split('|');
@@ -257,21 +255,31 @@ export default function SetupSchedule({ employees = [] }) {
         >
             <div className="rounded-lg bg-white shadow-sm">
                 
-                {/* 🟢 NEW: Cut-off Period Selector Bar */}
-                <div className="bg-indigo-50 border-b border-indigo-100 p-4 flex items-center justify-between rounded-t-lg">
+                {/* Cut-off Period Selector Bar */}
+                <div className="bg-indigo-50 border-b border-indigo-100 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-t-lg">
                     <div>
                         <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider">Viewing Cut-off Period:</span>
                         <p className="text-xs text-indigo-600 mt-0.5">Schedules shown below apply only to the selected dates.</p>
                     </div>
-                    <select
-                        className="block w-72 rounded-md border-indigo-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm font-semibold text-indigo-900 bg-white shadow-sm"
-                        value={selectedCutoff}
-                        onChange={(e) => setSelectedCutoff(e.target.value)}
-                    >
-                        {cutoffPeriodsList.map(period => (
-                            <option key={period.value} value={period.value}>{period.label}</option>
-                        ))}
-                    </select>
+                    <div className="flex items-center gap-3">
+                        <select
+                            className="block w-72 rounded-md border-indigo-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm font-semibold text-indigo-900 bg-white shadow-sm"
+                            value={selectedCutoff}
+                            onChange={(e) => setSelectedCutoff(e.target.value)}
+                        >
+                            {cutoffPeriodsList.map(period => (
+                                <option key={period.value} value={period.value}>{period.label}</option>
+                            ))}
+                        </select>
+                        
+                        {/* 🟢 NEW: Current Cutoff Button */}
+                        <button 
+                            onClick={() => setSelectedCutoff(getCurrentCutoffValue())}
+                            className="rounded-md border border-indigo-200 bg-indigo-100 px-4 py-2 text-sm font-semibold text-indigo-700 shadow-sm transition-colors hover:bg-indigo-200"
+                        >
+                            Current Cutoff
+                        </button>
+                    </div>
                 </div>
 
                 <div className="border-b border-gray-200 p-4 sm:flex sm:items-center sm:justify-between">
@@ -344,7 +352,6 @@ export default function SetupSchedule({ employees = [] }) {
                         <tbody className="divide-y divide-gray-200 bg-white">
                             {filteredEmployees.length > 0 ? (
                                 filteredEmployees.map((emp) => {
-                                    // 🟢 Dynamically fetch the schedule for this specific row based on the Cutoff
                                     const activeSchedule = getActiveSchedule(emp);
                                     
                                     return (
