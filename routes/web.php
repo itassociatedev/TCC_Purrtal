@@ -431,9 +431,12 @@ Route::post('/schedule-override', [AttendanceController::class, 'storeOverride']
 
 Route::get('/attendance-settings', [AttendanceSettingsController::class, 'index'])->name('admin.attendance-settings.index');
 Route::post('/attendance-settings/shift', [AttendanceSettingsController::class, 'storeShift'])->name('admin.attendance-settings.store-shift');
-Route::post('/attendance-settings/shift/{shift}/toggle', [AttendanceSettingsController::class, 'toggleShift'])->name('admin.attendance-settings.toggle-shift');
+Route::put('/admin/attendance-settings/shift/{id}', [\App\Http\Controllers\Admin\AttendanceSettingsController::class, 'updateShift'])->name('admin.attendance-settings.update-shift');
+Route::delete('/admin/attendance-settings/shift/{id}', [\App\Http\Controllers\Admin\AttendanceSettingsController::class, 'deleteShift'])->name('admin.attendance-settings.delete-shift');
 Route::post('/attendance-settings/cutoffs', [AttendanceSettingsController::class, 'updateCutoffs'])->name('admin.attendance-settings.update-cutoffs');
 
 Route::post('/attendance/schedule-override/reset', [\App\Http\Controllers\AttendanceController::class, 'resetOverride'])->name('attendance.schedule-override.reset');
+
+Route::delete('/admin/attendance-settings/shift/{id}', [\App\Http\Controllers\Admin\AttendanceSettingsController::class, 'deleteShift'])->name('admin.attendance-settings.delete-shift');
 
 require __DIR__.'/auth.php';

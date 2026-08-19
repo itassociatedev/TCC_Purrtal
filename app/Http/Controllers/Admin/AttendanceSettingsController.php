@@ -70,4 +70,30 @@ class AttendanceSettingsController extends Controller
 
         return redirect()->back()->with('success', 'Cut-off periods updated successfully.');
     }
+
+    // 🟢 NEW: Handles full updates to the shift details
+    public function updateShift(Request $request, $id)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'start_time' => 'required',
+            'end_time' => 'required',
+            'shift_type' => 'required|string',
+            'is_active' => 'required|boolean',
+        ]);
+
+        $shift = \App\Models\Shift::findOrFail($id);
+        $shift->update($request->only('name', 'start_time', 'end_time', 'shift_type', 'is_active'));
+
+        return redirect()->back()->with('success', 'Shift updated successfully.');
+    }
+
+    // 🟢 NEW: Handles permanent deletion
+    public function deleteShift($id)
+    {
+        $shift = \App\Models\Shift::findOrFail($id);
+        $shift->delete();
+
+        return redirect()->back()->with('success', 'Shift permanently deleted.');
+    }
 }
