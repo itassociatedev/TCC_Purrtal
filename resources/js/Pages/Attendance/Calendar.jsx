@@ -7,14 +7,13 @@ export default function Calendar({ employees = [], branches = [] }) {
     const { auth } = usePage().props;
     const authUserId = auth?.user?.id ? auth.user.id.toString() : '';
 
-    // 🔐 ROBUST ACL UI LOCK: Safely checks for Admin role OR case-insensitive full privileges
-    const hasFullAccess = (() => {
-        if (auth?.user?.role_id === 1 || auth?.user?.role?.name?.toLowerCase() === 'admin') return true;
-        const level = auth?.user?.acl_permissions?.attendance_calendar?.toLowerCase() || 'no_access';
-        return level === 'full';
-    })();
+    const isSuperAdmin = auth?.user?.role_id === 1 || auth?.user?.role?.name?.toLowerCase() === 'admin';
+    const aclLevel = auth?.user?.acl_permissions?.attendance_calendar?.toLowerCase() || 'no_access';
+    
+    // 🟢 NEW ACL CHECKS: Hide tools if VIEW only. Disable clicking cells for Summary Modal.
+    const isViewOnly = !isSuperAdmin && aclLevel === 'view';
+    const canViewSummary = isSuperAdmin || ['full', 'edit'].includes(aclLevel);
 
-    // 🟢 DYNAMIC SIDEBAR LINKS: Only show modules the user has permission to see
     const checkAccess = (module, requiredLevels) => {
         if (auth?.user?.role_id === 1 || auth?.user?.role?.name?.toLowerCase() === 'admin') return true;
         const level = auth?.user?.acl_permissions?.[module]?.toLowerCase() || 'no_access';
@@ -32,7 +31,6 @@ export default function Calendar({ employees = [], branches = [] }) {
     // STATES
     // ==========================================
     const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
-    
     const [branchFilter, setBranchFilter] = useState(''); 
     const [searchQuery, setSearchQuery] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -52,7 +50,13 @@ export default function Calendar({ employees = [], branches = [] }) {
 
     const dropdownRef = useRef(null);
 
-    // Close main dropdown when clicking outside
+    // 🟢 ACL HOOK: Instantly default to their own schedule if they are View-Only
+    useEffect(() => {
+        if (isViewOnly && !selectedEmployeeId && authUserId) {
+            setSelectedEmployeeId(authUserId);
+        }
+    }, [isViewOnly, authUserId, selectedEmployeeId]);
+
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) setIsDropdownOpen(false);
@@ -149,7 +153,6 @@ export default function Calendar({ employees = [], branches = [] }) {
     const filteredEmployees = useMemo(() => {
         return employees.filter(emp => {
             const matchesSearch = searchQuery.trim() === '' || emp.name.toLowerCase().includes(searchQuery.toLowerCase());
-            
             const selectedBranchId = Number(branchFilter);
             const matchesBranch = branchFilter === '' || 
                 Number(emp.branch_id) === selectedBranchId || 
@@ -159,7 +162,6 @@ export default function Calendar({ employees = [], branches = [] }) {
         });
     }, [employees, searchQuery, branchFilter]);
 
-    // Core shift logic
     const getShiftDetails = (emp, dateString, dayName) => {
         if (!emp) return { isOff: false, shiftType: null, startTime: null, endTime: null, isOverride: false };
         
@@ -191,7 +193,6 @@ export default function Calendar({ employees = [], branches = [] }) {
         return { isOff: false, shiftType: null, startTime: null, endTime: null, isOverride: false };
     };
 
-    // ADMIN SUMMARY MODAL LOGIC: Crunch numbers for the clicked day
     const daySummaryData = useMemo(() => {
         if (!summaryDate) return [];
         const staffList = [];
@@ -248,15 +249,10 @@ export default function Calendar({ employees = [], branches = [] }) {
         >
             <div className="rounded-lg bg-white p-6 shadow-sm">
                 
-                {/* 🟢 FIXED: Top Navigation Bar is now fully wrap-responsive */}
                 <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 sm:gap-6 mb-8 border-b border-gray-100 pb-6">
                     
-                    {/* Month/Year Arrows */}
                     <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 sm:gap-4">
-                        <button 
-                            onClick={handlePrevMonth} 
-                            className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition-colors hover:bg-gray-50 hover:text-indigo-600"
-                        >
+                        <button onClick={handlePrevMonth} className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 hover:text-indigo-600">
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
                         </button>
                         
@@ -266,93 +262,89 @@ export default function Calendar({ employees = [], branches = [] }) {
                             </h2>
                         </div>
                         
-                        <button 
-                            onClick={handleNextMonth} 
-                            className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition-colors hover:bg-gray-50 hover:text-indigo-600"
-                        >
+                        <button onClick={handleNextMonth} className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm hover:bg-gray-50 hover:text-indigo-600">
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
                         </button>
 
-                        <button 
-                            onClick={goToToday} 
-                            className="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-600 shadow-sm transition-colors hover:bg-gray-50 hover:text-indigo-600"
-                        >
+                        <button onClick={goToToday} className="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-600 shadow-sm hover:bg-gray-50 hover:text-indigo-600">
                             Today
                         </button>
                     </div>
 
-                    {/* Employee Selector & "View My Schedule" */}
-                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 w-full xl:w-auto mt-2 xl:mt-0">
-                        
-                        <select
-                            className={`block w-full sm:w-36 rounded-md border-gray-300 py-2 text-sm shadow-sm ${!hasFullAccess ? 'bg-gray-100 text-gray-500 cursor-not-allowed opacity-70' : 'focus:border-indigo-500 focus:ring-indigo-500 bg-white cursor-pointer'}`}
-                            value={branchFilter}
-                            onChange={e => setBranchFilter(e.target.value)}
-                            disabled={!hasFullAccess}
-                        >
-                            <option value="">All Branches</option>
-                            {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                        </select>
+                    {/* 🟢 UI MATRIX: Only show search tools if they have elevated permissions */}
+                    {isViewOnly ? (
+                        <div className="flex items-center mt-2 xl:mt-0 px-4 py-2 bg-indigo-50 border border-indigo-100 rounded-lg">
+                            <span className="text-sm font-bold text-indigo-700">Viewing Personal Schedule</span>
+                        </div>
+                    ) : (
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 w-full xl:w-auto mt-2 xl:mt-0">
+                            <select
+                                className="block w-full sm:w-36 rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white cursor-pointer"
+                                value={branchFilter}
+                                onChange={e => setBranchFilter(e.target.value)}
+                            >
+                                <option value="">All Branches</option>
+                                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                            </select>
 
-                        <div className="relative rounded-md shadow-sm w-full sm:w-auto" ref={dropdownRef}>
-                            <div className="relative flex items-center w-full">
-                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                    <svg className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
-                                    </svg>
+                            <div className="relative rounded-md shadow-sm w-full sm:w-auto" ref={dropdownRef}>
+                                <div className="relative flex items-center w-full">
+                                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                        <svg className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
+                                        </svg>
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder={activeEmployee ? activeEmployee.name : "Search employee..."}
+                                        className={`block w-full sm:w-56 lg:w-64 rounded-md border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white ${activeEmployee ? 'font-semibold text-indigo-700 bg-indigo-50 border-indigo-200' : ''}`}
+                                        value={searchQuery}
+                                        onChange={e => { setSearchQuery(e.target.value); setIsDropdownOpen(true); }}
+                                        onFocus={() => setIsDropdownOpen(true)}
+                                    />
                                 </div>
-                                <input
-                                    type="text"
-                                    placeholder={activeEmployee ? activeEmployee.name : "Search employee..."}
-                                    className={`block w-full sm:w-56 lg:w-64 rounded-md border-gray-300 py-2 pl-9 pr-3 text-sm ${!hasFullAccess ? 'bg-gray-100 text-gray-500 cursor-not-allowed opacity-70' : 'focus:border-indigo-500 focus:ring-indigo-500 bg-white'} ${activeEmployee && hasFullAccess ? 'font-semibold text-indigo-700 bg-indigo-50 border-indigo-200' : ''}`}
-                                    value={searchQuery}
-                                    onChange={e => { setSearchQuery(e.target.value); setIsDropdownOpen(true); }}
-                                    onFocus={() => setIsDropdownOpen(true)}
-                                    disabled={!hasFullAccess}
-                                />
+
+                                {isDropdownOpen && (
+                                    <div className="absolute right-0 z-20 mt-1 max-h-60 w-72 overflow-y-auto rounded-md border border-gray-100 bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5">
+                                        {filteredEmployees.length > 0 ? (
+                                            filteredEmployees.map(emp => {
+                                                const empDept = typeof emp.department === 'object' ? emp.department?.name : emp.department;
+                                                const isSelected = selectedEmployeeId === emp.id.toString();
+                                                return (
+                                                    <button
+                                                        key={emp.id}
+                                                        onClick={() => {
+                                                            setSelectedEmployeeId(emp.id.toString());
+                                                            setSearchQuery('');
+                                                            setIsDropdownOpen(false);
+                                                        }}
+                                                        className={`w-full text-left px-4 py-2 text-xs flex items-center justify-between transition-colors ${isSelected ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-700 hover:bg-indigo-50 hover:text-indigo-900'}`}
+                                                    >
+                                                        <span className="font-medium">{emp.name}</span>
+                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${isSelected ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>{empDept || 'Unassigned'}</span>
+                                                    </button>
+                                                );
+                                            })
+                                        ) : (
+                                            <div className="px-4 py-3 text-xs text-gray-400 italic text-center">No matching employees found.</div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
-                            {isDropdownOpen && hasFullAccess && (
-                                <div className="absolute right-0 z-20 mt-1 max-h-60 w-72 overflow-y-auto rounded-md border border-gray-100 bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5">
-                                    {filteredEmployees.length > 0 ? (
-                                        filteredEmployees.map(emp => {
-                                            const empDept = typeof emp.department === 'object' ? emp.department?.name : emp.department;
-                                            const isSelected = selectedEmployeeId === emp.id.toString();
-                                            return (
-                                                <button
-                                                    key={emp.id}
-                                                    onClick={() => {
-                                                        setSelectedEmployeeId(emp.id.toString());
-                                                        setSearchQuery('');
-                                                        setIsDropdownOpen(false);
-                                                    }}
-                                                    className={`w-full text-left px-4 py-2 text-xs flex items-center justify-between transition-colors ${isSelected ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-700 hover:bg-indigo-50 hover:text-indigo-900'}`}
-                                                >
-                                                    <span className="font-medium">{emp.name}</span>
-                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${isSelected ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>{empDept || 'Unassigned'}</span>
-                                                </button>
-                                            );
-                                        })
-                                    ) : (
-                                        <div className="px-4 py-3 text-xs text-gray-400 italic text-center">No matching employees found.</div>
-                                    )}
-                                </div>
-                            )}
+                            <button 
+                                onClick={() => {
+                                    setSelectedEmployeeId(authUserId);
+                                    setSearchQuery('');
+                                    setBranchFilter(''); 
+                                    goToToday();
+                                }}
+                                className="w-full sm:w-auto rounded-md bg-indigo-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 transition-colors whitespace-nowrap"
+                            >
+                                View My Schedule
+                            </button>
                         </div>
-
-                        {/* 🟢 ADDED: goToToday() automatically snaps calendar back to current month */}
-                        <button 
-                            onClick={() => {
-                                setSelectedEmployeeId(authUserId);
-                                setSearchQuery('');
-                                setBranchFilter(''); 
-                                goToToday();
-                            }}
-                            className="w-full sm:w-auto rounded-md bg-indigo-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 transition-colors whitespace-nowrap"
-                        >
-                            View My Schedule
-                        </button>
-                    </div>
+                    )}
                 </div>
 
                 {/* CALENDAR GRID */}
@@ -381,14 +373,15 @@ export default function Calendar({ employees = [], branches = [] }) {
                                 <div 
                                     key={`day-${slot.dayNum}`} 
                                     onClick={() => {
-                                        if (hasFullAccess) setSummaryDate(slot);
+                                        // 🟢 UI MATRIX: Only elevate users can click to open the Global Summary Modal
+                                        if (canViewSummary) setSummaryDate(slot);
                                     }}
                                     className={`h-full w-full flex flex-col rounded-md border p-1.5 sm:p-2.5 shadow-sm transition-colors relative ${
                                         isOverride ? 'border-amber-200 bg-amber-50/30' :
                                         slot.isToday ? 'bg-indigo-50/50 border-indigo-400 shadow-inner ring-1 ring-inset ring-indigo-500' :
                                         !activeEmployee ? 'border-gray-100 bg-white' :
                                         'border-gray-200 bg-white hover:bg-gray-50'
-                                    } ${hasFullAccess ? 'cursor-pointer hover:ring-2 hover:ring-indigo-400' : ''}`}
+                                    } ${canViewSummary ? 'cursor-pointer hover:ring-2 hover:ring-indigo-400' : ''}`}
                                 >
                                     <div className="flex justify-between items-start pointer-events-none">
                                         <div className="flex items-center gap-1.5">

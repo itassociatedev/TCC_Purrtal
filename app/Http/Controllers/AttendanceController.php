@@ -14,42 +14,62 @@ use Illuminate\Support\Facades\Auth;
 class AttendanceController extends Controller
 {
     /**
-     * 🟢 HELPER: Secures all Attendance queries using Role-Based Branch Isolation.
+     * 🟢 DYNAMIC ROW-LEVEL ISOLATION: 
+     * Reads the ACL Matrix and strictly restricts the employee data returned to the frontend.
      */
-    private function getBaseQueryAndBranches()
+    private function getIsolatedQuery($moduleKey)
     {
         $user = Auth::user();
-        
-        // Build the allowed branch IDs array (Primary Branch + Secondary Branches)
+        $aclLevel = strtolower($user->aclPermissionForModule($moduleKey));
+        $isAdmin = $user->role_id === 1 || strtolower(trim($user->role->name ?? '')) === 'admin';
+
         $allowedBranchIds = $user->branches->pluck('id')->push($user->branch_id)->filter()->unique();
 
-        // Fetch Branches (Admins get all, Managers get assigned)
-        $branches = Branch::select('id', 'name')
-            ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
-                $query->whereIn('id', $allowedBranchIds);
-            })
-            ->orderBy('name')
-            ->get();
+        // Base Branches Query
+        $branchesQuery = Branch::select('id', 'name')->orderBy('name');
+        if (!$isAdmin) {
+            $branchesQuery->whereIn('id', $allowedBranchIds);
+        }
+        $branches = $branchesQuery->get();
 
-        // Build the isolated Employee query
+        // Base Employee Query
         $query = User::with(['department', 'schedules', 'scheduleOverrides', 'branches'])
-            ->whereIn('status', ['Active', 'Password reset'])
-            ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
-                $query->where(function ($q) use ($allowedBranchIds) {
-                    $q->whereIn('branch_id', $allowedBranchIds)
-                      ->orWhereHas('branches', function ($pivotQuery) use ($allowedBranchIds) {
-                          $pivotQuery->whereIn('branch_id', $allowedBranchIds);
-                      });
-                });
-            })
-            ->orderBy('name', 'asc');
+            ->whereIn('status', ['Active', 'Password reset']);
 
-        return [$query, $branches];
+        // Admin Bypass
+        if ($isAdmin) {
+            return [$query->orderBy('name', 'asc'), $branches];
+        }
+
+        // MATRIX 1: Calendar View = Strictly Own Schedule Only
+        if ($moduleKey === 'attendance_calendar' && $aclLevel === 'view') {
+            $query->where('id', $user->id);
+            return [$query->orderBy('name', 'asc'), $branches];
+        }
+
+        // MATRIX 2: FULL Access = See everyone in authorized branches
+        if ($aclLevel === 'full') {
+            $query->where(function ($q) use ($allowedBranchIds) {
+                $q->whereIn('branch_id', $allowedBranchIds)
+                  ->orWhereHas('branches', function ($pivotQuery) use ($allowedBranchIds) {
+                      $pivotQuery->whereIn('branch_id', $allowedBranchIds);
+                  });
+            });
+        } 
+        // MATRIX 3: VIEW & EDIT = Strictly Own Branch AND Own Department
+        else {
+            $query->where('department_id', $user->department_id)
+                  ->where(function ($q) use ($allowedBranchIds) {
+                      $q->whereIn('branch_id', $allowedBranchIds)
+                        ->orWhereHas('branches', function ($pivotQuery) use ($allowedBranchIds) {
+                            $pivotQuery->whereIn('branch_id', $allowedBranchIds);
+                        });
+                  });
+        }
+
+        return [$query->orderBy('name', 'asc'), $branches];
     }
 
-    /**
-     * 🟢 HELPER: Fetches dynamic database configurations (Shifts & Cutoffs)
-     */
     private function getSharedProps()
     {
         $shifts = Shift::where('is_active', true)->orderBy('start_time')->get();
@@ -67,21 +87,14 @@ class AttendanceController extends Controller
     {
         $user = Auth::user();
 
-        // 🔐 INTELLIGENT PERMISSION-BASED REDIRECT
-        // If user doesn't have overview access, redirect them to the first module they CAN access
         if (!$user->canViewModule('attendance_overview')) {
-            if ($user->canViewModule('attendance_calendar')) {
-                return redirect()->route('attendance.calendar');
-            } elseif ($user->canViewModule('attendance_schedule_view')) {
-                return redirect()->route('attendance.schedule-view');
-            } elseif ($user->canEditModule('attendance_setup')) {
-                return redirect()->route('attendance.setup-schedule');
-            } else {
-                return redirect()->route('dashboard')->with('error', 'You do not have permission to access the Attendance module.');
-            }
+            if ($user->canViewModule('attendance_calendar')) return redirect()->route('attendance.calendar');
+            if ($user->canViewModule('attendance_schedule_view')) return redirect()->route('attendance.schedule-view');
+            if ($user->canEditModule('attendance_setup')) return redirect()->route('attendance.setup-schedule');
+            return redirect()->route('dashboard')->with('error', 'You do not have permission to access Attendance.');
         }
 
-        list($query, $branches) = $this->getBaseQueryAndBranches();
+        list($query, $branches) = $this->getIsolatedQuery('attendance_overview');
 
         $employees = $query->get()->map(function ($user) {
             return [
@@ -126,7 +139,7 @@ class AttendanceController extends Controller
             abort(403, 'Unauthorized access to Schedule View.');
         }
 
-        list($query, $branches) = $this->getBaseQueryAndBranches();
+        list($query, $branches) = $this->getIsolatedQuery('attendance_schedule_view');
 
         $employees = $query->get()->map(function ($user) {
             return [
@@ -171,7 +184,7 @@ class AttendanceController extends Controller
             abort(403, 'Unauthorized access to Calendar.');
         }
 
-        list($query, $branches) = $this->getBaseQueryAndBranches();
+        list($query, $branches) = $this->getIsolatedQuery('attendance_calendar');
 
         $employees = $query->get()->map(function ($user) {
             return [
@@ -217,7 +230,7 @@ class AttendanceController extends Controller
             abort(403, 'Unauthorized access to Schedule Setup.');
         }
 
-        list($query, $branches) = $this->getBaseQueryAndBranches();
+        list($query, $branches) = $this->getIsolatedQuery('attendance_setup');
 
         $employees = $query->get()->map(function ($user) {
             return [

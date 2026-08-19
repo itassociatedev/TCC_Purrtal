@@ -37,6 +37,8 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
     // ==========================================
     const [selectedCells, setSelectedCells] = useState([]);
     const [showOverrideModal, setShowOverrideModal] = useState(false);
+    const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
+    const [isResetting, setIsResetting] = useState(false);
 
     const { data: overrideData, setData: setOverrideData, post: postOverride, processing: overrideProcessing, reset: resetOverride } = useForm({
         cells: [],
@@ -114,12 +116,18 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
         });
     };
 
-    // 🟢 NEW: Handles resetting an override back to the cutoff default
-    const resetOverrides = () => {
-        if (!confirm('Are you sure you want to remove the overrides for the selected dates and return them to default?')) return;
-        
+    // 🟢 IN-APP RESET: Confirms through the custom Tailwind modal
+    const handleConfirmReset = () => {
+        setIsResetting(true);
         router.post(route('attendance.schedule-override.reset'), { cells: selectedCells }, {
-            onSuccess: () => setSelectedCells([])
+            onSuccess: () => {
+                setSelectedCells([]);
+                setShowResetConfirmModal(false);
+                setIsResetting(false);
+            },
+            onError: () => {
+                setIsResetting(false);
+            }
         });
     };
 
@@ -316,10 +324,10 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                     <div className="ml-2 flex items-center gap-3 border-l border-indigo-500 pl-6">
                         <button onClick={() => setSelectedCells([])} className="text-sm font-medium text-indigo-200 hover:text-white transition-colors">Cancel</button>
                         
-                        {/* 🟢 FULL ACL ONLY: Reset Overrides Button */}
+                        {/* 🟢 FULL ACL ONLY: Opens custom in-app confirmation modal */}
                         {canResetSchedule && (
                             <button 
-                                onClick={resetOverrides} 
+                                onClick={() => setShowResetConfirmModal(true)} 
                                 className="rounded-md bg-rose-500 hover:bg-rose-600 px-4 py-2 text-sm font-bold text-white shadow-md transition-colors"
                             >
                                 Reset Default
@@ -752,6 +760,54 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                                         </button>
                                     </div>
                                 </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 🟢 CUSTOM IN-APP CONFIRMATION MODAL (Replaces browser window.confirm) */}
+            {showResetConfirmModal && (
+                <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+                    <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !isResetting && setShowResetConfirmModal(false)}></div>
+
+                        <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
+                        <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-md sm:align-middle relative z-10">
+                            <div className="bg-white p-6">
+                                <div className="flex items-start gap-4">
+                                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600 sm:h-10 sm:w-10">
+                                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="text-lg font-bold text-gray-900" id="modal-title">
+                                            Reset Schedule Overrides?
+                                        </h3>
+                                        <p className="mt-2 text-sm text-gray-500">
+                                            Are you sure you want to remove the manual overrides for <strong className="text-gray-800 font-semibold">{selectedCells.length} selected date(s)</strong> and return them to their default cut-off schedule?
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="bg-gray-50 px-6 py-4 flex flex-col sm:flex-row-reverse gap-2 border-t border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={handleConfirmReset}
+                                    disabled={isResetting}
+                                    className="w-full sm:w-auto inline-flex justify-center rounded-md bg-rose-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 transition-colors disabled:opacity-50"
+                                >
+                                    {isResetting ? 'Resetting...' : 'Yes, Reset Overrides'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowResetConfirmModal(false)}
+                                    disabled={isResetting}
+                                    className="w-full sm:w-auto inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                                >
+                                    Cancel
+                                </button>
                             </div>
                         </div>
                     </div>

@@ -66,19 +66,16 @@ const getShiftDetails = (emp, dateString, dayName) => {
 const getWeekDates = (targetDateString) => {
     const [y, m, d] = targetDateString.split('-').map(Number);
     const baseDate = new Date(y, m - 1, d);
-
-    const dayOfWeek = baseDate.getDay() === 0 ? 6 : baseDate.getDay() - 1; // 0 = Mon, 6 = Sun
+    const dayOfWeek = baseDate.getDay() === 0 ? 6 : baseDate.getDay() - 1; 
     
     const monday = new Date(baseDate);
     monday.setDate(baseDate.getDate() - dayOfWeek);
     
     let days = [];
-
     for (let i = 0; i < 7; i++) {
         const cur = new Date(monday);
         cur.setDate(monday.getDate() + i);
         const curStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
-        
         days.push({ 
             dateString: curStr, 
             dayName: cur.toLocaleDateString('en-US', { weekday: 'long' }), 
@@ -94,7 +91,7 @@ const getWeekDates = (targetDateString) => {
 export default function Overview({ employees = [], branches = [], cutoffSettings = {} }) {
     const { auth } = usePage().props;
     
-    // 🔐 ROBUST ACL UI LOCK: Safely checks for Admin role OR case-insensitive edit/full privileges
+    // 🔐 ACL UI LOCK: Safely checks for Admin role OR case-insensitive edit/full privileges
     const canViewFullOverview = (() => {
         if (auth?.user?.role_id === 1 || auth?.user?.role?.name?.toLowerCase() === 'admin') return true;
         const level = auth?.user?.acl_permissions?.attendance_overview?.toLowerCase() || 'no_access';
@@ -115,9 +112,11 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
         checkAccess('attendance_calendar', ['full', 'edit', 'view']) && { label: 'Calendar', href: route('attendance.calendar'), active: route().current('attendance.calendar') },
     ].filter(Boolean);
 
-    // ==========================================
-    // STATES
-    // ==========================================
+    // 🟢 NEW ACL CHECK: Only EDIT and FULL can see the "Missing Schedules" block
+    const isSuperAdmin = auth?.user?.role_id === 1 || auth?.user?.role?.name?.toLowerCase() === 'admin';
+    const overviewAclLevel = auth?.user?.acl_permissions?.attendance_overview?.toLowerCase() || 'no_access';
+    const canFixMissingSched = isSuperAdmin || ['full', 'edit'].includes(overviewAclLevel);
+
     const [selectedDate, setSelectedDate] = useState(getTodayString());
     const [rosterSearch, setRosterSearch] = useState('');
     
@@ -165,11 +164,8 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
         let weeklyCounts = getWeekDates(selectedDate);
 
         globallyFilteredEmployees.forEach(emp => {
-            // Compliance Check
             const hasActiveCutoffSchedule = emp.schedules?.some(sch => currentCutoff.start >= sch.start_date && currentCutoff.end <= sch.end_date);
-            if (!hasActiveCutoffSchedule) {
-                unassignedStaff.push(emp);
-            }
+            if (!hasActiveCutoffSchedule) unassignedStaff.push(emp);
 
             // Roster Check for the specific day
             const details = getShiftDetails(emp, selectedDate, viewingDayName);
@@ -183,22 +179,17 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
                     deptName: typeof emp.department === 'object' ? emp.department?.name : emp.department || 'Unassigned' 
                 });
                 
-                if (details.isOff) {
-                    offDutyCount++;
-                } else {
+                if (details.isOff) offDutyCount++;
+                else {
                     scheduledCount++;
-                    if (details.shiftType === 'Graveyard Shift' || details.shiftType === 'Straight Duty') {
-                        specialDutiesCount++;
-                    }
+                    if (details.shiftType === 'Graveyard Shift' || details.shiftType === 'Straight Duty') specialDutiesCount++;
                 }
             }
 
             // Weekly Schedule Summary Count
             weeklyCounts.forEach((day, index) => {
                 const dayDetails = getShiftDetails(emp, day.dateString, day.dayName);
-                if (dayDetails.shiftType && !dayDetails.isOff) {
-                    weeklyCounts[index].count++;
-                }
+                if (dayDetails.shiftType && !dayDetails.isOff) weeklyCounts[index].count++;
             });
         });
 
@@ -210,9 +201,7 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
 
     // 3. The Roster Table
     const filteredRoster = useMemo(() => {
-        return analytics.roster.filter(emp => {
-            return rosterSearch === '' || emp.name.toLowerCase().includes(rosterSearch.toLowerCase());
-        });
+        return analytics.roster.filter(emp => rosterSearch === '' || emp.name.toLowerCase().includes(rosterSearch.toLowerCase()));
     }, [analytics.roster, rosterSearch]);
 
     const renderShiftBadge = (shiftType, isOffDay) => {
@@ -280,14 +269,13 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
                                 Today
                             </button>
                         </div>
-
                     </div>
                 </div>
             }
         >
             <div className="space-y-6">
                 
-                {/* ================= KPI CARDS ================= */}
+                {/* KPI CARDS */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-4 opacity-10">
@@ -325,7 +313,7 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
                     </div>
                 </div>
 
-                {/* ================= WEEKLY SUMMARY COUNT ================= */}
+                {/* WEEKLY SUMMARY */}
                 <div className="rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden">
                     <div className="border-b border-gray-200 bg-gray-50/50 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         <div>
@@ -359,82 +347,82 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
                     </div>
                 </div>
 
-                {/* 🔐 ACL RESTRICTED SECTION: Only renders for users with EDIT or FULL privileges */}
-                {canViewFullOverview && (
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                        {/* ================= LEFT COLUMN: DAILY ROSTER ================= */}
-                        <div className="lg:col-span-2 rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-                            <div className="border-b border-gray-200 bg-gray-50/50 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <div>
-                                    <h3 className="text-base font-bold text-gray-900">Daily Roster <span className="text-gray-400 font-medium ml-1">({viewingDisplay})</span></h3>
-                                    <p className="text-xs text-gray-500 mt-1">Everyone actively assigned to a schedule for the selected date.</p>
-                                </div>
-                                
-                                <div className="relative w-full sm:w-48">
-                                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
-                                        <svg className="h-3.5 w-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                        </svg>
-                                    </div>
-                                    <input 
-                                        type="text" 
-                                        placeholder="Search name..." 
-                                        className="w-full rounded-md border-gray-300 py-1.5 pl-8 pr-3 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                        value={rosterSearch}
-                                        onChange={e => setRosterSearch(e.target.value)}
-                                    />
-                                </div>
+                {/* 🟢 DYNAMIC GRID: If they don't have access to missing scheds, the table stretches to fill the screen */}
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                    
+                    <div className={`${canFixMissingSched ? 'lg:col-span-2' : 'lg:col-span-3'} rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden flex flex-col`}>
+                        <div className="border-b border-gray-200 bg-gray-50/50 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div>
+                                <h3 className="text-base font-bold text-gray-900">Daily Roster <span className="text-gray-400 font-medium ml-1">({viewingDisplay})</span></h3>
+                                <p className="text-xs text-gray-500 mt-1">Everyone actively assigned to a schedule for the selected date.</p>
                             </div>
                             
-                            <div className="flex-1 overflow-auto max-h-[600px]">
-                                {filteredRoster.length > 0 ? (
-                                    <table className="min-w-full divide-y divide-gray-200">
-                                        <thead className="bg-white sticky top-0 z-10">
-                                            <tr>
-                                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Employee</th>
-                                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Shift Type</th>
-                                                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100 bg-white">
-                                            {filteredRoster.map(emp => (
-                                                <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
-                                                    <td className="whitespace-nowrap px-6 py-4">
-                                                        <div className="font-bold text-sm text-gray-900">{emp.name}</div>
-                                                        <div className="text-xs text-gray-500">{emp.deptName}</div>
-                                                    </td>
-                                                    <td className="whitespace-nowrap px-6 py-4">
-                                                        <div className="flex items-center gap-2">
-                                                            {renderShiftBadge(emp.shiftType, emp.isOff)}
-                                                            {emp.isOverride && <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">Modified</span>}
-                                                        </div>
-                                                    </td>
-                                                    <td className="whitespace-nowrap px-6 py-4 text-right">
-                                                        {!emp.isOff && emp.startTime && emp.endTime ? (
-                                                            <span className="text-sm font-mono text-gray-700 bg-gray-50 px-2 py-1 rounded border border-gray-100">
-                                                                {emp.startTime} - {emp.endTime}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-sm italic text-gray-400">--</span>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center p-12 text-center">
-                                        <svg className="h-12 w-12 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                        </svg>
-                                        <h3 className="text-sm font-bold text-gray-900">No Match Found</h3>
-                                        <p className="mt-1 text-sm text-gray-500">No employees match your current filters.</p>
-                                    </div>
-                                )}
+                            <div className="relative w-full sm:w-48">
+                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
+                                    <svg className="h-3.5 w-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                </div>
+                                <input 
+                                    type="text" 
+                                    placeholder="Search name..." 
+                                    className="w-full rounded-md border-gray-300 py-1.5 pl-8 pr-3 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                    value={rosterSearch}
+                                    onChange={e => setRosterSearch(e.target.value)}
+                                />
                             </div>
                         </div>
+                        
+                        <div className="flex-1 overflow-auto max-h-[600px]">
+                            {filteredRoster.length > 0 ? (
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-white sticky top-0 z-10">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Employee</th>
+                                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Shift Type</th>
+                                            <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100 bg-white">
+                                        {filteredRoster.map(emp => (
+                                            <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
+                                                <td className="whitespace-nowrap px-6 py-4">
+                                                    <div className="font-bold text-sm text-gray-900">{emp.name}</div>
+                                                    <div className="text-xs text-gray-500">{emp.deptName}</div>
+                                                </td>
+                                                <td className="whitespace-nowrap px-6 py-4">
+                                                    <div className="flex items-center gap-2">
+                                                        {renderShiftBadge(emp.shiftType, emp.isOff)}
+                                                        {emp.isOverride && <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">Modified</span>}
+                                                    </div>
+                                                </td>
+                                                <td className="whitespace-nowrap px-6 py-4 text-right">
+                                                    {!emp.isOff && emp.startTime && emp.endTime ? (
+                                                        <span className="text-sm font-mono text-gray-700 bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                                                            {emp.startTime} - {emp.endTime}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-sm italic text-gray-400">--</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center p-12 text-center">
+                                    <svg className="h-12 w-12 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    <h3 className="text-sm font-bold text-gray-900">No Match Found</h3>
+                                    <p className="mt-1 text-sm text-gray-500">No employees match your current filters.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
 
-                        {/* ================= RIGHT COLUMN: SCHEDULE COMPLIANCE ================= */}
+                    {/* 🟢 HIDDEN FOR VIEW-ONLY ACL */}
+                    {canFixMissingSched && (
                         <div className="rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden flex flex-col">
                             <div className="border-b border-rose-100 bg-rose-50 px-6 py-4">
                                 <h3 className="text-base font-bold text-rose-900 flex items-center gap-2">
@@ -484,8 +472,8 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
                                 </div>
                             )}
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </SidebarLayout>
     );
