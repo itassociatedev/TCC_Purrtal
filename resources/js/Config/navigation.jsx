@@ -315,8 +315,9 @@ const MODULE_GROUPS = {
     ],
     attendance: [
         'attendance_overview',
-        'setup_schedule',
-        'schedule_view',
+        'attendance_setup',
+        'attendance_schedule_view',
+        'attendance_calendar'
     ]
 };
 
@@ -416,6 +417,20 @@ export const getAdminLinks = (auth) => {
             label: 'Admin Overview',
             href: route('admin.dashboard'),
             active: route().current('admin.dashboard'),
+        });
+    }
+
+    // 🟢 NEW: Add Attendance Settings to Admin Sidebar!
+    if (hasPermission(auth, 'admin_overview')) {
+        links.push({
+            label: 'Attendance Settings',
+            href: route('admin.attendance-settings.index'),
+            active: route().current('admin.attendance-settings.*'),
+            icon: () => (
+                <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            )
         });
     }
 
@@ -719,4 +734,13 @@ export const getPRPOLinks = (auth) => {
     }
 
     return links;
+};
+
+// 🟢 NEW: Fallback intelligent routing helper to prevent 403s on module entry
+export const getFirstAttendanceRoute = (auth) => {
+    if (canViewModule(auth, 'attendance_overview')) return route('attendance.overview');
+    if (canViewModule(auth, 'attendance_calendar')) return route('attendance.calendar');
+    if (canEditModule(auth, 'attendance_schedule_view')) return route('attendance.schedule-view');
+    if (canEditModule(auth, 'attendance_setup')) return route('attendance.setup-schedule');
+    return route('attendance.calendar'); // Fallback
 };

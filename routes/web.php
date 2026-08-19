@@ -35,6 +35,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use App\Http\Controllers\AttendanceController;
+use App\Http\Controllers\Admin\AttendanceSettingsController;
 
 Route::get('/', function () {
     return Inertia::render('Auth/Login', []);
@@ -427,5 +428,10 @@ Route::prefix('attendance')->middleware(['auth'])->group(function () {
 
 Route::post('/setup-schedule', [AttendanceController::class, 'storeSchedule'])->name('attendance.setup-schedule.store');
 Route::post('/schedule-override', [AttendanceController::class, 'storeOverride'])->name('attendance.schedule-override.store');
+
+Route::get('/attendance-settings', [AttendanceSettingsController::class, 'index'])->name('admin.attendance-settings.index');
+Route::post('/attendance-settings/shift', [AttendanceSettingsController::class, 'storeShift'])->name('admin.attendance-settings.store-shift');
+Route::post('/attendance-settings/shift/{shift}/toggle', [AttendanceSettingsController::class, 'toggleShift'])->name('admin.attendance-settings.toggle-shift');
+Route::post('/attendance-settings/cutoffs', [AttendanceSettingsController::class, 'updateCutoffs'])->name('admin.attendance-settings.update-cutoffs');
 
 require __DIR__.'/auth.php';
