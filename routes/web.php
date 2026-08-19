@@ -439,4 +439,6 @@ Route::post('/attendance/schedule-override/reset', [\App\Http\Controllers\Attend
 
 Route::delete('/admin/attendance-settings/shift/{id}', [\App\Http\Controllers\Admin\AttendanceSettingsController::class, 'deleteShift'])->name('admin.attendance-settings.delete-shift');
 
+Route::get('/attendance/export-overview', [\App\Http\Controllers\AttendanceController::class, 'exportOverview'])->name('attendance.export-overview');
+
 require __DIR__.'/auth.php';

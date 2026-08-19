@@ -274,6 +274,27 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
             }
         >
             <div className="space-y-6">
+
+                {/* 🟢 NEW: EXPORT LIST HEADER */}
+                <div className="flex flex-col sm:flex-row justify-between items-center bg-white rounded-xl shadow-sm border border-gray-200 p-4 gap-4">
+                    <div>
+                        <h2 className="text-lg font-bold text-gray-900">Weekly Dashboard</h2>
+                        <p className="text-xs text-gray-500 mt-1">Exporting data for the week of <span className="font-semibold text-indigo-600">{analytics.weeklyCounts[0]?.displayDate}</span> to <span className="font-semibold text-indigo-600">{analytics.weeklyCounts[6]?.displayDate}</span></p>
+                    </div>
+                    <a
+                        href={route('attendance.export-overview', { 
+                            start_date: analytics.weeklyCounts[0]?.dateString,
+                            branch_id: globalBranch 
+                        })}
+                        className="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 active:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition ease-in-out duration-150 shadow-sm"
+                        title="Download weekly matrix to Excel"
+                    >
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Export List
+                    </a>
+                </div>
                 
                 {/* KPI CARDS */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

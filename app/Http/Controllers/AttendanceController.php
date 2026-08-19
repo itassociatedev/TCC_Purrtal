@@ -380,4 +380,92 @@ class AttendanceController extends Controller
 
         return redirect()->back()->with('success', 'Overrides reset successfully.');
     }
+
+    public function exportOverview(Request $request)
+    {
+        if (!Auth::user()->canViewModule('attendance_overview')) abort(403);
+
+        $startDateStr = $request->query('start_date', now()->startOfWeek()->format('Y-m-d'));
+        $startDate = \Carbon\Carbon::parse($startDateStr);
+        
+        list($query, $branches) = $this->getIsolatedQuery('attendance_overview');
+
+        // 🟢 FIXED: Safely checks if branch_id is present AND not empty/null
+        if ($request->filled('branch_id')) {
+            $query->where('branch_id', $request->branch_id);
+        }
+
+        $rawEmployees = $query->get();
+
+        $dates = [];
+        for ($i = 0; $i < 7; $i++) {
+            $currentDate = $startDate->copy()->addDays($i);
+            $dates[] = [
+                'dateString' => $currentDate->format('Y-m-d'),
+                'dayName' => $currentDate->format('l'),
+                'display' => $currentDate->format('D, M d'),
+            ];
+        }
+
+        $weekRange = $dates[0]['display'] . ' - ' . $dates[6]['display'];
+
+        // 🟢 FIXED: Safe shift mapping attached directly to the user object
+        $employees = $rawEmployees->map(function ($user) use ($dates) {
+            $schedules = $user->schedules->toArray();
+            $overrides = $user->scheduleOverrides->keyBy('date')->toArray();
+
+            $userShifts = [];
+            foreach ($dates as $dateObj) {
+                $ds = $dateObj['dateString'];
+                $dn = $dateObj['dayName'];
+                $shiftData = null;
+
+                if (isset($overrides[$ds])) {
+                    $shiftData = [
+                        'is_off' => (bool)$overrides[$ds]['is_off_day'],
+                        'shift_type' => $overrides[$ds]['shift_type'],
+                        'start_time' => $overrides[$ds]['start_time'] ? date('g:i A', strtotime($overrides[$ds]['start_time'])) : null,
+                        'end_time' => $overrides[$ds]['end_time'] ? date('g:i A', strtotime($overrides[$ds]['end_time'])) : null,
+                        'is_override' => true
+                    ];
+                } else {
+                    foreach ($schedules as $sch) {
+                        if ($ds >= $sch['start_date'] && $ds <= $sch['end_date']) {
+                            $shiftData = [
+                                'is_off' => in_array($dn, $sch['off_days'] ?? []),
+                                'shift_type' => $sch['shift_type'],
+                                'start_time' => $sch['start_time'] ? date('g:i A', strtotime($sch['start_time'])) : null,
+                                'end_time' => $sch['end_time'] ? date('g:i A', strtotime($sch['end_time'])) : null,
+                                'is_override' => false
+                            ];
+                            break;
+                        }
+                    }
+                }
+                $userShifts[$ds] = $shiftData;
+            }
+
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'department' => $user->department ? $user->department->name : 'Unassigned',
+                'shifts' => $userShifts
+            ];
+        });
+
+        try {
+            \App\Models\SystemLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'Export',
+                'module' => 'Attendance Overview',
+                'description' => "Exported weekly attendance overview matrix for week: {$weekRange}.",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+        } catch (\Exception $e) {}
+
+        $fileName = "Attendance_Overview_{$startDateStr}.xlsx";
+        return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\AttendanceExport($employees, $dates, $weekRange), $fileName);
+    }
+    
 }
