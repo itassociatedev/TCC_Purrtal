@@ -47,6 +47,11 @@ class AttendanceController extends Controller
 
     public function overview()
     {
+        // 🔐 SECURITY LOCK: Must have at least 'view' access to the Overview module
+        if (!Auth::user()->canViewModule('attendance_overview')) {
+            abort(403, 'Unauthorized access to Attendance Overview.');
+        }
+
         list($query, $branches) = $this->getBaseQueryAndBranches();
 
         $employees = $query->get()->map(function ($user) {
@@ -87,6 +92,11 @@ class AttendanceController extends Controller
     
     public function scheduleView()
     {
+        // 🔐 SECURITY LOCK: Must have at least 'edit' access for Schedule View
+        if (!Auth::user()->canEditModule('attendance_schedule_view')) {
+            abort(403, 'Unauthorized access to Schedule View.');
+        }
+
         list($query, $branches) = $this->getBaseQueryAndBranches();
 
         $employees = $query->get()->map(function ($user) {
@@ -127,6 +137,11 @@ class AttendanceController extends Controller
     
     public function calendar()
     {
+        // 🔐 SECURITY LOCK: Everyone with at least 'view' can see the calendar
+        if (!Auth::user()->canViewModule('attendance_calendar')) {
+            abort(403, 'Unauthorized access to Calendar.');
+        }
+
         list($query, $branches) = $this->getBaseQueryAndBranches();
 
         $employees = $query->get()->map(function ($user) {
@@ -168,6 +183,11 @@ class AttendanceController extends Controller
     // 🟢 UPDATED: Fetch real data for the table
     public function setupSchedule()
     {
+        // 🔐 SECURITY LOCK: Must have at least 'edit' access to set up schedules
+        if (!Auth::user()->canEditModule('attendance_setup')) {
+            abort(403, 'Unauthorized access to Schedule Setup.');
+        }
+
         list($query, $branches) = $this->getBaseQueryAndBranches();
 
         $employees = $query->get()->map(function ($user) {
@@ -199,6 +219,8 @@ class AttendanceController extends Controller
 
     public function storeSchedule(Request $request)
     {
+        if (!Auth::user()->canEditModule('attendance_setup')) abort(403);
+
         $request->validate([
             'employee_id' => 'required_without:employee_ids|nullable|exists:users,id',
             'employee_ids' => 'required_without:employee_id|nullable|array',
@@ -242,6 +264,8 @@ class AttendanceController extends Controller
 
     public function storeOverride(Request $request)
     {
+        if (!Auth::user()->canEditModule('attendance_schedule_view')) abort(403);
+
         $request->validate([
             'cells' => 'required|array', 
             'is_off_day' => 'required|boolean',

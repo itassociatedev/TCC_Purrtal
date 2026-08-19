@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 
 // 🟢 HELPER: Gets today's date strictly in YYYY-MM-DD format (avoids timezone shift bugs)
@@ -87,12 +87,28 @@ const getWeekDates = (targetDateString) => {
 };
 
 export default function Overview({ employees = [], branches = [] }) {
+    const { auth } = usePage().props;
+    
+    // 🔐 ROBUST ACL UI LOCK: Safely checks for Admin role OR case-insensitive edit/full privileges
+    const canViewFullOverview = (() => {
+        if (auth?.user?.role_id === 1 || auth?.user?.role?.name?.toLowerCase() === 'admin') return true;
+        const level = auth?.user?.acl_permissions?.attendance_overview?.toLowerCase() || 'no_access';
+        return ['full', 'edit'].includes(level);
+    })();
+
+    // 🟢 DYNAMIC SIDEBAR LINKS: Only show modules the user has permission to see
+    const checkAccess = (module, requiredLevels) => {
+        if (auth?.user?.role_id === 1 || auth?.user?.role?.name?.toLowerCase() === 'admin') return true;
+        const level = auth?.user?.acl_permissions?.[module]?.toLowerCase() || 'no_access';
+        return requiredLevels.includes(level);
+    };
+
     const attendanceLinks = [
-        { label: 'Attendance Overview', href: route('attendance.overview'), active: route().current('attendance.overview') },
-        { label: 'Setup Schedule', href: route('attendance.setup-schedule'), active: route().current('attendance.setup-schedule') },
-        { label: 'Schedule View', href: route('attendance.schedule-view'), active: route().current('attendance.schedule-view') },
-        { label: 'Calendar', href: route('attendance.calendar'), active: route().current('attendance.calendar') },
-    ];
+        checkAccess('attendance_overview', ['full', 'edit', 'view']) && { label: 'Attendance Overview', href: route('attendance.overview'), active: route().current('attendance.overview') },
+        checkAccess('attendance_setup', ['full', 'edit']) && { label: 'Setup Schedule', href: route('attendance.setup-schedule'), active: route().current('attendance.setup-schedule') },
+        checkAccess('attendance_schedule_view', ['full', 'edit']) && { label: 'Schedule View', href: route('attendance.schedule-view'), active: route().current('attendance.schedule-view') },
+        checkAccess('attendance_calendar', ['full', 'edit', 'view']) && { label: 'Calendar', href: route('attendance.calendar'), active: route().current('attendance.calendar') },
+    ].filter(Boolean);
 
     // ==========================================
     // STATES
@@ -100,7 +116,7 @@ export default function Overview({ employees = [], branches = [] }) {
     const [selectedDate, setSelectedDate] = useState(getTodayString());
     const [rosterSearch, setRosterSearch] = useState('');
     
-    // 🟢 Global Filter States
+    // Global Filter States
     const [globalDept, setGlobalDept] = useState('');
     const [globalBranch, setGlobalBranch] = useState('');
 
@@ -118,7 +134,7 @@ export default function Overview({ employees = [], branches = [] }) {
     const viewingDayName = viewingDateObj.toLocaleDateString('en-US', { weekday: 'long' });
     const currentCutoff = getCutoffValueForDate(viewingDateObj);
 
-    // 🟢 1. Filter the entire employee pool globally based on selected department AND branch
+    // 1. Filter the entire employee pool globally based on selected department AND branch
     const globallyFilteredEmployees = useMemo(() => {
         return employees.filter(emp => {
             const deptName = typeof emp.department === 'object' ? emp.department?.name : emp.department || 'Unassigned';
@@ -133,7 +149,7 @@ export default function Overview({ employees = [], branches = [] }) {
         });
     }, [employees, globalDept, globalBranch]);
 
-    // 🟢 2. Calculate EVERYTHING strictly using the Globally Filtered Employees
+    // 2. Calculate EVERYTHING strictly using the Globally Filtered Employees
     const analytics = useMemo(() => {
         let scheduledCount = 0;
         let offDutyCount = 0;
@@ -144,13 +160,13 @@ export default function Overview({ employees = [], branches = [] }) {
         let weeklyCounts = getWeekDates(selectedDate);
 
         globallyFilteredEmployees.forEach(emp => {
-            // Compliance Check based on the selected date's cut-off period
+            // Compliance Check
             const hasActiveCutoffSchedule = emp.schedules?.some(sch => currentCutoff.start >= sch.start_date && currentCutoff.end <= sch.end_date);
             if (!hasActiveCutoffSchedule) {
                 unassignedStaff.push(emp);
             }
 
-            // Roster Check for the specifically selected day
+            // Roster Check for the specific day
             const details = getShiftDetails(emp, selectedDate, viewingDayName);
             
             if (details.isOverride) activeOverridesCount++;
@@ -181,19 +197,18 @@ export default function Overview({ employees = [], branches = [] }) {
             });
         });
 
-        // Sort roster: Scheduled people first, Off-duty people at the bottom
+        // Sort roster
         roster.sort((a, b) => (a.isOff === b.isOff) ? 0 : a.isOff ? 1 : -1);
 
         return { scheduledCount, offDutyCount, activeOverridesCount, specialDutiesCount, unassignedStaff, roster, weeklyCounts };
     }, [globallyFilteredEmployees, selectedDate, viewingDayName, currentCutoff]);
 
-    // 🟢 3. The Roster Table only needs to apply the local Name Search now
+    // 3. The Roster Table
     const filteredRoster = useMemo(() => {
         return analytics.roster.filter(emp => {
             return rosterSearch === '' || emp.name.toLowerCase().includes(rosterSearch.toLowerCase());
         });
     }, [analytics.roster, rosterSearch]);
-
 
     const renderShiftBadge = (shiftType, isOffDay) => {
         if (isOffDay) return <span className="inline-flex rounded border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 shadow-sm">Off Day</span>;
@@ -218,9 +233,8 @@ export default function Overview({ employees = [], branches = [] }) {
                         </span>
                     </div>
                     
-                    {/* 🟢 GLOBAL FILTERS: Branch, Department & Date Selector */}
+                    {/* GLOBAL FILTERS */}
                     <div className="flex flex-col sm:flex-row items-center gap-3">
-                        
                         <div className="w-full sm:w-auto flex gap-2">
                             <select 
                                 className="block w-full sm:w-[150px] rounded-md border-gray-300 py-1.5 pl-3 pr-8 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white cursor-pointer font-medium text-gray-700"
@@ -281,7 +295,7 @@ export default function Overview({ employees = [], branches = [] }) {
                     <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-4 opacity-10">
                             <svg className="w-16 h-16 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                                <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
                             </svg>
                         </div>
                         <dt className="truncate text-sm font-medium text-gray-500">Off Duty on Date</dt>
@@ -339,133 +353,133 @@ export default function Overview({ employees = [], branches = [] }) {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                    
-                    {/* ================= LEFT COLUMN: DAILY ROSTER ================= */}
-                    <div className="lg:col-span-2 rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-                        <div className="border-b border-gray-200 bg-gray-50/50 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                            <div>
-                                <h3 className="text-base font-bold text-gray-900">Daily Roster <span className="text-gray-400 font-medium ml-1">({viewingDisplay})</span></h3>
-                                <p className="text-xs text-gray-500 mt-1">Everyone actively assigned to a schedule for the selected date.</p>
+                {/* 🔐 ACL RESTRICTED SECTION: Only renders for users with EDIT or FULL privileges */}
+                {canViewFullOverview && (
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                        {/* ================= LEFT COLUMN: DAILY ROSTER ================= */}
+                        <div className="lg:col-span-2 rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+                            <div className="border-b border-gray-200 bg-gray-50/50 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div>
+                                    <h3 className="text-base font-bold text-gray-900">Daily Roster <span className="text-gray-400 font-medium ml-1">({viewingDisplay})</span></h3>
+                                    <p className="text-xs text-gray-500 mt-1">Everyone actively assigned to a schedule for the selected date.</p>
+                                </div>
+                                
+                                <div className="relative w-full sm:w-48">
+                                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
+                                        <svg className="h-3.5 w-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                        </svg>
+                                    </div>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Search name..." 
+                                        className="w-full rounded-md border-gray-300 py-1.5 pl-8 pr-3 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                        value={rosterSearch}
+                                        onChange={e => setRosterSearch(e.target.value)}
+                                    />
+                                </div>
                             </div>
                             
-                            {/* Roster Name Search (Local Filter) */}
-                            <div className="relative w-full sm:w-48">
-                                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">
-                                    <svg className="h-3.5 w-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                    </svg>
-                                </div>
-                                <input 
-                                    type="text" 
-                                    placeholder="Search name..." 
-                                    className="w-full rounded-md border-gray-300 py-1.5 pl-8 pr-3 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                    value={rosterSearch}
-                                    onChange={e => setRosterSearch(e.target.value)}
-                                />
-                            </div>
-                        </div>
-                        
-                        <div className="flex-1 overflow-auto max-h-[600px]">
-                            {filteredRoster.length > 0 ? (
-                                <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-white sticky top-0 z-10">
-                                        <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Employee</th>
-                                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Shift Type</th>
-                                            <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100 bg-white">
-                                        {filteredRoster.map(emp => (
-                                            <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
-                                                <td className="whitespace-nowrap px-6 py-4">
-                                                    <div className="font-bold text-sm text-gray-900">{emp.name}</div>
-                                                    <div className="text-xs text-gray-500">{emp.deptName}</div>
-                                                </td>
-                                                <td className="whitespace-nowrap px-6 py-4">
-                                                    <div className="flex items-center gap-2">
-                                                        {renderShiftBadge(emp.shiftType, emp.isOff)}
-                                                        {emp.isOverride && <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">Modified</span>}
-                                                    </div>
-                                                </td>
-                                                <td className="whitespace-nowrap px-6 py-4 text-right">
-                                                    {!emp.isOff && emp.startTime && emp.endTime ? (
-                                                        <span className="text-sm font-mono text-gray-700 bg-gray-50 px-2 py-1 rounded border border-gray-100">
-                                                            {emp.startTime} - {emp.endTime}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-sm italic text-gray-400">--</span>
-                                                    )}
-                                                </td>
+                            <div className="flex-1 overflow-auto max-h-[600px]">
+                                {filteredRoster.length > 0 ? (
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-white sticky top-0 z-10">
+                                            <tr>
+                                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Employee</th>
+                                                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Shift Type</th>
+                                                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            ) : (
-                                <div className="flex flex-col items-center justify-center p-12 text-center">
-                                    <svg className="h-12 w-12 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
-                                    <h3 className="text-sm font-bold text-gray-900">No Match Found</h3>
-                                    <p className="mt-1 text-sm text-gray-500">No employees match your current filters.</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* ================= RIGHT COLUMN: SCHEDULE COMPLIANCE ================= */}
-                    <div className="rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-                        <div className="border-b border-rose-100 bg-rose-50 px-6 py-4">
-                            <h3 className="text-base font-bold text-rose-900 flex items-center gap-2">
-                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                                Missing Schedules
-                            </h3>
-                            <p className="text-xs text-rose-700 mt-1">Active staff with no schedule set for the active <strong className="font-bold">Cut-off</strong>.</p>
-                        </div>
-
-                        <div className="flex-1 overflow-auto max-h-[600px] p-4">
-                            {analytics.unassignedStaff.length > 0 ? (
-                                <div className="space-y-3">
-                                    {analytics.unassignedStaff.map(emp => (
-                                        <div key={emp.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm">
-                                            <div>
-                                                <p className="text-sm font-bold text-gray-900">{emp.name}</p>
-                                                <p className="text-xs text-gray-500">{typeof emp.department === 'object' ? emp.department?.name : emp.department || 'Unassigned'}</p>
-                                            </div>
-                                            <Link 
-                                                href={route('attendance.setup-schedule')}
-                                                className="text-xs font-bold text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded transition-colors"
-                                            >
-                                                Fix Schedule
-                                            </Link>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-                                    <div className="h-12 w-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
-                                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 bg-white">
+                                            {filteredRoster.map(emp => (
+                                                <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
+                                                    <td className="whitespace-nowrap px-6 py-4">
+                                                        <div className="font-bold text-sm text-gray-900">{emp.name}</div>
+                                                        <div className="text-xs text-gray-500">{emp.deptName}</div>
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-6 py-4">
+                                                        <div className="flex items-center gap-2">
+                                                            {renderShiftBadge(emp.shiftType, emp.isOff)}
+                                                            {emp.isOverride && <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">Modified</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-6 py-4 text-right">
+                                                        {!emp.isOff && emp.startTime && emp.endTime ? (
+                                                            <span className="text-sm font-mono text-gray-700 bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                                                                {emp.startTime} - {emp.endTime}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-sm italic text-gray-400">--</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center p-12 text-center">
+                                        <svg className="h-12 w-12 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                        <h3 className="text-sm font-bold text-gray-900">No Match Found</h3>
+                                        <p className="mt-1 text-sm text-gray-500">No employees match your current filters.</p>
                                     </div>
-                                    <h3 className="text-sm font-bold text-gray-900">All Clear!</h3>
-                                    <p className="mt-1 text-sm text-gray-500">100% of the active staff in this scope have schedules assigned.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* ================= RIGHT COLUMN: SCHEDULE COMPLIANCE ================= */}
+                        <div className="rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+                            <div className="border-b border-rose-100 bg-rose-50 px-6 py-4">
+                                <h3 className="text-base font-bold text-rose-900 flex items-center gap-2">
+                                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                    Missing Schedules
+                                </h3>
+                                <p className="text-xs text-rose-700 mt-1">Active staff with no schedule set for the active <strong className="font-bold">Cut-off</strong>.</p>
+                            </div>
+
+                            <div className="flex-1 overflow-auto max-h-[600px] p-4">
+                                {analytics.unassignedStaff.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {analytics.unassignedStaff.map(emp => (
+                                            <div key={emp.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm">
+                                                <div>
+                                                    <p className="text-sm font-bold text-gray-900">{emp.name}</p>
+                                                    <p className="text-xs text-gray-500">{typeof emp.department === 'object' ? emp.department?.name : emp.department || 'Unassigned'}</p>
+                                                </div>
+                                                <Link 
+                                                    href={route('attendance.setup-schedule')}
+                                                    className="text-xs font-bold text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded transition-colors"
+                                                >
+                                                    Fix Schedule
+                                                </Link>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                                        <div className="h-12 w-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
+                                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                                        </div>
+                                        <h3 className="text-sm font-bold text-gray-900">All Clear!</h3>
+                                        <p className="mt-1 text-sm text-gray-500">100% of the active staff in this scope have schedules assigned.</p>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {analytics.unassignedStaff.length > 0 && (
+                                <div className="border-t border-gray-100 bg-gray-50 p-4">
+                                    <Link 
+                                        href={route('attendance.setup-schedule')}
+                                        className="block w-full text-center text-sm font-bold text-indigo-600 hover:text-indigo-800"
+                                    >
+                                        Go to Setup Schedule &rarr;
+                                    </Link>
                                 </div>
                             )}
                         </div>
-                        
-                        {analytics.unassignedStaff.length > 0 && (
-                            <div className="border-t border-gray-100 bg-gray-50 p-4">
-                                <Link 
-                                    href={route('attendance.setup-schedule')}
-                                    className="block w-full text-center text-sm font-bold text-indigo-600 hover:text-indigo-800"
-                                >
-                                    Go to Setup Schedule &rarr;
-                                </Link>
-                            </div>
-                        )}
                     </div>
-
-                </div>
+                )}
             </div>
         </SidebarLayout>
     );

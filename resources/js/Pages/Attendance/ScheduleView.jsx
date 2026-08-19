@@ -1,14 +1,23 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { useForm } from '@inertiajs/react';
+import { useForm, usePage } from '@inertiajs/react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 
 export default function ScheduleView({ employees = [], branches = [] }) {
+    const { auth } = usePage().props;
+
+    // 🟢 DYNAMIC SIDEBAR LINKS: Only show modules the user has permission to see
+    const checkAccess = (module, requiredLevels) => {
+        if (auth?.user?.role_id === 1 || auth?.user?.role?.name?.toLowerCase() === 'admin') return true;
+        const level = auth?.user?.acl_permissions?.[module]?.toLowerCase() || 'no_access';
+        return requiredLevels.includes(level);
+    };
+
     const attendanceLinks = [
-        { label: 'Attendance Overview', href: route('attendance.overview'), active: route().current('attendance.overview') },
-        { label: 'Setup Schedule', href: route('attendance.setup-schedule'), active: route().current('attendance.setup-schedule') },
-        { label: 'Schedule View', href: route('attendance.schedule-view'), active: route().current('attendance.schedule-view') },
-        { label: 'Calendar', href: route('attendance.calendar'), active: route().current('attendance.calendar') },
-    ];
+        checkAccess('attendance_overview', ['full', 'edit', 'view']) && { label: 'Attendance Overview', href: route('attendance.overview'), active: route().current('attendance.overview') },
+        checkAccess('attendance_setup', ['full', 'edit']) && { label: 'Setup Schedule', href: route('attendance.setup-schedule'), active: route().current('attendance.setup-schedule') },
+        checkAccess('attendance_schedule_view', ['full', 'edit']) && { label: 'Schedule View', href: route('attendance.schedule-view'), active: route().current('attendance.schedule-view') },
+        checkAccess('attendance_calendar', ['full', 'edit', 'view']) && { label: 'Calendar', href: route('attendance.calendar'), active: route().current('attendance.calendar') },
+    ].filter(Boolean);
 
     const [viewMode, setViewMode] = useState('batch');
     const [mounted, setMounted] = useState(false);
@@ -333,7 +342,6 @@ export default function ScheduleView({ employees = [], branches = [] }) {
                 {/* ================= BATCH VIEW ================= */}
                 {viewMode === 'batch' && (
                     <div className="space-y-6">
-                        {/* Batch Header Content Removed For Brevity (unchanged) */}
                         <div className="flex flex-col gap-4 border-b pb-4 lg:flex-row lg:items-end lg:justify-between">
                             <div>
                                 <h3 className="text-lg font-bold text-gray-800">Batch Timetable Overview</h3>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useForm } from '@inertiajs/react'; 
+import { useForm, usePage } from '@inertiajs/react'; 
 import SidebarLayout from '@/Layouts/SidebarLayout';
 
 // 🟢 HELPER: Generates the 6-20 and 21-5 cutoff periods automatically
@@ -53,19 +53,28 @@ const getCurrentCutoffValue = () => {
 };
 
 export default function SetupSchedule({ employees = [], branches = [] }) {
+    const { auth } = usePage().props;
+
+    // 🟢 DYNAMIC SIDEBAR LINKS: Only show modules the user has permission to see
+    const checkAccess = (module, requiredLevels) => {
+        if (auth?.user?.role_id === 1 || auth?.user?.role?.name?.toLowerCase() === 'admin') return true;
+        const level = auth?.user?.acl_permissions?.[module]?.toLowerCase() || 'no_access';
+        return requiredLevels.includes(level);
+    };
+
     const attendanceLinks = [
-        { label: 'Attendance Overview', href: route('attendance.overview'), active: route().current('attendance.overview') },
-        { label: 'Setup Schedule', href: route('attendance.setup-schedule'), active: route().current('attendance.setup-schedule') },
-        { label: 'Schedule View', href: route('attendance.schedule-view'), active: route().current('attendance.schedule-view') },
-        { label: 'Calendar', href: route('attendance.calendar'), active: route().current('attendance.calendar') },
-    ];
+        checkAccess('attendance_overview', ['full', 'edit', 'view']) && { label: 'Attendance Overview', href: route('attendance.overview'), active: route().current('attendance.overview') },
+        checkAccess('attendance_setup', ['full', 'edit']) && { label: 'Setup Schedule', href: route('attendance.setup-schedule'), active: route().current('attendance.setup-schedule') },
+        checkAccess('attendance_schedule_view', ['full', 'edit']) && { label: 'Schedule View', href: route('attendance.schedule-view'), active: route().current('attendance.schedule-view') },
+        checkAccess('attendance_calendar', ['full', 'edit', 'view']) && { label: 'Calendar', href: route('attendance.calendar'), active: route().current('attendance.calendar') },
+    ].filter(Boolean);
 
     const cutoffPeriodsList = useMemo(() => generateCutoffPeriods(), []);
     const [selectedCutoff, setSelectedCutoff] = useState(getCurrentCutoffValue());
 
     const [searchTerm, setSearchTerm] = useState('');
     const [departmentFilter, setDepartmentFilter] = useState('');
-    const [branchFilter, setBranchFilter] = useState(''); // 🟢 NEW
+    const [branchFilter, setBranchFilter] = useState('');
     
     const [showModal, setShowModal] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
@@ -232,7 +241,6 @@ export default function SetupSchedule({ employees = [], branches = [] }) {
         return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
     };
 
-    // 🟢 UPDATED FILTERING: Now respects the Branch dropdown securely
     const filteredEmployees = employees.filter((emp) => {
         const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase());
         const deptName = emp.department?.name || emp.department || ''; 
