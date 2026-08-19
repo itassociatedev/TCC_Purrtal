@@ -7,7 +7,15 @@ export default function AttendanceSettings({ shifts, settings }) {
     const { auth, flash } = usePage().props;
     const adminLinks = getAdminLinks(auth);
 
-    // Form for Cut-offs
+    // 🟢 UI ACL MATRIX DEFINITIONS
+    const isSuperAdmin = auth?.user?.role_id === 1 || auth?.user?.role?.name?.toLowerCase() === 'admin';
+    const aclLevel = auth?.user?.acl_permissions?.attendance_settings?.toLowerCase() || 'no_access';
+    
+    // EDIT access: Can edit cut-offs, add shifts, and modify shifts.
+    const canEditSettings = isSuperAdmin || ['full', 'edit'].includes(aclLevel);
+    // FULL access: Can delete shifts.
+    const canDeleteSettings = isSuperAdmin || ['full'].includes(aclLevel);
+
     const { data: cutoffData, setData: setCutoffData, post: postCutoff, processing: cutoffProcessing } = useForm({
         cutoff_1_start: settings.cutoff_1_start || '21',
         cutoff_1_end: settings.cutoff_1_end || '5',
@@ -50,11 +58,8 @@ export default function AttendanceSettings({ shifts, settings }) {
         });
     };
 
-    const toggleShift = (id) => {
-        postCutoff(route('admin.attendance-settings.toggle-shift', id));
-    };
-
     const openEditModal = (shift) => {
+        if (!canEditSettings) return;
         setEditData({
             id: shift.id,
             name: shift.name,
@@ -91,9 +96,7 @@ export default function AttendanceSettings({ shifts, settings }) {
                 resetEdit();
                 setIsDeleting(false);
             },
-            onError: () => {
-                setIsDeleting(false);
-            }
+            onError: () => setIsDeleting(false)
         });
     };
 
@@ -117,6 +120,14 @@ export default function AttendanceSettings({ shifts, settings }) {
                     </div>
                 )}
 
+                {/* 🟢 VIEW-ONLY BANNER */}
+                {!canEditSettings && (
+                    <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg font-medium flex items-center gap-3">
+                        <svg className="h-5 w-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                        You are currently in View-Only mode. Saving changes is disabled.
+                    </div>
+                )}
+
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold text-gray-900">Attendance Settings</h1>
                     <p className="text-gray-600 mt-2">Manage cut-off periods and authorized shifts for the entire system.</p>
@@ -129,71 +140,74 @@ export default function AttendanceSettings({ shifts, settings }) {
                         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
                             <h3 className="text-lg font-bold text-gray-900 mb-4">Cut-off Periods</h3>
                             <form onSubmit={handleCutoffSubmit} className="space-y-4">
-                                <div className="p-4 bg-gray-50 rounded-md border border-gray-100">
+                                <div className={`p-4 rounded-md border ${canEditSettings ? 'bg-gray-50 border-gray-100' : 'bg-gray-100 border-gray-200 opacity-70'}`}>
                                     <h4 className="text-sm font-bold text-indigo-800 mb-3 uppercase tracking-wider">First Period</h4>
                                     <div className="flex gap-4">
                                         <div>
                                             <label className="block text-xs font-medium text-gray-500">Start Day</label>
-                                            <input type="number" min="1" max="31" className="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 font-bold" value={cutoffData.cutoff_1_start} onChange={e => setCutoffData('cutoff_1_start', e.target.value)} required />
+                                            <input type="number" disabled={!canEditSettings} min="1" max="31" className="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 font-bold disabled:bg-gray-100 disabled:text-gray-500" value={cutoffData.cutoff_1_start} onChange={e => setCutoffData('cutoff_1_start', e.target.value)} required />
                                         </div>
                                         <div>
                                             <label className="block text-xs font-medium text-gray-500">End Day</label>
-                                            <input type="number" min="1" max="31" className="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 font-bold" value={cutoffData.cutoff_1_end} onChange={e => setCutoffData('cutoff_1_end', e.target.value)} required />
+                                            <input type="number" disabled={!canEditSettings} min="1" max="31" className="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 font-bold disabled:bg-gray-100 disabled:text-gray-500" value={cutoffData.cutoff_1_end} onChange={e => setCutoffData('cutoff_1_end', e.target.value)} required />
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="p-4 bg-gray-50 rounded-md border border-gray-100">
+                                <div className={`p-4 rounded-md border ${canEditSettings ? 'bg-gray-50 border-gray-100' : 'bg-gray-100 border-gray-200 opacity-70'}`}>
                                     <h4 className="text-sm font-bold text-indigo-800 mb-3 uppercase tracking-wider">Second Period</h4>
                                     <div className="flex gap-4">
                                         <div>
                                             <label className="block text-xs font-medium text-gray-500">Start Day</label>
-                                            <input type="number" min="1" max="31" className="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 font-bold" value={cutoffData.cutoff_2_start} onChange={e => setCutoffData('cutoff_2_start', e.target.value)} required />
+                                            <input type="number" disabled={!canEditSettings} min="1" max="31" className="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 font-bold disabled:bg-gray-100 disabled:text-gray-500" value={cutoffData.cutoff_2_start} onChange={e => setCutoffData('cutoff_2_start', e.target.value)} required />
                                         </div>
                                         <div>
                                             <label className="block text-xs font-medium text-gray-500">End Day</label>
-                                            <input type="number" min="1" max="31" className="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 font-bold" value={cutoffData.cutoff_2_end} onChange={e => setCutoffData('cutoff_2_end', e.target.value)} required />
+                                            <input type="number" disabled={!canEditSettings} min="1" max="31" className="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 font-bold disabled:bg-gray-100 disabled:text-gray-500" value={cutoffData.cutoff_2_end} onChange={e => setCutoffData('cutoff_2_end', e.target.value)} required />
                                         </div>
                                     </div>
                                 </div>
 
-                                <button type="submit" disabled={cutoffProcessing} className="w-full bg-indigo-600 text-white rounded-md py-2.5 text-sm font-bold shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors">
-                                    {cutoffProcessing ? 'Saving...' : 'Save Cut-offs'}
-                                </button>
+                                {canEditSettings && (
+                                    <button type="submit" disabled={cutoffProcessing} className="w-full bg-indigo-600 text-white rounded-md py-2.5 text-sm font-bold shadow-sm hover:bg-indigo-700 transition-colors">
+                                        {cutoffProcessing ? 'Saving...' : 'Save Cut-offs'}
+                                    </button>
+                                )}
                             </form>
                         </div>
 
-                        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-                            <h3 className="text-lg font-bold text-gray-900 mb-4">Add New Shift</h3>
-                            <form onSubmit={handleShiftSubmit} className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">Shift Label</label>
-                                    <input type="text" placeholder="e.g. 8:00AM - 5:00PM (Day Shift)" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-medium" value={shiftData.name} onChange={e => setShiftData('name', e.target.value)} required />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
+                        {canEditSettings && (
+                            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+                                <h3 className="text-lg font-bold text-gray-900 mb-4">Add New Shift</h3>
+                                <form onSubmit={handleShiftSubmit} className="space-y-4">
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">Start Time</label>
-                                        <input type="time" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono font-medium text-gray-700" value={shiftData.start_time} onChange={e => setShiftData('start_time', e.target.value)} required />
+                                        <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">Shift Label</label>
+                                        <input type="text" placeholder="e.g. 2:00PM - 11:00PM (Mid Shift)" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-medium" value={shiftData.name} onChange={e => setShiftData('name', e.target.value)} required />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">Start Time</label>
+                                            <input type="time" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono font-medium text-gray-700" value={shiftData.start_time} onChange={e => setShiftData('start_time', e.target.value)} required />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">End Time</label>
+                                            <input type="time" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono font-medium text-gray-700" value={shiftData.end_time} onChange={e => setShiftData('end_time', e.target.value)} required />
+                                        </div>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">End Time</label>
-                                        <input type="time" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono font-medium text-gray-700" value={shiftData.end_time} onChange={e => setShiftData('end_time', e.target.value)} required />
+                                        <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">Category</label>
+                                        <select className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-medium" value={shiftData.shift_type} onChange={e => setShiftData('shift_type', e.target.value)} required>
+                                            <option value="Day Shift">Day Shift</option>
+                                            <option value="Straight Duty">Straight Duty</option>
+                                            <option value="Graveyard Shift">Graveyard Shift</option>
+                                        </select>
                                     </div>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">Category</label>
-                                    <select className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-medium" value={shiftData.shift_type} onChange={e => setShiftData('shift_type', e.target.value)} required>
-                                        <option value="Day Shift">Day Shift</option>
-                                        <option value="Straight Duty">Straight Duty</option>
-                                        <option value="Graveyard Shift">Graveyard Shift</option>
-                                    </select>
-                                </div>
-                                <button type="submit" disabled={shiftProcessing} className="w-full bg-green-600 text-white rounded-md py-2.5 text-sm font-bold shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors mt-2">
-                                    {shiftProcessing ? 'Adding...' : '+ Add Shift'}
-                                </button>
-                            </form>
-                        </div>
-
+                                    <button type="submit" disabled={shiftProcessing} className="w-full bg-green-600 text-white rounded-md py-2.5 text-sm font-bold shadow-sm hover:bg-green-700 transition-colors mt-2">
+                                        {shiftProcessing ? 'Adding...' : '+ Add Shift'}
+                                    </button>
+                                </form>
+                            </div>
+                        )}
                     </div>
 
                     <div className="xl:col-span-2 min-w-0">
@@ -210,7 +224,7 @@ export default function AttendanceSettings({ shifts, settings }) {
                                             <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Time</th>
                                             <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Category</th>
                                             <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                                            <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Action</th>
+                                            {canEditSettings && <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Action</th>}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -235,14 +249,16 @@ export default function AttendanceSettings({ shifts, settings }) {
                                                         {shift.is_active ? 'Active' : 'Disabled'}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right">
-                                                    <button 
-                                                        onClick={() => openEditModal(shift)}
-                                                        className="text-xs font-bold px-4 py-1.5 rounded transition-colors text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200"
-                                                    >
-                                                        Edit
-                                                    </button>
-                                                </td>
+                                                {canEditSettings && (
+                                                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                                                        <button 
+                                                            onClick={() => openEditModal(shift)}
+                                                            className="text-xs font-bold px-4 py-1.5 rounded transition-colors text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200"
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                    </td>
+                                                )}
                                             </tr>
                                         ))}
                                     </tbody>
@@ -254,7 +270,7 @@ export default function AttendanceSettings({ shifts, settings }) {
                 </div>
             </div>
 
-            {/* Edit Shift Modal */}
+            {/* EDIT SHIFT MODAL */}
             {showEditModal && (
                 <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
                     <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
@@ -303,13 +319,18 @@ export default function AttendanceSettings({ shifts, settings }) {
                                     </div>
 
                                     <div className="mt-6 flex items-center justify-between border-t border-gray-100 pt-5">
-                                        <button 
-                                            type="button" 
-                                            onClick={confirmDelete}
-                                            className="text-sm font-bold text-rose-600 hover:text-rose-800 transition-colors"
-                                        >
-                                            Delete Shift
-                                        </button>
+                                        {/* 🟢 DELETE BUTTON: Only visible to FULL access */}
+                                        <div className="w-1/3">
+                                            {canDeleteSettings && (
+                                                <button 
+                                                    type="button" 
+                                                    onClick={confirmDelete}
+                                                    className="text-sm font-bold text-rose-600 hover:text-rose-800 transition-colors"
+                                                >
+                                                    Delete Shift
+                                                </button>
+                                            )}
+                                        </div>
 
                                         <div className="flex gap-3">
                                             <button 
@@ -335,7 +356,7 @@ export default function AttendanceSettings({ shifts, settings }) {
                 </div>
             )}
 
-            {/* 🟢 NEW: Custom Delete Confirmation Modal */}
+            {/* CUSTOM DELETE CONFIRMATION MODAL */}
             {showDeleteConfirmModal && (
                 <div className="fixed inset-0 z-[60] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
                     <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">

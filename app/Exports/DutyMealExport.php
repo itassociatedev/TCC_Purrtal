@@ -2,88 +2,109 @@
 
 namespace App\Exports;
 
-use App\Models\DutyMealParticipant;
 use App\Models\DutyMeal;
-use Maatwebsite\Excel\Concerns\FromCollection;
-use Maatwebsite\Excel\Concerns\WithHeadings;
-use Maatwebsite\Excel\Concerns\WithMapping;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Carbon\Carbon;
+use Illuminate\Contracts\View\View;
+use Maatwebsite\Excel\Concerns\FromView;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class DutyMealExport implements FromCollection, WithHeadings, WithMapping, ShouldAutoSize
+class DutyMealExport implements FromView, ShouldAutoSize, WithStyles
 {
     protected $dutyMealIds;
-    protected $includesMakati = false;
 
     public function __construct($dutyMealIds)
     {
-        $this->dutyMealIds = is_array($dutyMealIds) ? $dutyMealIds : [$dutyMealIds];
-        
-        $this->includesMakati = DutyMeal::whereIn('id', $this->dutyMealIds)
-            ->whereHas('branch', function($q) {
-                $q->where('name', 'like', '%Makati%');
-            })->exists();
+        $this->dutyMealIds = is_string($dutyMealIds) ? explode(',', $dutyMealIds) : $dutyMealIds;
     }
 
-    public function collection()
+    public function view(): View
     {
-        return DutyMealParticipant::with(['user', 'dutyMeal.branch'])
-            ->whereIn('duty_meal_id', $this->dutyMealIds)
-            ->get()
-            ->sortBy(function($participant) {
-                return $participant->dutyMeal->duty_date ?? '';
-            });
-    }
+        // Fetch the selected meals with their participants
+        $meals = DutyMeal::with(['participants.user', 'branch'])
+            ->whereIn('id', $this->dutyMealIds)
+            ->orderBy('duty_date')
+            ->get();
 
-    public function headings(): array
-    {
-        $headings = [
-            'Duty Date',
-            'User',
-            'Branch',
-            'Shift',
-            'Menu',
-            'Note'
-        ];
+        $weeks = [];
 
-        // Site successfully placed as the 7th column
-        if ($this->includesMakati) {
-            $headings[] = 'Site';
+        foreach ($meals as $meal) {
+            $date = Carbon::parse($meal->duty_date);
+            // Group everything by the start of the week (Monday)
+            $weekStart = $date->copy()->startOfWeek()->format('M d, Y');
+            
+            if (!isset($weeks[$weekStart])) {
+                $weeks[$weekStart] = [
+                    'dates' => [],
+                    'days' => []
+                ];
+                
+                // Build the 7 columns for Monday -> Sunday
+                for ($i = 0; $i < 7; $i++) {
+                    $dayDate = $date->copy()->startOfWeek()->addDays($i);
+                    $dayKey = $dayDate->format('Y-m-d');
+                    
+                    $weeks[$weekStart]['dates'][$dayKey] = $dayDate->format('D, M d');
+                    
+                    // Initialize the tallies for the 4 specific template categories
+                    $weeks[$weekStart]['days'][$dayKey] = [
+                        'clinic_lunch' => ['total' => 0, 'main' => 0, 'alt' => 0, 'special' => 0, 'notes' => []],
+                        'clinic_dinner' => ['total' => 0, 'main' => 0, 'alt' => 0, 'special' => 0, 'notes' => []],
+                        'clinic_whole' => ['total' => 0, 'main' => 0, 'alt' => 0, 'special' => 0, 'notes' => []],
+                        'back_office' => ['total' => 0, 'main' => 0, 'alt' => 0, 'special' => 0, 'notes' => []],
+                    ];
+                }
+            }
+
+            $dayKey = $date->format('Y-m-d');
+            
+            foreach ($meal->participants as $p) {
+                // Ignore if they haven't chosen a meal yet
+                if (!in_array($p->choice, ['main', 'alt', 'special'])) {
+                    continue;
+                }
+
+                $site = strtolower(trim($p->site ?? 'Clinic'));
+                $shift = strtolower(trim($p->shift_type ?? 'day'));
+                $choice = strtolower(trim($p->choice));
+
+                // 🟢 ROUTING: Match the database row to the correct Template Section
+                $cat = 'clinic_lunch';
+                
+                if ($site === 'back office') {
+                    $cat = 'back_office';
+                } else {
+                    if ($shift === 'graveyard') {
+                        $cat = 'clinic_dinner';
+                    } elseif ($shift === 'straight') {
+                        $cat = 'clinic_whole';
+                    } else {
+                        $cat = 'clinic_lunch'; // Default for day shifts
+                    }
+                }
+
+                // Increment the counters
+                $weeks[$weekStart]['days'][$dayKey][$cat]['total']++;
+                $weeks[$weekStart]['days'][$dayKey][$cat][$choice]++;
+                
+                // Format any special requests or notes
+                if (!empty($p->custom_request)) {
+                    $name = $p->user ? explode(' ', $p->user->name)[0] : 'Staff';
+                    $weeks[$weekStart]['days'][$dayKey][$cat]['notes'][] = $name . ': ' . $p->custom_request;
+                }
+            }
         }
 
-        return $headings;
+        return view('exports.duty_meals', [
+            'weeks' => $weeks
+        ]);
     }
 
-    public function map($participant): array
+    public function styles(Worksheet $sheet)
     {
-        // UPDATED: Added the check for 'special'
-        $menu = 'Pending';
-        if ($participant->choice === 'main') $menu = 'Main';
-        elseif ($participant->choice === 'alt') $menu = 'Alt';
-        elseif ($participant->choice === 'special') $menu = 'Special Request';
-
-        $shift = 'Unassigned';
-        if ($participant->shift_type === 'day') $shift = 'Day Shift';
-        elseif ($participant->shift_type === 'graveyard') $shift = 'Graveyard';
-        elseif ($participant->shift_type === 'straight') $shift = 'Straight';
-
-        $dutyDateObj = $participant->dutyMeal ? Carbon::parse($participant->dutyMeal->duty_date) : null;
-        $specificDate = $dutyDateObj ? $dutyDateObj->format('D, M j, Y') : 'N/A';
-
-        $row = [
-            $specificDate,
-            $participant->user ? $participant->user->name : 'N/A',
-            $participant->dutyMeal && $participant->dutyMeal->branch ? $participant->dutyMeal->branch->name : 'N/A',
-            $shift,
-            $menu,
-            $participant->custom_request ?? ''
+        return [
+            1 => ['font' => ['bold' => true, 'size' => 14]],
         ];
-
-        if ($this->includesMakati) {
-            $isThisMakati = stripos($participant->dutyMeal->branch->name ?? '', 'Makati') !== false;
-            $row[] = $isThisMakati ? ($participant->site ?? 'Unassigned') : 'N/A';
-        }
-
-        return $row;
     }
 }

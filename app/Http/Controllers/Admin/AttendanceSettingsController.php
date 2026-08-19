@@ -3,25 +3,23 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
 use App\Models\Shift;
 use App\Models\AttendanceSetting;
-use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Auth;
 
 class AttendanceSettingsController extends Controller
 {
     public function index()
     {
-        // 🔐 Ensure only Admins can access these system settings
-        if (auth()->user()->role_id !== 1 && strtolower(trim(auth()->user()->role->name)) !== 'admin') {
-            abort(403, 'Unauthorized access to Admin Settings.');
+        // 🟢 ACL MATRIX: VIEW (Allows Full, Edit, View)
+        if (!Auth::user()->canViewModule('attendance_settings')) {
+            abort(403, 'UNAUTHORIZED ACCESS TO ATTENDANCE SETTINGS.');
         }
 
         $shifts = Shift::orderBy('start_time')->get();
-        
-        // Format settings into a clean key-value pair for React
-        $rawSettings = AttendanceSetting::all();
-        $settings = $rawSettings->pluck('setting_value', 'setting_key')->toArray();
+        $settings = AttendanceSetting::pluck('setting_value', 'setting_key')->toArray();
 
         return Inertia::render('Admin/AttendanceSettings', [
             'shifts' => $shifts,
@@ -29,13 +27,37 @@ class AttendanceSettingsController extends Controller
         ]);
     }
 
+    public function updateCutoffs(Request $request)
+    {
+        // 🟢 ACL MATRIX: EDIT (Allows Full, Edit)
+        if (!Auth::user()->canEditModule('attendance_settings')) {
+            abort(403, 'You do not have permission to edit settings.');
+        }
+
+        $request->validate([
+            'cutoff_1_start' => 'required|numeric|min:1|max:31',
+            'cutoff_1_end' => 'required|numeric|min:1|max:31',
+            'cutoff_2_start' => 'required|numeric|min:1|max:31',
+            'cutoff_2_end' => 'required|numeric|min:1|max:31',
+        ]);
+
+        foreach ($request->only(['cutoff_1_start', 'cutoff_1_end', 'cutoff_2_start', 'cutoff_2_end']) as $key => $value) {
+            AttendanceSetting::updateOrCreate(['setting_key' => $key], ['setting_value' => $value]);
+        }
+
+        return redirect()->back()->with('success', 'Cut-off periods updated successfully.');
+    }
+
     public function storeShift(Request $request)
     {
+        // 🟢 ACL MATRIX: EDIT (Allows Full, Edit)
+        if (!Auth::user()->canEditModule('attendance_settings')) abort(403);
+
         $request->validate([
             'name' => 'required|string|max:255',
             'start_time' => 'required',
             'end_time' => 'required',
-            'shift_type' => 'required|string|in:Day Shift,Straight Duty,Graveyard Shift',
+            'shift_type' => 'required|string',
         ]);
 
         Shift::create([
@@ -46,34 +68,25 @@ class AttendanceSettingsController extends Controller
             'is_active' => true,
         ]);
 
-        return redirect()->back()->with('success', 'Shift added successfully.');
+        return redirect()->back()->with('success', 'New shift added successfully.');
     }
 
-    public function toggleShift(Shift $shift)
+    public function toggleShift($id)
     {
+        // 🟢 ACL MATRIX: EDIT (Allows Full, Edit)
+        if (!Auth::user()->canEditModule('attendance_settings')) abort(403);
+
+        $shift = Shift::findOrFail($id);
         $shift->update(['is_active' => !$shift->is_active]);
+
         return redirect()->back()->with('success', 'Shift status updated.');
     }
 
-    public function updateCutoffs(Request $request)
-    {
-        $request->validate([
-            'cutoff_1_start' => 'required|numeric|min:1|max:31',
-            'cutoff_1_end' => 'required|numeric|min:1|max:31',
-            'cutoff_2_start' => 'required|numeric|min:1|max:31',
-            'cutoff_2_end' => 'required|numeric|min:1|max:31',
-        ]);
-
-        foreach ($request->only(['cutoff_1_start', 'cutoff_1_end', 'cutoff_2_start', 'cutoff_2_end']) as $key => $value) {
-            AttendanceSetting::where('setting_key', $key)->update(['setting_value' => $value]);
-        }
-
-        return redirect()->back()->with('success', 'Cut-off periods updated successfully.');
-    }
-
-    // 🟢 NEW: Handles full updates to the shift details
     public function updateShift(Request $request, $id)
     {
+        // 🟢 ACL MATRIX: EDIT (Allows Full, Edit)
+        if (!Auth::user()->canEditModule('attendance_settings')) abort(403);
+
         $request->validate([
             'name' => 'required|string|max:255',
             'start_time' => 'required',
@@ -82,16 +95,18 @@ class AttendanceSettingsController extends Controller
             'is_active' => 'required|boolean',
         ]);
 
-        $shift = \App\Models\Shift::findOrFail($id);
+        $shift = Shift::findOrFail($id);
         $shift->update($request->only('name', 'start_time', 'end_time', 'shift_type', 'is_active'));
 
         return redirect()->back()->with('success', 'Shift updated successfully.');
     }
 
-    // 🟢 NEW: Handles permanent deletion
     public function deleteShift($id)
     {
-        $shift = \App\Models\Shift::findOrFail($id);
+        // 🟢 ACL MATRIX: FULL (Allows Full ONLY)
+        if (!Auth::user()->canDeleteModule('attendance_settings')) abort(403);
+
+        $shift = Shift::findOrFail($id);
         $shift->delete();
 
         return redirect()->back()->with('success', 'Shift permanently deleted.');
