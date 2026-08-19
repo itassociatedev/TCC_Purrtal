@@ -420,8 +420,8 @@ export const getAdminLinks = (auth) => {
         });
     }
 
-    // 🟢 NEW: Add Attendance Settings to Admin Sidebar!
-    if (hasPermission(auth, 'admin_overview')) {
+    // 🟢 FIXED: Changed from 'admin_overview' to 'attendance_settings'
+    if (hasPermission(auth, 'attendance_settings')) {
         links.push({
             label: 'Attendance Settings',
             href: route('admin.attendance-settings.index'),

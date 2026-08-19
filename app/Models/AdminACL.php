@@ -110,6 +110,7 @@ class AdminACL extends Model
         return [
             'Admin Module' => [
                 'admin_overview' => 'Admin Overview',
+                'attendance_settings' => 'Attendance Settings',
                 'announcements' => 'Announcements & Notices',
                 'employees' => 'Employee Management',
                 'company_content' => 'Company Content Management',

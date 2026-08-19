@@ -152,6 +152,36 @@ return [
             'operations manager',
             'hrbp',
         ],
+        
+        // 🟢 FIXED: Attendance Modules officially registered in the Backend Config
+        'attendance_overview' => [
+            'admin',
+            'director of corporate services and operations',
+            'hrbp',
+            'hr',
+        ],
+        'attendance_setup' => [
+            'admin',
+            'director of corporate services and operations',
+            'hrbp',
+            'hr',
+        ],
+        'attendance_schedule_view' => [
+            'admin',
+            'director of corporate services and operations',
+            'hrbp',
+            'hr',
+        ],
+        'attendance_calendar' => [
+            'admin',
+            'director of corporate services and operations',
+            'hrbp',
+            'hr',
+        ],
+        'attendance_settings' => [
+            'admin',
+            'director of corporate services and operations',
+        ],
     ],
 
     /**
