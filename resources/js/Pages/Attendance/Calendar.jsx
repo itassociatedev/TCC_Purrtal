@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { usePage } from '@inertiajs/react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 
-export default function Calendar({ employees = [], branches = [] }) {
+// 🟢 NEW: Added `holidays = {}` to the props destructuring
+export default function Calendar({ employees = [], branches = [], holidays = {} }) {
     // Grab the currently authenticated user
     const { auth } = usePage().props;
     const authUserId = auth?.user?.id ? auth.user.id.toString() : '';
@@ -10,7 +11,7 @@ export default function Calendar({ employees = [], branches = [] }) {
     const isSuperAdmin = auth?.user?.role_id === 1 || auth?.user?.role?.name?.toLowerCase() === 'admin';
     const aclLevel = auth?.user?.acl_permissions?.attendance_calendar?.toLowerCase() || 'no_access';
     
-    // 🟢 NEW ACL CHECKS: Hide tools if VIEW only. Disable clicking cells for Summary Modal.
+    // ACL CHECKS: Hide tools if VIEW only. Disable clicking cells for Summary Modal.
     const isViewOnly = !isSuperAdmin && aclLevel === 'view';
     const canViewSummary = isSuperAdmin || ['full', 'edit'].includes(aclLevel);
 
@@ -50,7 +51,7 @@ export default function Calendar({ employees = [], branches = [] }) {
 
     const dropdownRef = useRef(null);
 
-    // 🟢 ACL HOOK: Instantly default to their own schedule if they are View-Only
+    // ACL HOOK: Instantly default to their own schedule if they are View-Only
     useEffect(() => {
         if (isViewOnly && !selectedEmployeeId && authUserId) {
             setSelectedEmployeeId(authUserId);
@@ -368,7 +369,9 @@ export default function Calendar({ employees = [], branches = [] }) {
 
                             const { isOff, shiftType, startTime, endTime, isOverride } = getShiftDetails(activeEmployee, slot.dateString, slot.dayName);
                             
-                            // 🟢 FIXED: Ensures Today highlight is never accidentally overridden by the 'activeEmployee' checks
+                            // 🟢 CHECK HOLIDAYS: Does this specific date string match a holiday passed from the backend?
+                            const holidayName = holidays[slot.dateString];
+                            
                             return (
                                 <div 
                                     key={`day-${slot.dayNum}`} 
@@ -376,20 +379,33 @@ export default function Calendar({ employees = [], branches = [] }) {
                                         // 🟢 UI MATRIX: Only elevate users can click to open the Global Summary Modal
                                         if (canViewSummary) setSummaryDate(slot);
                                     }}
+                                    // 🟢 STYLING: Apply a subtle rose tint to the cell if it's a holiday
                                     className={`h-full w-full flex flex-col rounded-md border p-1.5 sm:p-2.5 shadow-sm transition-colors relative ${
                                         isOverride ? 'border-amber-200 bg-amber-50/30' :
                                         slot.isToday ? 'bg-indigo-50/50 border-indigo-400 shadow-inner ring-1 ring-inset ring-indigo-500' :
+                                        holidayName ? 'border-rose-200 bg-rose-50/20' :
                                         !activeEmployee ? 'border-gray-100 bg-white' :
                                         'border-gray-200 bg-white hover:bg-gray-50'
                                     } ${canViewSummary ? 'cursor-pointer hover:ring-2 hover:ring-indigo-400' : ''}`}
                                 >
                                     <div className="flex justify-between items-start pointer-events-none">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className={`text-xs sm:text-sm ${slot.isToday ? 'font-black text-indigo-700' : isOverride ? 'font-semibold text-amber-700' : 'font-semibold text-gray-700'}`}>
-                                                {slot.dayNum}
-                                            </span>
-                                            {slot.isToday && <span className="text-[8px] sm:text-[9px] font-bold text-indigo-600 bg-indigo-100 px-1 sm:px-1.5 py-0.5 rounded shadow-sm tracking-wider uppercase">Today</span>}
+                                        
+                                        <div className="flex flex-col gap-0.5">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className={`text-xs sm:text-sm ${slot.isToday ? 'font-black text-indigo-700' : isOverride ? 'font-semibold text-amber-700' : holidayName ? 'font-black text-rose-700' : 'font-semibold text-gray-700'}`}>
+                                                    {slot.dayNum}
+                                                </span>
+                                                {slot.isToday && <span className="text-[8px] sm:text-[9px] font-bold text-indigo-600 bg-indigo-100 px-1 sm:px-1.5 py-0.5 rounded shadow-sm tracking-wider uppercase">Today</span>}
+                                            </div>
+                                            
+                                            {/* 🟢 HOLIDAY BADGE: Displays the name of the holiday under the number */}
+                                                {holidayName && (
+                                                    <span className="block text-[10px] sm:text-xs font-bold text-rose-600 leading-tight w-full pr-1 whitespace-normal" title={holidayName}>
+                                                        🇵🇭 {holidayName}
+                                                    </span>
+                                                )}
                                         </div>
+
                                         {isOverride && <span className="text-[8px] sm:text-[9px] font-bold text-amber-500 uppercase tracking-wider bg-amber-100 px-1 sm:px-1.5 py-0.5 rounded shadow-sm">Modified</span>}
                                     </div>
 
@@ -506,7 +522,7 @@ export default function Calendar({ employees = [], branches = [] }) {
                                         </table>
                                     ) : (
                                         <div className="text-center py-10 text-gray-500">
-                                            <div className="text-4xl mb-3">📭</div>
+                                            <div className="text-4xl mb-3">👻</div>
                                             <p className="font-medium text-sm text-gray-800">No staff scheduled for this day matching your filters.</p>
                                         </div>
                                     )}

@@ -209,9 +209,18 @@ class AttendanceController extends Controller
             ];
         });
 
+        // 🟢 Generate 3 years of holidays in less than 1 millisecond
+        $currentYear = now()->year;
+        $holidays = array_merge(
+            $this->getPhilippineHolidays($currentYear - 1),
+            $this->getPhilippineHolidays($currentYear),
+            $this->getPhilippineHolidays($currentYear + 1)
+        );
+
         return Inertia::render('Attendance/Calendar', array_merge([
             'employees' => $employees,
-            'branches' => $branches
+            'branches' => $branches,
+            'holidays' => $holidays // 🟢 Pass to React
         ], $this->getSharedProps()));
     }
 
@@ -467,5 +476,39 @@ class AttendanceController extends Controller
         $fileName = "Attendance_Overview_{$startDateStr}.xlsx";
         return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\AttendanceExport($employees, $dates, $weekRange), $fileName);
     }
-    
+
+    // 🟢 NEW: Mathematical Philippine Holiday Generator
+    private function getPhilippineHolidays($year)
+    {
+        $holidays = [
+            "$year-01-01" => "New Year's Day",
+            "$year-04-09" => "Araw ng Kagitingan",
+            "$year-05-01" => "Labor Day",
+            "$year-06-12" => "Independence Day",
+            "$year-08-21" => "Ninoy Aquino Day",
+            "$year-11-01" => "All Saints' Day",
+            "$year-11-02" => "All Souls' Day",
+            "$year-11-30" => "Bonifacio Day",
+            "$year-12-08" => "Immaculate Conception",
+            "$year-12-24" => "Christmas Eve",
+            "$year-12-25" => "Christmas Day",
+            "$year-12-30" => "Rizal Day",
+            "$year-12-31" => "New Year's Eve",
+        ];
+
+        // 🟢 MOVABLE 1: Holy Week (Calculated mathematically via Easter)
+        $easterDays = easter_days($year);
+        $easter = \Carbon\Carbon::createFromDate($year, 3, 21)->addDays($easterDays);
+        
+        $holidays[$easter->copy()->subDays(3)->format('Y-m-d')] = "Maundy Thursday";
+        $holidays[$easter->copy()->subDays(2)->format('Y-m-d')] = "Good Friday";
+        $holidays[$easter->copy()->subDays(1)->format('Y-m-d')] = "Black Saturday";
+        $holidays[$easter->format('Y-m-d')] = "Easter Sunday";
+
+        // 🟢 MOVABLE 2: National Heroes Day (Always the Last Monday of August)
+        $heroesDay = \Carbon\Carbon::parse("last monday of august $year")->format('Y-m-d');
+        $holidays[$heroesDay] = "National Heroes Day";
+
+        return $holidays;
+    }
 }
