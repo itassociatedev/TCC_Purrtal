@@ -12,6 +12,25 @@ use Inertia\Inertia;
 class AccessControlController extends Controller
 {
     /**
+     * 🟢 HELPER: Automatically extracts a flat array of modules directly from groupedModules.
+     * This guarantees the Database and the UI are always 100% synchronized, preventing
+     * the bug where saved permissions revert to "No Access" on page reload.
+     */
+    private function getSyncedModules()
+    {
+        $groupedModules = AdminACL::groupedModules();
+        $modules = [];
+        
+        foreach ($groupedModules as $group => $mods) {
+            foreach ($mods as $key => $name) {
+                $modules[$key] = $name;
+            }
+        }
+        
+        return $modules;
+    }
+
+    /**
      * Display the ACL management interface.
      */
     public function index()
@@ -19,9 +38,9 @@ class AccessControlController extends Controller
         // Load all roles dynamically so newly created roles like Intern show up automatically.
         $roles = Role::with('adminAcls')->orderBy('name')->get();
 
-        // Get all modules
-        $modules = AdminACL::modules();
+        // 🟢 FIXED: Use the dynamic sync helper instead of the outdated AdminACL::modules()
         $groupedModules = AdminACL::groupedModules();
+        $modules = $this->getSyncedModules();
 
         // Get current ACL permissions organized by role and module
         $aclMatrix = [];
@@ -169,9 +188,12 @@ class AccessControlController extends Controller
         $targetRole = Role::find($validated['role_id']);
         $isSuperAdmin = $targetRole && strtolower(trim($targetRole->name)) === strtolower(trim(config('admin-acl.superadmin_role', 'admin')));
 
+        // 🟢 FIXED: Use synced modules here as well
+        $modules = $this->getSyncedModules();
+
         AdminACL::where('role_id', $validated['role_id'])->delete();
         if ($isSuperAdmin) {
-            foreach (AdminACL::modules() as $module => $moduleName) {
+            foreach ($modules as $module => $moduleName) {
                 AdminACL::updateOrCreate(
                     [
                         'role_id' => $validated['role_id'],
@@ -206,7 +228,8 @@ class AccessControlController extends Controller
     public function export()
     {
         $roles = Role::orderBy('name')->get();
-        $modules = AdminACL::modules();
+        // 🟢 FIXED: Use synced modules for accurate exporting
+        $modules = $this->getSyncedModules();
 
         $data = [];
         foreach ($roles as $role) {
