@@ -130,7 +130,7 @@ export default function Calendar({ employees = [], branches = [] }) {
                 displayDay: dayName, 
                 displayDate: dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), 
                 isPadding: false,
-                isToday: dateString === todayStr
+                isToday: dateString === todayStr 
             });
         }
 
@@ -248,11 +248,11 @@ export default function Calendar({ employees = [], branches = [] }) {
         >
             <div className="rounded-lg bg-white p-6 shadow-sm">
                 
-                {/* TOP NAVIGATION BAR */}
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 border-b border-gray-100 pb-6">
+                {/* 🟢 FIXED: Top Navigation Bar is now fully wrap-responsive */}
+                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 sm:gap-6 mb-8 border-b border-gray-100 pb-6">
                     
                     {/* Month/Year Arrows */}
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 sm:gap-4">
                         <button 
                             onClick={handlePrevMonth} 
                             className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition-colors hover:bg-gray-50 hover:text-indigo-600"
@@ -260,8 +260,8 @@ export default function Calendar({ employees = [], branches = [] }) {
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
                         </button>
                         
-                        <div className="w-56 text-center">
-                            <h2 className="text-2xl font-black text-gray-800 tracking-tight">
+                        <div className="w-48 sm:w-56 text-center">
+                            <h2 className="text-xl sm:text-2xl font-black text-gray-800 tracking-tight">
                                 {monthNames[currentMonth]} {currentYear}
                             </h2>
                         </div>
@@ -275,18 +275,17 @@ export default function Calendar({ employees = [], branches = [] }) {
 
                         <button 
                             onClick={goToToday} 
-                            className="ml-2 rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-600 shadow-sm transition-colors hover:bg-gray-50 hover:text-indigo-600"
+                            className="rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-600 shadow-sm transition-colors hover:bg-gray-50 hover:text-indigo-600"
                         >
                             Today
                         </button>
                     </div>
 
                     {/* Employee Selector & "View My Schedule" */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 w-full xl:w-auto mt-2 xl:mt-0">
                         
-                        {/* LOCKED: Branch Dropdown */}
                         <select
-                            className={`block w-36 rounded-md border-gray-300 py-2 text-sm shadow-sm ${!hasFullAccess ? 'bg-gray-100 text-gray-500 cursor-not-allowed opacity-70' : 'focus:border-indigo-500 focus:ring-indigo-500 bg-white cursor-pointer'}`}
+                            className={`block w-full sm:w-36 rounded-md border-gray-300 py-2 text-sm shadow-sm ${!hasFullAccess ? 'bg-gray-100 text-gray-500 cursor-not-allowed opacity-70' : 'focus:border-indigo-500 focus:ring-indigo-500 bg-white cursor-pointer'}`}
                             value={branchFilter}
                             onChange={e => setBranchFilter(e.target.value)}
                             disabled={!hasFullAccess}
@@ -295,18 +294,17 @@ export default function Calendar({ employees = [], branches = [] }) {
                             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                         </select>
 
-                        <div className="relative rounded-md shadow-sm" ref={dropdownRef}>
-                            <div className="relative flex items-center">
+                        <div className="relative rounded-md shadow-sm w-full sm:w-auto" ref={dropdownRef}>
+                            <div className="relative flex items-center w-full">
                                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                                     <svg className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
                                         <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
                                     </svg>
                                 </div>
-                                {/* LOCKED: Search Dropdown */}
                                 <input
                                     type="text"
                                     placeholder={activeEmployee ? activeEmployee.name : "Search employee..."}
-                                    className={`block w-56 lg:w-64 rounded-md border-gray-300 py-2 pl-9 pr-3 text-sm ${!hasFullAccess ? 'bg-gray-100 text-gray-500 cursor-not-allowed opacity-70' : 'focus:border-indigo-500 focus:ring-indigo-500 bg-white'} ${activeEmployee && hasFullAccess ? 'font-semibold text-indigo-700 bg-indigo-50 border-indigo-200' : ''}`}
+                                    className={`block w-full sm:w-56 lg:w-64 rounded-md border-gray-300 py-2 pl-9 pr-3 text-sm ${!hasFullAccess ? 'bg-gray-100 text-gray-500 cursor-not-allowed opacity-70' : 'focus:border-indigo-500 focus:ring-indigo-500 bg-white'} ${activeEmployee && hasFullAccess ? 'font-semibold text-indigo-700 bg-indigo-50 border-indigo-200' : ''}`}
                                     value={searchQuery}
                                     onChange={e => { setSearchQuery(e.target.value); setIsDropdownOpen(true); }}
                                     onFocus={() => setIsDropdownOpen(true)}
@@ -350,7 +348,7 @@ export default function Calendar({ employees = [], branches = [] }) {
                                 setBranchFilter(''); 
                                 goToToday();
                             }}
-                            className="rounded-md bg-indigo-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 transition-colors whitespace-nowrap"
+                            className="w-full sm:w-auto rounded-md bg-indigo-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 transition-colors whitespace-nowrap"
                         >
                             View My Schedule
                         </button>

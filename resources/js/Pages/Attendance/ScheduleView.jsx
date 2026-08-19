@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useForm, usePage } from '@inertiajs/react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 
-export default function ScheduleView({ employees = [], branches = [] }) {
+export default function ScheduleView({ employees = [], branches = [], shifts = [], cutoffSettings = {} }) {
     const { auth } = usePage().props;
 
     // 🟢 DYNAMIC SIDEBAR LINKS: Only show modules the user has permission to see
@@ -37,41 +37,6 @@ export default function ScheduleView({ employees = [], branches = [] }) {
         is_off_day: false
     });
 
-    const shiftOptions = [
-        { value: "07:30-16:30", label: "7:30AM - 4:30PM (07:30-16:30)" },
-        { value: "08:00-17:00", label: "8:00AM - 5:00PM (08:00-17:00)" },
-        { value: "09:00-18:00", label: "9:00AM - 6:00PM (09:00-18:00)" },
-        { value: "10:00-19:00", label: "10:00AM - 7:00PM (10:00-19:00)" },
-        { value: "12:00-21:00", label: "12:00PM - 9:00PM (12:00-21:00)" },
-        { value: "12:30-21:30", label: "12:30PM - 9:30PM (12:30-21:30)" },
-        { value: "05:30-14:30", label: "5:30AM - 2:30 PM (05:30-14:30)" },
-        { value: "11:00-20:00", label: "11:00AM - 8:00PM (11:00-20:00)" },
-        { value: "13:00-22:00", label: "1:00PM - 10:00PM (13:00-22:00)" },
-        { value: "06:00-15:00", label: "6:00AM - 3:00PM (06:00-15:00)" },
-        { value: "07:00-16:00", label: "7:00AM - 4:00PM (07:00-16:00)" },
-        { value: "09:30-18:30", label: "9:30AM - 6:30PM (09:30-18:30)" },
-        { value: "21:00-06:00", label: "9:00PM - 6:00AM (Graveyard Shift)" },
-        { value: "07:00-23:00", label: "7:00AM - 11:00PM (Straight Duty)" },
-        { value: "08:00-00:00", label: "8:00AM - 12:00AM (Straight Duty)" }
-    ];
-
-    const determineShiftType = (start, end) => {
-        if (start === "21:00" && end === "06:00") return 'Graveyard Shift';
-
-        const startH = parseInt(start.split(':')[0], 10);
-        const startM = parseInt(start.split(':')[1], 10);
-        const endH = parseInt(end.split(':')[0], 10);
-        const endM = parseInt(end.split(':')[1], 10);
-
-        let totalHours = endH - startH + (endM - startM) / 60;
-        if (totalHours < 0) totalHours += 24; 
-
-        if (totalHours >= 15) return 'Straight Duty';
-
-        return 'Day Shift';
-    };
-
-    // 🟢 UPDATED: Core logic that enforces the Cut-off Periods!
     const getShiftDetails = (emp, dateString, dayName) => {
         if (!emp) return { isOff: false, shiftType: null, startTime: null, endTime: null, isOverride: false };
         
@@ -145,7 +110,7 @@ export default function ScheduleView({ employees = [], branches = [] }) {
     // ==========================================
     const [selectedBatchIds, setSelectedBatchIds] = useState([]);
     const [batchDeptFilter, setBatchDeptFilter] = useState('');
-    const [batchBranchFilter, setBatchBranchFilter] = useState(''); // 🟢 NEW
+    const [batchBranchFilter, setBatchBranchFilter] = useState('');
     const [batchSearch, setBatchSearch] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [weekOffset, setWeekOffset] = useState(0);
@@ -212,7 +177,7 @@ export default function ScheduleView({ employees = [], branches = [] }) {
     // ==========================================
     const [singleEmployeeId, setSingleEmployeeId] = useState('');
     const [singleDeptFilter, setSingleDeptFilter] = useState('');
-    const [singleBranchFilter, setSingleBranchFilter] = useState(''); // 🟢 NEW
+    const [singleBranchFilter, setSingleBranchFilter] = useState(''); 
     const [singleSearch, setSingleSearch] = useState('');
     const [isSingleDropdownOpen, setIsSingleDropdownOpen] = useState(false);
     const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
@@ -701,6 +666,7 @@ export default function ScheduleView({ employees = [], branches = [] }) {
                                         <span className="text-sm font-medium text-gray-700">Mark these dates as Off Days</span>
                                     </label>
 
+                                    {/* 🟢 DYNAMIC SHIFT DROPDOWN: Rendered straight from the database! */}
                                     {!overrideData.is_off_day && (
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700">New Shift for Selected Days</label>
@@ -709,14 +675,21 @@ export default function ScheduleView({ employees = [], branches = [] }) {
                                                 value={overrideData.shift_start && overrideData.shift_end ? `${overrideData.shift_start}-${overrideData.shift_end}` : ''}
                                                 onChange={e => {
                                                     const [start, end] = e.target.value.split('-');
-                                                    const type = determineShiftType(start, end); 
-                                                    setOverrideData(prev => ({ ...prev, shift_start: start, shift_end: end, shift_type: type }));
+                                                    const matchedShift = shifts.find(s => s.start_time.startsWith(start) && s.end_time.startsWith(end));
+                                                    setOverrideData(prev => ({ 
+                                                        ...prev, 
+                                                        shift_start: start, 
+                                                        shift_end: end, 
+                                                        shift_type: matchedShift ? matchedShift.shift_type : 'Day Shift' 
+                                                    }));
                                                 }}
                                                 required
                                             >
                                                 <option value="" disabled>-- Select an Authorized Shift --</option>
-                                                {shiftOptions.map(shift => (
-                                                    <option key={shift.value} value={shift.value}>{shift.label}</option>
+                                                {shifts.map(shift => (
+                                                    <option key={shift.id} value={`${shift.start_time.substring(0,5)}-${shift.end_time.substring(0,5)}`}>
+                                                        {shift.name}
+                                                    </option>
                                                 ))}
                                             </select>
                                         </div>

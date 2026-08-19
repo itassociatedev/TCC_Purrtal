@@ -8,22 +8,27 @@ const getTodayString = () => {
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 };
 
-// 🟢 HELPER: Identifies the active cut-off period based on the specific date being viewed
-const getCutoffValueForDate = (dateObj) => {
+// 🟢 DYNAMIC HELPER: Identifies the active cut-off period based on the database settings
+const getCutoffValueForDate = (dateObj, settings) => {
     const y = dateObj.getFullYear();
     const m = dateObj.getMonth();
     const d = dateObj.getDate();
     const prevM = m === 0 ? 11 : m - 1;
     const prevY = m === 0 ? y - 1 : y;
 
-    if (d >= 6 && d <= 20) {
-        return { start: `${y}-${String(m + 1).padStart(2, '0')}-06`, end: `${y}-${String(m + 1).padStart(2, '0')}-20` };
-    } else if (d > 20) {
+    const c1s = parseInt(settings?.cutoff_1_start || 21);
+    const c1e = parseInt(settings?.cutoff_1_end || 5);
+    const c2s = parseInt(settings?.cutoff_2_start || 6);
+    const c2e = parseInt(settings?.cutoff_2_end || 20);
+
+    if (d >= c2s && d <= c2e) {
+        return { start: `${y}-${String(m + 1).padStart(2, '0')}-${String(c2s).padStart(2, '0')}`, end: `${y}-${String(m + 1).padStart(2, '0')}-${String(c2e).padStart(2, '0')}` };
+    } else if (d > c2e) {
         const nextM = m === 11 ? 0 : m + 1;
         const nextY = m === 11 ? y + 1 : y;
-        return { start: `${y}-${String(m + 1).padStart(2, '0')}-21`, end: `${nextY}-${String(nextM + 1).padStart(2, '0')}-05` };
+        return { start: `${y}-${String(m + 1).padStart(2, '0')}-${String(c1s).padStart(2, '0')}`, end: `${nextY}-${String(nextM + 1).padStart(2, '0')}-${String(c1e).padStart(2, '0')}` };
     } else {
-        return { start: `${prevY}-${String(prevM + 1).padStart(2, '0')}-21`, end: `${y}-${String(m + 1).padStart(2, '0')}-05` };
+        return { start: `${prevY}-${String(prevM + 1).padStart(2, '0')}-${String(c1s).padStart(2, '0')}`, end: `${y}-${String(m + 1).padStart(2, '0')}-${String(c1e).padStart(2, '0')}` };
     }
 };
 
@@ -86,7 +91,7 @@ const getWeekDates = (targetDateString) => {
     return days;
 };
 
-export default function Overview({ employees = [], branches = [] }) {
+export default function Overview({ employees = [], branches = [], cutoffSettings = {} }) {
     const { auth } = usePage().props;
     
     // 🔐 ROBUST ACL UI LOCK: Safely checks for Admin role OR case-insensitive edit/full privileges
@@ -132,7 +137,7 @@ export default function Overview({ employees = [], branches = [] }) {
     const viewingDateObj = new Date(selectedDate.split('-')[0], selectedDate.split('-')[1] - 1, selectedDate.split('-')[2]);
     const viewingDisplay = viewingDateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     const viewingDayName = viewingDateObj.toLocaleDateString('en-US', { weekday: 'long' });
-    const currentCutoff = getCutoffValueForDate(viewingDateObj);
+    const currentCutoff = getCutoffValueForDate(viewingDateObj, cutoffSettings);
 
     // 1. Filter the entire employee pool globally based on selected department AND branch
     const globallyFilteredEmployees = useMemo(() => {
@@ -294,8 +299,9 @@ export default function Overview({ employees = [], branches = [] }) {
 
                     <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-4 opacity-10">
-                            <svg className="w-16 h-16 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                            <svg className="w-16 h-16 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M11.47 3.84a.75.75 0 011.06 0l8.99 9a.75.75 0 101.06-1.06l-8.99-9a2.25 2.25 0 00-3.18 0l-8.99 9a.75.75 0 001.06 1.06l8.99-9z" />
+                                <path d="M12 5.432l8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 01-.75-.75v-4.5a.75.75 0 00-.75-.75h-3a.75.75 0 00-.75.75V21a.75.75 0 01-.75.75H5.625a1.875 1.875 0 01-1.875-1.875v-6.198a2.29 2.29 0 00.091-.086L12 5.43z" />
                             </svg>
                         </div>
                         <dt className="truncate text-sm font-medium text-gray-500">Off Duty on Date</dt>

@@ -7,6 +7,8 @@ use Inertia\Inertia;
 use App\Models\User;
 use App\Models\Schedule;
 use App\Models\Branch;
+use App\Models\Shift;
+use App\Models\AttendanceSetting;
 use Illuminate\Support\Facades\Auth;
 
 class AttendanceController extends Controller
@@ -45,6 +47,22 @@ class AttendanceController extends Controller
         return [$query, $branches];
     }
 
+    /**
+     * 🟢 HELPER: Fetches dynamic database configurations (Shifts & Cutoffs)
+     */
+    private function getSharedProps()
+    {
+        $shifts = Shift::where('is_active', true)->orderBy('start_time')->get();
+        $cutoffSettings = AttendanceSetting::whereIn('setting_key', [
+            'cutoff_1_start', 'cutoff_1_end', 'cutoff_2_start', 'cutoff_2_end'
+        ])->pluck('setting_value', 'setting_key')->toArray();
+
+        return [
+            'shifts' => $shifts,
+            'cutoffSettings' => $cutoffSettings
+        ];
+    }
+
     public function overview()
     {
         $user = Auth::user();
@@ -59,9 +77,7 @@ class AttendanceController extends Controller
             } elseif ($user->canEditModule('attendance_setup')) {
                 return redirect()->route('attendance.setup-schedule');
             } else {
-                // If they have literally zero attendance permissions, kick to dashboard
-                return redirect()->route('dashboard')
-                    ->with('error', 'You do not have permission to access the Attendance module.');
+                return redirect()->route('dashboard')->with('error', 'You do not have permission to access the Attendance module.');
             }
         }
 
@@ -97,10 +113,10 @@ class AttendanceController extends Controller
             ];
         });
 
-        return Inertia::render('Attendance/Overview', [
+        return Inertia::render('Attendance/Overview', array_merge([
             'employees' => $employees,
             'branches' => $branches
-        ]);
+        ], $this->getSharedProps()));
     }
     
     public function scheduleView()
@@ -142,10 +158,10 @@ class AttendanceController extends Controller
             ];
         });
 
-        return Inertia::render('Attendance/ScheduleView', [
+        return Inertia::render('Attendance/ScheduleView', array_merge([
             'employees' => $employees,
             'branches' => $branches
-        ]);
+        ], $this->getSharedProps()));
     }
     
     public function calendar()
@@ -187,10 +203,10 @@ class AttendanceController extends Controller
             ];
         });
 
-        return Inertia::render('Attendance/Calendar', [
+        return Inertia::render('Attendance/Calendar', array_merge([
             'employees' => $employees,
             'branches' => $branches
-        ]);
+        ], $this->getSharedProps()));
     }
 
     // 🟢 UPDATED: Fetch real data for the table
@@ -224,10 +240,10 @@ class AttendanceController extends Controller
             ];
         });
 
-        return Inertia::render('Attendance/SetupSchedule', [
+        return Inertia::render('Attendance/SetupSchedule', array_merge([
             'employees' => $employees,
             'branches' => $branches
-        ]);
+        ], $this->getSharedProps()));
     }
 
     public function storeSchedule(Request $request)

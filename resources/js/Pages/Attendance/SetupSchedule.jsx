@@ -2,13 +2,18 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useForm, usePage } from '@inertiajs/react'; 
 import SidebarLayout from '@/Layouts/SidebarLayout';
 
-// 🟢 HELPER: Generates the 6-20 and 21-5 cutoff periods automatically
-const generateCutoffPeriods = () => {
+// 🟢 DYNAMIC HELPER: Uses database settings for Cut-off periods
+const generateCutoffPeriods = (settings) => {
     const periods = [];
     const today = new Date();
     const year = today.getFullYear();
     const month = today.getMonth();
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    const c1s = parseInt(settings?.cutoff_1_start || 21);
+    const c1e = parseInt(settings?.cutoff_1_end || 5);
+    const c2s = parseInt(settings?.cutoff_2_start || 6);
+    const c2e = parseInt(settings?.cutoff_2_end || 20);
 
     for (let i = -2; i <= 3; i++) {
         const targetDate = new Date(year, month + i, 1);
@@ -18,13 +23,13 @@ const generateCutoffPeriods = () => {
         const prevM = m === 0 ? 11 : m - 1;
         const prevY = m === 0 ? y - 1 : y;
 
-        // Period 1: 21st to 5th
-        const val1 = `${prevY}-${String(prevM + 1).padStart(2, '0')}-21|${y}-${String(m + 1).padStart(2, '0')}-05`;
-        const label1 = `${monthNames[prevM]} 21, ${prevY} - ${monthNames[m]} 05, ${y}`;
+        // Period 1 (e.g., 21st to 5th)
+        const val1 = `${prevY}-${String(prevM + 1).padStart(2, '0')}-${String(c1s).padStart(2, '0')}|${y}-${String(m + 1).padStart(2, '0')}-${String(c1e).padStart(2, '0')}`;
+        const label1 = `${monthNames[prevM]} ${c1s}, ${prevY} - ${monthNames[m]} ${String(c1e).padStart(2, '0')}, ${y}`;
 
-        // Period 2: 6th to 20th
-        const val2 = `${y}-${String(m + 1).padStart(2, '0')}-06|${y}-${String(m + 1).padStart(2, '0')}-20`;
-        const label2 = `${monthNames[m]} 06, ${y} - ${monthNames[m]} 20, ${y}`;
+        // Period 2 (e.g., 6th to 20th)
+        const val2 = `${y}-${String(m + 1).padStart(2, '0')}-${String(c2s).padStart(2, '0')}|${y}-${String(m + 1).padStart(2, '0')}-${String(c2e).padStart(2, '0')}`;
+        const label2 = `${monthNames[m]} ${String(c2s).padStart(2, '0')}, ${y} - ${monthNames[m]} ${c2e}, ${y}`;
 
         periods.push({ label: label1, value: val1 });
         periods.push({ label: label2, value: val2 });
@@ -32,8 +37,8 @@ const generateCutoffPeriods = () => {
     return periods;
 };
 
-// 🟢 HELPER: Determines which cutoff we are currently in based on today's date
-const getCurrentCutoffValue = () => {
+// 🟢 DYNAMIC HELPER: Current cutoff
+const getCurrentCutoffValue = (settings) => {
     const today = new Date();
     const y = today.getFullYear();
     const m = today.getMonth();
@@ -41,21 +46,25 @@ const getCurrentCutoffValue = () => {
     const prevM = m === 0 ? 11 : m - 1;
     const prevY = m === 0 ? y - 1 : y;
 
-    if (d >= 6 && d <= 20) {
-        return `${y}-${String(m + 1).padStart(2, '0')}-06|${y}-${String(m + 1).padStart(2, '0')}-20`;
-    } else if (d > 20) {
+    const c1s = parseInt(settings?.cutoff_1_start || 21);
+    const c1e = parseInt(settings?.cutoff_1_end || 5);
+    const c2s = parseInt(settings?.cutoff_2_start || 6);
+    const c2e = parseInt(settings?.cutoff_2_end || 20);
+
+    if (d >= c2s && d <= c2e) {
+        return `${y}-${String(m + 1).padStart(2, '0')}-${String(c2s).padStart(2, '0')}|${y}-${String(m + 1).padStart(2, '0')}-${String(c2e).padStart(2, '0')}`;
+    } else if (d > c2e) {
         const nextM = m === 11 ? 0 : m + 1;
         const nextY = m === 11 ? y + 1 : y;
-        return `${y}-${String(m + 1).padStart(2, '0')}-21|${nextY}-${String(nextM + 1).padStart(2, '0')}-05`;
+        return `${y}-${String(m + 1).padStart(2, '0')}-${String(c1s).padStart(2, '0')}|${nextY}-${String(nextM + 1).padStart(2, '0')}-${String(c1e).padStart(2, '0')}`;
     } else {
-        return `${prevY}-${String(prevM + 1).padStart(2, '0')}-21|${y}-${String(m + 1).padStart(2, '0')}-05`;
+        return `${prevY}-${String(prevM + 1).padStart(2, '0')}-${String(c1s).padStart(2, '0')}|${y}-${String(m + 1).padStart(2, '0')}-${String(c1e).padStart(2, '0')}`;
     }
 };
 
-export default function SetupSchedule({ employees = [], branches = [] }) {
+export default function SetupSchedule({ employees = [], branches = [], shifts = [], cutoffSettings = {} }) {
     const { auth } = usePage().props;
 
-    // 🟢 DYNAMIC SIDEBAR LINKS: Only show modules the user has permission to see
     const checkAccess = (module, requiredLevels) => {
         if (auth?.user?.role_id === 1 || auth?.user?.role?.name?.toLowerCase() === 'admin') return true;
         const level = auth?.user?.acl_permissions?.[module]?.toLowerCase() || 'no_access';
@@ -69,8 +78,8 @@ export default function SetupSchedule({ employees = [], branches = [] }) {
         checkAccess('attendance_calendar', ['full', 'edit', 'view']) && { label: 'Calendar', href: route('attendance.calendar'), active: route().current('attendance.calendar') },
     ].filter(Boolean);
 
-    const cutoffPeriodsList = useMemo(() => generateCutoffPeriods(), []);
-    const [selectedCutoff, setSelectedCutoff] = useState(getCurrentCutoffValue());
+    const cutoffPeriodsList = useMemo(() => generateCutoffPeriods(cutoffSettings), [cutoffSettings]);
+    const [selectedCutoff, setSelectedCutoff] = useState(getCurrentCutoffValue(cutoffSettings));
 
     const [searchTerm, setSearchTerm] = useState('');
     const [departmentFilter, setDepartmentFilter] = useState('');
@@ -98,43 +107,9 @@ export default function SetupSchedule({ employees = [], branches = [] }) {
 
     const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-    const shiftOptions = [
-        { value: "07:30-16:30", label: "7:30AM - 4:30PM (07:30-16:30)" },
-        { value: "08:00-17:00", label: "8:00AM - 5:00PM (08:00-17:00)" },
-        { value: "09:00-18:00", label: "9:00AM - 6:00PM (09:00-18:00)" },
-        { value: "10:00-19:00", label: "10:00AM - 7:00PM (10:00-19:00)" },
-        { value: "12:00-21:00", label: "12:00PM - 9:00PM (12:00-21:00)" },
-        { value: "12:30-21:30", label: "12:30PM - 9:30PM (12:30-21:30)" },
-        { value: "05:30-14:30", label: "5:30AM - 2:30 PM (05:30-14:30)" },
-        { value: "11:00-20:00", label: "11:00AM - 8:00PM (11:00-20:00)" },
-        { value: "13:00-22:00", label: "1:00PM - 10:00PM (13:00-22:00)" },
-        { value: "06:00-15:00", label: "6:00AM - 3:00PM (06:00-15:00)" },
-        { value: "07:00-16:00", label: "7:00AM - 4:00PM (07:00-16:00)" },
-        { value: "09:30-18:30", label: "9:30AM - 6:30PM (09:30-18:30)" },
-        { value: "21:00-06:00", label: "9:00PM - 6:00AM (Graveyard Shift)" },
-        { value: "07:00-23:00", label: "7:00AM - 11:00PM (Straight Duty)" },
-        { value: "08:00-00:00", label: "8:00AM - 12:00AM (Straight Duty)" }
-    ];
-
     const uniqueDepartments = [...new Set(employees.map(emp => emp.department?.name || emp.department || 'Unassigned'))]
         .filter(dept => dept !== 'Unassigned')
         .sort();
-
-    const determineShiftType = (start, end) => {
-        if (start === "21:00" && end === "06:00") return 'Graveyard Shift';
-
-        const startH = parseInt(start.split(':')[0], 10);
-        const startM = parseInt(start.split(':')[1], 10);
-        const endH = parseInt(end.split(':')[0], 10);
-        const endM = parseInt(end.split(':')[1], 10);
-
-        let totalHours = endH - startH + (endM - startM) / 60;
-        if (totalHours < 0) totalHours += 24; 
-
-        if (totalHours >= 15) return 'Straight Duty';
-
-        return 'Day Shift';
-    };
 
     const handleCheckboxChange = (e) => {
         const { value, checked } = e.target;
@@ -290,7 +265,7 @@ export default function SetupSchedule({ employees = [], branches = [] }) {
                         </select>
                         
                         <button 
-                            onClick={() => setSelectedCutoff(getCurrentCutoffValue())}
+                            onClick={() => setSelectedCutoff(getCurrentCutoffValue(cutoffSettings))}
                             className="rounded-md border border-indigo-200 bg-indigo-100 px-4 py-2 text-sm font-semibold text-indigo-700 shadow-sm transition-colors hover:bg-indigo-200"
                         >
                             Current Cutoff
@@ -450,7 +425,6 @@ export default function SetupSchedule({ employees = [], branches = [] }) {
                                 
                                 <form onSubmit={submit} className="space-y-6">
                                     
-                                    {/* Modal Target Cutoff Display */}
                                     <div className="mb-4 rounded-md bg-indigo-50 p-4 border border-indigo-100">
                                         <p className="text-sm text-indigo-700">
                                             This schedule will be assigned for the <strong className="font-bold">
@@ -483,6 +457,7 @@ export default function SetupSchedule({ employees = [], branches = [] }) {
                                         </div>
                                     )}
 
+                                    {/* 🟢 DYNAMIC SHIFT DROPDOWN: Rendered straight from the database! */}
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700">Assigned Shift</label>
                                         <select 
@@ -490,19 +465,22 @@ export default function SetupSchedule({ employees = [], branches = [] }) {
                                             value={data.shift_start && data.shift_end ? `${data.shift_start}-${data.shift_end}` : ''}
                                             onChange={e => {
                                                 const [start, end] = e.target.value.split('-');
-                                                const type = determineShiftType(start, end); 
+                                                // 🟢 DYNAMIC LOOKUP: Find the exact shift in the database array to attach its exact Category automatically
+                                                const matchedShift = shifts.find(s => s.start_time.startsWith(start) && s.end_time.startsWith(end));
                                                 setData(prev => ({ 
                                                     ...prev, 
                                                     shift_start: start, 
                                                     shift_end: end,
-                                                    shift_type: type 
+                                                    shift_type: matchedShift ? matchedShift.shift_type : 'Day Shift'
                                                 }));
                                             }}
                                             required
                                         >
                                             <option value="" disabled>-- Select an Authorized Shift --</option>
-                                            {shiftOptions.map(shift => (
-                                                <option key={shift.value} value={shift.value}>{shift.label}</option>
+                                            {shifts.map(shift => (
+                                                <option key={shift.id} value={`${shift.start_time.substring(0,5)}-${shift.end_time.substring(0,5)}`}>
+                                                    {shift.name}
+                                                </option>
                                             ))}
                                         </select>
                                     </div>
