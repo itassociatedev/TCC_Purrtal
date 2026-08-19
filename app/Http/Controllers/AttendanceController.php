@@ -23,11 +23,14 @@ class AttendanceController extends Controller
         $aclLevel = strtolower($user->aclPermissionForModule($moduleKey));
         $isAdmin = $user->role_id === 1 || strtolower(trim($user->role->name ?? '')) === 'admin';
 
+        // 🟢 FIXED: Treat FULL access identically to an Admin for global data visibility!
+        $hasGlobalVisibility = $isAdmin || $aclLevel === 'full';
+
         $allowedBranchIds = $user->branches->pluck('id')->push($user->branch_id)->filter()->unique();
 
         // Base Branches Query
         $branchesQuery = Branch::select('id', 'name')->orderBy('name');
-        if (!$isAdmin) {
+        if (!$hasGlobalVisibility) {
             $branchesQuery->whereIn('id', $allowedBranchIds);
         }
         $branches = $branchesQuery->get();
@@ -36,8 +39,8 @@ class AttendanceController extends Controller
         $query = User::with(['department', 'schedules', 'scheduleOverrides', 'branches'])
             ->whereIn('status', ['Active', 'Password reset']);
 
-        // Admin Bypass
-        if ($isAdmin) {
+        // 🟢 GLOBAL BYPASS: Admin or FULL Access sees everyone across all branches
+        if ($hasGlobalVisibility) {
             return [$query->orderBy('name', 'asc'), $branches];
         }
 
@@ -47,25 +50,14 @@ class AttendanceController extends Controller
             return [$query->orderBy('name', 'asc'), $branches];
         }
 
-        // MATRIX 2: FULL Access = See everyone in authorized branches
-        if ($aclLevel === 'full') {
-            $query->where(function ($q) use ($allowedBranchIds) {
-                $q->whereIn('branch_id', $allowedBranchIds)
-                  ->orWhereHas('branches', function ($pivotQuery) use ($allowedBranchIds) {
-                      $pivotQuery->whereIn('branch_id', $allowedBranchIds);
-                  });
-            });
-        } 
-        // MATRIX 3: VIEW & EDIT = Strictly Own Branch AND Own Department
-        else {
-            $query->where('department_id', $user->department_id)
-                  ->where(function ($q) use ($allowedBranchIds) {
-                      $q->whereIn('branch_id', $allowedBranchIds)
-                        ->orWhereHas('branches', function ($pivotQuery) use ($allowedBranchIds) {
-                            $pivotQuery->whereIn('branch_id', $allowedBranchIds);
-                        });
-                  });
-        }
+        // MATRIX 2: VIEW & EDIT = Strictly Own Branch AND Own Department
+        $query->where('department_id', $user->department_id)
+              ->where(function ($q) use ($allowedBranchIds) {
+                  $q->whereIn('branch_id', $allowedBranchIds)
+                    ->orWhereHas('branches', function ($pivotQuery) use ($allowedBranchIds) {
+                        $pivotQuery->whereIn('branch_id', $allowedBranchIds);
+                    });
+              });
 
         return [$query->orderBy('name', 'asc'), $branches];
     }
