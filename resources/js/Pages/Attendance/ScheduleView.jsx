@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { useForm, usePage } from '@inertiajs/react';
+import { useForm, usePage, router } from '@inertiajs/react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 
 export default function ScheduleView({ employees = [], branches = [], shifts = [], cutoffSettings = {} }) {
@@ -15,9 +15,18 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
     const attendanceLinks = [
         checkAccess('attendance_overview', ['full', 'edit', 'view']) && { label: 'Attendance Overview', href: route('attendance.overview'), active: route().current('attendance.overview') },
         checkAccess('attendance_setup', ['full', 'edit']) && { label: 'Setup Schedule', href: route('attendance.setup-schedule'), active: route().current('attendance.setup-schedule') },
-        checkAccess('attendance_schedule_view', ['full', 'edit']) && { label: 'Schedule View', href: route('attendance.schedule-view'), active: route().current('attendance.schedule-view') },
+        checkAccess('attendance_schedule_view', ['full', 'edit', 'view']) && { label: 'Schedule View', href: route('attendance.schedule-view'), active: route().current('attendance.schedule-view') },
         checkAccess('attendance_calendar', ['full', 'edit', 'view']) && { label: 'Calendar', href: route('attendance.calendar'), active: route().current('attendance.calendar') },
     ].filter(Boolean);
+
+    // 🔐 ROBUST ACL UI LOCKS FOR SCHEDULE VIEW
+    const isSuperAdmin = auth?.user?.role_id === 1 || auth?.user?.role?.name?.toLowerCase() === 'admin';
+    const aclLevel = auth?.user?.acl_permissions?.attendance_schedule_view?.toLowerCase() || 'no_access';
+    
+    // EDIT access allows cell selection and applying overrides
+    const canEditSchedule = isSuperAdmin || ['full', 'edit'].includes(aclLevel);
+    // FULL access unlocks the red "Reset Default" override deletion tool
+    const canResetSchedule = isSuperAdmin || ['full'].includes(aclLevel);
 
     const [viewMode, setViewMode] = useState('batch');
     const [mounted, setMounted] = useState(false);
@@ -102,6 +111,15 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                 setSelectedCells([]);
                 resetOverride();
             }
+        });
+    };
+
+    // 🟢 NEW: Handles resetting an override back to the cutoff default
+    const resetOverrides = () => {
+        if (!confirm('Are you sure you want to remove the overrides for the selected dates and return them to default?')) return;
+        
+        router.post(route('attendance.schedule-override.reset'), { cells: selectedCells }, {
+            onSuccess: () => setSelectedCells([])
         });
     };
 
@@ -297,7 +315,23 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                     </div>
                     <div className="ml-2 flex items-center gap-3 border-l border-indigo-500 pl-6">
                         <button onClick={() => setSelectedCells([])} className="text-sm font-medium text-indigo-200 hover:text-white transition-colors">Cancel</button>
-                        <button onClick={openOverrideModal} className="rounded-md bg-white px-5 py-2 text-sm font-bold text-indigo-600 shadow-md hover:bg-indigo-50 transition-colors">Edit Shifts</button>
+                        
+                        {/* 🟢 FULL ACL ONLY: Reset Overrides Button */}
+                        {canResetSchedule && (
+                            <button 
+                                onClick={resetOverrides} 
+                                className="rounded-md bg-rose-500 hover:bg-rose-600 px-4 py-2 text-sm font-bold text-white shadow-md transition-colors"
+                            >
+                                Reset Default
+                            </button>
+                        )}
+
+                        <button 
+                            onClick={openOverrideModal} 
+                            className="rounded-md bg-white px-5 py-2 text-sm font-bold text-indigo-600 shadow-md hover:bg-indigo-50 transition-colors"
+                        >
+                            Edit Shifts
+                        </button>
                     </div>
                 </div>
             )}
@@ -424,15 +458,18 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                                                     const { isOff, shiftType, startTime, endTime, isOverride } = getShiftDetails(emp, day.dateString, day.dayName);
                                                     const isSelected = isCellSelected(emp.id, day.dateString);
                                                     
+                                                    // 🟢 EDIT ACL LOCK: Removes cursor-pointer and hover colors if user only has VIEW access
                                                     return (
                                                         <td key={day.dateString} className="px-1 py-1.5 align-middle">
                                                             <div 
-                                                                onClick={() => toggleCellSelection(emp.id, day.dateString)}
-                                                                className={`min-h-[85px] w-full flex flex-col justify-center items-center gap-1.5 rounded-md border p-2 shadow-sm transition-colors cursor-pointer relative ${
+                                                                onClick={() => {
+                                                                    if (canEditSchedule) toggleCellSelection(emp.id, day.dateString);
+                                                                }}
+                                                                className={`min-h-[85px] w-full flex flex-col justify-center items-center gap-1.5 rounded-md border p-2 shadow-sm transition-colors relative ${
                                                                     isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500' : 
-                                                                    isOverride ? 'border-amber-200 bg-amber-50/30 hover:bg-amber-50' : 
-                                                                    'border-gray-200 bg-white hover:bg-gray-50'
-                                                                }`}
+                                                                    isOverride ? 'border-amber-200 bg-amber-50/30' : 
+                                                                    'border-gray-200 bg-white'
+                                                                } ${canEditSchedule ? (isOverride ? 'hover:bg-amber-50 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer') : 'cursor-default'}`}
                                                             >
                                                                 {isOverride && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-amber-400 shadow-sm"></span>}
                                                                 <div className="flex flex-col items-center gap-1.5 pointer-events-none">
@@ -603,16 +640,19 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                                     const { isOff, shiftType, startTime, endTime, isOverride } = getShiftDetails(singleEmployee, slot.dateString, slot.dayName);
                                     const isSelected = singleEmployee ? isCellSelected(singleEmployee.id, slot.dateString) : false;
                                     
+                                    // 🟢 EDIT ACL LOCK: Removes cursor-pointer and hover colors if user only has VIEW access
                                     return (
                                         <div 
                                             key={`day-${slot.dayNum}`} 
-                                            onClick={() => singleEmployee && toggleCellSelection(singleEmployee.id, slot.dateString)}
+                                            onClick={() => {
+                                                if (canEditSchedule && singleEmployee) toggleCellSelection(singleEmployee.id, slot.dateString);
+                                            }}
                                             className={`h-full w-full flex flex-col rounded-md border p-1.5 sm:p-2.5 shadow-sm transition-colors ${
                                                 !singleEmployee ? 'border-gray-100 bg-white' :
-                                                isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500 cursor-pointer' : 
-                                                isOverride ? 'border-amber-200 bg-amber-50/30 hover:bg-amber-50 cursor-pointer' : 
-                                                'border-gray-200 bg-white hover:bg-gray-50 cursor-pointer'
-                                            }`}
+                                                isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500' : 
+                                                isOverride ? 'border-amber-200 bg-amber-50/30' : 
+                                                'border-gray-200 bg-white'
+                                            } ${canEditSchedule && singleEmployee ? (isOverride ? 'hover:bg-amber-50 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer') : 'cursor-default'}`}
                                         >
                                             <div className="flex justify-between items-start pointer-events-none">
                                                 <span className={`text-xs sm:text-sm font-semibold ${isOverride ? 'text-amber-700' : 'text-gray-700'}`}>{slot.dayNum}</span>

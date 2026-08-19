@@ -72,7 +72,7 @@ class AttendanceController extends Controller
         if (!$user->canViewModule('attendance_overview')) {
             if ($user->canViewModule('attendance_calendar')) {
                 return redirect()->route('attendance.calendar');
-            } elseif ($user->canEditModule('attendance_schedule_view')) {
+            } elseif ($user->canViewModule('attendance_schedule_view')) {
                 return redirect()->route('attendance.schedule-view');
             } elseif ($user->canEditModule('attendance_setup')) {
                 return redirect()->route('attendance.setup-schedule');
@@ -121,8 +121,8 @@ class AttendanceController extends Controller
     
     public function scheduleView()
     {
-        // 🔐 SECURITY LOCK: Must have at least 'edit' access for Schedule View
-        if (!Auth::user()->canEditModule('attendance_schedule_view')) {
+        // 🟢 DOWNGRADED LOCK: Now allows "View" access so staff can see the schedules without editing them
+        if (!Auth::user()->canViewModule('attendance_schedule_view')) {
             abort(403, 'Unauthorized access to Schedule View.');
         }
 
@@ -319,5 +319,23 @@ class AttendanceController extends Controller
         }
 
         return redirect()->back()->with('success', 'Daily overrides applied successfully.');
+    }
+
+    // 🟢 NEW: Backend endpoint specifically for the FULL permission "Reset" button
+    public function resetOverride(Request $request)
+    {
+        if (!Auth::user()->canDeleteModule('attendance_schedule_view')) abort(403);
+
+        $request->validate([
+            'cells' => 'required|array', 
+        ]);
+
+        foreach ($request->cells as $cell) {
+            \App\Models\ScheduleOverride::where('user_id', $cell['employee_id'])
+                ->where('date', $cell['date'])
+                ->delete();
+        }
+
+        return redirect()->back()->with('success', 'Overrides reset successfully.');
     }
 }

@@ -434,4 +434,6 @@ Route::post('/attendance-settings/shift', [AttendanceSettingsController::class, 
 Route::post('/attendance-settings/shift/{shift}/toggle', [AttendanceSettingsController::class, 'toggleShift'])->name('admin.attendance-settings.toggle-shift');
 Route::post('/attendance-settings/cutoffs', [AttendanceSettingsController::class, 'updateCutoffs'])->name('admin.attendance-settings.update-cutoffs');
 
+Route::post('/attendance/schedule-override/reset', [\App\Http\Controllers\AttendanceController::class, 'resetOverride'])->name('attendance.schedule-override.reset');
+
 require __DIR__.'/auth.php';

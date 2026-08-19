@@ -736,11 +736,11 @@ export const getPRPOLinks = (auth) => {
     return links;
 };
 
-// 🟢 NEW: Fallback intelligent routing helper to prevent 403s on module entry
+// 🟢 FIXED: Changed schedule_view to canViewModule so standard staff can route to it
 export const getFirstAttendanceRoute = (auth) => {
     if (canViewModule(auth, 'attendance_overview')) return route('attendance.overview');
     if (canViewModule(auth, 'attendance_calendar')) return route('attendance.calendar');
-    if (canEditModule(auth, 'attendance_schedule_view')) return route('attendance.schedule-view');
+    if (canViewModule(auth, 'attendance_schedule_view')) return route('attendance.schedule-view');
     if (canEditModule(auth, 'attendance_setup')) return route('attendance.setup-schedule');
     return route('attendance.calendar'); // Fallback
 };
