@@ -9,6 +9,7 @@ use App\Models\Schedule;
 use App\Models\Branch;
 use App\Models\Shift;
 use App\Models\AttendanceSetting;
+use App\Models\SystemLog; // 🟢 INJECTED FOR LOGGING
 use Illuminate\Support\Facades\Auth;
 
 class AttendanceController extends Controller
@@ -293,6 +294,18 @@ class AttendanceController extends Controller
             );
         }
 
+        // 🟢 SYSTEM LOGGING
+        try {
+            SystemLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'Update',
+                'module' => 'Attendance Setup',
+                'description' => "Assigned cut-off schedule ({$startDate} to {$endDate}) for " . count($employeeIds) . " employee(s).",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+        } catch (\Exception $e) {}
+
         return redirect()->back()->with('success', 'Schedule updated for the cut-off period.');
     }
 
@@ -323,6 +336,18 @@ class AttendanceController extends Controller
             );
         }
 
+        // 🟢 SYSTEM LOGGING
+        try {
+            SystemLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'Update',
+                'module' => 'Schedule View',
+                'description' => "Applied daily schedule overrides to " . count($request->cells) . " cell(s).",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+        } catch (\Exception $e) {}
+
         return redirect()->back()->with('success', 'Daily overrides applied successfully.');
     }
 
@@ -340,6 +365,18 @@ class AttendanceController extends Controller
                 ->where('date', $cell['date'])
                 ->delete();
         }
+
+        // 🟢 SYSTEM LOGGING
+        try {
+            SystemLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'Delete',
+                'module' => 'Schedule View',
+                'description' => "Reset manual overrides for " . count($request->cells) . " cell(s) back to default.",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+        } catch (\Exception $e) {}
 
         return redirect()->back()->with('success', 'Overrides reset successfully.');
     }

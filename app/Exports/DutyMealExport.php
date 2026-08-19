@@ -69,32 +69,49 @@ class DutyMealExport implements FromView, ShouldAutoSize, WithStyles
                 $shift = strtolower(trim($p->shift_type ?? 'day'));
                 $choice = strtolower(trim($p->choice));
 
-                // 🟢 ROUTING: Match the database row to the correct Template Section
-                $cat = 'clinic_lunch';
+                $catsToIncrement = [];
                 
+                // 🟢 ROUTING: Match the database row to the correct Template Section
                 if ($site === 'back office') {
-                    $cat = 'back_office';
+                    $catsToIncrement[] = 'back_office';
                 } else {
                     if ($shift === 'graveyard') {
-                        $cat = 'clinic_dinner';
+                        $catsToIncrement[] = 'clinic_dinner';
                     } elseif ($shift === 'straight') {
-                        $cat = 'clinic_whole';
+                        // 🟢 FIXED: Straight shifts get tallied in BOTH Lunch and Dinner
+                        $catsToIncrement[] = 'clinic_lunch';
+                        $catsToIncrement[] = 'clinic_dinner';
                     } else {
-                        $cat = 'clinic_lunch'; // Default for day shifts
+                        $catsToIncrement[] = 'clinic_lunch'; // Default for day shifts
                     }
                 }
 
                 // Increment the counters
-                $weeks[$weekStart]['days'][$dayKey][$cat]['total']++;
-                $weeks[$weekStart]['days'][$dayKey][$cat][$choice]++;
-                
-                // Format any special requests or notes
-                if (!empty($p->custom_request)) {
-                    $name = $p->user ? explode(' ', $p->user->name)[0] : 'Staff';
-                    $weeks[$weekStart]['days'][$dayKey][$cat]['notes'][] = $name . ': ' . $p->custom_request;
+                foreach ($catsToIncrement as $cat) {
+                    $weeks[$weekStart]['days'][$dayKey][$cat]['total']++;
+                    $weeks[$weekStart]['days'][$dayKey][$cat][$choice]++;
+                    
+                    // Format any special requests or notes
+                    if (!empty($p->custom_request)) {
+                        $name = $p->user ? explode(' ', $p->user->name)[0] : 'Staff';
+                        $weeks[$weekStart]['days'][$dayKey][$cat]['notes'][] = $name . ': ' . $p->custom_request;
+                    }
                 }
             }
         }
+
+        // 🟢 FIXED: "For the Whole Day" is now a perfect mathematical sum of Lunch + Dinner
+        foreach ($weeks as &$week) {
+            foreach ($week['days'] as &$day) {
+                $day['clinic_whole']['total'] = $day['clinic_lunch']['total'] + $day['clinic_dinner']['total'];
+                $day['clinic_whole']['main'] = $day['clinic_lunch']['main'] + $day['clinic_dinner']['main'];
+                $day['clinic_whole']['alt'] = $day['clinic_lunch']['alt'] + $day['clinic_dinner']['alt'];
+                $day['clinic_whole']['special'] = $day['clinic_lunch']['special'] + $day['clinic_dinner']['special'];
+                $day['clinic_whole']['notes'] = array_merge($day['clinic_lunch']['notes'], $day['clinic_dinner']['notes']);
+            }
+        }
+        unset($week);
+        unset($day);
 
         return view('exports.duty_meals', [
             'weeks' => $weeks
