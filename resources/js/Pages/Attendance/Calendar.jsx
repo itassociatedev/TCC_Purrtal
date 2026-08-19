@@ -130,7 +130,7 @@ export default function Calendar({ employees = [], branches = [] }) {
                 displayDay: dayName, 
                 displayDate: dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), 
                 isPadding: false,
-                isToday: dateString === todayStr 
+                isToday: dateString === todayStr
             });
         }
 
@@ -342,11 +342,13 @@ export default function Calendar({ employees = [], branches = [] }) {
                             )}
                         </div>
 
+                        {/* 🟢 ADDED: goToToday() automatically snaps calendar back to current month */}
                         <button 
                             onClick={() => {
                                 setSelectedEmployeeId(authUserId);
                                 setSearchQuery('');
                                 setBranchFilter(''); 
+                                goToToday();
                             }}
                             className="rounded-md bg-indigo-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 transition-colors whitespace-nowrap"
                         >
@@ -376,6 +378,7 @@ export default function Calendar({ employees = [], branches = [] }) {
 
                             const { isOff, shiftType, startTime, endTime, isOverride } = getShiftDetails(activeEmployee, slot.dateString, slot.dayName);
                             
+                            // 🟢 FIXED: Ensures Today highlight is never accidentally overridden by the 'activeEmployee' checks
                             return (
                                 <div 
                                     key={`day-${slot.dayNum}`} 
@@ -383,9 +386,9 @@ export default function Calendar({ employees = [], branches = [] }) {
                                         if (hasFullAccess) setSummaryDate(slot);
                                     }}
                                     className={`h-full w-full flex flex-col rounded-md border p-1.5 sm:p-2.5 shadow-sm transition-colors relative ${
-                                        slot.isToday && !activeEmployee ? 'bg-indigo-50/30 border-indigo-200' :
+                                        isOverride ? 'border-amber-200 bg-amber-50/30' :
+                                        slot.isToday ? 'bg-indigo-50/50 border-indigo-400 shadow-inner ring-1 ring-inset ring-indigo-500' :
                                         !activeEmployee ? 'border-gray-100 bg-white' :
-                                        isOverride ? 'border-amber-200 bg-amber-50/30' : 
                                         'border-gray-200 bg-white hover:bg-gray-50'
                                     } ${hasFullAccess ? 'cursor-pointer hover:ring-2 hover:ring-indigo-400' : ''}`}
                                 >

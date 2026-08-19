@@ -47,9 +47,22 @@ class AttendanceController extends Controller
 
     public function overview()
     {
-        // 🔐 SECURITY LOCK: Must have at least 'view' access to the Overview module
-        if (!Auth::user()->canViewModule('attendance_overview')) {
-            abort(403, 'Unauthorized access to Attendance Overview.');
+        $user = Auth::user();
+
+        // 🔐 INTELLIGENT PERMISSION-BASED REDIRECT
+        // If user doesn't have overview access, redirect them to the first module they CAN access
+        if (!$user->canViewModule('attendance_overview')) {
+            if ($user->canViewModule('attendance_calendar')) {
+                return redirect()->route('attendance.calendar');
+            } elseif ($user->canEditModule('attendance_schedule_view')) {
+                return redirect()->route('attendance.schedule-view');
+            } elseif ($user->canEditModule('attendance_setup')) {
+                return redirect()->route('attendance.setup-schedule');
+            } else {
+                // If they have literally zero attendance permissions, kick to dashboard
+                return redirect()->route('dashboard')
+                    ->with('error', 'You do not have permission to access the Attendance module.');
+            }
         }
 
         list($query, $branches) = $this->getBaseQueryAndBranches();
