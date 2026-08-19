@@ -6,11 +6,28 @@ import { getHRLinks } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, useForm, usePage } from '@inertiajs/react';
 import { useEffect } from 'react';
+import { canCreateModule, canViewModule, moduleHasAccess } from '@/Config/navigation';
 
 export default function ManpowerRequest({ auth, branches = [], departments = [], positions = [], managers = [] }) {
     const { system } = usePage().props;
     
     const hrLinks = getHRLinks(auth.user.role?.name || 'Employee', auth);
+    const canCreateManpowerRequest = canCreateModule(auth, 'manpower_requests_form');
+    const canViewManpowerRequestForm = canViewModule(auth, 'manpower_requests_form');
+
+    if (!moduleHasAccess(auth, 'hr')) {
+        return (
+            <SidebarLayout user={auth.user} activeModule="HR" sidebarLinks={hrLinks}>
+                <Head title="Access Denied" />
+                <div className="py-12 max-w-4xl mx-auto sm:px-6 lg:px-8">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+                        <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+                        <p className="text-gray-600">You do not have permission to view this section.</p>
+                    </div>
+                </div>
+            </SidebarLayout>
+        );
+    }
 
     const userRole = auth.user.role?.name?.toLowerCase().trim() || '';
     const canSelectAllBranches = userRole === 'admin' || userRole === 'director of corporate services and operations';
@@ -80,6 +97,9 @@ export default function ManpowerRequest({ auth, branches = [], departments = [],
 
     const submit = (e) => {
         e.preventDefault();
+        if (!canCreateManpowerRequest) {
+            return;
+        }
         post(route('hr.manpower-requests.store'), {
             preserveScroll: true,
             onSuccess: () => reset(),
@@ -98,10 +118,15 @@ export default function ManpowerRequest({ auth, branches = [], departments = [],
                     <p className="mt-2 text-sm text-gray-500">
                         Submit a formal request for new personnel. Once submitted, this will be routed to your Manager, then HR, and finally the Director for approval.
                     </p>
+                    {!canCreateManpowerRequest && canViewManpowerRequestForm && (
+                        <div className="mt-4 rounded-lg bg-yellow-50 border border-yellow-200 p-4 text-sm text-yellow-800">
+                            You currently have read-only access to the Manpower Request Form. You may view the fields and available options, but you cannot submit a new request.
+                        </div>
+                    )}
                 </div>
 
                 <form onSubmit={submit} className="space-y-6">
-                    
+                    <fieldset disabled={!canCreateManpowerRequest} className={!canCreateManpowerRequest ? 'opacity-80' : ''}>
                     {/* SECTION 1: ROLE & BUDGET */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                         <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
@@ -293,12 +318,13 @@ export default function ManpowerRequest({ auth, branches = [], departments = [],
                                 <div className="text-sm text-gray-600 bg-blue-50 text-blue-800 p-3 rounded-md border border-blue-100 w-full sm:w-auto">
                                     <span className="font-bold">Automated Routing:</span> This request will be automatically sent to your Department Head, followed by HR, and finally the Director.
                                 </div>
-                                <PrimaryButton className="px-8 py-3 shrink-0" disabled={processing}>
+                                <PrimaryButton className="px-8 py-3 shrink-0" disabled={!canCreateManpowerRequest || processing}>
                                     {processing ? 'Submitting Request...' : 'Submit to Workflow'}
                                 </PrimaryButton>
                             </div>
                         </div>
                     </div>
+                    </fieldset>
 
                 </form>
             </div>

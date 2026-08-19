@@ -5,7 +5,7 @@ import Modal from '@/Components/Modal';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
 import TextInput from '@/Components/TextInput';
-import { getAdminLinks } from '@/Config/navigation';
+import { getAdminLinks, canEditModule, canDeleteModule } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -13,6 +13,8 @@ import AnnouncementComments from '@/Components/AnnouncementComments';
 
 export default function Announcements({ auth, announcements = [], branches = [], priorities = [] }) {
     const adminLinks = getAdminLinks(auth);
+    const canManageAnnouncements = canEditModule(auth, 'announcements');
+    const canDeleteAnnouncements = canDeleteModule(auth, 'announcements');
     const { system } = usePage().props;
 
     const FRAME_RATIO_CLASS = 'aspect-[16/9] w-full max-w-[720px]';
@@ -753,12 +755,14 @@ export default function Announcements({ auth, announcements = [], branches = [],
                 <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
                     <div className="mb-6 flex items-center justify-between">
                         <p className="text-gray-600">Broadcast notices and updates to specific clinic branches.</p>
-                        <button
-                            onClick={() => setIsAddModalOpen(true)}
-                            className="rounded-md bg-gray-800 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-gray-700"
-                        >
-                            + Post Announcement
-                        </button>
+                        {canManageAnnouncements && (
+                            <button
+                                onClick={() => setIsAddModalOpen(true)}
+                                className="rounded-md bg-gray-800 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-gray-700"
+                            >
+                                + Post Announcement
+                            </button>
+                        )}
                     </div>
 
                     <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
@@ -1017,18 +1021,24 @@ export default function Announcements({ auth, announcements = [], branches = [],
                                                             )}
 
                                                             <div className="mt-auto flex justify-end gap-3 border-t border-gray-100 pt-3">
-                                                                <button
-                                                                    onClick={() => openEditModal(item)}
-                                                                    className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                                                                >
-                                                                    Edit
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => confirmDelete(item)}
-                                                                    className="text-sm font-medium text-red-600 hover:text-red-800"
-                                                                >
-                                                                    Delete
-                                                                </button>
+                                                                {canManageAnnouncements && (
+                                                                    <>
+                                                                        <button
+                                                                            onClick={() => openEditModal(item)}
+                                                                            className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                                                                        >
+                                                                            Edit
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => canDeleteAnnouncements && confirmDelete(item)}
+                                                                            disabled={!canDeleteAnnouncements}
+                                                                            className={`text-sm font-medium ${canDeleteAnnouncements ? 'text-red-600 hover:text-red-800' : 'text-red-300 cursor-not-allowed'}`}
+                                                                            title={canDeleteAnnouncements ? 'Delete announcement' : 'Full permission required to delete announcements'}
+                                                                        >
+                                                                            Delete
+                                                                        </button>
+                                                                    </>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>

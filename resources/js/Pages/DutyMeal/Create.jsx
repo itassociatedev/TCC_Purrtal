@@ -9,8 +9,9 @@ import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
 
 export default function CreateDutyMeal({ auth, employees = [], branches = [], departments = [], positions = [] }) {
-    const dutyMealsLinks = getDutyMealLinks();
+    const dutyMealsLinks = getDutyMealLinks(auth);
     const { system } = usePage().props;
+    const canEditDutyMeals = auth?.user?.acl_permissions?.duty_meal_setup_roster === 'full' || auth?.user?.acl_permissions?.duty_meal_setup_roster === 'edit';
     
     // --- SMART DEFAULT BRANCH LOGIC ---
     const defaultBranch = branches.length > 0 
@@ -65,6 +66,7 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
     };
 
     const handleWeekChange = (e) => {
+        if (!canEditDutyMeals) return;
         const dateVal = e.target.value;
         const newSched = generateWeekSchedule(dateVal);
         setData({
@@ -81,7 +83,7 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
     const hasSelectedWeek = data.schedule && data.schedule.length === 7;
 
     const handleMealChange = (field, value) => {
-        if (!hasSelectedWeek) return;
+        if (!canEditDutyMeals || !hasSelectedWeek) return;
         const newSchedule = [...data.schedule];
         newSchedule[activeTab] = { ...newSchedule[activeTab], [field]: value };
         setData('schedule', newSchedule);
@@ -122,6 +124,7 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
     }, [employees, data.branch_id, departmentFilter, filterPosition, searchQuery]);
 
     const toggleStaff = (employee) => {
+        if (!canEditDutyMeals) return;
         if (!hasSelectedWeek) return alert('Please select a week start date first.');
         const isAlreadySelected = activeParticipants.some(p => p.id === employee.id);
         
@@ -140,6 +143,7 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
     };
 
     const changeShiftType = (employeeId, newShift) => {
+        if (!canEditDutyMeals) return;
         const newParticipants = activeParticipants.map(p => 
             p.id === employeeId ? { ...p, shift_type: newShift } : p
         );
@@ -150,7 +154,7 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
 
     // --- BULK SELECTION FUNCTIONS ---
     const selectAllFiltered = () => {
-        if (!hasSelectedWeek) return;
+        if (!canEditDutyMeals || !hasSelectedWeek) return;
         const currentIds = new Set(activeParticipants.map(p => p.id));
         const newParticipants = [...activeParticipants];
         filteredEmployees.forEach(emp => {
@@ -167,7 +171,7 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
     };
 
     const deselectAllFiltered = () => {
-        if (!hasSelectedWeek) return;
+        if (!canEditDutyMeals || !hasSelectedWeek) return;
         const filteredIds = new Set(filteredEmployees.map(emp => emp.id));
         const newParticipants = activeParticipants.filter(p => !filteredIds.has(p.id));
         
@@ -178,6 +182,7 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
 
     const submit = (e) => {
         e.preventDefault();
+        if (!canEditDutyMeals) return;
         post(route('admin.duty-meals.store'));
     };
 
@@ -202,8 +207,8 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
                         <Link href={route('admin.duty-meals.index')}>
                             <SecondaryButton type="button">Cancel</SecondaryButton>
                         </Link>
-                        <PrimaryButton disabled={processing || !hasSelectedWeek || totalWeeklyStaff === 0}>
-                            Publish Roster ({totalWeeklyStaff} Shifts)
+                        <PrimaryButton disabled={processing || !hasSelectedWeek || totalWeeklyStaff === 0 || !canEditDutyMeals} className={!canEditDutyMeals ? 'opacity-60 cursor-not-allowed' : ''}>
+                            {canEditDutyMeals ? `Publish Roster (${totalWeeklyStaff} Shifts)` : 'View Only'}
                         </PrimaryButton>
                     </div>
                 </div>
@@ -213,7 +218,7 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
                     <div className="flex-1">
                         <InputLabel htmlFor="week_picker" value="🗓️ Select Starting Date" className="font-bold" />
                         <TextInput id="week_picker" type="date" className="mt-2 block w-full" 
-                            onChange={handleWeekChange} min={minDate} required />
+                            onChange={handleWeekChange} min={minDate} required disabled={!canEditDutyMeals} />
                         <InputError message={errors.week_start} className="mt-2" />
                     </div>
                     
@@ -223,7 +228,7 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
                             className={`mt-2 block w-full rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 
                                 ${branches.length <= 1 ? 'bg-gray-50 border-gray-200 text-gray-500 cursor-not-allowed' : 'border-gray-300'}`}
                             value={data.branch_id} onChange={e => setData('branch_id', e.target.value)} 
-                            disabled={branches.length <= 1} required>
+                            disabled={branches.length <= 1 || !canEditDutyMeals} required>
                             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                         </select>
                     </div>
@@ -243,6 +248,7 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
                                             ${activeTab === index 
                                                 ? 'bg-white text-indigo-700' 
                                                 : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'}`}
+                                        disabled={!canEditDutyMeals}
                                     >
                                         {/* Active Tab Indicator Line */}
                                         {activeTab === index && <div className="absolute top-0 left-0 w-full h-1 bg-indigo-600"></div>}
@@ -275,12 +281,12 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
                                     <div>
                                         <InputLabel value="🍗 Main Meal" />
                                         <TextInput placeholder="e.g. Chicken Adobo w/ Rice" className="mt-1 block w-full text-sm" 
-                                            value={activeDay.main_meal || ''} onChange={e => handleMealChange('main_meal', e.target.value)} />
+                                            value={activeDay.main_meal || ''} onChange={e => handleMealChange('main_meal', e.target.value)} disabled={!canEditDutyMeals} />
                                     </div>
                                     <div>
                                         <InputLabel value="🥗 Alternative Meal" />
                                         <TextInput placeholder="e.g. Tofu Stir-fry" className="mt-1 block w-full text-sm" 
-                                            value={activeDay.alt_meal || ''} onChange={e => handleMealChange('alt_meal', e.target.value)} />
+                                            value={activeDay.alt_meal || ''} onChange={e => handleMealChange('alt_meal', e.target.value)} disabled={!canEditDutyMeals} />
                                     </div>
                                 </div>
                             </div>
@@ -297,10 +303,13 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
                                         <button 
                                             type="button" 
                                             onClick={allFilteredSelected ? deselectAllFiltered : selectAllFiltered} 
+                                            disabled={!canEditDutyMeals}
                                             className={`text-xs font-bold px-3 py-1.5 rounded transition-colors border focus:outline-none ${
-                                                allFilteredSelected 
-                                                    ? 'bg-gray-700 text-gray-200 border-gray-500 hover:bg-gray-600' 
-                                                    : 'bg-gray-800 text-gray-300 border-gray-600 hover:bg-gray-700 hover:text-white'
+                                                !canEditDutyMeals
+                                                    ? 'bg-gray-700 text-gray-400 border-gray-600 cursor-not-allowed'
+                                                    : allFilteredSelected 
+                                                        ? 'bg-gray-700 text-gray-200 border-gray-500 hover:bg-gray-600' 
+                                                        : 'bg-gray-800 text-gray-300 border-gray-600 hover:bg-gray-700 hover:text-white'
                                             }`}
                                         >
                                             {allFilteredSelected ? 'Deselect All' : 'Select All'}
@@ -309,13 +318,13 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
                                     
                                     <div className="p-4 border-b border-gray-100 bg-gray-50 flex flex-col gap-3 shrink-0">
                                         <TextInput placeholder="🔍 Search employee name..." className="w-full text-sm"
-                                            value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setFilterPosition(''); }} />
+                                            value={searchQuery} onChange={e => { setSearchQuery(e.target.value); setFilterPosition(''); }} disabled={!canEditDutyMeals} />
                                         <div className="flex gap-2">
-                                            <select className="flex-1 rounded-md border-gray-300 text-sm py-1.5" value={departmentFilter} onChange={e => setDepartmentFilter(e.target.value)}>
+                                            <select className="flex-1 rounded-md border-gray-300 text-sm py-1.5" value={departmentFilter} onChange={e => setDepartmentFilter(e.target.value)} disabled={!canEditDutyMeals}>
                                                 <option value="All">All Departments</option>
                                                 {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                                             </select>
-                                            <select className="flex-1 rounded-md border-gray-300 text-sm py-1.5" value={filterPosition} onChange={e => setFilterPosition(e.target.value)} disabled={departmentFilter==='All'}>
+                                            <select className="flex-1 rounded-md border-gray-300 text-sm py-1.5" value={filterPosition} onChange={e => setFilterPosition(e.target.value)} disabled={departmentFilter==='All' || !canEditDutyMeals}>
                                                 <option value="">All Positions</option>
                                                 {availablePositions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                             </select>
@@ -331,8 +340,12 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
                                                     const isSelected = activeParticipants.some(p => p.id === emp.id);
                                                     return (
                                                         <div key={emp.id} onClick={() => toggleStaff(emp)}
-                                                            className={`group flex items-center justify-between p-3 rounded-lg border cursor-pointer transition select-none
-                                                                ${isSelected ? 'bg-indigo-50 border-indigo-300 ring-1 ring-indigo-500' : 'bg-white border-gray-200 hover:border-gray-400'}`}>
+                                                            className={`group flex items-center justify-between p-3 rounded-lg border transition select-none
+                                                                ${!canEditDutyMeals
+                                                                    ? 'bg-gray-50 border-gray-200 cursor-not-allowed opacity-70'
+                                                                    : isSelected
+                                                                        ? 'bg-indigo-50 border-indigo-300 ring-1 ring-indigo-500 cursor-pointer'
+                                                                        : 'bg-white border-gray-200 hover:border-gray-400 cursor-pointer'}`}>
                                                             <div>
                                                                 <p className={`text-sm font-bold ${isSelected ? 'text-indigo-900' : 'text-gray-800'}`}>{emp.name}</p>
                                                                 <p className="text-[11px] text-gray-500 mt-0.5">{getDepartmentName(emp.department_id)} • {getPositionName(emp.position_id)}</p>
@@ -394,21 +407,24 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
                                                         <div className="flex items-center gap-4">
                                                             <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200 shadow-inner">
                                                                 <button type="button" onClick={() => changeShiftType(p.id, 'day')}
-                                                                    className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${p.shift_type === 'day' ? 'bg-white shadow text-amber-600 ring-1 ring-amber-400' : 'text-gray-500 hover:text-gray-700'}`}>
+                                                                    disabled={!canEditDutyMeals}
+                                                                    className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${p.shift_type === 'day' ? 'bg-white shadow text-amber-600 ring-1 ring-amber-400' : 'text-gray-500'} ${canEditDutyMeals ? 'hover:text-gray-700' : 'cursor-not-allowed opacity-60'}`}>
                                                                     Day
                                                                 </button>
                                                                 <button type="button" onClick={() => changeShiftType(p.id, 'straight')}
-                                                                    className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${p.shift_type === 'straight' ? 'bg-white shadow text-emerald-600 ring-1 ring-emerald-400' : 'text-gray-500 hover:text-gray-700'}`}>
+                                                                    disabled={!canEditDutyMeals}
+                                                                    className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${p.shift_type === 'straight' ? 'bg-white shadow text-emerald-600 ring-1 ring-emerald-400' : 'text-gray-500'} ${canEditDutyMeals ? 'hover:text-gray-700' : 'cursor-not-allowed opacity-60'}`}>
                                                                     Str
                                                                 </button>
                                                                 <button type="button" onClick={() => changeShiftType(p.id, 'graveyard')}
-                                                                    className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${p.shift_type === 'graveyard' ? 'bg-white shadow text-indigo-600 ring-1 ring-indigo-400' : 'text-gray-500 hover:text-gray-700'}`}>
+                                                                    disabled={!canEditDutyMeals}
+                                                                    className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${p.shift_type === 'graveyard' ? 'bg-white shadow text-indigo-600 ring-1 ring-indigo-400' : 'text-gray-500'} ${canEditDutyMeals ? 'hover:text-gray-700' : 'cursor-not-allowed opacity-60'}`}>
                                                                     Grave
                                                                 </button>
                                                             </div>
                                                             
                                                             {/* Remove Button */}
-                                                            <button type="button" onClick={() => toggleStaff(p)} className="text-gray-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors">
+                                                            <button type="button" onClick={() => toggleStaff(p)} disabled={!canEditDutyMeals} className={`p-2 rounded-full transition-colors ${canEditDutyMeals ? 'text-gray-300 hover:text-red-500 hover:bg-red-50' : 'text-gray-200 cursor-not-allowed'}`}>
                                                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                                             </button>
                                                         </div>

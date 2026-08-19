@@ -1,5 +1,6 @@
+// Global flash/toast UI component (shows success/error messages)
 import { usePage } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export default function FlashMessage() {
     // 1. Pull both flash and errors from Inertia props
@@ -7,6 +8,19 @@ export default function FlashMessage() {
 
     const [toast, setToast] = useState({ message: '', type: '' });
     const [visible, setVisible] = useState(false);
+    const timerRef = useRef(null);
+
+    const getFirstErrorMessage = (errorObject) => {
+        const firstValue = Object.values(errorObject)[0];
+        if (!firstValue) return '';
+        if (Array.isArray(firstValue)) {
+            return firstValue.join(' ');
+        }
+        if (typeof firstValue === 'object' && firstValue !== null) {
+            return Object.values(firstValue).flat().join(' ');
+        }
+        return String(firstValue);
+    };
 
     useEffect(() => {
         let currentMessage = '';
@@ -19,14 +33,11 @@ export default function FlashMessage() {
         } else if (flash?.error) {
             currentMessage = flash.error;
             currentType = 'error';
-        } 
-        // 3. NEW: Check for Validation Errors (like your Role error)
-        else if (Object.keys(errors).length > 0) {
-            // Get the first error message from the object
-            currentMessage = Object.values(errors)[0];
+        } else if (Object.keys(errors).length > 0) {
+            currentMessage = getFirstErrorMessage(errors);
             currentType = 'error';
         }
-        
+
         if (currentMessage) {
             showToast(currentMessage, currentType);
         }
@@ -45,14 +56,27 @@ export default function FlashMessage() {
     const showToast = (message, type) => {
         setToast({ message, type });
         setVisible(true);
-        const timer = setTimeout(() => {
+
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+        }
+
+        timerRef.current = window.setTimeout(() => {
             setVisible(false);
         }, 4000);
-        return () => clearTimeout(timer);
     };
+
+    useEffect(() => {
+        return () => {
+            if (timerRef.current) {
+                clearTimeout(timerRef.current);
+            }
+        };
+    }, []);
 
     return (
         <div
+            aria-live="assertive"
             className={`fixed bottom-10 right-10 z-[100] transform transition-all duration-500 ease-in-out ${
                 visible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'
             }`}

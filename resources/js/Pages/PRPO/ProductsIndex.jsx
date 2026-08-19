@@ -5,7 +5,7 @@ import Modal from '@/Components/Modal';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
 import TextInput from '@/Components/TextInput';
-import { getPRPOLinks } from '@/Config/navigation';
+import { getPRPOLinks, canCreateModule, canDeleteModule, canEditModule, canViewModule } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, router, useForm } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
@@ -13,11 +13,14 @@ import { useEffect, useMemo, useState } from 'react';
 export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
 
     const PRPOLinks = getPRPOLinks(auth);
-    
-    // 🟢 DEFINE READ-ONLY STATE
-    const userRole = auth.user.role?.name?.toLowerCase().trim() || '';
-    const isInventory = userRole.includes('inventory');
-    const isReadOnly = isInventory && userRole !== 'admin'; // Admin overrides read-only
+    const canViewProducts = canViewModule(auth, 'products');
+    const canCreateProducts = canCreateModule(auth, 'products');
+    const canEditProducts = canEditModule(auth, 'products');
+    const canDeleteProducts = canDeleteModule(auth, 'products');
+    const canViewSuppliers = canViewModule(auth, 'suppliers');
+    const canEditSuppliers = canEditModule(auth, 'suppliers');
+    const canDeleteSuppliers = canDeleteModule(auth, 'suppliers');
+    const isReadOnly = canViewProducts && !canEditProducts;
 
     const { data: importData, setData: setImportData, post: postImport, processing: importProcessing, errors: importErrors, reset: resetImport } = useForm({
         import_file: null,
@@ -433,42 +436,50 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                     </div>
                     
                     {/* 🟢 HIDE ALL EDITING ACTIONS IF READ-ONLY */}
-                    {!isReadOnly && (
+                    {canViewProducts && (
                         <div className="flex flex-wrap gap-3">
-                            <SecondaryButton onClick={() => setSupplierModalOpen(true)}>Manage Suppliers</SecondaryButton>
+                            {canEditSuppliers && (
+                                <SecondaryButton onClick={() => setSupplierModalOpen(true)}>Manage Suppliers</SecondaryButton>
+                            )}
 
-                            <a
-                                href={route('prpo.products.import-template')}
-                                className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 transition ease-in-out duration-150"
-                            >
-                                📄 Download Template
-                            </a>
+                            {canCreateProducts && (
+                                <>
+                                    <a
+                                        href={route('prpo.products.import-template')}
+                                        className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 transition ease-in-out duration-150"
+                                    >
+                                        📄 Download Template
+                                    </a>
 
-                            <div className="relative">
-                                <input
-                                    type="file"
-                                    id="excel-upload"
-                                    className="hidden"
-                                    accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
-                                    onChange={handleFileUpload}
-                                />
+                                    <div className="relative">
+                                        <input
+                                            type="file"
+                                            id="excel-upload"
+                                            className="hidden"
+                                            accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                                            onChange={handleFileUpload}
+                                        />
 
-                                <SecondaryButton onClick={() => document.getElementById('excel-upload').click()} disabled={importProcessing} className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100">
-                                    {importProcessing ? 'Importing...' : '📁 Batch Import'}
-                                </SecondaryButton>
-                            </div>
+                                        <SecondaryButton onClick={() => document.getElementById('excel-upload').click()} disabled={importProcessing} className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100">
+                                            {importProcessing ? 'Importing...' : '📁 Batch Import'}
+                                        </SecondaryButton>
+                                    </div>
 
-                            <a
-                                href={route('prpo.products.export', {
-                                    supplier_id: filterSupplier,
-                                    search: filterProductSearch
-                                })}
-                                className="inline-flex items-center px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-md font-bold text-xs text-indigo-700 uppercase tracking-widest shadow-sm hover:bg-indigo-100 transition ease-in-out duration-150"
-                            >
-                                📥 Export Current View
-                            </a>
+                                    <PrimaryButton onClick={() => openProductModal(null)}>+ Add Product</PrimaryButton>
+                                </>
+                            )}
 
-                            <PrimaryButton onClick={() => openProductModal(null)}>+ Add Product</PrimaryButton>
+                            {canViewProducts && (
+                                <a
+                                    href={route('prpo.products.export', {
+                                        supplier_id: filterSupplier,
+                                        search: filterProductSearch
+                                    })}
+                                    className="inline-flex items-center px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-md font-bold text-xs text-indigo-700 uppercase tracking-widest shadow-sm hover:bg-indigo-100 transition ease-in-out duration-150"
+                                >
+                                    📥 Export Current View
+                                </a>
+                            )}
 
                             {importErrors.import_file && (
                                 <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded w-full">
@@ -543,7 +554,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                         </div>
                     </div>
                     <div className="w-full sm:w-auto flex justify-end min-h-[38px]">
-                        {!isReadOnly && isBatchSelection && (
+                        {canDeleteProducts && isBatchSelection && (
                             <button onClick={confirmBatchDelete} className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-md shadow-sm transition-colors">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                 Delete Selected ({selectedProducts.length})
@@ -560,7 +571,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                             <thead className="bg-gray-50 sticky top-0 z-10 border-b border-gray-200 shadow-sm">
                                 <tr>
                                     {/* 🟢 HIDE CHECKBOX COLUMN IF READ-ONLY */}
-                                    {!isReadOnly && (
+                                    {canDeleteProducts && (
                                         <th scope="col" className="px-6 py-3 text-left w-12">
                                             <input type="checkbox" className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer" checked={isAllSelected} onChange={handleSelectAll} disabled={filteredProducts.length === 0} />
                                         </th>
@@ -595,13 +606,13 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {filteredProducts.length === 0 ? (
-                                    <tr><td colSpan={isReadOnly ? "6" : "8"} className="px-6 py-12 text-center text-gray-500 font-medium">No products found.</td></tr>
+                                    <tr><td colSpan={canEditProducts ? (canDeleteProducts ? "8" : "7") : "6"} className="px-6 py-12 text-center text-gray-500 font-medium">No products found.</td></tr>
                                 ) : (
                                     filteredProducts.map((product) => (
                                         <tr key={product.id} className={`hover:bg-gray-50 ${selectedProducts.includes(product.id) ? 'bg-indigo-50/30' : ''}`}>
                                             
-                                            {/* 🟢 HIDE CHECKBOX CELL IF READ-ONLY */}
-                                            {!isReadOnly && (
+                                            {/* 🟢 HIDE CHECKBOX CELL IF NO DELETE PERMISSION */}
+                                            {canDeleteProducts && (
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <input type="checkbox" className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer" checked={selectedProducts.includes(product.id)} onChange={() => handleSelectOne(product.id)} />
                                                 </td>
@@ -623,7 +634,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                                             </td>
                                             
                                             {/* 🟢 HIDE ACTIONS CELL IF READ-ONLY */}
-                                            {!isReadOnly && (
+                                            {canEditProducts && (
                                                 <td className="px-6 py-4 whitespace-nowrap text-center relative">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown === product.id ? null : product.id); }}
@@ -644,7 +655,9 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                                                             >
                                                                 {product.status === 'Disabled' ? 'Enable' : 'Disable'}
                                                             </button>
-                                                            <button className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-100 font-medium" onClick={() => confirmDeleteProduct(product)}>Delete</button>
+                                                            {canDeleteProducts && (
+                                                                <button className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-100 font-medium" onClick={() => confirmDeleteProduct(product)}>Delete</button>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </td>

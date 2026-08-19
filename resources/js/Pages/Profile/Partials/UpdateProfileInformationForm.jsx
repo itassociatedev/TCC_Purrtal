@@ -13,6 +13,8 @@ export default function UpdateProfileInformation({ className = '' }) {
         ? user.branches.map(b => b.name).join(', ')
         : (user.branch?.name || 'Unassigned');
 
+    
+
     return (
      <section className="w-full">
     <header className="mb-6">
@@ -23,28 +25,23 @@ export default function UpdateProfileInformation({ className = '' }) {
     </header>
 
     {/* Using w-full with no max-w limits so it fills the parent container perfectly */}
-    <div className="w-full bg-white p-5 sm:p-8 shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl">
+            <div className="w-full bg-white p-5 sm:p-8 shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl">
         
         {/* Responsive grid: 1 column on mobile, 2 columns on tablet/desktop */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
             
             <div className="flex flex-col">
                 <span className="text-[11px] font-bold tracking-wider text-gray-500 uppercase">
                     Full Name
                 </span>
-                {/* break-words ensures long names don't break the mobile layout */}
-                <span className="mt-1 text-base font-medium text-gray-900 break-words">
-                    {user.name}
-                </span>
+                <span className="mt-1 text-base font-medium text-gray-900 break-words">{user.name || 'N/A'}</span>
             </div>
 
             <div className="flex flex-col">
                 <span className="text-[11px] font-bold tracking-wider text-gray-500 uppercase">
                     Email Address
                 </span>
-                <span className="mt-1 text-base font-medium text-gray-900 break-words">
-                    {user.email}
-                </span>
+                <span className="mt-1 text-base font-medium text-gray-900 break-words">{user.email || 'N/A'}</span>
             </div>
 
             <div className="flex flex-col">
@@ -76,9 +73,12 @@ export default function UpdateProfileInformation({ className = '' }) {
                         : 'No branches assigned'}
                 </span>
             </div>
-            
-        </div>
-    </div>
-</section>
+
+            {/* Avatar removed per request */}
+
+            </div>
+
+            </div>
+    </section>
     );
 }
