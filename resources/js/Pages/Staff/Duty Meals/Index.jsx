@@ -1,5 +1,5 @@
 import ConfirmModal from '@/Components/ConfirmModal';
-import { getStaffDutyMealLinks } from '@/Config/navigation';
+import { getDutyMealLinks } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { formatAppDate } from '@/Utils/date';
 import { Head, router, usePage } from '@inertiajs/react';
@@ -230,7 +230,7 @@ const MealCard = ({ meal, selection, onSelectionChange }) => {
 };
 
 export default function Index({ auth, myDutyMeals = [] }) {
-    const DutyMealLinks = getStaffDutyMealLinks();
+    const DutyMealLinks = getDutyMealLinks(auth);
 
     // 1. FILTER STATES
     const [statusFilter, setStatusFilter] = useState('Pending');
