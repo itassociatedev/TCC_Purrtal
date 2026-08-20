@@ -35,7 +35,7 @@ const normalizeAclPermissionLevel = (value) => {
 export const isUserAdmin = (auth) => {
     if (!auth?.user?.role) return false;
     const roleName = String(auth.user.role.name || '').toLowerCase().trim();
-    return roleName === 'admin';
+    return roleName === 'admin' || roleName === 'executive vice president';
 };
 
 export const hasPermission = (auth, permissionKey) => {

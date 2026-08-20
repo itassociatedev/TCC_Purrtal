@@ -58,6 +58,7 @@ class User extends Authenticatable
         // Add ANY future top-level roles to this array!
         $allowedRoles = [
             'admin',
+            'executive vice president', // 🟢 Added EVP LEZGO RRS
             'director of corporate services and operations',
             'hrbp',
             'hr assistant'
