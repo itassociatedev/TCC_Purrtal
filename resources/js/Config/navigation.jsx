@@ -505,20 +505,29 @@ export const getDocumentSidebarLinks = (categories = [], activeCategory = 'Overv
 };
 
 // Duty Meal Module Links
+// Duty Meal Module Links
 export const getDutyMealLinks = (auth) => {
-    // Hide Duty Meal module if user has no duty meal submodule permissions at all
-    const hasDutyMealAccess = [
-        'duty_meal_setup_roster',
-        'duty_meal_archive',
-    ].some((module) => hasPermission(auth, module));
+    // 🟢 NEW: Allow basic staff to see the module so they can lock their meals
+    const isBasicStaff = !canViewModule(auth, 'duty_meal') 
+        && !canViewModule(auth, 'duty_meal_setup_roster') 
+        && !canViewModule(auth, 'duty_meal_archive');
 
-    if (!hasDutyMealAccess) return [];
+    const links = [];
 
-    // 🔐 DYNAMIC ACL CHECKS: Show the roster link for view-level access as well as edit/create access.
+    // 🟢 NEW: Basic staff only see the locking interface
+    if (isBasicStaff) {
+        links.push({
+            label: 'Duty Meal Roster',
+            href: route('staff.duty-meals.index'),
+            active: route().current('staff.duty-meals.index'),
+        });
+        return links;
+    }
+
+    // 🔐 DYNAMIC ACL CHECKS for Elevated Users
     const canSetupRoster = canViewModule(auth, 'duty_meal_setup_roster');
     const canAccessArchive = canViewModule(auth, 'duty_meal_archive');
     const canViewOverview = canViewModule(auth, 'duty_meal');
-    const links = [];
 
     if (canViewOverview) {
         links.push({
@@ -542,9 +551,16 @@ export const getDutyMealLinks = (auth) => {
         links.push({
             label: 'Duty Meal Archive',
             href: route('admin.duty-meals.archive'),
-            active:  route().current('admin.duty-meals.archive'),
+            active: route().current('admin.duty-meals.archive'),
         });
     }
+
+    // 🟢 NEW: Elevated users ALSO need to lock their own meals, so we append the staff route at the bottom
+    links.push({
+        label: 'My Personal Meals',
+        href: route('staff.duty-meals.index'),
+        active: route().current('staff.duty-meals.index'),
+    });
 
     return links;
 };

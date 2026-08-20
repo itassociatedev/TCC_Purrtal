@@ -179,6 +179,9 @@ class AttendanceController extends Controller
 
         list($query, $branches) = $this->getIsolatedQuery('attendance_calendar');
 
+        // 🟢 NEW: Eager load duty meal participants to send to the Calendar UI
+        $query->with(['dutyMealParticipants.dutyMeal']);
+
         $employees = $query->get()->map(function ($user) {
             return [
                 'id' => $user->id,
@@ -206,6 +209,10 @@ class AttendanceController extends Controller
                         'end_time' => $override->end_time ? date('g:i A', strtotime($override->end_time)) : null,
                     ];
                 })->toArray(),
+                // 🟢 NEW: Map out the meal choices by Date
+                'duty_meals' => $user->dutyMealParticipants->mapWithKeys(function ($p) {
+                    return [\Carbon\Carbon::parse($p->dutyMeal->duty_date)->format('Y-m-d') => $p->choice];
+                })->toArray(),
             ];
         });
 
@@ -220,7 +227,7 @@ class AttendanceController extends Controller
         return Inertia::render('Attendance/Calendar', array_merge([
             'employees' => $employees,
             'branches' => $branches,
-            'holidays' => $holidays // 🟢 Pass to React
+            'holidays' => $holidays 
         ], $this->getSharedProps()));
     }
 
@@ -303,7 +310,13 @@ class AttendanceController extends Controller
             );
         }
 
-        // 🟢 SYSTEM LOGGING
+        // 🟢 NEW: Dispatch Notification to Assigned Users
+        try {
+            $usersToNotify = User::whereIn('id', $employeeIds)->get();
+            $message = "Your schedule has been assigned for the cut-off period: $startDate to $endDate.";
+            \Illuminate\Support\Facades\Notification::send($usersToNotify, new \App\Notifications\ScheduleAssigned($message));
+        } catch (\Exception $e) {}
+
         try {
             SystemLog::create([
                 'user_id' => Auth::id(),
@@ -330,6 +343,8 @@ class AttendanceController extends Controller
             'shift_type' => 'nullable|string',
         ]);
 
+        $affectedUserIds = [];
+
         foreach ($request->cells as $cell) {
             \App\Models\ScheduleOverride::updateOrCreate(
                 [
@@ -343,9 +358,17 @@ class AttendanceController extends Controller
                     'end_time' => $request->is_off_day ? null : $request->shift_end,
                 ]
             );
+            $affectedUserIds[] = $cell['employee_id'];
         }
 
-        // 🟢 SYSTEM LOGGING
+        // 🟢 NEW: Dispatch Notification for Overrides
+        try {
+            $uniqueUserIds = array_unique($affectedUserIds);
+            $usersToNotify = User::whereIn('id', $uniqueUserIds)->get();
+            $message = "An Admin has modified or overridden your daily schedule. Please check your calendar.";
+            \Illuminate\Support\Facades\Notification::send($usersToNotify, new \App\Notifications\ScheduleAssigned($message));
+        } catch (\Exception $e) {}
+
         try {
             SystemLog::create([
                 'user_id' => Auth::id(),

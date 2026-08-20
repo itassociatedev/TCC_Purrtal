@@ -313,4 +313,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(ScheduleOverride::class);
     }
+
+    /**
+     * Get the duty meal selections for the user.
+     */
+    public function dutyMealParticipants()
+    {
+        return $this->hasMany(\App\Models\DutyMealParticipant::class, 'user_id');
+    }
 }
