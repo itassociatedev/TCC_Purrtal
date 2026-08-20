@@ -12,6 +12,8 @@ use App\Models\AttendanceSetting;
 use App\Models\Holiday; // 🟢 INJECTED FOR EDITABLE HOLIDAYS
 use App\Models\SystemLog; // 🟢 INJECTED FOR LOGGING
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB; // 🟢 INJECTED FOR DIRECT DB TIMESTAMPS
+use Carbon\Carbon;
 
 class AttendanceController extends Controller
 {
@@ -77,100 +79,83 @@ class AttendanceController extends Controller
         ];
     }
 
+    // 🟢 API MAPPER HELPER: Consolidated to ensure all views share the exact same logic
+    private function mapEmployeeSchedules($query)
+    {
+        return $query->get()->map(function ($user) {
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'branch_id' => $user->branch_id,
+                'assigned_branch_ids' => $user->branches->pluck('id')->toArray(),
+                'department' => $user->department ? $user->department->name : 'Unassigned',
+                'schedules' => $user->schedules->map(function ($sch) {
+                    return [
+                        'start_date' => $sch->start_date,
+                        'end_date' => $sch->end_date,
+                        'shift_type' => $sch->shift_type,
+                        'off_days' => $sch->off_days ?? [],
+                        'start_time' => $sch->start_time ? date('g:i A', strtotime($sch->start_time)) : null,
+                        'end_time' => $sch->end_time ? date('g:i A', strtotime($sch->end_time)) : null,
+                    ];
+                })->toArray(),
+                'overrides' => $user->scheduleOverrides->keyBy(function($item) {
+                    return Carbon::parse($item->date)->format('Y-m-d');
+                })->map(function ($override) {
+                    return [
+                        'is_off_day' => (bool) $override->is_off_day,
+                        'shift_type' => $override->shift_type,
+                        'start_time' => $override->start_time ? date('g:i A', strtotime($override->start_time)) : null,
+                        'end_time' => $override->end_time ? date('g:i A', strtotime($override->end_time)) : null,
+                        // 🟢 MAGIC FIX: Verifies if the DB timestamp is exactly our forced 2000-01-01 import flag
+                        'is_manual' => $override->updated_at ? (Carbon::parse($override->updated_at)->year > 2000) : true,
+                    ];
+                })->toArray(),
+                'duty_meals' => $user->dutyMealParticipants ? $user->dutyMealParticipants->mapWithKeys(function ($p) {
+                    return [Carbon::parse($p->dutyMeal->duty_date)->format('Y-m-d') => $p->choice];
+                })->toArray() : [],
+            ];
+        });
+    }
+
     public function overview()
     {
         $user = Auth::user();
 
         if (!$user->canViewModule('attendance_overview')) {
             if ($user->canViewModule('attendance_calendar')) return redirect()->route('attendance.calendar');
-            if ($user->canViewModule('attendance_schedule_view')) return redirect()->route('attendance.schedule-view');
             if ($user->canEditModule('attendance_setup')) return redirect()->route('attendance.setup-schedule');
             return redirect()->route('dashboard')->with('error', 'You do not have permission to access Attendance.');
         }
 
         list($query, $branches) = $this->getIsolatedQuery('attendance_overview');
 
-        $employees = $query->get()->map(function ($user) {
-            return [
-                'id' => $user->id,
-                'name' => $user->name,
-                'branch_id' => $user->branch_id,
-                'assigned_branch_ids' => $user->branches->pluck('id')->toArray(),
-                'department' => $user->department ? $user->department->name : 'Unassigned',
-                'schedules' => $user->schedules->map(function ($sch) {
-                    return [
-                        'start_date' => $sch->start_date,
-                        'end_date' => $sch->end_date,
-                        'shift_type' => $sch->shift_type,
-                        'off_days' => $sch->off_days ?? [],
-                        'start_time' => $sch->start_time ? date('g:i A', strtotime($sch->start_time)) : null,
-                        'end_time' => $sch->end_time ? date('g:i A', strtotime($sch->end_time)) : null,
-                    ];
-                })->toArray(),
-                'overrides' => $user->scheduleOverrides->keyBy(function($item) {
-                    return \Carbon\Carbon::parse($item->date)->format('Y-m-d');
-                })->map(function ($override) {
-                    return [
-                        'is_off_day' => (bool) $override->is_off_day,
-                        'shift_type' => $override->shift_type,
-                        'start_time' => $override->start_time ? date('g:i A', strtotime($override->start_time)) : null,
-                        'end_time' => $override->end_time ? date('g:i A', strtotime($override->end_time)) : null,
-                    ];
-                })->toArray(),
-            ];
-        });
-
         return Inertia::render('Attendance/Overview', array_merge([
-            'employees' => $employees,
+            'employees' => $this->mapEmployeeSchedules($query),
             'branches' => $branches
         ], $this->getSharedProps()));
     }
     
-    public function scheduleView()
+    // 🟢 DELETED scheduleView() - It is now entirely replaced by setupSchedule()
+    
+    public function setupSchedule()
     {
-        // 🟢 DOWNGRADED LOCK: Now allows "View" access so staff can see the schedules without editing them
-        if (!Auth::user()->canViewModule('attendance_schedule_view')) {
-            abort(403, 'Unauthorized access to Schedule View.');
+        if (!Auth::user()->canEditModule('attendance_setup')) {
+            // Allows fallback to View-Only if they originally had Schedule View access
+            if (!Auth::user()->canViewModule('attendance_schedule_view')) {
+                abort(403, 'Unauthorized access to Setup Schedule.');
+            }
         }
 
-        list($query, $branches) = $this->getIsolatedQuery('attendance_schedule_view');
+        // We use the 'attendance_setup' ACL rules to gather the staff
+        list($query, $branches) = $this->getIsolatedQuery('attendance_setup');
 
-        $employees = $query->get()->map(function ($user) {
-            return [
-                'id' => $user->id,
-                'name' => $user->name,
-                'branch_id' => $user->branch_id,
-                'assigned_branch_ids' => $user->branches->pluck('id')->toArray(),
-                'department' => $user->department ? $user->department->name : 'Unassigned',
-                'schedules' => $user->schedules->map(function ($sch) {
-                    return [
-                        'start_date' => $sch->start_date,
-                        'end_date' => $sch->end_date,
-                        'shift_type' => $sch->shift_type,
-                        'off_days' => $sch->off_days ?? [],
-                        'start_time' => $sch->start_time ? date('g:i A', strtotime($sch->start_time)) : null,
-                        'end_time' => $sch->end_time ? date('g:i A', strtotime($sch->end_time)) : null,
-                    ];
-                })->toArray(),
-                'overrides' => $user->scheduleOverrides->keyBy(function($item) {
-                    return \Carbon\Carbon::parse($item->date)->format('Y-m-d');
-                })->map(function ($override) {
-                    return [
-                        'is_off_day' => (bool) $override->is_off_day,
-                        'shift_type' => $override->shift_type,
-                        'start_time' => $override->start_time ? date('g:i A', strtotime($override->start_time)) : null,
-                        'end_time' => $override->end_time ? date('g:i A', strtotime($override->end_time)) : null,
-                    ];
-                })->toArray(),
-            ];
-        });
-
-        return Inertia::render('Attendance/ScheduleView', array_merge([
-            'employees' => $employees,
+        return Inertia::render('Attendance/SetupSchedule', array_merge([
+            'employees' => $this->mapEmployeeSchedules($query),
             'branches' => $branches
         ], $this->getSharedProps()));
     }
-    
+
     public function calendar()
     {
         // 🔐 SECURITY LOCK: Everyone with at least 'view' can see the calendar
@@ -179,43 +164,7 @@ class AttendanceController extends Controller
         }
 
         list($query, $branches) = $this->getIsolatedQuery('attendance_calendar');
-
-        // 🟢 NEW: Eager load duty meal participants to send to the Calendar UI
         $query->with(['dutyMealParticipants.dutyMeal']);
-
-        $employees = $query->get()->map(function ($user) {
-            return [
-                'id' => $user->id,
-                'name' => $user->name,
-                'branch_id' => $user->branch_id,
-                'assigned_branch_ids' => $user->branches->pluck('id')->toArray(),
-                'department' => $user->department ? $user->department->name : 'Unassigned',
-                'schedules' => $user->schedules->map(function ($sch) {
-                    return [
-                        'start_date' => $sch->start_date,
-                        'end_date' => $sch->end_date,
-                        'shift_type' => $sch->shift_type,
-                        'off_days' => $sch->off_days ?? [],
-                        'start_time' => $sch->start_time ? date('g:i A', strtotime($sch->start_time)) : null,
-                        'end_time' => $sch->end_time ? date('g:i A', strtotime($sch->end_time)) : null,
-                    ];
-                })->toArray(),
-                'overrides' => $user->scheduleOverrides->keyBy(function($item) {
-                    return \Carbon\Carbon::parse($item->date)->format('Y-m-d');
-                })->map(function ($override) {
-                    return [
-                        'is_off_day' => (bool) $override->is_off_day,
-                        'shift_type' => $override->shift_type,
-                        'start_time' => $override->start_time ? date('g:i A', strtotime($override->start_time)) : null,
-                        'end_time' => $override->end_time ? date('g:i A', strtotime($override->end_time)) : null,
-                    ];
-                })->toArray(),
-                // 🟢 NEW: Map out the meal choices by Date
-                'duty_meals' => $user->dutyMealParticipants->mapWithKeys(function ($p) {
-                    return [\Carbon\Carbon::parse($p->dutyMeal->duty_date)->format('Y-m-d') => $p->choice];
-                })->toArray(),
-            ];
-        });
 
         // 🟢 Generate 3 years of standard mathematical holidays
         $currentYear = now()->year;
@@ -247,7 +196,7 @@ class AttendanceController extends Controller
         $holidays = array_replace($mathHolidays, $dbHolidays);
 
         return Inertia::render('Attendance/Calendar', array_merge([
-            'employees' => $employees,
+            'employees' => $this->mapEmployeeSchedules($query),
             'branches' => $branches,
             'holidays' => $holidays 
         ], $this->getSharedProps()));
@@ -282,43 +231,6 @@ class AttendanceController extends Controller
         }
 
         return redirect()->back()->with('success', 'Event/Holiday removed successfully.');
-    }
-
-    // 🟢 UPDATED: Fetch real data for the table
-    public function setupSchedule()
-    {
-        // 🔐 SECURITY LOCK: Must have at least 'edit' access to set up schedules
-        if (!Auth::user()->canEditModule('attendance_setup')) {
-            abort(403, 'Unauthorized access to Schedule Setup.');
-        }
-
-        list($query, $branches) = $this->getIsolatedQuery('attendance_setup');
-
-        $employees = $query->get()->map(function ($user) {
-            return [
-                'id' => $user->id,
-                'name' => $user->name,
-                'branch_id' => $user->branch_id,
-                'assigned_branch_ids' => $user->branches->pluck('id')->toArray(),
-                'department' => $user->department ? $user->department->name : 'Unassigned',
-                'schedules' => $user->schedules->map(function ($sch) {
-                    return [
-                        'start_date' => $sch->start_date,
-                        'end_date' => $sch->end_date,
-                        'shift_type' => $sch->shift_type,
-                        'off_days' => $sch->off_days ? implode(', ', $sch->off_days) : 'None',
-                        'raw_off_days' => $sch->off_days ?? [],
-                        'start_time' => date('H:i', strtotime($sch->start_time)),
-                        'end_time' => date('H:i', strtotime($sch->end_time)),
-                    ];
-                })->toArray(),
-            ];
-        });
-
-        return Inertia::render('Attendance/SetupSchedule', array_merge([
-            'employees' => $employees,
-            'branches' => $branches
-        ], $this->getSharedProps()));
     }
 
     public function storeSchedule(Request $request)
@@ -386,7 +298,8 @@ class AttendanceController extends Controller
 
     public function storeOverride(Request $request)
     {
-        if (!Auth::user()->canEditModule('attendance_schedule_view')) abort(403);
+        // Allowed if they can edit setup
+        if (!Auth::user()->canEditModule('attendance_setup')) abort(403);
 
         $request->validate([
             'cells' => 'required|array', 
@@ -399,7 +312,7 @@ class AttendanceController extends Controller
         $affectedUserIds = [];
 
         foreach ($request->cells as $cell) {
-            \App\Models\ScheduleOverride::updateOrCreate(
+            $override = \App\Models\ScheduleOverride::updateOrCreate(
                 [
                     'user_id' => $cell['employee_id'],
                     'date' => $cell['date'],
@@ -411,6 +324,9 @@ class AttendanceController extends Controller
                     'end_time' => $request->is_off_day ? null : $request->shift_end,
                 ]
             );
+
+            // Force touch to ensure Eloquent stamps this as manually modified (now)
+            $override->touch();
             $affectedUserIds[] = $cell['employee_id'];
         }
 
@@ -439,7 +355,7 @@ class AttendanceController extends Controller
     // 🟢 NEW: Backend endpoint specifically for the FULL permission "Reset" button
     public function resetOverride(Request $request)
     {
-        if (!Auth::user()->canDeleteModule('attendance_schedule_view')) abort(403);
+        if (!Auth::user()->canDeleteModule('attendance_setup')) abort(403);
 
         $request->validate([
             'cells' => 'required|array', 
@@ -466,13 +382,7 @@ class AttendanceController extends Controller
         return redirect()->back()->with('success', 'Overrides reset successfully.');
     }
 
-    // 🟢 NEW: Receive the imported setup document from the Front-end
-    // 🟢 UPDATED: Import overview summary and map to Daily Schedule Overrides
-    // 🟢 UPDATED: Import overview summary with precise time-range shift matching
-    // 🟢 UPDATED: Import overview summary with robust Excel whitespace and non-breaking space cleaning
-    // 🟢 UPDATED: Import schedule by reading dates directly from the Excel header row
     // 🟢 FROM SCRATCH: Smart Import Engine
-    // 🟢 UPDATED: Smart Import Engine with Newline-Safe Text Cleaning
     public function importSchedule(Request $request)
     {
         if (!Auth::user()->canEditModule('attendance_setup')) abort(403);
@@ -644,13 +554,20 @@ class AttendanceController extends Controller
                     }
 
                     if ($needsOverride) {
-                        \App\Models\ScheduleOverride::updateOrCreate(
-                            ['user_id' => $employee->id, 'date' => $dateString],
+                        // 🟢 100% BULLETPROOF BYPASS OF ELOQUENT TIMESTAMPS
+                        // Using raw DB updates ensures Eloquent doesn't forcefully overwrite our 2000-01-01 flag with now()
+                        DB::table('schedule_overrides')->updateOrInsert(
+                            [
+                                'user_id' => $employee->id,
+                                'date' => $dateString
+                            ],
                             [
                                 'is_off_day' => $cell['isOff'],
                                 'shift_type' => $cell['shift'] ? $cell['shift']->shift_type : null,
                                 'start_time' => $cell['shift'] ? $cell['shift']->start_time : null,
                                 'end_time' => $cell['shift'] ? $cell['shift']->end_time : null,
+                                'created_at' => '2000-01-01 00:00:00',
+                                'updated_at' => '2000-01-01 00:00:00'
                             ]
                         );
                     } else {
@@ -738,7 +655,8 @@ class AttendanceController extends Controller
                             'shift_type' => $overrides[$ds]['shift_type'],
                             'start_time' => $overrides[$ds]['start_time'] ? date('g:i A', strtotime($overrides[$ds]['start_time'])) : null,
                             'end_time' => $overrides[$ds]['end_time'] ? date('g:i A', strtotime($overrides[$ds]['end_time'])) : null,
-                            'is_override' => true
+                            // 🟢 FIXED: Ensures imported dates don't highlight in Excel either!
+                            'is_override' => isset($overrides[$ds]['updated_at']) ? (\Carbon\Carbon::parse($overrides[$ds]['updated_at'])->year > 2000) : true,
                         ];
                     } else {
                         foreach ($schedules as $sch) {
