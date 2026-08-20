@@ -13,12 +13,14 @@ class AttendanceExport implements FromView, ShouldAutoSize, WithStyles
     protected $employees;
     protected $dates;
     protected $weekRange;
+    protected $formatOnly; // 🟢 NEW FLAG
 
-    public function __construct($employees, $dates, $weekRange)
+    public function __construct($employees, $dates, $weekRange, $formatOnly = false)
     {
         $this->employees = $employees;
         $this->dates = $dates;
         $this->weekRange = $weekRange;
+        $this->formatOnly = $formatOnly;
     }
 
     public function view(): View
@@ -26,7 +28,8 @@ class AttendanceExport implements FromView, ShouldAutoSize, WithStyles
         return view('exports.attendance_overview', [
             'employees' => $this->employees,
             'dates' => $this->dates,
-            'weekRange' => $this->weekRange
+            'weekRange' => $this->weekRange,
+            'formatOnly' => $this->formatOnly // 🟢 PASS TO BLADE VIEW
         ]);
     }
 

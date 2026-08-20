@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Link, usePage } from '@inertiajs/react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
+import Modal from '@/Components/Modal'; // 🟢 Added Modal Import
 
 // 🟢 HELPER: Gets today's date strictly in YYYY-MM-DD format (avoids timezone shift bugs)
 const getTodayString = () => {
@@ -123,6 +124,9 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
     // Global Filter States
     const [globalDept, setGlobalDept] = useState('');
     const [globalBranch, setGlobalBranch] = useState('');
+    
+    // 🟢 NEW: Export Modal State
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
     const uniqueDepartments = useMemo(() => {
         return [...new Set(employees.map(e => (typeof e.department === 'object' ? e.department?.name : e.department) || 'Unassigned'))]
@@ -214,6 +218,11 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
         }
     };
 
+    // 🟢 DYNAMIC EXPORT URLs (Auto-applies cutoff range and branch/dept filters)
+    const exportBaseUrl = route('attendance.export-overview');
+    const fullReportUrl = `${exportBaseUrl}?start_date=${currentCutoff.start}&end_date=${currentCutoff.end}&branch_id=${globalBranch}&department=${globalDept}`;
+    const blankFormatUrl = `${exportBaseUrl}?start_date=${currentCutoff.start}&end_date=${currentCutoff.end}&branch_id=${globalBranch}&department=${globalDept}&format_only=1`;
+
     return (
         <SidebarLayout
             activeModule="Attendance"
@@ -275,25 +284,21 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
         >
             <div className="space-y-6">
 
-                {/* 🟢 NEW: EXPORT LIST HEADER */}
+                {/* 🟢 NEW: EXPORT LIST HEADER WITH MODAL TRIGGER */}
                 <div className="flex flex-col sm:flex-row justify-between items-center bg-white rounded-xl shadow-sm border border-gray-200 p-4 gap-4">
                     <div>
                         <h2 className="text-lg font-bold text-gray-900">Weekly Dashboard</h2>
-                        <p className="text-xs text-gray-500 mt-1">Exporting data for the week of <span className="font-semibold text-indigo-600">{analytics.weeklyCounts[0]?.displayDate}</span> to <span className="font-semibold text-indigo-600">{analytics.weeklyCounts[6]?.displayDate}</span></p>
+                        <p className="text-xs text-gray-500 mt-1">Showing data for the week of <span className="font-semibold text-indigo-600">{analytics.weeklyCounts[0]?.displayDate}</span> to <span className="font-semibold text-indigo-600">{analytics.weeklyCounts[6]?.displayDate}</span></p>
                     </div>
-                    <a
-                        href={route('attendance.export-overview', { 
-                            start_date: analytics.weeklyCounts[0]?.dateString,
-                            branch_id: globalBranch 
-                        })}
+                    <button
+                        onClick={() => setIsExportModalOpen(true)}
                         className="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 active:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition ease-in-out duration-150 shadow-sm"
-                        title="Download weekly matrix to Excel"
                     >
                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        Export List
-                    </a>
+                        Export Options
+                    </button>
                 </div>
                 
                 {/* KPI CARDS */}
@@ -370,7 +375,6 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
 
                 {/* 🟢 DYNAMIC GRID: If they don't have access to missing scheds, the table stretches to fill the screen */}
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                    
                     <div className={`${canFixMissingSched ? 'lg:col-span-2' : 'lg:col-span-3'} rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden flex flex-col`}>
                         <div className="border-b border-gray-200 bg-gray-50/50 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div>
@@ -496,6 +500,55 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
                     )}
                 </div>
             </div>
+
+            {/* 🟢 NEW: EXPORT MODAL */}
+            <Modal show={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} maxWidth="lg">
+                <div className="p-6 bg-white rounded-lg">
+                    <div className="flex justify-between items-center border-b border-gray-100 pb-4 mb-5">
+                        <h2 className="text-lg font-bold text-gray-900">Export Options</h2>
+                        <button onClick={() => setIsExportModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+
+                    <p className="text-sm text-gray-600 mb-6 leading-relaxed">
+                        Reports are automatically scoped to the active cut-off period <strong className="text-gray-900 font-bold">({currentCutoff.start} to {currentCutoff.end})</strong>. 
+                        Exports will also respect any Branch or Department filters you currently have selected.
+                    </p>
+
+                    <div className="space-y-4">
+                        {/* Option 1: Full Report */}
+                        <a
+                            href={fullReportUrl}
+                            onClick={() => setIsExportModalOpen(false)}
+                            className="flex items-start gap-4 p-4 rounded-xl border border-indigo-100 bg-indigo-50 hover:bg-indigo-100 hover:shadow-md transition-all group"
+                        >
+                            <div className="bg-indigo-200 text-indigo-600 p-2.5 rounded-lg shrink-0">
+                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-indigo-900 group-hover:text-indigo-700">Full Cut-off Report</h3>
+                                <p className="text-xs text-indigo-700 mt-1">Downloads the complete matrix including all assigned schedules, shifts, and overrides.</p>
+                            </div>
+                        </a>
+
+                        {/* Option 2: Blank Format */}
+                        <a
+                            href={blankFormatUrl}
+                            onClick={() => setIsExportModalOpen(false)}
+                            className="flex items-start gap-4 p-4 rounded-xl border border-emerald-100 bg-emerald-50 hover:bg-emerald-100 hover:shadow-md transition-all group"
+                        >
+                            <div className="bg-emerald-200 text-emerald-600 p-2.5 rounded-lg shrink-0">
+                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" /></svg>
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-emerald-900 group-hover:text-emerald-700">Blank Format Template</h3>
+                                <p className="text-xs text-emerald-700 mt-1">Downloads the exact structure and names for this cut-off, but leaves the daily cells blank for manual filling.</p>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            </Modal>
         </SidebarLayout>
     );
 }
