@@ -194,11 +194,11 @@ const buildRole = (overrides = {}) => ({
     'Set Up Roster': 'NONE',
     'Duty meal Archive': 'NONE',
     'Attendance Overview': 'VIEW',
+    // 🟢 FIXED: Schedule View is entirely removed from the hierarchy
     'Setup Schedule': 'NONE',
-    'Schedule View': 'NONE',
     'Calendar': 'VIEW',
     'Attendance Settings': 'NONE',
-    'Personal Meal Selection': 'EDIT', // 🟢 New module 
+    'Personal Meal Selection': 'EDIT',
     ...overrides
 });
 
@@ -223,8 +223,8 @@ const ALL_FULL = {
     'Set Up Roster': 'FULL', 
     'Duty meal Archive': 'FULL',
     'Attendance Overview': 'FULL', 
+    // 🟢 FIXED: Schedule View is entirely removed from the hierarchy
     'Setup Schedule': 'FULL', 
-    'Schedule View': 'FULL',
     'Calendar': 'FULL', 
     'Attendance Settings': 'FULL', 
     'Personal Meal Selection': 'FULL'
@@ -238,8 +238,8 @@ const HR_BASE = buildRole({
     'Approval Board': 'FULL',
     'Feedback Form': 'FULL', 
     'Attendance Overview': 'FULL', 
+    // 🟢 FIXED: Schedule View is entirely removed from the hierarchy
     'Setup Schedule': 'FULL',
-    'Schedule View': 'FULL', 
     'Calendar': 'FULL'
 });
 
@@ -347,12 +347,12 @@ const MODULE_NAME_KEY_OVERRIDES = {
   'set up roster': 'duty_meal_setup_roster',
   'supplier management': 'suppliers',
   'attendance overview': 'attendance_overview',
+  // 🟢 FIXED: The new consolidated mapping. Schedule View is dead, Setup Schedule reigns supreme.
   'setup schedule': 'attendance_setup',
-  'schedule view': 'attendance_schedule_view',
   'calendar': 'attendance_calendar',
   'personal calendar': 'attendance_calendar',
   'attendance settings': 'attendance_settings', 
-  'personal meal selection': 'duty_meal_personal', // 🟢 Mapped for the backend!
+  'personal meal selection': 'duty_meal_personal', 
 };
 
 const POSITION_ORDER = [

@@ -137,7 +137,7 @@ class AdminACL extends Model
             'Attendance Module' => [
                 'attendance_overview' => 'Attendance Overview',
                 'attendance_setup' => 'Setup Schedule',
-                'attendance_schedule_view' => 'Schedule View',
+                // 🟢 Fixed: Removed Schedule View from the ACL Grid
                 'attendance_calendar' => 'Calendar',
             ],
             'PR/PO Module' => [

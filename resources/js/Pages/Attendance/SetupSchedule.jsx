@@ -94,7 +94,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
     useEffect(() => setMounted(true), []);
 
     // ==========================================
-    // 🟢 MASTER CUT-OFF STATE ENGINE (Replaces the sliding week/month logic!)
+    // 🟢 MASTER CUT-OFF STATE ENGINE
     // ==========================================
     const cutoffPeriodsList = useMemo(() => generateCutoffPeriods(cutoffSettings), [cutoffSettings]);
     const [selectedCutoff, setSelectedCutoff] = useState(getCurrentCutoffValue(cutoffSettings));
@@ -236,7 +236,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [weekOffset, setWeekOffset] = useState(0);
 
-    // 🟢 REBUILT BATCH GRID: Generates dates based entirely on the selected cutoff period instead of standard weeks!
+    // 🟢 REBUILT BATCH GRID: 7-Day Weekly view anchored to the selected cutoff start date!
     const batchDates = useMemo(() => {
         const [startStr] = selectedCutoff.split('|');
         const baseDate = new Date(`${startStr}T12:00:00`);
@@ -252,7 +252,9 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
             d.setDate(monday.getDate() + i);
             const dateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
             const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
-            days.push({ dayName, dateString, display: d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) });
+            const display = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+            
+            days.push({ dayName, dateString, display });
         }
         return days;
     }, [weekOffset, selectedCutoff]);
@@ -292,8 +294,8 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
 
     const addEmployeeToBatch = (id) => {
         setSelectedBatchIds(prev => [...prev, id]);
+        // 🟢 FIXED: Clears search so the list resets, but KEEPS dropdown open to add more staff rapidly!
         setBatchSearch('');
-        setIsDropdownOpen(false);
     };
 
     // ==========================================
@@ -391,12 +393,13 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
         return [...new Set(employees.map(e => (typeof e.department === 'object' ? e.department?.name : e.department) || 'Unassigned'))].filter(dept => dept !== 'Unassigned').sort();
     }, [employees]);
 
+    // 🟢 FIXED: Shortened text to "Day", "Straight", and "Graveyard" to free up cell space!
     const renderShiftBadge = (shiftType, isOffDay) => {
         if (isOffDay) return <span className="inline-flex rounded border border-gray-200 bg-gray-100 px-2 py-1 text-[10px] sm:text-xs font-medium text-gray-600 shadow-sm">Off Day</span>;
         switch (shiftType) {
-            case 'Day Shift': return <span className="inline-flex rounded bg-blue-50 px-2 py-1 text-[10px] sm:text-xs font-medium text-blue-700 shadow-sm">Day Shift</span>;
-            case 'Straight Duty': return <span className="inline-flex rounded bg-green-50 px-2 py-1 text-[10px] sm:text-xs font-medium text-green-700 shadow-sm">Straight Duty</span>;
-            case 'Graveyard Shift': return <span className="inline-flex rounded bg-purple-50 px-2 py-1 text-[10px] sm:text-xs font-medium text-purple-700 shadow-sm">Graveyard Shift</span>;
+            case 'Day Shift': return <span className="inline-flex rounded bg-blue-50 px-2 py-1 text-[10px] sm:text-xs font-medium text-blue-700 shadow-sm">Day</span>;
+            case 'Straight Duty': return <span className="inline-flex rounded bg-green-50 px-2 py-1 text-[10px] sm:text-xs font-medium text-green-700 shadow-sm">Straight</span>;
+            case 'Graveyard Shift': return <span className="inline-flex rounded bg-purple-50 px-2 py-1 text-[10px] sm:text-xs font-medium text-purple-700 shadow-sm">Graveyard</span>;
             default: return <span className="inline-flex rounded border border-gray-100 bg-gray-50 px-2 py-1 text-[10px] sm:text-xs font-medium text-gray-400">No Shift</span>;
         }
     };
@@ -408,20 +411,20 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
             header={
                 <div className="flex items-center justify-between relative">
                     <div className="flex items-center gap-4">
-                        <h2 className="text-xl font-semibold leading-tight text-gray-800">Set-Up Schedule</h2>
+                        <h2 className="text-xl font-semibold leading-tight text-gray-800">Setup Schedule</h2>
                         
                         <div className="inline-flex rounded-lg bg-gray-200 p-1 ml-2">
                             <button
                                 onClick={() => { setViewMode('batch'); setSelectedCells([]); }}
                                 className={`rounded-md px-3 py-1 text-sm font-medium transition-all ${viewMode === 'batch' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
                             >
-                                Batch View
+                                Weekly Grid
                             </button>
                             <button
                                 onClick={() => { setViewMode('single'); setSelectedCells([]); }}
                                 className={`rounded-md px-3 py-1 text-sm font-medium transition-all ${viewMode === 'single' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
                             >
-                                Single View
+                                Monthly Calendar
                             </button>
                         </div>
                     </div>
@@ -438,7 +441,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                             />
                             <button 
                                 onClick={() => fileInputRef.current?.click()}
-                                className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
                             >
                                 Import Schedule
                             </button>
@@ -447,6 +450,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                 </div>
             }
         >
+            {/* FLOATING ACTION BAR FOR OVERRIDES */}
             {mounted && selectedCells.length > 0 && (
                 <div 
                     className="flex items-center gap-6 rounded-xl bg-indigo-600 px-6 py-4 text-white shadow-2xl transition-all animate-fade-in-up"
@@ -486,15 +490,15 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
 
             <div className="rounded-lg bg-white shadow-sm relative overflow-hidden">
                 
-                {/* 🟢 THE MOCKUP CUT-OFF SELECTOR BAR */}
+                {/* 🟢 ROW 1: THE MOCKUP CUT-OFF SELECTOR BAR */}
                 <div className="bg-indigo-50 border-b border-indigo-100 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider">Viewing Cut-off Period:</span>
-                        <p className="text-xs text-indigo-600 mt-0.5">Schedules shown below apply only to the selected dates.</p>
+                        <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider">Active Cut-off Period:</span>
+                        <p className="text-xs text-indigo-600 mt-0.5">Manage schedules and daily overrides for the dates within this period.</p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                         <select
-                            className="block w-72 rounded-md border-indigo-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm font-semibold text-indigo-900 bg-white shadow-sm"
+                            className="block w-72 rounded-md border-indigo-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm font-semibold text-indigo-900 bg-white shadow-sm cursor-pointer"
                             value={selectedCutoff}
                             onChange={(e) => {
                                 setSelectedCutoff(e.target.value);
@@ -511,217 +515,212 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                             ))}
                         </select>
                         
+                        {/* 🟢 FIXED: The button now explicitly defines w-[150px] and whitespace-nowrap to prevent jittering */}
                         <button 
-                            onClick={() => {
-                                const current = getCurrentCutoffValue(cutoffSettings);
-                                setSelectedCutoff(current);
-                                setSelectedCells([]);
-                                const [start] = current.split('|');
-                                const startDate = new Date(`${start}T00:00:00`);
-                                setCurrentMonth(startDate.getMonth());
-                                setCurrentYear(startDate.getFullYear());
-                                setWeekOffset(0);
-                            }}
-                            className="rounded-md border border-indigo-200 bg-indigo-100 px-4 py-2 text-sm font-semibold text-indigo-700 shadow-sm transition-colors hover:bg-indigo-200"
+                            onClick={() => setShowCutoffHighlight(!showCutoffHighlight)}
+                            className={`flex items-center justify-center w-[150px] whitespace-nowrap gap-1.5 rounded-md border px-4 py-2 text-sm font-bold shadow-sm transition-colors ${
+                                showCutoffHighlight 
+                                ? 'border-indigo-300 bg-indigo-100 text-indigo-700 hover:bg-indigo-200' 
+                                : 'border-indigo-200 bg-white text-indigo-600 hover:bg-indigo-50'
+                            }`}
                         >
-                            Current Cutoff
+                            {showCutoffHighlight && (
+                                <span className="relative flex h-2 w-2 shrink-0">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                                </span>
+                            )}
+                            {!showCutoffHighlight && (
+                                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                            )}
+                            {showCutoffHighlight ? 'Hide Cut-off' : 'Highlight Cut-off'}
                         </button>
                     </div>
                 </div>
 
                 {/* ================= BATCH VIEW ================= */}
                 {viewMode === 'batch' && (
-                    <div className="space-y-6 p-6">
-                        <div className="flex flex-col gap-4 border-b pb-4 lg:flex-row lg:items-end lg:justify-between">
-                            <div>
-                                <h3 className="text-lg font-bold text-gray-800">Batch Timetable Overview</h3>
-                                <div className="mt-2 flex items-center gap-4">
-                                    <div className="flex items-center gap-2">
-                                        <button onClick={() => setWeekOffset(prev => prev - 1)} className="rounded border border-gray-300 bg-white px-2 py-1 text-gray-600 shadow-sm hover:bg-gray-50">&larr;</button>
-                                        <span className="text-sm font-medium text-gray-700 w-56 text-center">{currentWeekRange}</span>
-                                        <button onClick={() => setWeekOffset(prev => prev + 1)} className="rounded border border-gray-300 bg-white px-2 py-1 text-gray-600 shadow-sm hover:bg-gray-50">&rarr;</button>
-                                    </div>
-                                    <button onClick={() => setWeekOffset(0)} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50">Cutoff Start Week</button>
-                                    
-                                    <button 
-                                        onClick={() => setShowCutoffHighlight(!showCutoffHighlight)}
-                                        className={`flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-bold transition-colors ${
-                                            showCutoffHighlight 
-                                            ? 'border-indigo-300 bg-indigo-50/80 text-indigo-700 hover:bg-indigo-100' 
-                                            : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
-                                        }`}
-                                    >
-                                        {showCutoffHighlight && (
-                                            <span className="relative flex h-2 w-2">
-                                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                                              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
-                                            </span>
-                                        )}
-                                        {!showCutoffHighlight && (
-                                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                        )}
-                                        {showCutoffHighlight ? 'Hide Cut-off' : 'Show Cut-off'}
-                                    </button>
-                                </div>
-                            </div>
+                    <div className="flex flex-col">
+                        
+                        {/* 🟢 ROW 2: ADD STAFF TO VIEW */}
+                        <div className="bg-white border-b border-gray-100 p-4 sm:px-6 sm:py-5 flex flex-col lg:flex-row lg:items-center gap-4">
+                            <span className="text-sm font-bold text-gray-700 whitespace-nowrap">Select Employees:</span>
+                            <div className="flex flex-wrap items-center gap-4 w-full">
+                                
+                                <select
+                                    className="rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-40 cursor-pointer"
+                                    value={batchBranchFilter}
+                                    onChange={e => { setBatchBranchFilter(e.target.value); setBatchSearch(''); setIsDropdownOpen(true); }}
+                                >
+                                    <option value="">All Branches</option>
+                                    {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                </select>
 
-                            <div className="flex flex-col gap-2">
-                                <span className="text-xs font-semibold text-gray-500">Add Staff to View:</span>
-                                <div className="flex flex-wrap items-center gap-2">
-                                    
-                                    <select
-                                        className="rounded-md border-gray-300 py-1.5 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-32"
-                                        value={batchBranchFilter}
-                                        onChange={e => { setBatchBranchFilter(e.target.value); setBatchSearch(''); setIsDropdownOpen(true); }}
-                                    >
-                                        <option value="">All Branches</option>
-                                        {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                                    </select>
+                                <select
+                                    className="rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-48 cursor-pointer"
+                                    value={batchDeptFilter}
+                                    onChange={e => { setBatchDeptFilter(e.target.value); setBatchSearch(''); setIsDropdownOpen(true); }}
+                                >
+                                    <option value="">All Departments</option>
+                                    {uniqueDepartments.map(dept => <option key={dept} value={dept}>{dept}</option>)}
+                                </select>
 
-                                    <select
-                                        className="rounded-md border-gray-300 py-1.5 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-36"
-                                        value={batchDeptFilter}
-                                        onChange={e => { setBatchDeptFilter(e.target.value); setBatchSearch(''); setIsDropdownOpen(true); }}
-                                    >
-                                        <option value="">All Departments</option>
-                                        {uniqueDepartments.map(dept => <option key={dept} value={dept}>{dept}</option>)}
-                                    </select>
-
-                                    <div className="relative rounded-md shadow-sm" ref={dropdownRef}>
-                                        <div className="relative flex items-center">
-                                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                                <svg className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                                                    <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
-                                                </svg>
-                                            </div>
-                                            <input
-                                                type="text"
-                                                placeholder="Search by name..."
-                                                className="block w-48 lg:w-64 rounded-md border-gray-300 py-1.5 pl-9 pr-3 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                                value={batchSearch}
-                                                onChange={e => { setBatchSearch(e.target.value); setIsDropdownOpen(true); }}
-                                                onFocus={() => setIsDropdownOpen(true)}
-                                            />
+                                <div className="relative rounded-md shadow-sm" ref={dropdownRef}>
+                                    <div className="relative flex items-center">
+                                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                            <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
+                                            </svg>
                                         </div>
-
-                                        {isDropdownOpen && (
-                                            <div className="absolute right-0 z-20 mt-1 max-h-60 w-72 overflow-y-auto rounded-md border border-gray-100 bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5">
-                                                {availableEmployeesForPicker.length > 0 ? (
-                                                    availableEmployeesForPicker.map(emp => {
-                                                        const isAdded = selectedBatchIds.includes(emp.id);
-                                                        const empDept = typeof emp.department === 'object' ? emp.department?.name : emp.department;
-                                                        return (
-                                                            <button
-                                                                key={emp.id}
-                                                                onClick={() => !isAdded && addEmployeeToBatch(emp.id)}
-                                                                disabled={isAdded}
-                                                                className={`w-full text-left px-4 py-2 text-xs flex items-center justify-between transition-colors ${isAdded ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : 'text-gray-700 hover:bg-indigo-50 hover:text-indigo-900'}`}
-                                                            >
-                                                                <span className="font-medium">{emp.name} {isAdded && <span className="text-[10px] italic ml-1 font-normal">(Added)</span>}</span>
-                                                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${isAdded ? 'bg-gray-200 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>{empDept || 'Unassigned'}</span>
-                                                            </button>
-                                                        );
-                                                    })
-                                                ) : (
-                                                    <div className="px-4 py-3 text-xs text-gray-400 italic text-center">No matching active employees found.</div>
-                                                )}
-                                            </div>
-                                        )}
+                                        <input
+                                            type="text"
+                                            placeholder="Search by name..."
+                                            className="block w-56 lg:w-72 rounded-md border-gray-300 py-2 pl-10 pr-3 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                            value={batchSearch}
+                                            onChange={e => { setBatchSearch(e.target.value); setIsDropdownOpen(true); }}
+                                            onFocus={() => setIsDropdownOpen(true)}
+                                        />
                                     </div>
+
+                                    {isDropdownOpen && (
+                                        <div className="absolute left-0 lg:right-0 z-20 mt-1 max-h-64 w-80 overflow-y-auto rounded-md border border-gray-100 bg-white py-1 shadow-2xl ring-1 ring-black ring-opacity-5">
+                                            {availableEmployeesForPicker.length > 0 ? (
+                                                availableEmployeesForPicker.map(emp => {
+                                                    const isAdded = selectedBatchIds.includes(emp.id);
+                                                    const empDept = typeof emp.department === 'object' ? emp.department?.name : emp.department;
+                                                    return (
+                                                        <button
+                                                            key={emp.id}
+                                                            onClick={() => !isAdded && addEmployeeToBatch(emp.id)}
+                                                            disabled={isAdded}
+                                                            className={`w-full text-left px-4 py-2.5 text-xs flex items-center justify-between transition-colors ${isAdded ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : 'text-gray-700 hover:bg-indigo-50 hover:text-indigo-900'}`}
+                                                        >
+                                                            <span className="font-medium text-sm">{emp.name} {isAdded && <span className="text-[10px] italic ml-1 font-normal">(Added)</span>}</span>
+                                                            <span className={`text-[10px] px-2 py-0.5 rounded ${isAdded ? 'bg-gray-200 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>{empDept || 'Unassigned'}</span>
+                                                        </button>
+                                                    );
+                                                })
+                                            ) : (
+                                                <div className="px-4 py-4 text-sm text-gray-400 italic text-center">No matching active employees found.</div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
 
-                        <div>
-                            {batchEmployeesList.length > 0 ? (
-                                <div className="flex flex-wrap gap-1.5 border border-gray-100 bg-gray-50 p-3 rounded-lg">
-                                    {batchEmployeesList.map(emp => (
-                                        <span key={emp.id} className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1 text-xs font-medium text-white shadow-sm">
-                                            {emp.name}
-                                            <button onClick={() => setSelectedBatchIds(prev => prev.filter(i => i !== emp.id))} className="rounded-full bg-indigo-800 px-1 text-[10px] hover:bg-indigo-900 focus:outline-none">✕</button>
-                                        </span>
-                                    ))}
+                        {/* 🟢 ROW 3: TIMETABLE OVERVIEW & SLIDER */}
+                        <div className="bg-white border-b border-gray-100 p-4 sm:px-6 sm:py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+                                <h3 className="text-xl font-bold text-gray-800">Weekly Grid</h3>
+                                <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-lg border border-gray-200">
+                                    <button onClick={() => setWeekOffset(prev => prev - 1)} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-gray-600 shadow-sm hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">&larr;</button>
+                                    <span className="text-sm font-medium text-gray-700 w-56 text-center">{currentWeekRange}</span>
+                                    <button onClick={() => setWeekOffset(prev => prev + 1)} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-gray-600 shadow-sm hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">&rarr;</button>
                                 </div>
-                            ) : (
-                                <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center"><p className="text-sm text-gray-500">No employees selected. Add staff to build the table.</p></div>
-                            )}
+                            </div>
                         </div>
 
-                        {batchEmployeesList.length > 0 && (
-                            <div className="overflow-x-auto pt-2 pb-4">
-                                <table className="min-w-full border-collapse border border-gray-200 rounded-lg">
-                                    <thead className="bg-gray-50">
-                                        <tr>
-                                            <th className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-4 w-1/5 border-b border-gray-200">Employee</th>
-                                            {batchDates.map(day => {
-                                                // 🟢 CHECK IF THIS DAY IS IN THE CURRENT CUTOFF
-                                                const isCutoff = isDateInCurrentCutoff(day.dateString);
-                                                return (
-                                                    <th key={day.dateString} className={`px-3 py-3.5 text-center text-sm font-semibold text-gray-900 border-b border-gray-200 ${isCutoff ? 'bg-indigo-50 border-t-4 border-t-indigo-400 shadow-sm' : ''}`}>
-                                                        {day.display}
-                                                    </th>
-                                                );
-                                            })}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white">
-                                        {batchEmployeesList.map((emp, idx) => (
-                                            <tr key={emp.id} className={idx !== batchEmployeesList.length - 1 ? "border-b border-gray-100" : ""}>
-                                                <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-4">
-                                                    <div className="font-bold text-gray-800">{emp.name}</div>
-                                                    <div className="text-xs text-gray-500">{typeof emp.department === 'object' ? emp.department?.name : emp.department}</div>
-                                                </td>
+                        <div className="p-4 sm:p-6 space-y-6">
+                            <div>
+                                {batchEmployeesList.length > 0 ? (
+                                    <div className="flex flex-wrap gap-2 border border-gray-100 bg-gray-50 p-4 rounded-xl">
+                                        {batchEmployeesList.map(emp => (
+                                            <span key={emp.id} className="inline-flex items-center gap-2 rounded-full bg-indigo-600 pl-3 pr-1.5 py-1 text-sm font-medium text-white shadow-sm">
+                                                {emp.name}
+                                                <button onClick={() => {
+                                                    setSelectedBatchIds(prev => prev.filter(i => i !== emp.id));
+                                                }} className="rounded-full bg-indigo-800 p-1 text-[10px] hover:bg-indigo-900 focus:outline-none transition-colors">
+                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center"><p className="text-base font-medium text-gray-500">No employees selected. Add staff to build the grid.</p></div>
+                                )}
+                            </div>
+
+                            {/* THE MASTER GRID */}
+                            {batchEmployeesList.length > 0 && (
+                                <div className="overflow-x-auto pb-4">
+                                    <table className="min-w-full border-collapse">
+                                        <thead className="bg-gray-50 sticky top-0 z-10">
+                                            <tr>
+                                                <th className="py-4 pl-4 pr-3 text-left text-sm font-bold text-gray-900 w-1/5 min-w-[200px] border-b border-gray-200 bg-gray-50 z-20 sticky left-0 shadow-[1px_0_0_0_#e5e7eb]">
+                                                    Employee
+                                                </th>
                                                 {batchDates.map(day => {
-                                                    const { isOff, shiftType, startTime, endTime, isOverride } = getShiftDetails(emp, day.dateString, day.dayName);
-                                                    const isSelected = isCellSelected(emp.id, day.dateString);
-                                                    const isCutoff = isDateInCurrentCutoff(day.dateString); // 🟢 CHECK CELL
-                                                    
-                                                    // 🟢 EDIT ACL LOCK: Removes cursor-pointer and hover colors if user only has VIEW access
+                                                    const isCutoff = isDateInCurrentCutoff(day.dateString);
                                                     return (
-                                                        <td key={day.dateString} className={`px-1 py-1.5 align-middle ${isCutoff ? 'bg-indigo-50/40' : ''}`}>
-                                                            <div 
-                                                                onClick={() => {
-                                                                    if (canEditSchedule) toggleCellSelection(emp.id, day.dateString);
-                                                                }}
-                                                                className={`min-h-[85px] w-full flex flex-col justify-center items-center gap-1.5 rounded-md border p-2 shadow-sm transition-colors relative ${
-                                                                    isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500' : 
-                                                                    isOverride ? 'border-amber-200 bg-amber-50/30' : 
-                                                                    isCutoff ? 'border-indigo-200 bg-white ring-1 ring-indigo-100' : 
-                                                                    'border-gray-200 bg-white'
-                                                                } ${canEditSchedule ? (isOverride ? 'hover:bg-amber-50 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer') : 'cursor-default'}`}
-                                                            >
-                                                                {isOverride && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-amber-400 shadow-sm"></span>}
-                                                                <div className="flex flex-col items-center gap-1.5 pointer-events-none">
-                                                                    {renderShiftBadge(shiftType, isOff)}
-                                                                    {!isOff && startTime && endTime && (
-                                                                        <span className={`text-[10px] font-mono font-medium text-center ${isOverride ? 'text-amber-700' : 'text-gray-500'}`}>
-                                                                            {startTime} <br className="hidden xl:block" /> <span className="xl:hidden">-</span> {endTime}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </td>
+                                                        <th key={day.dateString} className={`px-3 py-4 text-center text-sm font-semibold text-gray-900 border-b border-gray-200 border-l border-gray-100 min-w-[120px] ${isCutoff ? 'bg-indigo-50 border-t-4 border-t-indigo-400 shadow-sm' : ''}`}>
+                                                            {day.display}
+                                                        </th>
                                                     );
                                                 })}
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
+                                        </thead>
+                                        <tbody className="bg-white">
+                                            {batchEmployeesList.map((emp, idx) => (
+                                                <tr key={emp.id} className={idx !== batchEmployeesList.length - 1 ? "border-b border-gray-100" : ""}>
+                                                    <td className="whitespace-nowrap py-5 pl-4 pr-3 text-sm font-medium text-gray-900 bg-white sticky left-0 shadow-[1px_0_0_0_#e5e7eb] z-10 border-b border-gray-50">
+                                                        <div className="font-bold text-gray-800 text-base">{emp.name}</div>
+                                                        <div className="text-xs font-medium text-gray-500 mt-0.5">{typeof emp.department === 'object' ? emp.department?.name : emp.department}</div>
+                                                    </td>
+                                                    {batchDates.map(day => {
+                                                        const { isOff, shiftType, startTime, endTime, isOverride } = getShiftDetails(emp, day.dateString, day.dayName);
+                                                        const isSelected = isCellSelected(emp.id, day.dateString);
+                                                        const isCutoff = isDateInCurrentCutoff(day.dateString);
+                                                        
+                                                        // 🟢 FIXED: Reduced padding to strictly tighten the gap between Batch cells without crushing text.
+                                                        return (
+                                                            <td key={day.dateString} className={`px-1 py-1.5 align-middle border-l border-gray-100 border-b border-gray-50 ${isCutoff ? 'bg-indigo-50/40' : ''}`}>
+                                                                <div 
+                                                                    onClick={() => {
+                                                                        if (canEditSchedule) toggleCellSelection(emp.id, day.dateString);
+                                                                    }}
+                                                                    className={`min-h-[80px] w-full flex flex-col justify-center items-center gap-1 rounded-lg border p-1.5 shadow-sm transition-colors relative ${
+                                                                        isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500' : 
+                                                                        isOverride ? 'border-amber-200 bg-amber-50/30' : 
+                                                                        isCutoff ? 'border-indigo-200 bg-white ring-1 ring-indigo-100' : 
+                                                                        'border-gray-200 bg-white'
+                                                                    } ${canEditSchedule ? (isOverride ? 'hover:bg-amber-50 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer') : 'cursor-default'}`}
+                                                                >
+                                                                    {isOverride && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-amber-400 shadow-sm"></span>}
+                                                                    <div className="flex flex-col items-center gap-1 pointer-events-none">
+                                                                        {renderShiftBadge(shiftType, isOff)}
+                                                                        {!isOff && startTime && endTime && (
+                                                                            <span className={`text-[10px] font-mono font-bold text-center leading-tight ${isOverride ? 'text-amber-700' : 'text-gray-500'}`}>
+                                                                                {startTime} <br /> {endTime}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
 
                 {/* ================= SINGLE VIEW ================= */}
                 {viewMode === 'single' && (
-                    <div className="space-y-6 p-6">
-                        <div className="flex flex-col gap-4 border-b pb-4 lg:flex-row lg:items-center lg:justify-between">
-                            <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex flex-col">
+                        
+                        {/* 🟢 ROW 2: ADD STAFF TO VIEW */}
+                        <div className="bg-white border-b border-gray-100 p-4 sm:px-6 sm:py-5 flex flex-col lg:flex-row lg:items-center gap-4">
+                            <span className="text-sm font-bold text-gray-700 whitespace-nowrap">Select Employee:</span>
+                            <div className="flex flex-wrap items-center gap-4 w-full">
                                 
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Branch</label>
                                     <select
-                                        className="block rounded-md border-gray-300 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 min-w-[120px]"
+                                        className="block rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-40 cursor-pointer"
                                         value={singleBranchFilter}
                                         onChange={e => { 
                                             setSingleBranchFilter(e.target.value); 
@@ -736,9 +735,8 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Department</label>
                                     <select
-                                        className="block rounded-md border-gray-300 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 min-w-[140px]"
+                                        className="block rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-48 cursor-pointer"
                                         value={singleDeptFilter}
                                         onChange={e => { 
                                             setSingleDeptFilter(e.target.value); 
@@ -755,18 +753,17 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Search Employee</label>
                                     <div className="relative rounded-md shadow-sm" ref={singleDropdownRef}>
                                         <div className="relative flex items-center">
                                             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                                <svg className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                                <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
                                                     <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clipRule="evenodd" />
                                                 </svg>
                                             </div>
                                             <input
                                                 type="text"
                                                 placeholder="Search by name..."
-                                                className="block w-48 lg:w-64 rounded-md border-gray-300 py-1.5 pl-9 pr-3 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                                className="block w-56 lg:w-72 rounded-md border-gray-300 py-2 pl-10 pr-3 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                                                 value={singleSearch}
                                                 onChange={e => { setSingleSearch(e.target.value); setIsSingleDropdownOpen(true); }}
                                                 onFocus={() => setIsSingleDropdownOpen(true)}
@@ -774,7 +771,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                         </div>
 
                                         {isSingleDropdownOpen && (
-                                            <div className="absolute left-0 z-20 mt-1 max-h-60 w-72 overflow-y-auto rounded-md border border-gray-100 bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5">
+                                            <div className="absolute left-0 lg:right-0 z-20 mt-1 max-h-64 w-80 overflow-y-auto rounded-md border border-gray-100 bg-white py-1 shadow-2xl ring-1 ring-black ring-opacity-5">
                                                 {availableSingleEmployees.length > 0 ? (
                                                     availableSingleEmployees.map(emp => {
                                                         const empDept = typeof emp.department === 'object' ? emp.department?.name : emp.department;
@@ -788,83 +785,61 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                                                     setSingleSearch('');
                                                                     setIsSingleDropdownOpen(false);
                                                                 }}
-                                                                className={`w-full text-left px-4 py-2 text-xs flex items-center justify-between transition-colors ${isSelected ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-700 hover:bg-indigo-50 hover:text-indigo-900'}`}
+                                                                className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between transition-colors ${isSelected ? 'bg-indigo-50 text-indigo-700 font-bold' : 'text-gray-700 hover:bg-indigo-50 hover:text-indigo-900'}`}
                                                             >
                                                                 <span className="font-medium">{emp.name} {isSelected && <span className="text-[10px] ml-1 text-indigo-500 font-normal">(Selected)</span>}</span>
-                                                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${isSelected ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>{empDept || 'Unassigned'}</span>
+                                                                <span className={`text-[10px] px-2 py-0.5 rounded ${isSelected ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>{empDept || 'Unassigned'}</span>
                                                             </button>
                                                         );
                                                     })
                                                 ) : (
-                                                    <div className="px-4 py-3 text-xs text-gray-400 italic text-center">No matching employees found.</div>
+                                                    <div className="px-4 py-4 text-sm text-gray-400 italic text-center">No matching employees found.</div>
                                                 )}
                                             </div>
                                         )}
                                     </div>
                                 </div>
+                            </div>
+                        </div>
 
-                                {/* 🟢 REPLACED: Converted Month/Year Selectors into a Slider and Legend Button */}
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Month / Year</label>
-                                    <div className="flex items-center gap-1.5">
-                                        <button 
-                                            onClick={handlePrevMonth}
-                                            className="flex items-center justify-center w-8 h-8 rounded-md border border-gray-300 bg-white text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
-                                        >
-                                            &larr;
-                                        </button>
-                                        <div className="flex items-center justify-center w-32 h-8 rounded-md border border-gray-300 bg-white text-sm font-bold text-gray-800 shadow-sm select-none">
-                                            {monthNames[currentMonth]} {currentYear}
-                                        </div>
-                                        <button 
-                                            onClick={handleNextMonth}
-                                            className="flex items-center justify-center w-8 h-8 rounded-md border border-gray-300 bg-white text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
-                                        >
-                                            &rarr;
-                                        </button>
-                                        
-                                        {/* 🟢 MODIFIED: Current Cut-off Toggle Button */}
-                                        <button 
-                                            onClick={() => setShowCutoffHighlight(!showCutoffHighlight)}
-                                            className={`ml-1 sm:ml-2 flex items-center gap-1.5 px-3 h-8 rounded-md border text-xs font-bold shadow-sm transition-colors ${
-                                                showCutoffHighlight 
-                                                ? 'border-indigo-300 bg-indigo-50/80 text-indigo-700 hover:bg-indigo-100' 
-                                                : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
-                                            }`}
-                                            title="Toggle Current Cut-off Highlight"
-                                        >
-                                            {showCutoffHighlight && (
-                                                <span className="relative flex h-2 w-2">
-                                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
-                                                </span>
-                                            )}
-                                            {!showCutoffHighlight && (
-                                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                            )}
-                                            {showCutoffHighlight ? 'Hide Cut-off' : 'Show Cut-off'}
-                                        </button>
+                        {/* 🟢 ROW 3: TIMETABLE OVERVIEW & SLIDER */}
+                        <div className="bg-white border-b border-gray-100 p-4 sm:px-6 sm:py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+                                <h3 className="text-xl font-bold text-gray-800">Monthly Calendar</h3>
+                                <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-lg border border-gray-200">
+                                    <button 
+                                        onClick={handlePrevMonth}
+                                        className="flex items-center justify-center w-10 h-10 rounded-md border border-gray-300 bg-white text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+                                    </button>
+                                    <div className="flex items-center justify-center w-40 h-10 rounded-md border border-gray-300 bg-white text-sm font-black text-gray-800 shadow-sm select-none">
+                                        {monthNames[currentMonth]} {currentYear}
                                     </div>
+                                    <button 
+                                        onClick={handleNextMonth}
+                                        className="flex items-center justify-center w-10 h-10 rounded-md border border-gray-300 bg-white text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+                                    </button>
                                 </div>
                             </div>
-                            
-                            <div className="text-left lg:text-right bg-gray-50 p-3 rounded-lg border border-gray-100 min-w-[250px]">
-                                <h4 className="text-sm font-bold text-gray-800">{singleEmployee?.name || 'No Employee Selected'}</h4>
-                                <div className="mt-1 text-xs text-gray-600 flex flex-col gap-0.5">
+                            <div className="text-left lg:text-right bg-gray-50 px-4 py-2 rounded-xl border border-gray-100 min-w-[250px]">
+                                <h4 className="text-base font-bold text-gray-800">{singleEmployee?.name || 'No Employee Selected'}</h4>
+                                <div className="text-sm text-gray-600 flex flex-col gap-0.5">
                                     <span className="font-medium text-gray-500">
-                                        {singleEmployee ? (typeof singleEmployee.department === 'object' ? singleEmployee.department?.name : singleEmployee.department || 'Unassigned') : 'Select an employee'}
+                                        {singleEmployee ? (typeof singleEmployee.department === 'object' ? singleEmployee.department?.name : singleEmployee.department || 'Unassigned') : 'Select an employee from the dropdown'}
                                     </span>
-                                    {singleEmployee && <span className="text-indigo-600 italic mt-1 font-medium">Schedules vary by cut-off dates.</span>}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="w-full">
+                        <div className="w-full p-4 sm:p-6">
                             
                             {/* 🟢 FIXED: High-contrast Dark Grey Headers */}
-                            <div className="grid gap-1.5 mb-1.5" style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
+                            <div className="grid gap-2 mb-2" style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
                                 {daysOfWeekSunToSat.map(d => (
-                                    <div key={`header-${d}`} className="rounded-md bg-gray-600 py-2.5 text-center text-xs font-bold text-white uppercase tracking-wider shadow-sm">
+                                    <div key={`header-${d}`} className="rounded-md bg-gray-600 py-3 text-center text-xs font-bold text-white uppercase tracking-wider shadow-sm">
                                         {d}
                                     </div>
                                 ))}
@@ -872,8 +847,8 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
 
                             {/* 🟢 FIXED: gridAutoRows set to minmax(110px, auto) allows rows to dynamically expand without hiding data */}
                             <div 
-                                className="grid gap-1.5" 
-                                style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gridAutoRows: 'minmax(110px, auto)' }}
+                                className="grid gap-2" 
+                                style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gridAutoRows: 'minmax(120px, auto)' }}
                             >
                                 {monthDays.map((slot, index) => {
                                     
@@ -892,7 +867,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                             onClick={() => {
                                                 if (canEditSchedule && singleEmployee) toggleCellSelection(singleEmployee.id, slot.dateString);
                                             }}
-                                            className={`h-full w-full flex flex-col rounded-md border p-1.5 sm:p-2.5 shadow-sm transition-colors relative ${
+                                            className={`h-full w-full flex flex-col rounded-md border p-2 sm:p-3 shadow-sm transition-colors relative ${
                                                 !singleEmployee ? 'border-gray-100 bg-white' :
                                                 isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500' : 
                                                 isOverride ? 'border-amber-200 bg-amber-50/30' : 
@@ -901,19 +876,18 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                             } ${canEditSchedule && singleEmployee ? (isOverride ? 'hover:bg-amber-50 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer') : 'cursor-default'}`}
                                         >
                                             <div className="flex justify-between items-start pointer-events-none">
-                                                <span className={`text-xs sm:text-sm font-semibold ${isOverride ? 'text-amber-700' : 'text-gray-700'}`}>{slot.dayNum}</span>
+                                                <span className={`text-sm sm:text-base font-bold ${isOverride ? 'text-amber-700' : 'text-gray-700'}`}>{slot.dayNum}</span>
                                                 
-                                                {/* 🟢 MODIFIED: Removed the Cut-off text label to free up cell space, relying purely on the indigo highlight! */}
                                                 <div className="flex flex-col items-end gap-1">
-                                                    {isOverride && <span className="text-[8px] sm:text-[9px] font-bold text-amber-500 uppercase tracking-wider bg-amber-100 px-1 sm:px-1.5 py-0.5 rounded shadow-sm">Modified</span>}
+                                                    {isOverride && <span className="text-[9px] sm:text-[10px] font-bold text-amber-500 uppercase tracking-wider bg-amber-100 px-1.5 sm:px-2 py-0.5 rounded shadow-sm">Modified</span>}
                                                 </div>
                                             </div>
 
                                             {singleEmployee && (
-                                                <div className="mt-1 sm:mt-2 flex flex-col items-center justify-center flex-1 gap-1 sm:gap-1.5 pointer-events-none">
+                                                <div className="mt-2 sm:mt-3 flex flex-col items-center justify-center flex-1 gap-2 pointer-events-none">
                                                     {renderShiftBadge(shiftType, isOff)}
                                                     {!isOff && startTime && endTime && (
-                                                        <span className={`text-[9px] sm:text-[10px] font-medium leading-tight font-mono text-center ${isOverride ? 'text-amber-700' : 'text-gray-500'}`}>
+                                                        <span className={`text-[10px] sm:text-[11px] font-bold leading-tight font-mono text-center ${isOverride ? 'text-amber-700' : 'text-gray-500'}`}>
                                                             {startTime}<br/>|<br/>{endTime}
                                                         </span>
                                                     )}
@@ -929,7 +903,9 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
 
             </div>
 
+            {/* ========================================== */}
             {/* OVERRIDE SHIFT MODAL */}
+            {/* ========================================== */}
             {showOverrideModal && (
                 <div className="fixed inset-0 z-[60] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
                     <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
@@ -938,14 +914,13 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                         <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
                         <div className="inline-block transform overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle relative z-10">
                             <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                                <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4" id="modal-title">Override Selected Days</h3>
+                                <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Override Selected Days</h3>
                                 
                                 <div className="mb-4 rounded-md bg-blue-50 p-4 border border-blue-100">
                                     <p className="text-sm text-blue-700">You are applying a daily override to <strong>{selectedCells.length} specific day(s)</strong>.</p>
                                 </div>
                                 
                                 <form onSubmit={submitOverride} className="space-y-6">
-                                    
                                     <label className="flex items-center space-x-3 p-3 border border-gray-200 rounded-md bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
                                         <input 
                                             type="checkbox" 
@@ -956,7 +931,6 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                         <span className="text-sm font-medium text-gray-700">Mark these dates as Off Days</span>
                                     </label>
 
-                                    {/* 🟢 DYNAMIC SHIFT DROPDOWN: Rendered straight from the database! */}
                                     {!overrideData.is_off_day && (
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700">New Shift for Selected Days</label>
@@ -1008,7 +982,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                 </div>
             )}
 
-            {/* 🟢 CUSTOM IN-APP CONFIRMATION MODAL (Replaces browser window.confirm) */}
+            {/* 🟢 CUSTOM IN-APP CONFIRMATION MODAL */}
             {showResetConfirmModal && (
                 <div className="fixed inset-0 z-[60] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
                     <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
