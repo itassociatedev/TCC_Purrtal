@@ -123,6 +123,7 @@ class AdminACL extends Model
                 'hr_overview' => 'HR Overview',
                 'documents' => 'Document Requests',
                 'form_2316_approvals' => 'Form 2316 Approvals',
+                'documents' => 'Document Repository',
                 'manpower_requests_form' => 'Manpower Request Form',
                 'approval_board_hr' => 'Approval Board',
                 'feedback_form' => 'Feedback Form',

@@ -194,11 +194,11 @@ const buildRole = (overrides = {}) => ({
     'Set Up Roster': 'NONE',
     'Duty meal Archive': 'NONE',
     'Attendance Overview': 'VIEW',
-    // 🟢 FIXED: Schedule View is entirely removed from the hierarchy
     'Setup Schedule': 'NONE',
     'Calendar': 'VIEW',
     'Attendance Settings': 'NONE',
     'Personal Meal Selection': 'EDIT',
+    'Document Repository': 'VIEW', // 🟢 Default access set to VIEW for all standard roles
     ...overrides
 });
 
@@ -223,11 +223,11 @@ const ALL_FULL = {
     'Set Up Roster': 'FULL', 
     'Duty meal Archive': 'FULL',
     'Attendance Overview': 'FULL', 
-    // 🟢 FIXED: Schedule View is entirely removed from the hierarchy
     'Setup Schedule': 'FULL', 
     'Calendar': 'FULL', 
     'Attendance Settings': 'FULL', 
-    'Personal Meal Selection': 'FULL'
+    'Personal Meal Selection': 'FULL',
+    'Document Repository': 'FULL'
 };
 
 const HR_BASE = buildRole({
@@ -238,9 +238,9 @@ const HR_BASE = buildRole({
     'Approval Board': 'FULL',
     'Feedback Form': 'FULL', 
     'Attendance Overview': 'FULL', 
-    // 🟢 FIXED: Schedule View is entirely removed from the hierarchy
     'Setup Schedule': 'FULL',
-    'Calendar': 'FULL'
+    'Calendar': 'FULL',
+    'Document Repository': 'FULL' // HR overrides base template to get FULL access
 });
 
 const TL_BASE = buildRole({
@@ -251,7 +251,7 @@ const TL_BASE = buildRole({
 // only map the DIFFERENCES from the base templates
 const aclDefaultPermissions = {
     'Admin': ALL_FULL,
-    'Executive Vice President': ALL_FULL, // 🟢 Added with FULL access
+    'Executive Vice President': ALL_FULL,
     'DCSO': ALL_FULL,
     'HRBP': HR_BASE,
     'HR': HR_BASE,
@@ -271,7 +271,7 @@ const aclDefaultPermissions = {
     'Inventory Assistant': buildRole({ 
                     'PR Form': 'WRITE', 
                     'PO Generation': 'VIEW', 
-                    'Products Masterlist': 'VIEW' 
+                    'Products Masterlist': 'VIEW'
                 }),
     'Housekeeping TL': { ...TL_BASE, 
                     'Duty Meal Overview': 'FULL', 
@@ -287,7 +287,7 @@ const aclDefaultPermissions = {
                     'PO Generation': 'FULL', 
                     'Products Masterlist': 'FULL', 
                     'Duty Meal Overview': 'VIEW', 
-                    'Duty meal Archive': 'VIEW' 
+                    'Duty meal Archive': 'VIEW'
                 }),
     'Auditor TL': { ...TL_BASE, 
                     'PO Generation': 'VIEW', 
@@ -307,7 +307,7 @@ const aclDefaultPermissions = {
     'Employee': buildRole({ 
                     'Duty Meal Overview': 'FULL', 
                     'Set Up Roster': 'FULL', 
-                    'Duty meal Archive': 'FULL' 
+                    'Duty meal Archive': 'FULL'
                 }),
     'Intern': buildRole({}),
 };
@@ -347,12 +347,12 @@ const MODULE_NAME_KEY_OVERRIDES = {
   'set up roster': 'duty_meal_setup_roster',
   'supplier management': 'suppliers',
   'attendance overview': 'attendance_overview',
-  // 🟢 FIXED: The new consolidated mapping. Schedule View is dead, Setup Schedule reigns supreme.
   'setup schedule': 'attendance_setup',
   'calendar': 'attendance_calendar',
   'personal calendar': 'attendance_calendar',
   'attendance settings': 'attendance_settings', 
   'personal meal selection': 'duty_meal_personal', 
+  'document repository': 'documents', // 🟢 Ensures exact backend mapping
 };
 
 const POSITION_ORDER = [
