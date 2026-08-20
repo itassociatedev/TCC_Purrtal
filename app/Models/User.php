@@ -165,6 +165,13 @@ class User extends Authenticatable
         if ($acl) {
             return strtolower(trim($acl->permission_level));
         }
+        
+        // 🟢 DEFAULT PERMISSION FALLBACK
+        // If the ACL entry doesn't exist in the database at all, 
+        // default to 'edit' so all staff can access their personal duty meals.
+        if ($normalizedModule === 'duty_meal_personal') {
+            return 'edit';
+        }
 
         if (strtolower(trim($this->role->name)) === strtolower(trim(config('admin-acl.superadmin_role', 'admin')))) {
             return 'full';

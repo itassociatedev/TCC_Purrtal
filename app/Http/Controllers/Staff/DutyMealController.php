@@ -18,7 +18,11 @@ class DutyMealController extends Controller
 {
     public function index(Request $request)
     {
-        // ... [Index method remains completely unchanged] ...
+        // 🟢 NEW: Enforce ACL Security for Personal Meals
+        if (!\Illuminate\Support\Facades\Auth::user()->canViewModule('duty_meal_personal')) {
+            abort(403, 'You do not have permission to access Personal Duty Meals.');
+        }
+
         $user = $request->user();
         $now = now();
 

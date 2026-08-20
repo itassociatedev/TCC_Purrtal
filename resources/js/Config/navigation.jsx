@@ -44,6 +44,14 @@ export const hasPermission = (auth, permissionKey) => {
 
     if (isUserAdmin(auth)) return true;
 
+    // 🟢 DEFAULT PERMISSION FALLBACK
+    if (normalizedKey === 'duty_meal_personal') {
+        const aclPermissions = auth.user.acl_permissions;
+        if (!aclPermissions || aclPermissions[normalizedKey] === undefined) {
+            return true;
+        }
+    }
+
     const aclPermissions = auth.user.acl_permissions;
     if (aclPermissions && typeof aclPermissions === 'object' && Object.prototype.hasOwnProperty.call(aclPermissions, normalizedKey)) {
         return normalizeAclPermissionLevel(aclPermissions[normalizedKey]) !== 'no_access';
@@ -57,12 +65,20 @@ export const hasPermission = (auth, permissionKey) => {
 };
 
 export const getAclPermissionLevel = (auth, permissionKey) => {
+    const normalizedKey = String(permissionKey).trim().toLowerCase();
+
+    // 🟢 DEFAULT PERMISSION FALLBACK
     if (!auth?.user?.acl_permissions) {
+        if (normalizedKey === 'duty_meal_personal') return 'edit';
         return null;
     }
 
-    const normalizedKey = String(permissionKey).trim().toLowerCase();
     const level = auth.user.acl_permissions[normalizedKey];
+
+    // 🟢 DEFAULT PERMISSION FALLBACK (If key doesn't exist yet)
+    if (level === undefined && normalizedKey === 'duty_meal_personal') {
+        return 'edit';
+    }
 
     return level ? String(level).trim().toLowerCase() : null;
 };
@@ -287,6 +303,7 @@ const MODULE_GROUPS = {
         'duty_meal',
         'duty_meal_setup_roster',
         'duty_meal_archive',
+        'duty_meal_personal', // 🟢 NEW
     ],
     dmc: [
         'duty_meal',
@@ -505,29 +522,24 @@ export const getDocumentSidebarLinks = (categories = [], activeCategory = 'Overv
 };
 
 // Duty Meal Module Links
-// Duty Meal Module Links
 export const getDutyMealLinks = (auth) => {
-    // 🟢 NEW: Allow basic staff to see the module so they can lock their meals
-    const isBasicStaff = !canViewModule(auth, 'duty_meal') 
-        && !canViewModule(auth, 'duty_meal_setup_roster') 
-        && !canViewModule(auth, 'duty_meal_archive');
+    // 🟢 NEW: Check if the user has access to ANY part of the duty meal ecosystem
+    const hasDutyMealAccess = [
+        'duty_meal',
+        'duty_meal_setup_roster',
+        'duty_meal_archive',
+        'duty_meal_personal'
+    ].some((module) => hasPermission(auth, module) || canViewModule(auth, module));
 
-    const links = [];
+    if (!hasDutyMealAccess) return [];
 
-    // 🟢 NEW: Basic staff only see the locking interface
-    if (isBasicStaff) {
-        links.push({
-            label: 'Duty Meal Roster',
-            href: route('staff.duty-meals.index'),
-            active: route().current('staff.duty-meals.index'),
-        });
-        return links;
-    }
-
-    // 🔐 DYNAMIC ACL CHECKS for Elevated Users
+    // 🔐 DYNAMIC ACL CHECKS
+    const canViewOverview = canViewModule(auth, 'duty_meal');
     const canSetupRoster = canViewModule(auth, 'duty_meal_setup_roster');
     const canAccessArchive = canViewModule(auth, 'duty_meal_archive');
-    const canViewOverview = canViewModule(auth, 'duty_meal');
+    const canAccessPersonal = canViewModule(auth, 'duty_meal_personal');
+
+    const links = [];
 
     if (canViewOverview) {
         links.push({
@@ -555,12 +567,14 @@ export const getDutyMealLinks = (auth) => {
         });
     }
 
-    // 🟢 NEW: Elevated users ALSO need to lock their own meals, so we append the staff route at the bottom
-    links.push({
-        label: 'My Personal Meals',
-        href: route('staff.duty-meals.index'),
-        active: route().current('staff.duty-meals.index'),
-    });
+    // 🟢 NEW: Now strictly governed by the ACL grid!
+    if (canAccessPersonal) {
+        links.push({
+            label: 'My Personal Meals',
+            href: route('staff.duty-meals.index'),
+            active: route().current('staff.duty-meals.index'),
+        });
+    }
 
     return links;
 };

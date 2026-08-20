@@ -131,6 +131,7 @@ class AdminACL extends Model
                 'duty_meal' => 'Duty Meal Management',
                 'duty_meal_setup_roster' => 'Set Up Roster',
                 'duty_meal_archive' => 'Duty Meal Archive',
+                'duty_meal_personal' => 'Personal Meal Selection', // 🟢 NEW: Added to the ACL Grid
             ],
             // 🟢 ADDED: Attendance Group
             'Attendance Module' => [
