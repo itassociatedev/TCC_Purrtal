@@ -34,47 +34,63 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
     useEffect(() => setMounted(true), []);
 
     // ==========================================
-    // 🟢 CUT-OFF HIGHLIGHT LOGIC ENGINE
+    // 🟢 CUT-OFF HIGHLIGHT LOGIC ENGINE (FIXED)
     // ==========================================
     const currentCutoffRange = useMemo(() => {
-        // Use system server date if available, otherwise fallback to local browser time
         const today = new Date(system?.serverDate ? `${system.serverDate}T00:00:00` : new Date().setHours(0,0,0,0));
-        const day = today.getDate();
-        const month = today.getMonth();
-        const year = today.getFullYear();
+        const y = today.getFullYear();
+        const m = today.getMonth();
+        const d = today.getDate();
 
-        // Fallbacks to standard semi-monthly bounds if missing from DB
-        const c1s = parseInt(cutoffSettings?.cutoff_1_start || 11);
-        const c1e = parseInt(cutoffSettings?.cutoff_1_end || 25);
-        const c2s = parseInt(cutoffSettings?.cutoff_2_start || 26);
-        const c2e = parseInt(cutoffSettings?.cutoff_2_end || 10);
+        const c1s = parseInt(cutoffSettings?.cutoff_1_start || 21);
+        const c1e = parseInt(cutoffSettings?.cutoff_1_end || 5);
+        const c2s = parseInt(cutoffSettings?.cutoff_2_start || 6);
+        const c2e = parseInt(cutoffSettings?.cutoff_2_end || 20);
 
-        let startDate, endDate;
+        let startStr, endStr;
 
-        if (day >= c1s && day <= c1e) {
-            // We are in Cutoff 1 (e.g. 11th to 25th)
-            startDate = new Date(year, month, c1s);
-            endDate = new Date(year, month, c1e);
-        } else if (day >= c2s) {
-            // We are in the first half of Cutoff 2 (e.g. 26th to end of month)
-            startDate = new Date(year, month, c2s);
-            endDate = new Date(year, month + 1, c2e); // Pushes to next month automatically
+        if (d >= c2s && d <= c2e) {
+            startStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(c2s).padStart(2, '0')}`;
+            endStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(c2e).padStart(2, '0')}`;
+        } else if (d > c2e) {
+            const nextM = m === 11 ? 0 : m + 1;
+            const nextY = m === 11 ? y + 1 : y;
+            startStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(c1s).padStart(2, '0')}`;
+            endStr = `${nextY}-${String(nextM + 1).padStart(2, '0')}-${String(c1e).padStart(2, '0')}`;
         } else {
-            // We are in the second half of Cutoff 2 (e.g. 1st to 10th)
-            startDate = new Date(year, month - 1, c2s); // Pushes to prev month automatically
-            endDate = new Date(year, month, c2e);
+            const prevM = m === 0 ? 11 : m - 1;
+            const prevY = m === 0 ? y - 1 : y;
+            startStr = `${prevY}-${String(prevM + 1).padStart(2, '0')}-${String(c1s).padStart(2, '0')}`;
+            endStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(c1e).padStart(2, '0')}`;
         }
 
-        startDate.setHours(0,0,0,0);
-        endDate.setHours(23,59,59,999);
+        const startDate = new Date(`${startStr}T00:00:00`);
+        const endDate = new Date(`${endStr}T23:59:59`);
 
         return { startDate, endDate };
     }, [cutoffSettings, system?.serverDate]);
 
-    // Simple checker to see if a given string matches the active bounds
+    // 🟢 NEW: Toggle State for the highlight
+    const [showCutoffHighlight, setShowCutoffHighlight] = useState(false);
+
+    const toggleCutoffHighlight = () => {
+        const newValue = !showCutoffHighlight;
+        setShowCutoffHighlight(newValue);
+        if (newValue) {
+            // Jump to the current cut-off dates when turned ON
+            if (viewMode === 'single') {
+                setCurrentMonth(currentCutoffRange.startDate.getMonth());
+                setCurrentYear(currentCutoffRange.startDate.getFullYear());
+            } else {
+                setWeekOffset(0);
+            }
+        }
+    };
+
     const isDateInCurrentCutoff = (dateStr) => {
-        if (!dateStr) return false;
-        const d = new Date(`${dateStr}T12:00:00`); // 12 PM to avoid timezone edge cases
+        // Will only highlight if the toggle is ON
+        if (!showCutoffHighlight || !dateStr) return false;
+        const d = new Date(`${dateStr}T12:00:00`); 
         return d >= currentCutoffRange.startDate && d <= currentCutoffRange.endDate;
     };
 
@@ -423,7 +439,28 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                                         <span className="text-sm font-medium text-gray-700 w-56 text-center">{currentWeekRange}</span>
                                         <button onClick={() => setWeekOffset(prev => prev + 1)} className="rounded border border-gray-300 bg-white px-2 py-1 text-gray-600 shadow-sm hover:bg-gray-50">&rarr;</button>
                                     </div>
-                                    <button onClick={() => setWeekOffset(0)} className="rounded border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition-colors hover:bg-indigo-100">This Week</button>
+                                    <button onClick={() => setWeekOffset(0)} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-50">This Week</button>
+                                    
+                                    {/* 🟢 NEW: TOGGLE BUTTON FOR BATCH VIEW */}
+                                    <button 
+                                        onClick={toggleCutoffHighlight}
+                                        className={`flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-bold transition-colors ${
+                                            showCutoffHighlight 
+                                            ? 'border-indigo-300 bg-indigo-50/80 text-indigo-700 hover:bg-indigo-100' 
+                                            : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        {showCutoffHighlight && (
+                                            <span className="relative flex h-2 w-2">
+                                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                                            </span>
+                                        )}
+                                        {!showCutoffHighlight && (
+                                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                        )}
+                                        {showCutoffHighlight ? 'Hide Cut-off' : 'Show Cut-off'}
+                                    </button>
                                 </div>
                             </div>
 
@@ -521,7 +558,6 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                                                 return (
                                                     <th key={day.dateString} className={`px-3 py-3.5 text-center text-sm font-semibold text-gray-900 border-b border-gray-200 ${isCutoff ? 'bg-indigo-50 border-t-4 border-t-indigo-400 shadow-sm' : ''}`}>
                                                         {day.display}
-                                                        {isCutoff && <div className="text-[9px] text-indigo-600 font-black uppercase mt-0.5 tracking-wider">Current Cut-off</div>}
                                                     </th>
                                                 );
                                             })}
@@ -541,7 +577,7 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                                                     
                                                     // 🟢 EDIT ACL LOCK: Removes cursor-pointer and hover colors if user only has VIEW access
                                                     return (
-                                                        <td key={day.dateString} className={`px-1 py-1.5 align-middle ${isCutoff ? 'bg-indigo-50/20' : ''}`}>
+                                                        <td key={day.dateString} className={`px-1 py-1.5 align-middle ${isCutoff ? 'bg-indigo-50/40' : ''}`}>
                                                             <div 
                                                                 onClick={() => {
                                                                     if (canEditSchedule) toggleCellSelection(emp.id, day.dateString);
@@ -549,7 +585,7 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                                                                 className={`min-h-[85px] w-full flex flex-col justify-center items-center gap-1.5 rounded-md border p-2 shadow-sm transition-colors relative ${
                                                                     isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500' : 
                                                                     isOverride ? 'border-amber-200 bg-amber-50/30' : 
-                                                                    isCutoff ? 'border-indigo-200 bg-white' : 
+                                                                    isCutoff ? 'border-indigo-200 bg-white ring-1 ring-indigo-100' : 
                                                                     'border-gray-200 bg-white'
                                                                 } ${canEditSchedule ? (isOverride ? 'hover:bg-amber-50 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer') : 'cursor-default'}`}
                                                             >
@@ -686,21 +722,26 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                                             &rarr;
                                         </button>
                                         
-                                        {/* 🟢 NEW: Current Cut-off Legend & Jump Button */}
+                                        {/* 🟢 MODIFIED: Current Cut-off Toggle Button */}
                                         <button 
-                                            onClick={() => {
-                                                const d = currentCutoffRange.startDate;
-                                                setCurrentMonth(d.getMonth());
-                                                setCurrentYear(d.getFullYear());
-                                            }}
-                                            className="ml-1 sm:ml-2 flex items-center gap-1.5 px-3 h-8 rounded-md border border-indigo-300 bg-indigo-50/80 text-xs font-bold text-indigo-700 shadow-sm hover:bg-indigo-100 transition-colors"
-                                            title="Jump to Current Cut-off"
+                                            onClick={toggleCutoffHighlight}
+                                            className={`ml-1 sm:ml-2 flex items-center gap-1.5 px-3 h-8 rounded-md border text-xs font-bold shadow-sm transition-colors ${
+                                                showCutoffHighlight 
+                                                ? 'border-indigo-300 bg-indigo-50/80 text-indigo-700 hover:bg-indigo-100' 
+                                                : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+                                            }`}
+                                            title="Toggle Current Cut-off Highlight"
                                         >
-                                            <span className="relative flex h-2 w-2">
-                                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                                              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
-                                            </span>
-                                            Current Cut-off
+                                            {showCutoffHighlight && (
+                                                <span className="relative flex h-2 w-2">
+                                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                                                </span>
+                                            )}
+                                            {!showCutoffHighlight && (
+                                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                            )}
+                                            {showCutoffHighlight ? 'Hide Cut-off' : 'Show Cut-off'}
                                         </button>
                                     </div>
                                 </div>
@@ -750,7 +791,7 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                                             onClick={() => {
                                                 if (canEditSchedule && singleEmployee) toggleCellSelection(singleEmployee.id, slot.dateString);
                                             }}
-                                            className={`h-full w-full flex flex-col rounded-md border p-1.5 sm:p-2.5 shadow-sm transition-colors ${
+                                            className={`h-full w-full flex flex-col rounded-md border p-1.5 sm:p-2.5 shadow-sm transition-colors relative ${
                                                 !singleEmployee ? 'border-gray-100 bg-white' :
                                                 isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500' : 
                                                 isOverride ? 'border-amber-200 bg-amber-50/30' : 
