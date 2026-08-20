@@ -772,5 +772,7 @@ export const getFirstAttendanceRoute = (auth) => {
     if (canViewModule(auth, 'attendance_calendar')) return route('attendance.calendar');
     if (canViewModule(auth, 'attendance_schedule_view')) return route('attendance.schedule-view');
     if (canEditModule(auth, 'attendance_setup')) return route('attendance.setup-schedule');
-    return route('attendance.calendar'); // Fallback
+    
+    // 🟢 FIXED: If they have no access to anything, return null so the UI knows not to route them!
+    return null; 
 };

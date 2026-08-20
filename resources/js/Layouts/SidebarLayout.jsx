@@ -3,8 +3,8 @@ import Dropdown from '@/Components/Dropdown';
 import FlashMessage from '@/Components/FlashMessage';
 import { Link, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
-import { useEffect, useState } from 'react';
-import { hasHRModuleAccess, moduleHasAccess, hasPermission, canViewModuleCard } from '@/Config/navigation';
+import { useEffect, useState, useRef } from 'react';
+import { hasHRModuleAccess, moduleHasAccess, hasPermission, canViewModuleCard, getFirstAttendanceRoute } from '@/Config/navigation';
 
 export default function SidebarLayout({
     header,
@@ -143,6 +143,28 @@ export default function SidebarLayout({
 
     const user = usePage().props.auth.user;
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+    // 🟢 NEW: Quick Links Dropdown State & Ref
+    const [isQuickLinksOpen, setIsQuickLinksOpen] = useState(false);
+    const quickLinksRef = useRef(null);
+
+    // Close Quick Links if user clicks outside of the widget
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (quickLinksRef.current && !quickLinksRef.current.contains(event.target)) {
+                setIsQuickLinksOpen(false);
+            }
+        };
+        if (isQuickLinksOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isQuickLinksOpen]);
+
+    // 🟢 FIXED: Check if user has ANY quick links before rendering the floating button (Added Documents)
+    const hasAnyQuickLinks = canViewModuleCard(auth, 'attendance_calendar') || 
+                             canViewModuleCard(auth, 'duty_meal_personal') ||
+                             canViewModuleCard(auth, 'documents');
 
     const currentModuleLabel =
         activeModule === 'Admin'
@@ -369,7 +391,7 @@ export default function SidebarLayout({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
             </svg>
         ),
-        // 🟢 NEW ICONS FOR ATTENDANCE MODULE - MARX HAHAHAHAHA
+        // 🟢 NEW ICONS FOR ATTENDANCE MODULE
         'Attendance Overview': (
             <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -476,60 +498,6 @@ export default function SidebarLayout({
                         </div>
                     )}
 
-                    {['General', 'Profile'].includes(activeModule) && (
-                        <div className="mb-4">
-                            <div className="mb-4 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                                Quick Links
-                            </div>
-                            <ul className="space-y-2">
-                                {canViewModuleCard(auth, 'duty_meal') && (
-                                    <li>
-                                        <Link
-                                            href={route('staff.duty-meals.index')}
-                                            className="flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                                        >
-                                            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14" />
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 5l7 7-7 7" />
-                                            </svg>
-                                            Duty Meal
-                                        </Link>
-                                    </li>
-                                )}
-                                {canViewModuleCard(auth, 'documents') && (
-                                    <li>
-                                        <Link
-                                            href={route('admin.documents.index')}
-                                            className="flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                                        >
-                                            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 2h8l4 4v14a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z" />
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 2v4h8" />
-                                            </svg>
-                                            Document Repository
-                                        </Link>
-                                    </li>
-                                )}
-                                
-                                {/* 🟢 NEW: Calendar Quick Link */}
-                                <li>
-                                    <Link
-                                        href={route('attendance.calendar')}
-                                        className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 ${
-                                            route().current('attendance.calendar') ? 'bg-gray-100 font-bold text-gray-900' : ''
-                                        }`}
-                                    >
-                                        <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                        </svg>
-                                        Calendar
-                                    </Link>
-                                </li>
-
-                            </ul>
-                        </div>
-                    )}
-
                     {priorityLink && (
                         <div className="mb-4">
                             <Link
@@ -605,7 +573,7 @@ export default function SidebarLayout({
 
             <div className="flex flex-1 flex-col overflow-hidden relative">
                 
-                {/* 🔽 CSS FIX FOR MOBILE NOTIFICATION DROPDOWN 🔽 */}
+                {/* 🔽 CSS FIX FOR MOBILE NOTIFICATION DROPDOWN AND CUSTOM BOB ANIMATION 🔽 */}
                 <style>{`
                     @media (max-width: 639px) {
                         .mobile-notification-fix > div > .absolute.z-50,
@@ -618,6 +586,26 @@ export default function SidebarLayout({
                             width: 95vw !important;
                             max-width: 400px !important;
                         }
+                    }
+                    /* 🟢 Custom Bobbing Animation */
+                    @keyframes bob-delay {
+                        0%, 100% { transform: translateY(0); }
+                        10% { transform: translateY(-6px); }
+                        20% { transform: translateY(0); }
+                        30% { transform: translateY(-3px); }
+                        40% { transform: translateY(0); }
+                    }
+                    .animate-bob-delay {
+                        animation: bob-delay 4s ease-in-out infinite;
+                    }
+                    
+                    /* 🟢 Custom Panning/Slide Animation for Quick Links Menu */
+                    @keyframes slide-up-pan {
+                        0% { opacity: 0; transform: translateY(20px) scale(0.95); }
+                        100% { opacity: 1; transform: translateY(0) scale(1); }
+                    }
+                    .animate-slide-up-pan {
+                        animation: slide-up-pan 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
                     }
                 `}</style>
 
@@ -754,10 +742,12 @@ export default function SidebarLayout({
                                         <Dropdown.Link href={route('admin.duty-meals.index')}>Duty Meal Module</Dropdown.Link>
                                     )}
 
-                                    {/* 🟢 NEW ATTENDANCE MODULE LINK */}
-                                    <Dropdown.Link href={route('attendance.overview')}>
-                                        Attendance Module
-                                    </Dropdown.Link>
+                                    {/* 🟢 FIXED: Wrapped the Attendance link in the ACL checker */}
+                                    {moduleHasAccess(auth, 'attendance') && (
+                                        <Dropdown.Link href={getFirstAttendanceRoute(auth)}>
+                                            Attendance Module
+                                        </Dropdown.Link>
+                                    )}
                                     
                                 </Dropdown.Content>
                         </Dropdown>
@@ -797,6 +787,75 @@ export default function SidebarLayout({
                     )}
                     {children}
                 </main>
+
+                {/* 🟢 NEW: FLOATING QUICK LINKS WIDGET (Dropdown Style) */}
+                {hasAnyQuickLinks && (
+                    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end" ref={quickLinksRef}>
+                        
+                        {/* The Dropdown Menu (visible when open) */}
+                        {isQuickLinksOpen && (
+                            <div className="flex flex-col gap-2 mb-3 origin-bottom-right animate-slide-up-pan">
+                                {canViewModuleCard(auth, 'documents') && (
+                                    <a
+                                        href={route('admin.documents.index')}
+                                        className="flex items-center gap-3 px-4 py-3 bg-white border border-gray-200 text-gray-700 rounded-lg shadow-lg hover:bg-emerald-50 hover:text-emerald-700 hover:shadow-xl transition-all duration-200"
+                                    >
+                                        <span className="text-xl">📁</span>
+                                        <span className="font-semibold text-sm whitespace-nowrap">Document Repository</span>
+                                    </a>
+                                )}
+                                {canViewModuleCard(auth, 'attendance_calendar') && (
+                                    <a
+                                        href={route('attendance.calendar')}
+                                        className="flex items-center gap-3 px-4 py-3 bg-white border border-gray-200 text-gray-700 rounded-lg shadow-lg hover:bg-indigo-50 hover:text-indigo-700 hover:shadow-xl transition-all duration-200"
+                                    >
+                                        <span className="text-xl">📅</span>
+                                        <span className="font-semibold text-sm whitespace-nowrap">My Calendar</span>
+                                    </a>
+                                )}
+                                {canViewModuleCard(auth, 'duty_meal_personal') && (
+                                    <a
+                                        href={route('staff.duty-meals.index')}
+                                        className="flex items-center gap-3 px-4 py-3 bg-white border border-gray-200 text-gray-700 rounded-lg shadow-lg hover:bg-rose-50 hover:text-rose-700 hover:shadow-xl transition-all duration-200"
+                                    >
+                                        <span className="text-xl">🍽️</span>
+                                        <span className="font-semibold text-sm whitespace-nowrap">Personal Meals</span>
+                                    </a>
+                                )}
+                            </div>
+                        )}
+
+                        {/* The Main FAB (Floating Action Button) */}
+                        <div className="relative group flex items-center">
+                            
+                            {/* 🟢 Permanent Bobbing Chat Bubble Tooltip (Hides when menu is open) */}
+                            {!isQuickLinksOpen && (
+                                <div className="absolute right-[4.5rem] flex items-center pointer-events-none">
+                                    <div className="animate-bob-delay">
+                                        <span className="bg-gray-900 text-white text-xs font-bold px-3 py-2 rounded-lg whitespace-nowrap shadow-md relative block after:content-[''] after:absolute after:top-1/2 after:-translate-y-1/2 after:-right-1.5 after:border-t-[6px] after:border-b-[6px] after:border-l-[6px] after:border-t-transparent after:border-b-transparent after:border-l-gray-900">
+                                            Quick Links!
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+
+                            <button
+                                onClick={() => setIsQuickLinksOpen(!isQuickLinksOpen)}
+                                className="flex items-center justify-center w-14 h-14 bg-gray-900 text-white rounded-full shadow-lg hover:bg-gray-800 hover:shadow-xl transition-all duration-200 hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-gray-300"
+                            >
+                                <svg 
+                                    className={`w-6 h-6 transition-transform duration-300 ${isQuickLinksOpen ? 'rotate-45' : ''}`} 
+                                    fill="none" 
+                                    stroke="currentColor" 
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                </svg>
+                            </button>
+                            
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
