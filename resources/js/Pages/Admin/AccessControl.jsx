@@ -203,25 +203,49 @@ const buildRole = (overrides = {}) => ({
 });
 
 const ALL_FULL = {
-    'Admin Overview': 'FULL', 'Announcements & Notices': 'FULL', 'Employee Management': 'FULL',
-    'Company Content Management': 'FULL', 'Organizational Directory': 'FULL', 'Resource Links': 'FULL',
-    'System Logs & Security': 'FULL', 'Document Requests': 'FULL', 'Form 2316 Approval': 'FULL',
-    'Manpower Request Form': 'FULL', 'Approval Board': 'FULL', 'Feedback Form': 'FULL',
-    'PR Form': 'FULL', 'PR Approval Board': 'FULL', 'PO Generation': 'FULL', 'Products Masterlist': 'FULL',
-    'Duty Meal Overview': 'FULL', 'Set Up Roster': 'FULL', 'Duty meal Archive': 'FULL',
-    'Attendance Overview': 'FULL', 'Setup Schedule': 'FULL', 'Schedule View': 'FULL',
-    'Calendar': 'FULL', 'Attendance Settings': 'FULL', 'Personal Meal Selection': 'FULL'
+    'Admin Overview': 'FULL', 
+    'Announcements & Notices': 'FULL', 
+    'Employee Management': 'FULL',
+    'Company Content Management': 'FULL', 
+    'Organizational Directory': 'FULL', 
+    'Resource Links': 'FULL',
+    'System Logs & Security': 'FULL', 
+    'Document Requests': 'FULL', 
+    'Form 2316 Approval': 'FULL',
+    'Manpower Request Form': 'FULL', 
+    'Approval Board': 'FULL', 
+    'Feedback Form': 'FULL',
+    'PR Form': 'FULL', 
+    'PR Approval Board': 'FULL', 
+    'PO Generation': 'FULL', 
+    'Products Masterlist': 'FULL',
+    'Duty Meal Overview': 'FULL', 
+    'Set Up Roster': 'FULL', 
+    'Duty meal Archive': 'FULL',
+    'Attendance Overview': 'FULL', 
+    'Setup Schedule': 'FULL', 
+    'Schedule View': 'FULL',
+    'Calendar': 'FULL', 
+    'Attendance Settings': 'FULL', 
+    'Personal Meal Selection': 'FULL'
 };
 
 const HR_BASE = buildRole({
-    'Announcements & Notices': 'FULL', 'Company Content Management': 'FULL',
-    'Document Requests': 'FULL', 'Manpower Request Form': 'FULL', 'Approval Board': 'FULL',
-    'Feedback Form': 'FULL', 'Attendance Overview': 'FULL', 'Setup Schedule': 'FULL',
-    'Schedule View': 'FULL', 'Calendar': 'FULL'
+    'Announcements & Notices': 'FULL', 
+    'Company Content Management': 'FULL',
+    'Document Requests': 'FULL', 
+    'Manpower Request Form': 'FULL', 
+    'Approval Board': 'FULL',
+    'Feedback Form': 'FULL', 
+    'Attendance Overview': 'FULL', 
+    'Setup Schedule': 'FULL',
+    'Schedule View': 'FULL', 
+    'Calendar': 'FULL'
 });
 
 const TL_BASE = buildRole({
-    'Manpower Request Form': 'WRITE', 'Approval Board': 'VIEW'
+    'Manpower Request Form': 'WRITE', 
+    'Approval Board': 'VIEW'
 });
 
 // only map the DIFFERENCES from the base templates
@@ -232,24 +256,59 @@ const aclDefaultPermissions = {
     'HRBP': HR_BASE,
     'HR': HR_BASE,
     'HR Assistant': HR_BASE,
-    'Operations Manager': { ...TL_BASE, 'PR Approval Board': 'FULL' },
+    'Operations Manager': { ...TL_BASE, 
+                    'PR Approval Board': 'FULL' },
     'Chief Vet': TL_BASE,
     'Vet Tech TL': TL_BASE,
     'Clinic Assistant TL': TL_BASE,
     'Cashier TL': TL_BASE,
-    'Inventory TL': { ...TL_BASE, 'PR Form': 'FULL', 'PR Approval Board': 'FULL', 'PO Generation': 'VIEW', 'Products Masterlist': 'VIEW' },
-    'Inventory Assistant': buildRole({ 'PR Form': 'WRITE', 'PO Generation': 'VIEW', 'Products Masterlist': 'VIEW' }),
-    'Housekeeping TL': { ...TL_BASE, 'Duty Meal Overview': 'FULL', 'Set Up Roster': 'FULL', 'Duty meal Archive': 'FULL' },
+    'Inventory TL': { ...TL_BASE, 
+                    'PR Form': 'FULL', 
+                    'PR Approval Board': 'FULL', 
+                    'PO Generation': 'VIEW', 
+                    'Products Masterlist': 'VIEW' 
+                },
+    'Inventory Assistant': buildRole({ 
+                    'PR Form': 'WRITE', 
+                    'PO Generation': 'VIEW', 
+                    'Products Masterlist': 'VIEW' 
+                }),
+    'Housekeeping TL': { ...TL_BASE, 
+                    'Duty Meal Overview': 'FULL', 
+                    'Set Up Roster': 'FULL', 
+                    'Duty meal Archive': 'FULL' 
+                },
     'Marketing Manager': TL_BASE,
-    'Procurement TL': { ...TL_BASE, 'PO Generation': 'FULL', 'Products Masterlist': 'FULL' },
-    'Procurement Assistant': buildRole({ 'PO Generation': 'FULL', 'Products Masterlist': 'FULL', 'Duty Meal Overview': 'VIEW', 'Duty meal Archive': 'VIEW' }),
-    'Auditor TL': { ...TL_BASE, 'PO Generation': 'VIEW', 'Products Masterlist': 'VIEW', 'Duty Meal Overview': 'VIEW', 'Duty meal Archive': 'VIEW' },
+    'Procurement TL': { ...TL_BASE, 
+                    'PO Generation': 'FULL', 
+                    'Products Masterlist': 'FULL' 
+                },
+    'Procurement Assistant': buildRole({ 
+                    'PO Generation': 'FULL', 
+                    'Products Masterlist': 'FULL', 
+                    'Duty Meal Overview': 'VIEW', 
+                    'Duty meal Archive': 'VIEW' 
+                }),
+    'Auditor TL': { ...TL_BASE, 
+                    'PO Generation': 'VIEW', 
+                    'Products Masterlist': 'VIEW', 
+                    'Duty Meal Overview': 'VIEW', 
+                    'Duty meal Archive': 'VIEW' 
+                },
     'Audit Assist': buildRole({ 'PO Generation': 'VIEW' }),
     'General Accounting': { ...TL_BASE, 'Form 2316 Approval': 'FULL' },
-    'IT TL': { ...TL_BASE, 'Duty Meal Overview': 'FULL', 'Set Up Roster': 'FULL', 'Duty meal Archive': 'FULL' },
+    'IT TL': { ...TL_BASE, 
+                    'Duty Meal Overview': 'FULL', 
+                    'Set Up Roster': 'FULL', 
+                    'Duty meal Archive': 'FULL' 
+                },
     'Duty Meal Custodian': TL_BASE,
     'Point of Contact': buildRole({}), // 🟢 Added with standard base access
-    'Employee': buildRole({ 'Duty Meal Overview': 'FULL', 'Set Up Roster': 'FULL', 'Duty meal Archive': 'FULL' }),
+    'Employee': buildRole({ 
+                    'Duty Meal Overview': 'FULL', 
+                    'Set Up Roster': 'FULL', 
+                    'Duty meal Archive': 'FULL' 
+                }),
     'Intern': buildRole({}),
 };
 
