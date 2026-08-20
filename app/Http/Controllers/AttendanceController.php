@@ -466,6 +466,34 @@ class AttendanceController extends Controller
         return redirect()->back()->with('success', 'Overrides reset successfully.');
     }
 
+    // 🟢 NEW: Receive the imported setup document from the Front-end
+    public function importSchedule(Request $request)
+    {
+        if (!Auth::user()->canEditModule('attendance_setup')) abort(403);
+
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls,csv',
+        ]);
+
+        try {
+            // Using Maatwebsite Excel. Make sure App\Imports\AttendanceImport maps the export schema!
+            \Maatwebsite\Excel\Facades\Excel::import(new \App\Imports\AttendanceImport, $request->file('file'));
+
+            SystemLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'Import',
+                'module' => 'Attendance Setup',
+                'description' => "Imported schedule backup document.",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+
+            return redirect()->back()->with('success', 'Schedule imported successfully.');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Error importing schedule: ' . $e->getMessage());
+        }
+    }
+
     public function exportOverview(Request $request)
     {
         if (!Auth::user()->canViewModule('attendance_overview')) abort(403);

@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { useForm, usePage } from '@inertiajs/react'; 
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useForm, usePage, router } from '@inertiajs/react'; 
 import SidebarLayout from '@/Layouts/SidebarLayout';
 
 // 🟢 DYNAMIC HELPER: Uses database settings for Cut-off periods
@@ -64,6 +64,7 @@ const getCurrentCutoffValue = (settings) => {
 
 export default function SetupSchedule({ employees = [], branches = [], shifts = [], cutoffSettings = {} }) {
     const { auth } = usePage().props;
+    const fileInputRef = useRef(null);
 
     const checkAccess = (module, requiredLevels) => {
         if (auth?.user?.role_id === 1 || auth?.user?.role?.name?.toLowerCase() === 'admin') return true;
@@ -151,6 +152,22 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
         setShowModal(true);
     };
 
+    const handleFileImport = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        router.post(route('attendance.setup-schedule.import'), { file: file }, {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                e.target.value = null; // reset input
+            },
+            onError: () => {
+                e.target.value = null;
+            }
+        });
+    };
+
     const getActiveSchedule = (emp) => {
         if (!emp.schedules || emp.schedules.length === 0) return null;
         const [start, end] = selectedCutoff.split('|');
@@ -236,12 +253,27 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
             header={
                 <div className="flex items-center justify-between">
                     <h2 className="text-xl font-semibold leading-tight text-gray-800">Set-Up Schedule</h2>
-                    <button 
-                        onClick={handleAddSchedule}
-                        className="inline-flex items-center justify-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                    >
-                        + Add Schedule
-                    </button>
+                    <div className="flex space-x-3">
+                        <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            style={{ display: 'none' }} 
+                            accept=".xlsx,.xls,.csv" 
+                            onChange={handleFileImport} 
+                        />
+                        <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                        >
+                            Import Backup
+                        </button>
+                        <button 
+                            onClick={handleAddSchedule}
+                            className="inline-flex items-center justify-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                        >
+                            + Add Schedule
+                        </button>
+                    </div>
                 </div>
             }
         >
