@@ -3,7 +3,8 @@ import { useForm, usePage, router } from '@inertiajs/react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 
 export default function ScheduleView({ employees = [], branches = [], shifts = [], cutoffSettings = {} }) {
-    const { auth } = usePage().props;
+    // 🟢 ADDED: Extract system props here for serverDate
+    const { auth, system } = usePage().props;
 
     // 🟢 DYNAMIC SIDEBAR LINKS: Only show modules the user has permission to see
     const checkAccess = (module, requiredLevels) => {
@@ -31,6 +32,51 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
     const [viewMode, setViewMode] = useState('batch');
     const [mounted, setMounted] = useState(false);
     useEffect(() => setMounted(true), []);
+
+    // ==========================================
+    // 🟢 CUT-OFF HIGHLIGHT LOGIC ENGINE
+    // ==========================================
+    const currentCutoffRange = useMemo(() => {
+        // Use system server date if available, otherwise fallback to local browser time
+        const today = new Date(system?.serverDate ? `${system.serverDate}T00:00:00` : new Date().setHours(0,0,0,0));
+        const day = today.getDate();
+        const month = today.getMonth();
+        const year = today.getFullYear();
+
+        // Fallbacks to standard semi-monthly bounds if missing from DB
+        const c1s = parseInt(cutoffSettings?.cutoff_1_start || 11);
+        const c1e = parseInt(cutoffSettings?.cutoff_1_end || 25);
+        const c2s = parseInt(cutoffSettings?.cutoff_2_start || 26);
+        const c2e = parseInt(cutoffSettings?.cutoff_2_end || 10);
+
+        let startDate, endDate;
+
+        if (day >= c1s && day <= c1e) {
+            // We are in Cutoff 1 (e.g. 11th to 25th)
+            startDate = new Date(year, month, c1s);
+            endDate = new Date(year, month, c1e);
+        } else if (day >= c2s) {
+            // We are in the first half of Cutoff 2 (e.g. 26th to end of month)
+            startDate = new Date(year, month, c2s);
+            endDate = new Date(year, month + 1, c2e); // Pushes to next month automatically
+        } else {
+            // We are in the second half of Cutoff 2 (e.g. 1st to 10th)
+            startDate = new Date(year, month - 1, c2s); // Pushes to prev month automatically
+            endDate = new Date(year, month, c2e);
+        }
+
+        startDate.setHours(0,0,0,0);
+        endDate.setHours(23,59,59,999);
+
+        return { startDate, endDate };
+    }, [cutoffSettings, system?.serverDate]);
+
+    // Simple checker to see if a given string matches the active bounds
+    const isDateInCurrentCutoff = (dateStr) => {
+        if (!dateStr) return false;
+        const d = new Date(`${dateStr}T12:00:00`); // 12 PM to avoid timezone edge cases
+        return d >= currentCutoffRange.startDate && d <= currentCutoffRange.endDate;
+    };
 
     // ==========================================
     // OVERRIDE LOGIC & HELPERS
@@ -220,6 +266,25 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
         document.addEventListener('mousedown', handleClickOutsideSingle);
         return () => document.removeEventListener('mousedown', handleClickOutsideSingle);
     }, []);
+
+    // 🟢 Slider Navigation Logic
+    const handlePrevMonth = () => {
+        if (currentMonth === 0) {
+            setCurrentMonth(11);
+            setCurrentYear(prev => prev - 1);
+        } else {
+            setCurrentMonth(prev => prev - 1);
+        }
+    };
+
+    const handleNextMonth = () => {
+        if (currentMonth === 11) {
+            setCurrentMonth(0);
+            setCurrentYear(prev => prev + 1);
+        } else {
+            setCurrentMonth(prev => prev + 1);
+        }
+    };
 
     // 🟢 UPDATED: Filter by Branch securely
     const availableSingleEmployees = useMemo(() => {
@@ -450,9 +515,16 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                                     <thead className="bg-gray-50">
                                         <tr>
                                             <th className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-4 w-1/5 border-b border-gray-200">Employee</th>
-                                            {weekDates.map(day => (
-                                                <th key={day.dateString} className="px-3 py-3.5 text-center text-sm font-semibold text-gray-900 border-b border-gray-200">{day.display}</th>
-                                            ))}
+                                            {weekDates.map(day => {
+                                                // 🟢 CHECK IF THIS DAY IS IN THE CURRENT CUTOFF
+                                                const isCutoff = isDateInCurrentCutoff(day.dateString);
+                                                return (
+                                                    <th key={day.dateString} className={`px-3 py-3.5 text-center text-sm font-semibold text-gray-900 border-b border-gray-200 ${isCutoff ? 'bg-indigo-50 border-t-4 border-t-indigo-400 shadow-sm' : ''}`}>
+                                                        {day.display}
+                                                        {isCutoff && <div className="text-[9px] text-indigo-600 font-black uppercase mt-0.5 tracking-wider">Current Cut-off</div>}
+                                                    </th>
+                                                );
+                                            })}
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white">
@@ -465,10 +537,11 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                                                 {weekDates.map(day => {
                                                     const { isOff, shiftType, startTime, endTime, isOverride } = getShiftDetails(emp, day.dateString, day.dayName);
                                                     const isSelected = isCellSelected(emp.id, day.dateString);
+                                                    const isCutoff = isDateInCurrentCutoff(day.dateString); // 🟢 CHECK CELL
                                                     
                                                     // 🟢 EDIT ACL LOCK: Removes cursor-pointer and hover colors if user only has VIEW access
                                                     return (
-                                                        <td key={day.dateString} className="px-1 py-1.5 align-middle">
+                                                        <td key={day.dateString} className={`px-1 py-1.5 align-middle ${isCutoff ? 'bg-indigo-50/20' : ''}`}>
                                                             <div 
                                                                 onClick={() => {
                                                                     if (canEditSchedule) toggleCellSelection(emp.id, day.dateString);
@@ -476,6 +549,7 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                                                                 className={`min-h-[85px] w-full flex flex-col justify-center items-center gap-1.5 rounded-md border p-2 shadow-sm transition-colors relative ${
                                                                     isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500' : 
                                                                     isOverride ? 'border-amber-200 bg-amber-50/30' : 
+                                                                    isCutoff ? 'border-indigo-200 bg-white' : 
                                                                     'border-gray-200 bg-white'
                                                                 } ${canEditSchedule ? (isOverride ? 'hover:bg-amber-50 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer') : 'cursor-default'}`}
                                                             >
@@ -592,22 +666,42 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                                     </div>
                                 </div>
 
+                                {/* 🟢 REPLACED: Converted Month/Year Selectors into a Slider and Legend Button */}
                                 <div>
                                     <label className="block text-xs font-medium text-gray-500 mb-1">Month / Year</label>
-                                    <div className="flex gap-2">
-                                        <select
-                                            className="block w-28 rounded-md border-gray-300 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                            value={currentMonth}
-                                            onChange={e => setCurrentMonth(parseInt(e.target.value))}
+                                    <div className="flex items-center gap-1.5">
+                                        <button 
+                                            onClick={handlePrevMonth}
+                                            className="flex items-center justify-center w-8 h-8 rounded-md border border-gray-300 bg-white text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
                                         >
-                                            {monthNames.map((m, idx) => <option key={m} value={idx}>{m}</option>)}
-                                        </select>
-                                        <input
-                                            type="number"
-                                            className="block w-20 rounded-md border-gray-300 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                            value={currentYear}
-                                            onChange={e => setCurrentYear(parseInt(e.target.value))}
-                                        />
+                                            &larr;
+                                        </button>
+                                        <div className="flex items-center justify-center w-32 h-8 rounded-md border border-gray-300 bg-white text-sm font-bold text-gray-800 shadow-sm select-none">
+                                            {monthNames[currentMonth]} {currentYear}
+                                        </div>
+                                        <button 
+                                            onClick={handleNextMonth}
+                                            className="flex items-center justify-center w-8 h-8 rounded-md border border-gray-300 bg-white text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
+                                        >
+                                            &rarr;
+                                        </button>
+                                        
+                                        {/* 🟢 NEW: Current Cut-off Legend & Jump Button */}
+                                        <button 
+                                            onClick={() => {
+                                                const d = currentCutoffRange.startDate;
+                                                setCurrentMonth(d.getMonth());
+                                                setCurrentYear(d.getFullYear());
+                                            }}
+                                            className="ml-1 sm:ml-2 flex items-center gap-1.5 px-3 h-8 rounded-md border border-indigo-300 bg-indigo-50/80 text-xs font-bold text-indigo-700 shadow-sm hover:bg-indigo-100 transition-colors"
+                                            title="Jump to Current Cut-off"
+                                        >
+                                            <span className="relative flex h-2 w-2">
+                                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                                            </span>
+                                            Current Cut-off
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -647,6 +741,7 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
 
                                     const { isOff, shiftType, startTime, endTime, isOverride } = getShiftDetails(singleEmployee, slot.dateString, slot.dayName);
                                     const isSelected = singleEmployee ? isCellSelected(singleEmployee.id, slot.dateString) : false;
+                                    const isCutoff = singleEmployee && isDateInCurrentCutoff(slot.dateString); // 🟢 CHECK CALENDAR CELL
                                     
                                     // 🟢 EDIT ACL LOCK: Removes cursor-pointer and hover colors if user only has VIEW access
                                     return (
@@ -659,12 +754,17 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                                                 !singleEmployee ? 'border-gray-100 bg-white' :
                                                 isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500' : 
                                                 isOverride ? 'border-amber-200 bg-amber-50/30' : 
+                                                isCutoff ? 'border-indigo-300 bg-indigo-50/40 ring-1 ring-indigo-100' : 
                                                 'border-gray-200 bg-white'
                                             } ${canEditSchedule && singleEmployee ? (isOverride ? 'hover:bg-amber-50 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer') : 'cursor-default'}`}
                                         >
                                             <div className="flex justify-between items-start pointer-events-none">
                                                 <span className={`text-xs sm:text-sm font-semibold ${isOverride ? 'text-amber-700' : 'text-gray-700'}`}>{slot.dayNum}</span>
-                                                {isOverride && <span className="text-[8px] sm:text-[9px] font-bold text-amber-500 uppercase tracking-wider bg-amber-100 px-1 sm:px-1.5 py-0.5 rounded shadow-sm">Modified</span>}
+                                                
+                                                {/* 🟢 MODIFIED: Removed the Cut-off text label to free up cell space, relying purely on the indigo highlight! */}
+                                                <div className="flex flex-col items-end gap-1">
+                                                    {isOverride && <span className="text-[8px] sm:text-[9px] font-bold text-amber-500 uppercase tracking-wider bg-amber-100 px-1 sm:px-1.5 py-0.5 rounded shadow-sm">Modified</span>}
+                                                </div>
                                             </div>
 
                                             {singleEmployee && (
