@@ -121,7 +121,8 @@ export default function ScheduleView({ employees = [], branches = [], shifts = [
                 shiftType: override.shift_type,
                 startTime: override.start_time,
                 endTime: override.end_time,
-                isOverride: true 
+                // 🟢 The Magic Switch: Only shows yellow if it was manually overridden in UI!
+                isOverride: override.is_manual
             };
         }
 

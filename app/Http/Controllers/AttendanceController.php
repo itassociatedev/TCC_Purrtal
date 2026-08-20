@@ -467,28 +467,209 @@ class AttendanceController extends Controller
     }
 
     // 🟢 NEW: Receive the imported setup document from the Front-end
+    // 🟢 UPDATED: Import overview summary and map to Daily Schedule Overrides
+    // 🟢 UPDATED: Import overview summary with precise time-range shift matching
+    // 🟢 UPDATED: Import overview summary with robust Excel whitespace and non-breaking space cleaning
+    // 🟢 UPDATED: Import schedule by reading dates directly from the Excel header row
+    // 🟢 FROM SCRATCH: Smart Import Engine
+    // 🟢 UPDATED: Smart Import Engine with Newline-Safe Text Cleaning
     public function importSchedule(Request $request)
     {
         if (!Auth::user()->canEditModule('attendance_setup')) abort(403);
 
         $request->validate([
-            'file' => 'required|file|mimes:xlsx,xls,csv',
+            'file' => 'required|file',
         ]);
 
         try {
-            // Using Maatwebsite Excel. Make sure App\Imports\AttendanceImport maps the export schema!
-            \Maatwebsite\Excel\Facades\Excel::import(new \App\Imports\AttendanceImport, $request->file('file'));
+            $file = $request->file('file');
+            $extension = strtolower($file->getClientOriginalExtension());
+            $rows = [];
+
+            // 1. Read the file
+            if ($extension === 'csv' || $extension === 'txt') {
+                $path = $file->getRealPath();
+                if (($handle = fopen($path, 'r')) !== FALSE) {
+                    while (($row = fgetcsv($handle, 10000, ',')) !== FALSE) {
+                        $rows[] = $row;
+                    }
+                    fclose($handle);
+                }
+            } else {
+                if (!class_exists('ZipArchive')) {
+                    return redirect()->back()->with('error', 'Server Error: The PHP "ZipArchive" extension is missing. Please save and upload your backup as a CSV file instead!');
+                }
+                $data = \Maatwebsite\Excel\Facades\Excel::toArray(new \App\Imports\AttendanceImport(null, null), $file);
+                $rows = $data[0] ?? [];
+            }
+
+            if (count($rows) < 2) {
+                return redirect()->back()->with('error', 'The uploaded file is empty or formatted incorrectly.');
+            }
+
+            // 2. Parse Dates from Header Row
+            $headerRow = $rows[1] ?? [];
+            $columnDates = [];
+            $currentYear = now()->year;
+
+            for ($col = 2; $col < count($headerRow); $col++) {
+                $headerText = trim($headerRow[$col] ?? '');
+                if (empty($headerText)) continue;
+
+                try {
+                    $parsedDate = \Carbon\Carbon::parse($headerText . ' ' . $currentYear);
+                    $columnDates[$col] = $parsedDate->format('Y-m-d');
+                } catch (\Exception $e) {}
+            }
+
+            if (empty($columnDates)) return redirect()->back()->with('error', 'Could not detect valid dates in the header row.');
+
+            $parsedDateStrings = array_values($columnDates);
+            $startDate = min($parsedDateStrings);
+            $endDate = max($parsedDateStrings);
+            $weekOrder = ['Monday' => 1, 'Tuesday' => 2, 'Wednesday' => 3, 'Thursday' => 4, 'Friday' => 5, 'Saturday' => 6, 'Sunday' => 7];
+
+            // 3. Process each Employee Row
+            for ($i = 2; $i < count($rows); $i++) {
+                $row = $rows[$i];
+                $employeeName = trim($row[0] ?? '');
+                if (empty($employeeName)) continue;
+
+                $employee = User::where('name', $employeeName)->first();
+                if (!$employee) continue;
+
+                $cellData = [];
+                $shiftCounts = [];
+                $dayOffTally = [];
+
+                // A. Extract and Clean Data for Every Cell
+                foreach ($columnDates as $colIndex => $dateString) {
+                    $rawCell = $row[$colIndex] ?? '';
+                    
+                    // 🟢 SAFE CLEANING: Removes non-breaking spaces and trailing spaces but KEEPS \n
+                    $cellValue = str_replace("\xC2\xA0", ' ', $rawCell);
+                    $cellValue = str_replace(["\r\n", "\r"], "\n", $cellValue);
+                    $cellValue = preg_replace('/[ \t]+/', ' ', $cellValue); 
+                    $cellValue = trim($cellValue);
+
+                    $dayName = \Carbon\Carbon::parse($dateString)->format('l');
+
+                    $parsedCell = [
+                        'date' => $dateString,
+                        'dayName' => $dayName,
+                        'isOff' => false,
+                        'isNoShift' => false,
+                        'shift' => null
+                    ];
+
+                    if (empty($cellValue) || stripos($cellValue, 'no shift') !== false) {
+                        $parsedCell['isNoShift'] = true;
+                    } elseif (stripos($cellValue, 'off day') !== false) {
+                        $parsedCell['isOff'] = true;
+                        $dayOffTally[$dayName] = ($dayOffTally[$dayName] ?? 0) + 1; 
+                    } else {
+                        // Extract shift name and times safely using \n
+                        $lines = array_values(array_filter(array_map('trim', explode("\n", $cellValue))));
+                        $shiftTypeName = $lines[0] ?? '';
+                        $timeRange = $lines[1] ?? '';
+
+                        $startTime = null;
+                        $endTime = null;
+                        
+                        if (!empty($timeRange) && str_contains($timeRange, '-')) {
+                            list($rawStart, $rawEnd) = explode('-', $timeRange);
+                            $startTime = date('H:i:s', strtotime(trim($rawStart)));
+                            $endTime = date('H:i:s', strtotime(trim($rawEnd)));
+                        }
+
+                        $matchedShift = null;
+                        if ($startTime && $endTime) {
+                            $matchedShift = Shift::where('start_time', 'LIKE', "{$startTime}%")->where('end_time', 'LIKE', "{$endTime}%")->first();
+                        }
+                        if (!$matchedShift) {
+                            // Strip any accidental time data attached to the name string just in case
+                            $cleanName = trim(preg_replace('/[0-9]{1,2}:[0-9]{2}\s*[AP]M\s*-\s*[0-9]{1,2}:[0-9]{2}\s*[AP]M/i', '', $shiftTypeName));
+                            $matchedShift = Shift::where('name', $cleanName)->orWhere('shift_type', $cleanName)->first();
+                        }
+
+                        if ($matchedShift) {
+                            $parsedCell['shift'] = $matchedShift;
+                            $shiftCounts[$matchedShift->id] = ($shiftCounts[$matchedShift->id] ?? 0) + 1;
+                        } else {
+                            $parsedCell['isNoShift'] = true; 
+                        }
+                    }
+                    
+                    $cellData[$dateString] = $parsedCell;
+                }
+
+                // B. Construct the Base Schedule
+                if (empty($shiftCounts)) {
+                    Schedule::where('user_id', $employee->id)->where('start_date', $startDate)->where('end_date', $endDate)->delete();
+                    \App\Models\ScheduleOverride::where('user_id', $employee->id)->whereIn('date', array_keys($cellData))->delete();
+                    continue;
+                }
+
+                // Find the primary shift
+                arsort($shiftCounts);
+                $primaryShiftId = array_key_first($shiftCounts);
+                $primaryShift = Shift::find($primaryShiftId);
+
+                // Collect unique off days
+                $baseOffDays = array_keys($dayOffTally);
+                usort($baseOffDays, function ($a, $b) use ($weekOrder) {
+                    return ($weekOrder[$a] ?? 0) <=> ($weekOrder[$b] ?? 0);
+                });
+
+                Schedule::updateOrCreate(
+                    ['user_id' => $employee->id, 'start_date' => $startDate, 'end_date' => $endDate],
+                    ['shift_type' => $primaryShift->shift_type, 'start_time' => $primaryShift->start_time, 'end_time' => $primaryShift->end_time, 'off_days' => $baseOffDays]
+                );
+
+                // C. Compare & Apply Overrides
+                foreach ($cellData as $dateString => $cell) {
+                    $expectedIsOff = in_array($cell['dayName'], $baseOffDays);
+                    $needsOverride = false;
+
+                    if ($cell['isNoShift']) {
+                        $needsOverride = true;
+                    } elseif ($cell['isOff']) {
+                        if (!$expectedIsOff) $needsOverride = true; 
+                    } else {
+                        if ($expectedIsOff) {
+                            $needsOverride = true; 
+                        } elseif ($cell['shift']->id !== $primaryShift->id) {
+                            $needsOverride = true; 
+                        }
+                    }
+
+                    if ($needsOverride) {
+                        \App\Models\ScheduleOverride::updateOrCreate(
+                            ['user_id' => $employee->id, 'date' => $dateString],
+                            [
+                                'is_off_day' => $cell['isOff'],
+                                'shift_type' => $cell['shift'] ? $cell['shift']->shift_type : null,
+                                'start_time' => $cell['shift'] ? $cell['shift']->start_time : null,
+                                'end_time' => $cell['shift'] ? $cell['shift']->end_time : null,
+                            ]
+                        );
+                    } else {
+                        \App\Models\ScheduleOverride::where('user_id', $employee->id)->where('date', $dateString)->delete();
+                    }
+                }
+            }
 
             SystemLog::create([
                 'user_id' => Auth::id(),
                 'action' => 'Import',
                 'module' => 'Attendance Setup',
-                'description' => "Imported schedule backup document.",
+                'description' => "Imported schedule backup matrix.",
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent()
             ]);
 
-            return redirect()->back()->with('success', 'Schedule imported successfully.');
+            return redirect()->back()->with('success', 'Schedule backup successfully mapped and imported.');
+
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Error importing schedule: ' . $e->getMessage());
         }

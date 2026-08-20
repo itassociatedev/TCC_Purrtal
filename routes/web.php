@@ -444,4 +444,6 @@ Route::get('/attendance/export-overview', [\App\Http\Controllers\AttendanceContr
 Route::post('/admin/attendance-settings/holiday', [AttendanceSettingsController::class, 'storeHoliday'])->name('admin.attendance-settings.store-holiday');
 Route::delete('/admin/attendance-settings/holiday/{id}', [AttendanceSettingsController::class, 'deleteHoliday'])->name('admin.attendance-settings.delete-holiday');
 
+Route::post('/attendance/setup-schedule/import', [App\Http\Controllers\AttendanceController::class, 'importSchedule'])->name('attendance.setup-schedule.import');
+
 require __DIR__.'/auth.php';

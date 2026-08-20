@@ -166,6 +166,7 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
     const getShiftDetails = (emp, dateString, dayName) => {
         if (!emp) return { isOff: false, shiftType: null, startTime: null, endTime: null, isOverride: false };
         
+        // 1. Check for overrides (either manual UI edits or Excel imports)
         const override = emp.overrides?.[dateString];
         if (override) {
             return {
@@ -173,13 +174,13 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
                 shiftType: override.shift_type,
                 startTime: override.start_time,
                 endTime: override.end_time,
-                isOverride: true 
+                // 🟢 The Magic Switch: Only shows yellow if it was manually overridden in UI!
+                isOverride: override.is_manual 
             };
         }
 
-        const activeSchedule = emp.schedules?.find(sch => {
-            return dateString >= sch.start_date && dateString <= sch.end_date;
-        });
+        // 2. Fall back to Base Schedule rules
+        const activeSchedule = emp.schedules?.find(sch => dateString >= sch.start_date && dateString <= sch.end_date);
 
         if (activeSchedule) {
             return {

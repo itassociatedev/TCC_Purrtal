@@ -37,7 +37,7 @@ const generateCutoffPeriods = (settings) => {
     return periods;
 };
 
-// 🟢 DYNAMIC HELPER: Current cutoff
+// 泙 DYNAMIC HELPER: Current cutoff
 const getCurrentCutoffValue = (settings) => {
     const today = new Date();
     const y = today.getFullYear();
@@ -152,11 +152,15 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
         setShowModal(true);
     };
 
+    // 🟢 UPDATED: Pass the selected cutoff period directly to the backend
     const handleFileImport = (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        router.post(route('attendance.setup-schedule.import'), { file: file }, {
+        router.post(route('attendance.setup-schedule.import'), { 
+            file: file,
+            cutoff_period: selectedCutoff
+        }, {
             forceFormData: true,
             preserveScroll: true,
             onSuccess: () => {
@@ -265,7 +269,8 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                             onClick={() => fileInputRef.current?.click()}
                             className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                         >
-                            Import Backup
+                            {/* 🟢 UPDATED BUTTON NAME */}
+                            Import Schedule
                         </button>
                         <button 
                             onClick={handleAddSchedule}
