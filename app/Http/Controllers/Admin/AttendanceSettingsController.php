@@ -8,6 +8,7 @@ use App\Models\Shift;
 use App\Models\AttendanceSetting;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Auth;
+use App\Models\Holiday;
 
 class AttendanceSettingsController extends Controller
 {
@@ -21,9 +22,13 @@ class AttendanceSettingsController extends Controller
         $shifts = Shift::orderBy('start_time')->get();
         $settings = AttendanceSetting::pluck('setting_value', 'setting_key')->toArray();
 
+        // 🟢 Fetch all holidays
+        $holidays = Holiday::orderBy('date', 'desc')->get();
+
         return Inertia::render('Admin/AttendanceSettings', [
             'shifts' => $shifts,
-            'settings' => $settings
+            'settings' => $settings,
+            'holidays' => $holidays
         ]);
     }
 
@@ -110,5 +115,28 @@ class AttendanceSettingsController extends Controller
         $shift->delete();
 
         return redirect()->back()->with('success', 'Shift permanently deleted.');
+    }
+
+    // 🟢 STORE A NEW HOLIDAY
+    public function storeHoliday(Request $request)
+    {
+        $request->validate([
+            'date' => 'required|date',
+            'name' => 'required|string|max:255'
+        ]);
+
+        Holiday::updateOrCreate(
+            ['date' => $request->date],
+            ['name' => $request->name]
+        );
+
+        return redirect()->back()->with('success', 'Holiday/Event added successfully.');
+    }
+
+    // 🟢 DELETE A HOLIDAY
+    public function deleteHoliday($id)
+    {
+        Holiday::findOrFail($id)->delete();
+        return redirect()->back()->with('success', 'Holiday/Event removed.');
     }
 }

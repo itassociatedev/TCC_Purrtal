@@ -217,10 +217,7 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
             const matchesSearch = summarySearchQuery.trim() === '' || emp.name.toLowerCase().includes(summarySearchQuery.toLowerCase());
             
             const selectedBranchId = Number(summaryBranchFilter);
-            const matchesBranch = summaryBranchFilter === '' || 
-                Number(emp.branch_id) === selectedBranchId || 
-                (emp.assigned_branch_ids && emp.assigned_branch_ids.includes(selectedBranchId));
-
+            const matchesBranch = summaryBranchFilter === '' || Number(emp.branch_id) === selectedBranchId || (emp.assigned_branch_ids && emp.assigned_branch_ids.includes(selectedBranchId));
             const deptName = typeof emp.department === 'object' ? emp.department?.name : emp.department;
             const matchesDept = summaryDeptFilter === '' || (deptName || 'Unassigned').toLowerCase() === summaryDeptFilter.toLowerCase();
 
@@ -369,8 +366,9 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
 
                             const { isOff, shiftType, startTime, endTime, isOverride } = getShiftDetails(activeEmployee, slot.dateString, slot.dayName);
                             
-                            // 🟢 CHECK HOLIDAYS: Does this specific date string match a holiday passed from the backend?
-                            const holidayName = holidays[slot.dateString];
+                            // 🟢 EXTRACT THE EVENT NAME FROM THE DATABASE OBJECT SAFELY
+                            const holidayObj = holidays[slot.dateString];
+                            const holidayName = holidayObj ? holidayObj.name : null;
                             
                             // 🟢 NEW: Duty Meal Status Extraction
                             const mealChoice = activeEmployee?.duty_meals?.[slot.dateString];
@@ -425,7 +423,7 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
                                             {/* 🟢 HOLIDAY BADGE: Displays the name of the holiday under the number */}
                                                 {holidayName && (
                                                     <span className="block text-[10px] sm:text-xs font-bold text-rose-600 leading-tight w-full pr-1 whitespace-normal" title={holidayName}>
-                                                        🇵🇭 {holidayName}
+                                                        📌 {holidayName}
                                                     </span>
                                                 )}
                                         </div>

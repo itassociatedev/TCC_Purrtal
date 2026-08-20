@@ -9,6 +9,7 @@ use App\Models\Schedule;
 use App\Models\Branch;
 use App\Models\Shift;
 use App\Models\AttendanceSetting;
+use App\Models\Holiday; // 🟢 INJECTED FOR EDITABLE HOLIDAYS
 use App\Models\SystemLog; // 🟢 INJECTED FOR LOGGING
 use Illuminate\Support\Facades\Auth;
 
@@ -216,19 +217,71 @@ class AttendanceController extends Controller
             ];
         });
 
-        // 🟢 Generate 3 years of holidays in less than 1 millisecond
+        // 🟢 Generate 3 years of standard mathematical holidays
         $currentYear = now()->year;
-        $holidays = array_merge(
+        $mathHolidaysRaw = array_merge(
             $this->getPhilippineHolidays($currentYear - 1),
             $this->getPhilippineHolidays($currentYear),
             $this->getPhilippineHolidays($currentYear + 1)
         );
+
+        $mathHolidays = [];
+        foreach ($mathHolidaysRaw as $date => $name) {
+            $mathHolidays[$date] = [
+                'id' => null, // Math holidays don't have DB IDs
+                'name' => $name,
+            ];
+        }
+
+        // 🟢 Fetch custom editable holidays from the database and key them BY DATE
+        $dbHolidaysRaw = \App\Models\Holiday::all();
+        $dbHolidays = [];
+        foreach ($dbHolidaysRaw as $h) {
+            $dbHolidays[$h->date] = [
+                'id' => $h->id,
+                'name' => $h->name,
+            ];
+        }
+        
+        // 🟢 Safely merge them together. If a DB holiday shares the same date as a Math holiday, the DB wins.
+        $holidays = array_replace($mathHolidays, $dbHolidays);
 
         return Inertia::render('Attendance/Calendar', array_merge([
             'employees' => $employees,
             'branches' => $branches,
             'holidays' => $holidays 
         ], $this->getSharedProps()));
+    }
+
+    // 🟢 NEW ENDPOINT: Store or Update an Event/Holiday
+    public function storeHoliday(Request $request)
+    {
+        if (!Auth::user()->canEditModule('attendance_calendar')) abort(403);
+        
+        $request->validate([
+            'date' => 'required|date',
+            'name' => 'required|string|max:255'
+        ]);
+
+        Holiday::updateOrCreate(
+            ['date' => $request->date],
+            ['name' => $request->name]
+        );
+
+        return redirect()->back()->with('success', 'Event/Holiday added successfully.');
+    }
+
+    // 🟢 NEW ENDPOINT: Delete an Event/Holiday
+    public function destroyHoliday($id)
+    {
+        if (!Auth::user()->canEditModule('attendance_calendar')) abort(403);
+        
+        $holiday = Holiday::find($id);
+        if ($holiday) {
+            $holiday->delete();
+        }
+
+        return redirect()->back()->with('success', 'Event/Holiday removed successfully.');
     }
 
     // 🟢 UPDATED: Fetch real data for the table

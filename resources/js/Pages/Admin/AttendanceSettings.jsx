@@ -3,7 +3,8 @@ import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import { getAdminLinks } from '@/Config/navigation';
 
-export default function AttendanceSettings({ shifts, settings }) {
+// 🟢 ADDED: holidays array to props
+export default function AttendanceSettings({ shifts, settings, holidays = [] }) {
     const { auth, flash } = usePage().props;
     const adminLinks = getAdminLinks(auth);
 
@@ -31,6 +32,12 @@ export default function AttendanceSettings({ shifts, settings }) {
         shift_type: 'Day Shift'
     });
 
+    // 🟢 NEW: Form for New Holiday
+    const { data: holidayData, setData: setHolidayData, post: postHoliday, reset: resetHoliday, processing: holidayProcessing } = useForm({
+        date: '',
+        name: ''
+    });
+
     // Form & State for Editing a Shift
     const [showEditModal, setShowEditModal] = useState(false);
     const { data: editData, setData: setEditData, put: putEdit, processing: editProcessing, reset: resetEdit } = useForm({
@@ -46,6 +53,10 @@ export default function AttendanceSettings({ shifts, settings }) {
     const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
+    // 🟢 NEW: State for Holiday Deletion Modal
+    const [holidayToDelete, setHolidayToDelete] = useState(null);
+    const [showHolidayDeleteModal, setShowHolidayDeleteModal] = useState(false);
+
     const handleCutoffSubmit = (e) => {
         e.preventDefault();
         postCutoff(route('admin.attendance-settings.update-cutoffs'));
@@ -55,6 +66,14 @@ export default function AttendanceSettings({ shifts, settings }) {
         e.preventDefault();
         postShift(route('admin.attendance-settings.store-shift'), {
             onSuccess: () => resetShift()
+        });
+    };
+
+    // 🟢 NEW: Submit handler for holidays
+    const handleHolidaySubmit = (e) => {
+        e.preventDefault();
+        postHoliday(route('admin.attendance-settings.store-holiday'), {
+            onSuccess: () => resetHoliday()
         });
     };
 
@@ -100,6 +119,25 @@ export default function AttendanceSettings({ shifts, settings }) {
         });
     };
 
+    // 🟢 NEW: Holiday deletion logic
+    const confirmDeleteHoliday = (holiday) => {
+        setHolidayToDelete(holiday);
+        setShowHolidayDeleteModal(true);
+    };
+
+    const executeDeleteHoliday = () => {
+        if (!holidayToDelete) return;
+        setIsDeleting(true);
+        router.delete(route('admin.attendance-settings.delete-holiday', holidayToDelete.id), {
+            onSuccess: () => {
+                setShowHolidayDeleteModal(false);
+                setHolidayToDelete(null);
+                setIsDeleting(false);
+            },
+            onError: () => setIsDeleting(false)
+        });
+    };
+
     const formatTime = (timeString) => {
         if (!timeString) return '';
         const [hour, minute] = timeString.split(':');
@@ -107,6 +145,12 @@ export default function AttendanceSettings({ shifts, settings }) {
         const ampm = h >= 12 ? 'PM' : 'AM';
         const formattedHour = h % 12 || 12;
         return `${formattedHour}:${minute} ${ampm}`;
+    };
+
+    const formatDate = (dateString) => {
+        if (!dateString) return '';
+        const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' };
+        return new Date(dateString).toLocaleDateString('en-US', options);
     };
 
     return (
@@ -130,7 +174,7 @@ export default function AttendanceSettings({ shifts, settings }) {
 
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold text-gray-900">Attendance Settings</h1>
-                    <p className="text-gray-600 mt-2">Manage cut-off periods and authorized shifts for the entire system.</p>
+                    <p className="text-gray-600 mt-2">Manage cut-off periods, authorized shifts, and calendar holidays for the entire system.</p>
                 </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -177,41 +221,65 @@ export default function AttendanceSettings({ shifts, settings }) {
                         </div>
 
                         {canEditSettings && (
-                            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-                                <h3 className="text-lg font-bold text-gray-900 mb-4">Add New Shift</h3>
-                                <form onSubmit={handleShiftSubmit} className="space-y-4">
-                                    <div>
-                                        <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">Shift Label</label>
-                                        <input type="text" placeholder="e.g. 2:00PM - 11:00PM (Mid Shift)" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-medium" value={shiftData.name} onChange={e => setShiftData('name', e.target.value)} required />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                            <>
+                                {/* SHIFT CREATOR */}
+                                <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+                                    <h3 className="text-lg font-bold text-gray-900 mb-4">Add New Shift</h3>
+                                    <form onSubmit={handleShiftSubmit} className="space-y-4">
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">Start Time</label>
-                                            <input type="time" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono font-medium text-gray-700" value={shiftData.start_time} onChange={e => setShiftData('start_time', e.target.value)} required />
+                                            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">Shift Label</label>
+                                            <input type="text" placeholder="e.g. 2:00PM - 11:00PM (Mid Shift)" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-medium" value={shiftData.name} onChange={e => setShiftData('name', e.target.value)} required />
                                         </div>
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">End Time</label>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">Start Time</label>
+                                                <input type="time" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono font-medium text-gray-700" value={shiftData.start_time} onChange={e => setShiftData('start_time', e.target.value)} required />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">End Time</label>
                                             <input type="time" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono font-medium text-gray-700" value={shiftData.end_time} onChange={e => setShiftData('end_time', e.target.value)} required />
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">Category</label>
-                                        <select className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-medium" value={shiftData.shift_type} onChange={e => setShiftData('shift_type', e.target.value)} required>
-                                            <option value="Day Shift">Day Shift</option>
-                                            <option value="Straight Duty">Straight Duty</option>
-                                            <option value="Graveyard Shift">Graveyard Shift</option>
-                                        </select>
-                                    </div>
-                                    <button type="submit" disabled={shiftProcessing} className="w-full bg-green-600 text-white rounded-md py-2.5 text-sm font-bold shadow-sm hover:bg-green-700 transition-colors mt-2">
-                                        {shiftProcessing ? 'Adding...' : '+ Add Shift'}
-                                    </button>
-                                </form>
-                            </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">Category</label>
+                                            <select className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-medium" value={shiftData.shift_type} onChange={e => setShiftData('shift_type', e.target.value)} required>
+                                                <option value="Day Shift">Day Shift</option>
+                                                <option value="Straight Duty">Straight Duty</option>
+                                                <option value="Graveyard Shift">Graveyard Shift</option>
+                                            </select>
+                                        </div>
+                                        <button type="submit" disabled={shiftProcessing} className="w-full bg-green-600 text-white rounded-md py-2.5 text-sm font-bold shadow-sm hover:bg-green-700 transition-colors mt-2">
+                                            {shiftProcessing ? 'Adding...' : '+ Add Shift'}
+                                        </button>
+                                    </form>
+                                </div>
+
+                                {/* 🟢 NEW: HOLIDAY CREATOR */}
+                                <div className="bg-rose-50 rounded-lg border border-rose-200 shadow-sm p-6">
+                                    <h3 className="text-lg font-bold text-rose-900 mb-4 flex items-center gap-2">
+                                        📌 Add Calendar Event / Holiday
+                                    </h3>
+                                    <form onSubmit={handleHolidaySubmit} className="space-y-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-rose-700 uppercase tracking-wider">Date</label>
+                                            <input type="date" className="mt-1 block w-full rounded-md border-rose-300 shadow-sm focus:border-rose-500 focus:ring-rose-500 sm:text-sm font-bold text-gray-900" value={holidayData.date} onChange={e => setHolidayData('date', e.target.value)} required />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-rose-700 uppercase tracking-wider">Event Name</label>
+                                            <input type="text" placeholder="e.g. Independence Day" className="mt-1 block w-full rounded-md border-rose-300 shadow-sm focus:border-rose-500 focus:ring-rose-500 sm:text-sm font-medium" value={holidayData.name} onChange={e => setHolidayData('name', e.target.value)} required />
+                                        </div>
+                                        <button type="submit" disabled={holidayProcessing} className="w-full bg-rose-600 text-white rounded-md py-2.5 text-sm font-bold shadow-sm hover:bg-rose-700 transition-colors mt-2 disabled:opacity-50">
+                                            {holidayProcessing ? 'Saving...' : 'Save Event'}
+                                        </button>
+                                    </form>
+                                </div>
+                            </>
                         )}
                     </div>
 
-                    <div className="xl:col-span-2 min-w-0">
-                        <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden flex flex-col h-full">
+                    <div className="xl:col-span-2 min-w-0 flex flex-col gap-8">
+                        {/* SHIFT LIST */}
+                        <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden flex flex-col">
                             <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
                                 <h3 className="text-lg font-bold text-gray-900">Shift Masterlist</h3>
                                 <p className="text-xs text-gray-500 mt-1">These are the authorized shifts available in the Attendance module dropdowns.</p>
@@ -265,8 +333,59 @@ export default function AttendanceSettings({ shifts, settings }) {
                                 </table>
                             </div>
                         </div>
-                    </div>
 
+                        {/* 🟢 NEW: HOLIDAY LIST */}
+                        <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+                            <div className="border-b border-gray-200 bg-rose-50 px-6 py-4">
+                                <h3 className="text-lg font-bold text-rose-900">Event & Holiday Masterlist</h3>
+                                <p className="text-xs text-rose-700 mt-1">These events will highlight specific dates in the global Attendance Calendar.</p>
+                            </div>
+                            <div className="overflow-x-auto flex-1 max-h-[400px]">
+                                {holidays.length > 0 ? (
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-white sticky top-0 z-10">
+                                            <tr>
+                                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Event Name</th>
+                                                {canEditSettings && <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Action</th>}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {holidays.map(holiday => (
+                                                <tr key={holiday.id} className="bg-white hover:bg-gray-50 transition-colors">
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-800">
+                                                        {formatDate(holiday.date)}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-medium">
+                                                        📌 {holiday.name}
+                                                    </td>
+                                                    {canEditSettings && (
+                                                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                                                            {canDeleteSettings ? (
+                                                                <button 
+                                                                    onClick={() => confirmDeleteHoliday(holiday)}
+                                                                    className="text-xs font-bold px-4 py-1.5 rounded transition-colors text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200"
+                                                                >
+                                                                    Delete
+                                                                </button>
+                                                            ) : (
+                                                                <span className="text-xs text-gray-400 italic">No access</span>
+                                                            )}
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                ) : (
+                                    <div className="p-8 text-center text-gray-500 text-sm">
+                                        No custom events or holidays have been added yet.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                    </div>
                 </div>
             </div>
 
@@ -356,7 +475,7 @@ export default function AttendanceSettings({ shifts, settings }) {
                 </div>
             )}
 
-            {/* CUSTOM DELETE CONFIRMATION MODAL */}
+            {/* CUSTOM DELETE CONFIRMATION MODAL FOR SHIFTS */}
             {showDeleteConfirmModal && (
                 <div className="fixed inset-0 z-[60] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
                     <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
@@ -393,6 +512,54 @@ export default function AttendanceSettings({ shifts, settings }) {
                                 <button
                                     type="button"
                                     onClick={() => setShowDeleteConfirmModal(false)}
+                                    disabled={isDeleting}
+                                    className="w-full sm:w-auto inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 🟢 NEW: CUSTOM DELETE CONFIRMATION MODAL FOR HOLIDAYS */}
+            {showHolidayDeleteModal && (
+                <div className="fixed inset-0 z-[60] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+                    <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !isDeleting && setShowHolidayDeleteModal(false)}></div>
+
+                        <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
+                        <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-md sm:align-middle relative z-10">
+                            <div className="bg-white p-6">
+                                <div className="flex items-start gap-4">
+                                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600 sm:h-10 sm:w-10">
+                                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="text-lg font-bold text-gray-900" id="modal-title">
+                                            Remove Event?
+                                        </h3>
+                                        <p className="mt-2 text-sm text-gray-500">
+                                            Are you sure you want to delete the event <strong className="text-gray-800 font-semibold">"{holidayToDelete?.name}"</strong> scheduled for {holidayToDelete && formatDate(holidayToDelete.date)}?
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="bg-gray-50 px-6 py-4 flex flex-col sm:flex-row-reverse gap-2 border-t border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={executeDeleteHoliday}
+                                    disabled={isDeleting}
+                                    className="w-full sm:w-auto inline-flex justify-center rounded-md bg-rose-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 transition-colors disabled:opacity-50"
+                                >
+                                    {isDeleting ? 'Removing...' : 'Yes, Remove Event'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowHolidayDeleteModal(false)}
                                     disabled={isDeleting}
                                     className="w-full sm:w-auto inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
                                 >
