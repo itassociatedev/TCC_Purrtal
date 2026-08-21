@@ -446,6 +446,7 @@ Route::delete('/admin/attendance-settings/holiday/{id}', [AttendanceSettingsCont
 
 Route::post('/attendance/setup-schedule/import', [App\Http\Controllers\AttendanceController::class, 'importSchedule'])->name('attendance.setup-schedule.import');
 
-Route::post('/staff/duty-meals/branch-request', [\App\Http\Controllers\DutyMeal\MyDutyMealController::class, 'storeBranchRequest'])->name('staff.duty-meals.branch-request.store');
+Route::post('/staff/duty-meals/branch-request', 
+[\App\Http\Controllers\Staff\DutyMealController::class, 'storeBranchRequest'])->name('staff.duty-meals.branch-request.store');
 
 require __DIR__.'/auth.php';

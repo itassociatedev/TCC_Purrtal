@@ -60,6 +60,7 @@ class DutyMealController extends Controller
                     'alt_meal' => $participant->dutyMeal->alt_meal,
                     'is_locked' => $participant->dutyMeal->is_locked,
                     'branch_name' => $participant->dutyMeal->branch->name ?? 'Unknown',
+                    'branch_id' => $participant->dutyMeal->branch_id, // 🟢 Required for the Branch Request feature
                 ];
             })->sortByDesc('duty_date')->values();
 
@@ -137,5 +138,54 @@ class DutyMealController extends Controller
         }
 
         return back()->with('success', "Successfully locked in {$updatedCount} meal choices for the week!");
+    }
+
+    // 🟢 NEW: Handles submissions from the Multi-Branch Swap Request Dropdown
+    public function storeBranchRequest(Request $request)
+    {
+        $request->validate([
+            'duty_date' => 'required|date',
+            'original_branch_id' => 'required|exists:branches,id',
+            'requested_branch_id' => 'required|exists:branches,id|different:original_branch_id',
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        $userId = Auth::id();
+
+        // Prevent users from spamming the same request
+        $existingRequest = \App\Models\DutyMealBranchRequest::where('user_id', $userId)
+            ->where('duty_date', $request->duty_date)
+            ->first();
+
+        if ($existingRequest) {
+            if ($existingRequest->status === 'pending') {
+                return back()->with('error', 'You already have a pending branch change request for this date.');
+            } else {
+                return back()->with('error', 'A branch change request for this date was already processed.');
+            }
+        }
+
+        // Store the request
+        \App\Models\DutyMealBranchRequest::create([
+            'user_id' => $userId,
+            'duty_date' => $request->duty_date,
+            'original_branch_id' => $request->original_branch_id,
+            'requested_branch_id' => $request->requested_branch_id,
+            'reason' => $request->reason,
+            'status' => 'pending',
+        ]);
+
+        try {
+            SystemLog::create([
+                'user_id' => $userId,
+                'action' => 'Create',
+                'module' => 'Duty Meal Participant',
+                'description' => "Requested a branch change for duty meal on {$request->duty_date}.",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+        } catch (\Exception $e) {}
+
+        return back()->with('success', 'Branch change request submitted successfully. It is now awaiting admin approval.');
     }
 }
