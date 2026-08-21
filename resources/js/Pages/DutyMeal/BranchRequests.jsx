@@ -21,7 +21,10 @@ export default function BranchRequests({ requests = [] }) {
 
     const confirmAction = () => {
         const { requestId, action } = confirmDialog;
-        setConfirmDialog({ isOpen: false, requestId: null, action: '' });
+        
+        // 🟢 FIXED: Only toggle 'isOpen' to false. 
+        // We leave 'action' and 'requestId' intact so the modal keeps its wording during the fade-out CSS transition!
+        setConfirmDialog(prev => ({ ...prev, isOpen: false })); 
         setProcessingId(requestId);
 
         router.post(route('duty-meals.branch-requests.handle', requestId), { status: action }, {
@@ -141,7 +144,8 @@ export default function BranchRequests({ requests = [] }) {
 
             <ConfirmModal 
                 show={confirmDialog.isOpen}
-                onClose={() => setConfirmDialog({ isOpen: false, requestId: null, action: '' })}
+                // 🟢 FIXED: Also preserve state on manual cancel closures
+                onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))} 
                 title={`Confirm ${confirmDialog.action === 'approved' ? 'Approval' : 'Rejection'}`}
                 message={`Are you sure you want to ${confirmDialog.action === 'approved' ? 'approve' : 'reject'} this branch transfer request?`}
                 confirmText={`Yes, ${confirmDialog.action === 'approved' ? 'Approve' : 'Reject'}`}
