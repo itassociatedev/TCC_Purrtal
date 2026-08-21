@@ -610,17 +610,29 @@ class DutyMealController extends Controller
 
             // 2. If approved, migrate the user to the new branch's duty meal
             if ($request->status === 'approved') {
-                // Find or create the target Duty Meal for the new branch on that date
+                
+                // Find or create the target Duty Meal for the new branch on that exact date
                 $targetDutyMeal = \App\Models\DutyMeal::firstOrCreate(
-                    ['duty_date' => $branchRequest->duty_date, 'branch_id' => $branchRequest->requested_branch_id],
-                    ['main_meal' => 'TBD', 'alt_meal' => null, 'is_locked' => false]
+                    [
+                        'duty_date' => $branchRequest->duty_date->format('Y-m-d'), 
+                        'branch_id' => $branchRequest->requested_branch_id
+                    ],
+                    [
+                        'main_meal' => 'TBD', 
+                        'alt_meal' => '', 
+                        'is_locked' => false
+                    ]
                 );
                 
-                // Move the participant and reset their choices so they can vote on the new menu
+                // 🟢 FIXED: Bulletproof Database Query
+                // The previous whereHas() closure failed silently because of a strict datetime object 
+                // comparison against MySQL. We now pull the exact IDs first, then force the update.
+                $originalDutyMealIds = \App\Models\DutyMeal::where('branch_id', $branchRequest->original_branch_id)
+                    ->whereDate('duty_date', $branchRequest->duty_date->format('Y-m-d'))
+                    ->pluck('id');
+
                 \App\Models\DutyMealParticipant::where('user_id', $branchRequest->user_id)
-                    ->whereHas('dutyMeal', function($q) use ($branchRequest) {
-                        $q->where('duty_date', $branchRequest->duty_date);
-                    })
+                    ->whereIn('duty_meal_id', $originalDutyMealIds)
                     ->update([
                         'duty_meal_id' => $targetDutyMeal->id,
                         'choice' => 'none',
@@ -633,11 +645,15 @@ class DutyMealController extends Controller
         // 🟢 Notify User
         try {
             $userToNotify = \App\Models\User::find($branchRequest->user_id);
-            $action = $request->status === 'approved' ? 'approved ✅' : 'rejected ❌';
-            $message = "Your branch change request for {$branchRequest->duty_date->format('M d, Y')} was {$action}.";
-            
-            \Illuminate\Support\Facades\Notification::send($userToNotify, new \App\Notifications\ScheduleAssigned($message));
-        } catch (\Exception $e) {}
+            if ($userToNotify) {
+                $action = $request->status === 'approved' ? 'approved ✅' : 'rejected ❌';
+                $message = "Your branch change request for {$branchRequest->duty_date->format('M d, Y')} was {$action}.";
+                
+                $userToNotify->notify(new \App\Notifications\ScheduleAssigned($message));
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to send branch request notification: ' . $e->getMessage());
+        }
 
         // 🟢 System Log
         try {

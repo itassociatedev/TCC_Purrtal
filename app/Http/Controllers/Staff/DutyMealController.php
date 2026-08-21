@@ -151,10 +151,13 @@ class DutyMealController extends Controller
         ]);
 
         $userId = Auth::id();
+        
+        // 🟢 FIXED: Strip timezone and time data to force a strict Y-m-d format
+        $formattedDate = \Carbon\Carbon::parse($request->duty_date)->format('Y-m-d');
 
         // Prevent users from spamming the same request
         $existingRequest = \App\Models\DutyMealBranchRequest::where('user_id', $userId)
-            ->where('duty_date', $request->duty_date)
+            ->whereDate('duty_date', $formattedDate)
             ->first();
 
         if ($existingRequest) {
@@ -168,7 +171,7 @@ class DutyMealController extends Controller
         // Store the request
         \App\Models\DutyMealBranchRequest::create([
             'user_id' => $userId,
-            'duty_date' => $request->duty_date,
+            'duty_date' => $formattedDate, // 🟢 FIXED: Save strictly as Y-m-d
             'original_branch_id' => $request->original_branch_id,
             'requested_branch_id' => $request->requested_branch_id,
             'reason' => $request->reason,
@@ -180,13 +183,13 @@ class DutyMealController extends Controller
                 'user_id' => $userId,
                 'action' => 'Create',
                 'module' => 'Duty Meal Participant',
-                'description' => "Requested a branch change for duty meal on {$request->duty_date}.",
+                'description' => "Requested a branch change for duty meal on {$formattedDate}.",
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent()
             ]);
         } catch (\Exception $e) {}
 
-        return back()->with('success', 'Branch change request submitted successfully. It is now awaiting admin approval.');
+        return back()->with('success', 'Branch change request submitted successfully. It is now awaiting approval.');
     }
 
     // 🟢 View the Branch Request Approval Board
