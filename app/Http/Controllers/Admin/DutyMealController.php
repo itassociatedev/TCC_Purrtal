@@ -238,29 +238,42 @@ class DutyMealController extends Controller
                 foreach ($validated['schedule'] as $day) {
                     if (empty($day['main_meal']) && empty($day['participants'])) continue; 
 
-                    $dutyMeal = DutyMeal::create([
-                        'branch_id' => $validated['branch_id'],
-                        'duty_date' => $day['date'],
-                        'main_meal' => $day['main_meal'] ?? 'TBD', 
-                        'alt_meal' => $day['alt_meal'] ?? null,
-                        'is_locked' => false,
-                    ]);
+                    // 🟢 FIXED: Use updateOrCreate to gracefully absorb dummy transfer rosters
+                    $dutyMeal = DutyMeal::updateOrCreate(
+                        [
+                            'branch_id' => $validated['branch_id'],
+                            'duty_date' => $day['date'],
+                        ],
+                        [
+                            'main_meal' => $day['main_meal'] ?? 'TBD', 
+                            'alt_meal' => $day['alt_meal'] ?? '', // Prevent null constraint
+                            'is_locked' => false,
+                        ]
+                    );
 
                     $createdDutyMeals->push($dutyMeal);
 
+                    // 🟢 FIXED: Map existing users so we don't accidentally insert duplicates
+                    $existingUserIds = \App\Models\DutyMealParticipant::where('duty_meal_id', $dutyMeal->id)
+                        ->pluck('user_id')
+                        ->toArray();
+
                     if (!empty($day['participants'])) {
                         foreach ($day['participants'] as $staff) {
-                            $allParticipantData[] = [
-                                'duty_meal_id' => $dutyMeal->id,
-                                'user_id' => $staff['id'],
-                                'choice' => 'none',
-                                'shift_type' => $staff['shift_type'],
-                                'created_at' => now(),
-                                'updated_at' => now(),
-                            ];
-                            
-                            $userIdsToNotify[] = $staff['id'];
-                            $totalShifts++;
+                            // Only queue them if they aren't already transferred into this roster
+                            if (!in_array($staff['id'], $existingUserIds)) {
+                                $allParticipantData[] = [
+                                    'duty_meal_id' => $dutyMeal->id,
+                                    'user_id' => $staff['id'],
+                                    'choice' => 'none',
+                                    'shift_type' => $staff['shift_type'],
+                                    'created_at' => now(),
+                                    'updated_at' => now(),
+                                ];
+                                
+                                $userIdsToNotify[] = $staff['id'];
+                                $totalShifts++;
+                            }
                         }
                     }
                 }
@@ -285,7 +298,7 @@ class DutyMealController extends Controller
                     'user_id' => Auth::id(),
                     'action' => 'Create',
                     'module' => 'Duty Meal Setup',
-                    'description' => "Published a 7-Day Duty Meal Roster for Branch ID: {$validated['branch_id']} starting on {$validated['week_start']} ({$totalShifts} shifts).",
+                    'description' => "Published a 7-Day Duty Meal Roster for Branch ID: {$validated['branch_id']} starting on {$validated['week_start']} ({$totalShifts} new shifts added).",
                     'ip_address' => $request->ip(),
                     'user_agent' => $request->userAgent()
                 ]);
@@ -294,7 +307,7 @@ class DutyMealController extends Controller
             return redirect()->route('admin.duty-meals.index')->with('success', '7-Day duty roster published successfully!');
 
         } catch (\Illuminate\Database\QueryException $e) {
-            if ($e->errorInfo[1] == 1062) return back()->with('error', 'A roster already exists for one of these dates! Please edit the existing roster instead.');
+            if ($e->errorInfo[1] == 1062) return back()->with('error', 'A duplicate entry was detected! Please refresh and try again.');
             return back()->withErrors(['error' => 'Database error: ' . $e->getMessage()]);
         }
     }

@@ -87,7 +87,7 @@ export default function BranchRequests({ requests = [] }) {
                                     filteredRequests.map(req => (
                                         <tr key={req.id} className="hover:bg-slate-50 transition-colors">
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-800">
-                                                {new Date(req.duty_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                {new Date(req.duty_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-700">
                                                 {req.user_name}
