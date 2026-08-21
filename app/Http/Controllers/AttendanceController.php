@@ -97,6 +97,7 @@ class AttendanceController extends Controller
                         'off_days' => $sch->off_days ?? [],
                         'start_time' => $sch->start_time ? date('g:i A', strtotime($sch->start_time)) : null,
                         'end_time' => $sch->end_time ? date('g:i A', strtotime($sch->end_time)) : null,
+                        'pattern' => $sch->pattern, // 🟢 NEW: Pass pattern to frontend
                     ];
                 })->toArray(),
                 'overrides' => $user->scheduleOverrides->keyBy(function($item) {
@@ -242,10 +243,13 @@ class AttendanceController extends Controller
             'employee_ids' => 'required_without:employee_id|nullable|array',
             'employee_ids.*' => 'exists:users,id',
             'cutoff_period' => 'required|string', 
-            'shift_start' => 'required',
-            'shift_end' => 'required',
-            'shift_type' => 'required|string',
-            'rest_days' => 'array'
+            
+            // Validate the 7-day pattern payload
+            'pattern' => 'required|array',
+            'pattern.*.is_off_day' => 'boolean',
+            'pattern.*.shift_start' => 'nullable|string',
+            'pattern.*.shift_end' => 'nullable|string',
+            'pattern.*.shift_type' => 'nullable|string',
         ]);
 
         $employeeIds = $request->employee_ids ?: [$request->employee_id];
@@ -253,11 +257,13 @@ class AttendanceController extends Controller
         // Split the "YYYY-MM-DD|YYYY-MM-DD" string from React
         list($startDate, $endDate) = explode('|', $request->cutoff_period);
 
-        $weekOrder = ['Monday' => 1, 'Tuesday' => 2, 'Wednesday' => 3, 'Thursday' => 4, 'Friday' => 5, 'Saturday' => 6, 'Sunday' => 7];
-        $sortedRestDays = $request->rest_days ?? [];
-        usort($sortedRestDays, function ($a, $b) use ($weekOrder) {
-            return ($weekOrder[$a] ?? 0) <=> ($weekOrder[$b] ?? 0);
-        });
+        // 🟢 FIXED: Grab the first working day from the pattern to use as a fallback 
+        // to satisfy the strict database NOT NULL constraints!
+        $firstWorkingDay = collect($request->pattern)->firstWhere('is_off_day', false);
+        
+        $fallbackType = $firstWorkingDay ? $firstWorkingDay['shift_type'] : 'Custom Pattern';
+        $fallbackStart = $firstWorkingDay ? $firstWorkingDay['shift_start'] : '00:00:00';
+        $fallbackEnd = $firstWorkingDay ? $firstWorkingDay['shift_end'] : '00:00:00';
 
         foreach ($employeeIds as $id) {
             Schedule::updateOrCreate(
@@ -267,15 +273,16 @@ class AttendanceController extends Controller
                     'end_date' => $endDate
                 ],
                 [
-                    'shift_type' => $request->shift_type,
-                    'start_time' => $request->shift_start,
-                    'end_time' => $request->shift_end,
-                    'off_days' => $sortedRestDays,
+                    'pattern' => $request->pattern, 
+                    'shift_type' => $fallbackType,   // 🟢 Keeps DB happy
+                    'start_time' => $fallbackStart,  // 🟢 Keeps DB happy
+                    'end_time' => $fallbackEnd,      // 🟢 Keeps DB happy
+                    'off_days' => [],
                 ]
             );
         }
 
-        // 🟢 NEW: Dispatch Notification to Assigned Users
+        // Dispatch Notification to Assigned Users
         try {
             $usersToNotify = User::whereIn('id', $employeeIds)->get();
             $message = "📅Your schedule has been assigned for the cut-off period: $startDate to $endDate.";
@@ -678,13 +685,25 @@ class AttendanceController extends Controller
                     } else {
                         foreach ($schedules as $sch) {
                             if ($ds >= $sch['start_date'] && $ds <= $sch['end_date']) {
-                                $shiftData = [
-                                    'is_off' => in_array($dn, $sch['off_days'] ?? []),
-                                    'shift_type' => $sch['shift_type'],
-                                    'start_time' => $sch['start_time'] ? date('g:i A', strtotime($sch['start_time'])) : null,
-                                    'end_time' => $sch['end_time'] ? date('g:i A', strtotime($sch['end_time'])) : null,
-                                    'is_override' => false
-                                ];
+                                // 🟢 NEW: Check pattern first for export
+                                if (isset($sch['pattern']) && isset($sch['pattern'][$dn])) {
+                                    $dayConfig = $sch['pattern'][$dn];
+                                    $shiftData = [
+                                        'is_off' => (bool)$dayConfig['is_off_day'],
+                                        'shift_type' => $dayConfig['shift_type'],
+                                        'start_time' => $dayConfig['shift_start'] ? date('g:i A', strtotime($dayConfig['shift_start'])) : null,
+                                        'end_time' => $dayConfig['shift_end'] ? date('g:i A', strtotime($dayConfig['shift_end'])) : null,
+                                        'is_override' => false
+                                    ];
+                                } else {
+                                    $shiftData = [
+                                        'is_off' => in_array($dn, $sch['off_days'] ?? []),
+                                        'shift_type' => $sch['shift_type'],
+                                        'start_time' => $sch['start_time'] ? date('g:i A', strtotime($sch['start_time'])) : null,
+                                        'end_time' => $sch['end_time'] ? date('g:i A', strtotime($sch['end_time'])) : null,
+                                        'is_override' => false
+                                    ];
+                                }
                                 break;
                             }
                         }

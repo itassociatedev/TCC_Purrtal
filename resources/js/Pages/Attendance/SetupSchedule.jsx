@@ -167,6 +167,19 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
 
         // If a cut-off schedule applies to this date, render it.
         if (activeSchedule) {
+            // 🟢 NEW: Read the day-by-day pattern we just created!
+            if (activeSchedule.pattern && activeSchedule.pattern[dayName]) {
+                const dayConfig = activeSchedule.pattern[dayName];
+                return {
+                    isOff: dayConfig.is_off_day,
+                    shiftType: dayConfig.shift_type,
+                    startTime: dayConfig.shift_start,
+                    endTime: dayConfig.shift_end,
+                    isOverride: false
+                };
+            }
+
+            // Fallback to legacy single-shift format
             return {
                 isOff: activeSchedule.off_days?.includes(dayName),
                 shiftType: activeSchedule.shift_type,

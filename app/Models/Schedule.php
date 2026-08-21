@@ -15,6 +15,7 @@ class Schedule extends Model
         'start_time',
         'end_time',
         'off_days',
+        'pattern', // 🟢 Added pattern
         'start_date', 
         'end_date'
     ];
@@ -22,6 +23,7 @@ class Schedule extends Model
     // Automatically converts the JSON array to a PHP array when we load it
     protected $casts = [
         'off_days' => 'array',
+        'pattern' => 'array', // 🟢 Added pattern cast
     ];
 
     public function user()
