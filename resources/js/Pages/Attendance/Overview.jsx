@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Link, usePage } from '@inertiajs/react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
-import Modal from '@/Components/Modal'; // 🟢 Added Modal Import
+import Modal from '@/Components/Modal';
 
 // 🟢 HELPER: Gets today's date strictly in YYYY-MM-DD format (avoids timezone shift bugs)
 const getTodayString = () => {
@@ -45,7 +45,6 @@ const getShiftDetails = (emp, dateString, dayName) => {
             shiftType: override.shift_type,
             startTime: override.start_time,
             endTime: override.end_time,
-            // 🟢 The Magic Switch: Only shows yellow if it was manually overridden in UI!
             isOverride: override.is_manual 
         };
     }
@@ -66,19 +65,32 @@ const getShiftDetails = (emp, dateString, dayName) => {
     return { isOff: false, shiftType: null, startTime: null, endTime: null, isOverride: false };
 };
 
-// 🟢 HELPER: Generates the days of the week (Mon-Sun) containing the specific date being viewed
-const getWeekDates = (targetDateString) => {
+// 🟢 NEW HELPER: Generates the dynamic dates for Weekly, Cut-off, or Monthly views
+const getSummaryDates = (targetDateString, mode, settings) => {
     const [y, m, d] = targetDateString.split('-').map(Number);
     const baseDate = new Date(y, m - 1, d);
-    const dayOfWeek = baseDate.getDay() === 0 ? 6 : baseDate.getDay() - 1; 
-    
-    const monday = new Date(baseDate);
-    monday.setDate(baseDate.getDate() - dayOfWeek);
+
+    let startDate, endDate;
+
+    if (mode === 'weekly') {
+        const dayOfWeek = baseDate.getDay() === 0 ? 6 : baseDate.getDay() - 1; 
+        startDate = new Date(baseDate);
+        startDate.setDate(baseDate.getDate() - dayOfWeek);
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 6);
+    } else if (mode === 'cutoff') {
+        const cutoff = getCutoffValueForDate(baseDate, settings);
+        startDate = new Date(cutoff.start.split('-')[0], cutoff.start.split('-')[1] - 1, cutoff.start.split('-')[2]);
+        endDate = new Date(cutoff.end.split('-')[0], cutoff.end.split('-')[1] - 1, cutoff.end.split('-')[2]);
+    } else { // monthly
+        startDate = new Date(y, m - 1, 1);
+        endDate = new Date(y, m, 0); // Day 0 gives the last day of the month
+    }
     
     let days = [];
-    for (let i = 0; i < 7; i++) {
-        const cur = new Date(monday);
-        cur.setDate(monday.getDate() + i);
+    let cur = new Date(startDate);
+    
+    while (cur <= endDate) {
         const curStr = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
         days.push({ 
             dateString: curStr, 
@@ -86,8 +98,9 @@ const getWeekDates = (targetDateString) => {
             displayDay: cur.toLocaleDateString('en-US', { weekday: 'short' }), 
             displayDate: cur.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
             isTargetDate: curStr === targetDateString,
-            count: 0 // Default starting count
+            count: 0
         });
+        cur.setDate(cur.getDate() + 1);
     }
     return days;
 };
@@ -95,14 +108,14 @@ const getWeekDates = (targetDateString) => {
 export default function Overview({ employees = [], branches = [], cutoffSettings = {} }) {
     const { auth } = usePage().props;
     
-    // 🔐 ACL UI LOCK: Safely checks for Admin role OR case-insensitive edit/full privileges
+    // 🔐 ACL UI LOCK
     const canViewFullOverview = (() => {
         if (auth?.user?.role_id === 1 || auth?.user?.role?.name?.toLowerCase() === 'admin') return true;
         const level = auth?.user?.acl_permissions?.attendance_overview?.toLowerCase() || 'no_access';
         return ['full', 'edit'].includes(level);
     })();
 
-    // 🟢 DYNAMIC SIDEBAR LINKS: Only show modules the user has permission to see
+    // 🟢 DYNAMIC SIDEBAR LINKS
     const checkAccess = (module, requiredLevels) => {
         if (auth?.user?.role_id === 1 || auth?.user?.role?.name?.toLowerCase() === 'admin') return true;
         const level = auth?.user?.acl_permissions?.[module]?.toLowerCase() || 'no_access';
@@ -115,7 +128,7 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
         checkAccess('attendance_calendar', ['full', 'edit', 'view']) && { label: 'Calendar', href: route('attendance.calendar'), active: route().current('attendance.calendar') },
     ].filter(Boolean);
 
-    // 🟢 NEW ACL CHECK: Only EDIT and FULL can see the "Missing Schedules" block
+    // 🟢 ACL CHECK: Missing Schedules Block
     const isSuperAdmin = auth?.user?.role_id === 1 || auth?.user?.role?.name?.toLowerCase() === 'admin';
     const overviewAclLevel = auth?.user?.acl_permissions?.attendance_overview?.toLowerCase() || 'no_access';
     const canFixMissingSched = isSuperAdmin || ['full', 'edit'].includes(overviewAclLevel);
@@ -126,8 +139,7 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
     // Global Filter States
     const [globalDept, setGlobalDept] = useState('');
     const [globalBranch, setGlobalBranch] = useState('');
-    
-    // 🟢 NEW: Export Modal State
+    const [summaryViewMode, setSummaryViewMode] = useState('weekly'); // 🟢 NEW: 'weekly', 'cutoff', 'monthly'
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
     const uniqueDepartments = useMemo(() => {
@@ -144,7 +156,7 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
     const viewingDayName = viewingDateObj.toLocaleDateString('en-US', { weekday: 'long' });
     const currentCutoff = getCutoffValueForDate(viewingDateObj, cutoffSettings);
 
-    // 1. Filter the entire employee pool globally based on selected department AND branch
+    // 1. Filter globally based on dept AND branch
     const globallyFilteredEmployees = useMemo(() => {
         return employees.filter(emp => {
             const deptName = typeof emp.department === 'object' ? emp.department?.name : emp.department || 'Unassigned';
@@ -159,7 +171,7 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
         });
     }, [employees, globalDept, globalBranch]);
 
-    // 2. Calculate EVERYTHING strictly using the Globally Filtered Employees
+    // 2. Calculate EVERYTHING using the Globally Filtered Employees
     const analytics = useMemo(() => {
         let scheduledCount = 0;
         let offDutyCount = 0;
@@ -167,7 +179,9 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
         let specialDutiesCount = 0;
         let unassignedStaff = [];
         let roster = [];
-        let weeklyCounts = getWeekDates(selectedDate);
+        
+        // 🟢 FIXED: Calls our new dynamic date array generator!
+        let summaryCounts = getSummaryDates(selectedDate, summaryViewMode, cutoffSettings); 
 
         globallyFilteredEmployees.forEach(emp => {
             const hasActiveCutoffSchedule = emp.schedules?.some(sch => currentCutoff.start >= sch.start_date && currentCutoff.end <= sch.end_date);
@@ -175,7 +189,6 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
 
             // Roster Check for the specific day
             const details = getShiftDetails(emp, selectedDate, viewingDayName);
-            
             if (details.isOverride) activeOverridesCount++;
 
             if (details.shiftType || details.isOff) {
@@ -192,18 +205,17 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
                 }
             }
 
-            // Weekly Schedule Summary Count
-            weeklyCounts.forEach((day, index) => {
+            // Summary Loop Count
+            summaryCounts.forEach((day, index) => {
                 const dayDetails = getShiftDetails(emp, day.dateString, day.dayName);
-                if (dayDetails.shiftType && !dayDetails.isOff) weeklyCounts[index].count++;
+                if (dayDetails.shiftType && !dayDetails.isOff) summaryCounts[index].count++;
             });
         });
 
-        // Sort roster
         roster.sort((a, b) => (a.isOff === b.isOff) ? 0 : a.isOff ? 1 : -1);
 
-        return { scheduledCount, offDutyCount, activeOverridesCount, specialDutiesCount, unassignedStaff, roster, weeklyCounts };
-    }, [globallyFilteredEmployees, selectedDate, viewingDayName, currentCutoff]);
+        return { scheduledCount, offDutyCount, activeOverridesCount, specialDutiesCount, unassignedStaff, roster, summaryCounts };
+    }, [globallyFilteredEmployees, selectedDate, viewingDayName, currentCutoff, summaryViewMode, cutoffSettings]);
 
     // 3. The Roster Table
     const filteredRoster = useMemo(() => {
@@ -220,7 +232,6 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
         }
     };
 
-    // 🟢 DYNAMIC EXPORT URLs (Auto-applies cutoff range and branch/dept filters)
     const exportBaseUrl = route('attendance.export-overview');
     const fullReportUrl = `${exportBaseUrl}?start_date=${currentCutoff.start}&end_date=${currentCutoff.end}&branch_id=${globalBranch}&department=${globalDept}`;
     const blankFormatUrl = `${exportBaseUrl}?start_date=${currentCutoff.start}&end_date=${currentCutoff.end}&branch_id=${globalBranch}&department=${globalDept}&format_only=1`;
@@ -286,15 +297,15 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
         >
             <div className="space-y-6">
 
-                {/* 🟢 NEW: EXPORT LIST HEADER WITH MODAL TRIGGER */}
+                {/* HEADER & EXPORT */}
                 <div className="flex flex-col sm:flex-row justify-between items-center bg-white rounded-xl shadow-sm border border-gray-200 p-4 gap-4">
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900">Weekly Dashboard</h2>
-                        <p className="text-xs text-gray-500 mt-1">Showing data for the week of <span className="font-semibold text-indigo-600">{analytics.weeklyCounts[0]?.displayDate}</span> to <span className="font-semibold text-indigo-600">{analytics.weeklyCounts[6]?.displayDate}</span></p>
+                        <h2 className="text-lg font-bold text-gray-900">Analytics Dashboard</h2>
+                        <p className="text-xs text-gray-500 mt-1">Showing data from <span className="font-semibold text-indigo-600">{analytics.summaryCounts[0]?.displayDate}</span> to <span className="font-semibold text-indigo-600">{analytics.summaryCounts[analytics.summaryCounts.length - 1]?.displayDate}</span></p>
                     </div>
                     <button
                         onClick={() => setIsExportModalOpen(true)}
-                        className="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 active:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition ease-in-out duration-150 shadow-sm"
+                        className="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-green-700 transition ease-in-out duration-150 shadow-sm"
                     >
                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -341,41 +352,76 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
                     </div>
                 </div>
 
-                {/* WEEKLY SUMMARY */}
+                {/* 🟢 DYNAMIC SCHEDULE SUMMARY */}
                 <div className="rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="border-b border-gray-200 bg-gray-50/50 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="border-b border-gray-200 bg-gray-50/50 px-6 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                         <div>
-                            <h3 className="text-base font-bold text-gray-900">Weekly Schedule Summary</h3>
-                            <p className="text-xs text-gray-500 mt-1">Total headcount scheduled to work each day {globalDept && <span className="font-bold text-indigo-600">in {globalDept}</span>}.</p>
+                            <h3 className="text-base font-bold text-gray-900">Schedule Summary</h3>
+                            <p className="text-xs text-gray-500 mt-1">Select a date to view the scheduled daily roster.</p>
                         </div>
-                        <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                            Week of {analytics.weeklyCounts[0]?.displayDate} – {analytics.weeklyCounts[6]?.displayDate}
+                        <div className="flex flex-col sm:flex-row items-center gap-4">
+                            
+                            <div className="w-[150px] text-right text-[11px] font-bold text-gray-400 uppercase tracking-wider hidden sm:block">
+                                {analytics.summaryCounts[0]?.displayDate} – {analytics.summaryCounts[analytics.summaryCounts.length - 1]?.displayDate}
+                            </div>
+
+                            <div className="flex bg-gray-200/50 rounded-lg p-1 shadow-inner border border-gray-200 w-[210px]">
+                                {[
+                                    { id: 'weekly', label: 'Weekly' },
+                                    { id: 'cutoff', label: 'Cut-off' },
+                                    { id: 'monthly', label: 'Monthly' }
+                                ].map(mode => (
+                                    <button
+                                        key={mode.id}
+                                        onClick={() => setSummaryViewMode(mode.id)}
+                                        className={`flex-1 py-1 text-[11px] font-bold rounded-md transition-all ${
+                                            summaryViewMode === mode.id 
+                                            ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-black/5' 
+                                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+                                        }`}
+                                    >
+                                        {mode.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 divide-y sm:divide-y-0 sm:divide-x divide-gray-100 border-b border-gray-100 sm:border-b-0">
-                        {analytics.weeklyCounts.map(day => (
-                            <div 
-                                key={day.dateString} 
-                                onClick={() => setSelectedDate(day.dateString)}
-                                className={`p-4 flex flex-col items-center justify-center cursor-pointer transition-colors ${
-                                    day.isTargetDate ? 'bg-indigo-50/70 ring-1 ring-inset ring-indigo-200 shadow-inner' : 'bg-white hover:bg-indigo-50/30'
-                                }`}
-                            >
-                                <span className={`text-xs font-bold uppercase tracking-wider ${day.isTargetDate ? 'text-indigo-700' : 'text-gray-500'}`}>
-                                    {day.displayDay}
-                                </span>
-                                <span className={`text-xs mt-0.5 ${day.isTargetDate ? 'text-indigo-500' : 'text-gray-400'}`}>
-                                    {day.displayDate}
-                                </span>
-                                <span className={`mt-2 text-2xl font-black ${day.isTargetDate ? 'text-indigo-700' : 'text-gray-800'}`}>
-                                    {day.count}
-                                </span>
-                            </div>
-                        ))}
+                    
+                    {/* 🟢 RESPONSIVE DYNAMIC GRID: Increased text sizes! */}
+                    <div className="overflow-x-auto w-full">
+                        <div 
+                            className="grid border-l border-t border-gray-100 min-w-[700px] xl:min-w-full" 
+                            style={{
+                                gridTemplateColumns: summaryViewMode === 'weekly' 
+                                    ? 'repeat(7, minmax(0, 1fr))' 
+                                    : summaryViewMode === 'cutoff' 
+                                        ? `repeat(${analytics.summaryCounts.length}, minmax(0, 1fr))` 
+                                        : 'repeat(16, minmax(0, 1fr))'
+                            }}
+                        >
+                            {analytics.summaryCounts.map(day => (
+                                <div 
+                                    key={day.dateString} 
+                                    onClick={() => setSelectedDate(day.dateString)}
+                                    className={`py-3 sm:py-4 px-2 flex flex-col items-center justify-center cursor-pointer transition-colors border-r border-b border-gray-100 ${
+                                        day.isTargetDate ? 'bg-indigo-50/80 ring-1 ring-inset ring-indigo-300 shadow-inner' : 'bg-white hover:bg-indigo-50/40'
+                                    }`}
+                                >
+                                    {/* 🟢 FIXED: Bumped up to text-xs sm:text-sm */}
+                                    <span className={`text-xs sm:text-sm font-bold uppercase tracking-widest ${day.isTargetDate ? 'text-indigo-600' : 'text-gray-400'}`}>
+                                        {day.displayDay}
+                                    </span>
+                                    {/* 🟢 FIXED: Bumped up to text-xs sm:text-sm */}
+                                    <span className={`text-xs sm:text-sm mt-0.5 font-semibold ${day.isTargetDate ? 'text-indigo-900' : 'text-gray-600'}`}>
+                                        {day.displayDate}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
-                {/* 🟢 DYNAMIC GRID: If they don't have access to missing scheds, the table stretches to fill the screen */}
+                {/* ROSTER TABLE */}
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                     <div className={`${canFixMissingSched ? 'lg:col-span-2' : 'lg:col-span-3'} rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden flex flex-col`}>
                         <div className="border-b border-gray-200 bg-gray-50/50 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -402,20 +448,22 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
                         
                         <div className="flex-1 overflow-auto max-h-[600px]">
                             {filteredRoster.length > 0 ? (
-                                <table className="min-w-full divide-y divide-gray-200">
+                                /* 🟢 FIXED: Added 'table-fixed' to force strict column widths */
+                                <table className="min-w-full divide-y divide-gray-200 table-fixed">
                                     <thead className="bg-white sticky top-0 z-10">
                                         <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Employee</th>
-                                            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Shift Type</th>
-                                            <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
+                                            {/* 🟢 FIXED: Locked widths (50%, 25%, 25%) so they NEVER shift! */}
+                                            <th className="w-[50%] px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Employee</th>
+                                            <th className="w-[25%] px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Shift Type</th>
+                                            <th className="w-[25%] px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100 bg-white">
                                         {filteredRoster.map(emp => (
                                             <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
-                                                <td className="whitespace-nowrap px-6 py-4">
-                                                    <div className="font-bold text-sm text-gray-900">{emp.name}</div>
-                                                    <div className="text-xs text-gray-500">{emp.deptName}</div>
+                                                <td className="whitespace-nowrap px-6 py-4 overflow-hidden text-ellipsis">
+                                                    <div className="font-bold text-sm text-gray-900 truncate">{emp.name}</div>
+                                                    <div className="text-xs text-gray-500 truncate">{emp.deptName}</div>
                                                 </td>
                                                 <td className="whitespace-nowrap px-6 py-4">
                                                     <div className="flex items-center gap-2">
@@ -448,7 +496,7 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
                         </div>
                     </div>
 
-                    {/* 🟢 HIDDEN FOR VIEW-ONLY ACL */}
+                    {/* MISSING SCHEDULES BLOCK */}
                     {canFixMissingSched && (
                         <div className="rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden flex flex-col">
                             <div className="border-b border-rose-100 bg-rose-50 px-6 py-4">
@@ -503,7 +551,7 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
                 </div>
             </div>
 
-            {/* 🟢 NEW: EXPORT MODAL */}
+            {/* EXPORT MODAL */}
             <Modal show={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} maxWidth="lg">
                 <div className="p-6 bg-white rounded-lg">
                     <div className="flex justify-between items-center border-b border-gray-100 pb-4 mb-5">
