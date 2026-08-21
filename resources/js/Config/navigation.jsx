@@ -587,7 +587,7 @@ export const getDutyMealLinks = (auth) => {
     // 🟢 NEW: Now strictly governed by the ACL grid!
     if (canAccessPersonal) {
         links.push({
-            label: 'My Personal Meals',
+            label: 'My Duty Meals',
             href: route('staff.duty-meals.index'),
             active: route().current('staff.duty-meals.index'),
         });
