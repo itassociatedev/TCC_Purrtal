@@ -228,6 +228,20 @@ class DutyMealController extends Controller
             'schedule.*.participants.*.shift_type'=> 'required_with:schedule.*.participants|string|in:day,graveyard,straight',
         ]);
 
+        // 🟢 SMART CHECK: Detect if a fully published real roster already exists for any of these dates
+        foreach ($validated['schedule'] as $day) {
+            if (empty($day['main_meal']) && empty($day['participants'])) continue; 
+
+            $existingMeal = DutyMeal::where('branch_id', $validated['branch_id'])
+                ->whereDate('duty_date', $day['date'])
+                ->first();
+
+            // If a meal exists AND its main_meal is NOT 'TBD', it's a real published roster!
+            if ($existingMeal && $existingMeal->main_meal !== 'TBD') {
+                return back()->with('error', 'A roster already exists for one of these dates! Please edit the existing roster instead.');
+            }
+        }
+
         try {
             $createdDutyMeals = collect();
             $allParticipantData = [];
@@ -238,7 +252,8 @@ class DutyMealController extends Controller
                 foreach ($validated['schedule'] as $day) {
                     if (empty($day['main_meal']) && empty($day['participants'])) continue; 
 
-                    // 🟢 FIXED: Use updateOrCreate to gracefully absorb dummy transfer rosters
+                    // Since we already blocked real published rosters above, 
+                    // updateOrCreate here will safely update any 'TBD' transfer stubs or create new ones.
                     $dutyMeal = DutyMeal::updateOrCreate(
                         [
                             'branch_id' => $validated['branch_id'],
@@ -253,7 +268,7 @@ class DutyMealController extends Controller
 
                     $createdDutyMeals->push($dutyMeal);
 
-                    // 🟢 FIXED: Map existing users so we don't accidentally insert duplicates
+                    // Map existing users so we don't accidentally insert duplicates
                     $existingUserIds = \App\Models\DutyMealParticipant::where('duty_meal_id', $dutyMeal->id)
                         ->pluck('user_id')
                         ->toArray();
