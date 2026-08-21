@@ -278,7 +278,7 @@ class AttendanceController extends Controller
         // 🟢 NEW: Dispatch Notification to Assigned Users
         try {
             $usersToNotify = User::whereIn('id', $employeeIds)->get();
-            $message = "Your schedule has been assigned for the cut-off period: $startDate to $endDate.";
+            $message = "📅Your schedule has been assigned for the cut-off period: $startDate to $endDate.";
             \Illuminate\Support\Facades\Notification::send($usersToNotify, new \App\Notifications\ScheduleAssigned($message));
         } catch (\Exception $e) {}
 
@@ -334,7 +334,7 @@ class AttendanceController extends Controller
         try {
             $uniqueUserIds = array_unique($affectedUserIds);
             $usersToNotify = User::whereIn('id', $uniqueUserIds)->get();
-            $message = "An Admin has modified or overridden your daily schedule. Please check your calendar.";
+            $message = "📅 Your schedule has been updated. Please check your calendar.";
             \Illuminate\Support\Facades\Notification::send($usersToNotify, new \App\Notifications\ScheduleAssigned($message));
         } catch (\Exception $e) {}
 
@@ -382,6 +382,7 @@ class AttendanceController extends Controller
         return redirect()->back()->with('success', 'Overrides reset successfully.');
     }
 
+    // 🟢 FROM SCRATCH: Smart Import Engine
     // 🟢 FROM SCRATCH: Smart Import Engine
     public function importSchedule(Request $request)
     {
@@ -439,6 +440,9 @@ class AttendanceController extends Controller
             $endDate = max($parsedDateStrings);
             $weekOrder = ['Monday' => 1, 'Tuesday' => 2, 'Wednesday' => 3, 'Thursday' => 4, 'Friday' => 5, 'Saturday' => 6, 'Sunday' => 7];
 
+            // 🟢 NEW: Array to collect the IDs of every user updated by this import
+            $importedUserIds = [];
+
             // 3. Process each Employee Row
             for ($i = 2; $i < count($rows); $i++) {
                 $row = $rows[$i];
@@ -447,6 +451,9 @@ class AttendanceController extends Controller
 
                 $employee = User::where('name', $employeeName)->first();
                 if (!$employee) continue;
+
+                // Track the successful user for notifications
+                $importedUserIds[] = $employee->id;
 
                 $cellData = [];
                 $shiftCounts = [];
@@ -575,6 +582,16 @@ class AttendanceController extends Controller
                     }
                 }
             }
+
+            // 🟢 NEW: Dispatch Notification to Imported Users
+            try {
+                if (!empty($importedUserIds)) {
+                    $uniqueUserIds = array_unique($importedUserIds);
+                    $usersToNotify = User::whereIn('id', $uniqueUserIds)->get();
+                    $message = "📅Your schedule has been assigned for the cut-off period: $startDate to $endDate.";
+                    \Illuminate\Support\Facades\Notification::send($usersToNotify, new \App\Notifications\ScheduleAssigned($message));
+                }
+            } catch (\Exception $e) {}
 
             SystemLog::create([
                 'user_id' => Auth::id(),
