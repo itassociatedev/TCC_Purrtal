@@ -6,12 +6,26 @@ import { Head, router, usePage, useForm } from '@inertiajs/react';
 import { useEffect, useMemo, useState, useRef } from 'react';
 
 // 🟢 NEW: Inline Component for Requesting Branch Override
+// 🟢 NEW: Inline Component for Requesting Branch Override
 const BranchRequestDropdown = ({ meal, userBranches = [], closeDropdown }) => {
     // Filter out the branch the user is currently assigned to for this meal
     const availableBranches = userBranches.filter(b => b.id !== meal.branch_id);
 
+    // 🟢 FIXED: Extract pure local YYYY-MM-DD components to completely bypass timezone shifts
+    const getPureLocalDate = (dateInput) => {
+        if (!dateInput) return '';
+        const d = new Date(dateInput);
+        if (isNaN(d.getTime())) {
+            return String(dateInput).substring(0, 10);
+        }
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
     const { data, setData, post, processing, reset } = useForm({
-        duty_date: meal.duty_date,
+        duty_date: getPureLocalDate(meal.duty_date), // 🟢 Strictly local calendar date
         original_branch_id: meal.branch_id,
         requested_branch_id: availableBranches.length > 0 ? availableBranches[0].id : '',
         reason: ''

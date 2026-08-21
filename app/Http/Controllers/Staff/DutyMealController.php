@@ -55,12 +55,12 @@ class DutyMealController extends Controller
                     'choice' => $participant->choice,
                     'site' => $participant->site, 
                     'custom_request' => $participant->custom_request,
-                    'duty_date' => $participant->dutyMeal->duty_date,
+                    'duty_date' => Carbon::parse($participant->dutyMeal->duty_date)->format('Y-m-d'), // 🟢 FIXED: Force Y-m-d string here
                     'main_meal' => $participant->dutyMeal->main_meal,
                     'alt_meal' => $participant->dutyMeal->alt_meal,
                     'is_locked' => $participant->dutyMeal->is_locked,
                     'branch_name' => $participant->dutyMeal->branch->name ?? 'Unknown',
-                    'branch_id' => $participant->dutyMeal->branch_id, // 🟢 Required for the Branch Request feature
+                    'branch_id' => $participant->dutyMeal->branch_id,
                 ];
             })->sortByDesc('duty_date')->values();
 
@@ -141,6 +141,7 @@ class DutyMealController extends Controller
     }
 
     // 🟢 NEW: Handles submissions from the Multi-Branch Swap Request Dropdown
+    // 🟢 NEW: Handles submissions from the Multi-Branch Swap Request Dropdown
     public function storeBranchRequest(Request $request)
     {
         $request->validate([
@@ -152,8 +153,8 @@ class DutyMealController extends Controller
 
         $userId = Auth::id();
         
-        // 🟢 FIXED: Strip timezone and time data to force a strict Y-m-d format
-        $formattedDate = \Carbon\Carbon::parse($request->duty_date)->format('Y-m-d');
+        // 🟢 FIXED: Directly slice the first 10 characters (YYYY-MM-DD) to completely bypass timezone shifts!
+        $formattedDate = substr($request->duty_date, 0, 10);
 
         // Prevent users from spamming the same request
         $existingRequest = \App\Models\DutyMealBranchRequest::where('user_id', $userId)
@@ -171,7 +172,7 @@ class DutyMealController extends Controller
         // Store the request
         \App\Models\DutyMealBranchRequest::create([
             'user_id' => $userId,
-            'duty_date' => $formattedDate, // 🟢 FIXED: Save strictly as Y-m-d
+            'duty_date' => $formattedDate, 
             'original_branch_id' => $request->original_branch_id,
             'requested_branch_id' => $request->requested_branch_id,
             'reason' => $request->reason,
