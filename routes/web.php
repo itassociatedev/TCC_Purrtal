@@ -449,4 +449,8 @@ Route::post('/attendance/setup-schedule/import', [App\Http\Controllers\Attendanc
 Route::post('/staff/duty-meals/branch-request', 
 [\App\Http\Controllers\Staff\DutyMealController::class, 'storeBranchRequest'])->name('staff.duty-meals.branch-request.store');
 
+// Branch Request Approval Board
+Route::get('/duty-meals/branch-requests', [\App\Http\Controllers\Admin\DutyMealController::class, 'branchRequests'])->name('duty-meals.branch-requests.index');
+Route::post('/duty-meals/branch-requests/{id}', [\App\Http\Controllers\Admin\DutyMealController::class, 'handleBranchRequest'])->name('duty-meals.branch-requests.handle');
+
 require __DIR__.'/auth.php';

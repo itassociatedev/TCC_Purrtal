@@ -303,7 +303,8 @@ const MODULE_GROUPS = {
         'duty_meal',
         'duty_meal_setup_roster',
         'duty_meal_archive',
-        'duty_meal_personal', // 🟢 NEW
+        'duty_meal_personal', 
+        'duty_meal_branch_requests', // 🟢 Added Branch Requests
     ],
     dmc: [
         'duty_meal',
@@ -528,7 +529,8 @@ export const getDutyMealLinks = (auth) => {
         'duty_meal',
         'duty_meal_setup_roster',
         'duty_meal_archive',
-        'duty_meal_personal'
+        'duty_meal_personal',
+        'duty_meal_branch_requests' // 🟢 Added Branch Requests
     ].some((module) => hasPermission(auth, module) || canViewModule(auth, module));
 
     if (!hasDutyMealAccess) return [];
@@ -538,6 +540,7 @@ export const getDutyMealLinks = (auth) => {
     const canSetupRoster = canViewModule(auth, 'duty_meal_setup_roster');
     const canAccessArchive = canViewModule(auth, 'duty_meal_archive');
     const canAccessPersonal = canViewModule(auth, 'duty_meal_personal');
+    const canManageBranchRequests = canViewModule(auth, 'duty_meal_branch_requests'); // 🟢 ACL Check
 
     const links = [];
 
@@ -546,6 +549,20 @@ export const getDutyMealLinks = (auth) => {
             label: 'Duty Meal Overview',
             href: route('admin.duty-meals.index'),
             active: route().current('admin.duty-meals.index'),
+        });
+    }
+
+    // 🟢 NEW: Expose the Approval Board Link!
+    if (canManageBranchRequests) {
+        links.push({
+            label: 'Branch Transfer Requests',
+            href: route('duty-meals.branch-requests.index'),
+            active: route().current('duty-meals.branch-requests.index'),
+            icon: () => (
+                <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+            )
         });
     }
 

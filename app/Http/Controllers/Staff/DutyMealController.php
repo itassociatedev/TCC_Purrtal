@@ -188,4 +188,105 @@ class DutyMealController extends Controller
 
         return back()->with('success', 'Branch change request submitted successfully. It is now awaiting admin approval.');
     }
+
+    // 🟢 View the Branch Request Approval Board
+    public function branchRequests(Request $request)
+    {
+        // Require ACL View Access
+        if (!\Illuminate\Support\Facades\Auth::user()->canViewModule('duty_meal_branch_requests')) {
+            abort(403, 'Unauthorized access to Branch Requests.');
+        }
+
+        $requests = \App\Models\DutyMealBranchRequest::with(['user', 'originalBranch', 'requestedBranch', 'handler'])
+            ->orderByRaw("FIELD(status, 'pending', 'approved', 'rejected')")
+            ->orderBy('duty_date', 'asc')
+            ->get()->map(function($req) {
+                return [
+                    'id' => $req->id,
+                    'duty_date' => $req->duty_date->format('Y-m-d'),
+                    'user_name' => $req->user->name,
+                    'original_branch' => $req->originalBranch->name ?? 'Unknown',
+                    'requested_branch' => $req->requestedBranch->name ?? 'Unknown',
+                    'reason' => $req->reason,
+                    'status' => $req->status,
+                    'handled_by' => $req->handler->name ?? null,
+                ];
+            });
+
+        return \Inertia\Inertia::render('DutyMeals/BranchRequests', [
+            'requests' => $requests
+        ]);
+    }
+
+    // 🟢 Handle Approve / Reject
+    public function handleBranchRequest(Request $request, $id)
+    {
+        // Require ACL Edit Access
+        if (!\Illuminate\Support\Facades\Auth::user()->canEditModule('duty_meal_branch_requests')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $request->validate([
+            'status' => 'required|in:approved,rejected'
+        ]);
+
+        $branchRequest = \App\Models\DutyMealBranchRequest::findOrFail($id);
+        
+        if ($branchRequest->status !== 'pending') {
+            return back()->with('error', 'This request has already been processed.');
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function() use ($request, $branchRequest) {
+            // 1. Update the request status
+            $branchRequest->update([
+                'status' => $request->status,
+                'handled_by' => \Illuminate\Support\Facades\Auth::id(),
+                'handled_at' => now()
+            ]);
+
+            // 2. If approved, migrate the user to the new branch's duty meal
+            if ($request->status === 'approved') {
+                // Find or create the target Duty Meal for the new branch on that date
+                $targetDutyMeal = \App\Models\DutyMeal::firstOrCreate(
+                    ['duty_date' => $branchRequest->duty_date, 'branch_id' => $branchRequest->requested_branch_id],
+                    ['main_meal' => 'TBD', 'alt_meal' => null, 'is_locked' => false]
+                );
+                
+                // Move the participant and reset their choices so they can vote on the new menu
+                \App\Models\DutyMealParticipant::where('user_id', $branchRequest->user_id)
+                    ->whereHas('dutyMeal', function($q) use ($branchRequest) {
+                        $q->where('duty_date', $branchRequest->duty_date);
+                    })
+                    ->update([
+                        'duty_meal_id' => $targetDutyMeal->id,
+                        'choice' => 'none',
+                        'site' => null,
+                        'custom_request' => null
+                    ]);
+            }
+        });
+
+        // 🟢 Notify User
+        try {
+            $userToNotify = \App\Models\User::find($branchRequest->user_id);
+            $action = $request->status === 'approved' ? 'approved ✅' : 'rejected ❌';
+            $message = "Your branch change request for {$branchRequest->duty_date->format('M d, Y')} was {$action}.";
+            
+            \Illuminate\Support\Facades\Notification::send($userToNotify, new \App\Notifications\ScheduleAssigned($message));
+        } catch (\Exception $e) {}
+
+        // 🟢 System Log
+        try {
+            \App\Models\SystemLog::create([
+                'user_id' => \Illuminate\Support\Facades\Auth::id(),
+                'action' => 'Update',
+                'module' => 'Duty Meal Branch Requests',
+                'description' => ucfirst($request->status) . " branch change request for user ID {$branchRequest->user_id}.",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+        } catch (\Exception $e) {}
+
+        return back()->with('success', 'Request ' . $request->status . ' successfully.');
+    }
 }
