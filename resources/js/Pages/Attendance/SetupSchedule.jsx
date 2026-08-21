@@ -299,6 +299,54 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
     };
 
     // ==========================================
+    // NEW MODAL LOGIC: 7-Day Base Schedule Pattern
+    // ==========================================
+    const [showBaseModal, setShowBaseModal] = useState(false);
+    const [showEmptyGridAlert, setShowEmptyGridAlert] = useState(false); // 🟢 Custom alert state
+    
+    const defaultWeekPattern = {
+        Monday: { is_off_day: false, shift_start: '', shift_end: '', shift_type: '' },
+        Tuesday: { is_off_day: false, shift_start: '', shift_end: '', shift_type: '' },
+        Wednesday: { is_off_day: false, shift_start: '', shift_end: '', shift_type: '' },
+        Thursday: { is_off_day: false, shift_start: '', shift_end: '', shift_type: '' },
+        Friday: { is_off_day: false, shift_start: '', shift_end: '', shift_type: '' },
+        Saturday: { is_off_day: true, shift_start: '', shift_end: '', shift_type: '' },
+        Sunday: { is_off_day: true, shift_start: '', shift_end: '', shift_type: '' },
+    };
+
+    const { data: baseData, setData: setBaseData, post: postBase, processing: baseProcessing, reset: resetBase } = useForm({
+        employee_ids: [],
+        cutoff_period: selectedCutoff,
+        pattern: defaultWeekPattern
+    });
+
+    useEffect(() => {
+        setBaseData('cutoff_period', selectedCutoff);
+    }, [selectedCutoff]);
+
+    const openBaseModal = () => {
+        if (selectedBatchIds.length === 0) {
+            // 🟢 FIXED: Replaced ugly browser alert with our custom in-app modal state
+            setShowEmptyGridAlert(true);
+            return;
+        }
+        resetBase();
+        setBaseData('cutoff_period', selectedCutoff);
+        setBaseData('employee_ids', selectedBatchIds);
+        setShowBaseModal(true);
+    };
+
+    const submitBaseSchedule = (e) => {
+        e.preventDefault();
+        postBase(route('attendance.setup-schedule.store'), {
+            onSuccess: () => {
+                setShowBaseModal(false); 
+                resetBase(); 
+            }
+        });
+    };
+
+    // ==========================================
     // SINGLE VIEW: STATES & LOGIC
     // ==========================================
     const [singleEmployeeId, setSingleEmployeeId] = useState('');
@@ -490,59 +538,11 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
 
             <div className="rounded-lg bg-white shadow-sm relative overflow-hidden">
                 
-                {/* 🟢 ROW 1: THE MOCKUP CUT-OFF SELECTOR BAR */}
-                <div className="bg-indigo-50 border-b border-indigo-100 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                        <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider">Active Cut-off Period:</span>
-                        <p className="text-xs text-indigo-600 mt-0.5">Manage schedules and daily overrides for the dates within this period.</p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-3">
-                        <select
-                            className="block w-72 rounded-md border-indigo-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm font-semibold text-indigo-900 bg-white shadow-sm cursor-pointer"
-                            value={selectedCutoff}
-                            onChange={(e) => {
-                                setSelectedCutoff(e.target.value);
-                                setSelectedCells([]);
-                                const [start] = e.target.value.split('|');
-                                const startDate = new Date(`${start}T00:00:00`);
-                                setCurrentMonth(startDate.getMonth());
-                                setCurrentYear(startDate.getFullYear());
-                                setWeekOffset(0);
-                            }}
-                        >
-                            {cutoffPeriodsList.map(period => (
-                                <option key={period.value} value={period.value}>{period.label}</option>
-                            ))}
-                        </select>
-                        
-                        {/* 🟢 FIXED: The button now explicitly defines w-[150px] and whitespace-nowrap to prevent jittering */}
-                        <button 
-                            onClick={() => setShowCutoffHighlight(!showCutoffHighlight)}
-                            className={`flex items-center justify-center w-[150px] whitespace-nowrap gap-1.5 rounded-md border px-4 py-2 text-sm font-bold shadow-sm transition-colors ${
-                                showCutoffHighlight 
-                                ? 'border-indigo-300 bg-indigo-100 text-indigo-700 hover:bg-indigo-200' 
-                                : 'border-indigo-200 bg-white text-indigo-600 hover:bg-indigo-50'
-                            }`}
-                        >
-                            {showCutoffHighlight && (
-                                <span className="relative flex h-2 w-2 shrink-0">
-                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
-                                </span>
-                            )}
-                            {!showCutoffHighlight && (
-                                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                            )}
-                            {showCutoffHighlight ? 'Hide Cut-off' : 'Highlight Cut-off'}
-                        </button>
-                    </div>
-                </div>
-
                 {/* ================= BATCH VIEW ================= */}
                 {viewMode === 'batch' && (
                     <div className="flex flex-col">
                         
-                        {/* 🟢 ROW 2: ADD STAFF TO VIEW */}
+                        {/* 🟢 ROW 1: ADD STAFF TO VIEW */}
                         <div className="bg-white border-b border-gray-100 p-4 sm:px-6 sm:py-5 flex flex-col lg:flex-row lg:items-center gap-4">
                             <span className="text-sm font-bold text-gray-700 whitespace-nowrap">Select Employees:</span>
                             <div className="flex flex-wrap items-center gap-4 w-full">
@@ -609,7 +609,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                             </div>
                         </div>
 
-                        {/* 🟢 ROW 3: TIMETABLE OVERVIEW & SLIDER */}
+                        {/* 🟢 ROW 2: TIMETABLE OVERVIEW, SLIDER & CUTOFF ACTIONS */}
                         <div className="bg-white border-b border-gray-100 p-4 sm:px-6 sm:py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                             <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
                                 <h3 className="text-xl font-bold text-gray-800">Weekly Grid</h3>
@@ -618,6 +618,57 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                     <span className="text-sm font-medium text-gray-700 w-56 text-center">{currentWeekRange}</span>
                                     <button onClick={() => setWeekOffset(prev => prev + 1)} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-gray-600 shadow-sm hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">&rarr;</button>
                                 </div>
+                            </div>
+                            
+                            {/* 🟢 MOVED: Cutoff Dropdown and Action Buttons moved to the right side of the Weekly Grid */}
+                            <div className="flex flex-wrap items-center gap-3">
+                                <select
+                                    className="block w-48 sm:w-64 rounded-md border-indigo-300 py-2 pl-3 pr-10 text-sm font-semibold text-indigo-900 bg-indigo-50 shadow-sm cursor-pointer focus:ring-indigo-500 focus:border-indigo-500"
+                                    value={selectedCutoff}
+                                    onChange={(e) => {
+                                        setSelectedCutoff(e.target.value);
+                                        setSelectedCells([]);
+                                        const [start] = e.target.value.split('|');
+                                        const startDate = new Date(`${start}T00:00:00`);
+                                        setCurrentMonth(startDate.getMonth());
+                                        setCurrentYear(startDate.getFullYear());
+                                        setWeekOffset(0);
+                                    }}
+                                >
+                                    {cutoffPeriodsList.map(period => (
+                                        <option key={period.value} value={period.value}>{period.label}</option>
+                                    ))}
+                                </select>
+                                
+                                <button 
+                                    onClick={() => setShowCutoffHighlight(!showCutoffHighlight)}
+                                    className={`flex items-center justify-center w-[150px] whitespace-nowrap gap-1.5 rounded-md border px-4 py-2 text-sm font-bold shadow-sm transition-colors ${
+                                        showCutoffHighlight 
+                                        ? 'border-indigo-300 bg-indigo-100 text-indigo-700 hover:bg-indigo-200' 
+                                        : 'border-indigo-200 bg-white text-indigo-600 hover:bg-indigo-50'
+                                    }`}
+                                >
+                                    {showCutoffHighlight && (
+                                        <span className="relative flex h-2 w-2 shrink-0">
+                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                          <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                                        </span>
+                                    )}
+                                    {!showCutoffHighlight && (
+                                        <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                    )}
+                                    {showCutoffHighlight ? 'Hide Cut-off' : 'Highlight Cut-off'}
+                                </button>
+
+                                {/* 🟢 RESTORED: Assign Base Schedule Button */}
+                                {canEditSchedule && (
+                                    <button 
+                                        onClick={openBaseModal}
+                                        className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors whitespace-nowrap"
+                                    >
+                                        + Assign Base Schedule
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -713,7 +764,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                 {viewMode === 'single' && (
                     <div className="flex flex-col">
                         
-                        {/* 🟢 ROW 2: ADD STAFF TO VIEW */}
+                        {/* 🟢 ROW 1: ADD STAFF TO VIEW */}
                         <div className="bg-white border-b border-gray-100 p-4 sm:px-6 sm:py-5 flex flex-col lg:flex-row lg:items-center gap-4">
                             <span className="text-sm font-bold text-gray-700 whitespace-nowrap">Select Employee:</span>
                             <div className="flex flex-wrap items-center gap-4 w-full">
@@ -802,7 +853,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                             </div>
                         </div>
 
-                        {/* 🟢 ROW 3: TIMETABLE OVERVIEW & SLIDER */}
+                        {/* 🟢 ROW 2: TIMETABLE OVERVIEW & SLIDER & CUTOFF */}
                         <div className="bg-white border-b border-gray-100 p-4 sm:px-6 sm:py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                             <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
                                 <h3 className="text-xl font-bold text-gray-800">Monthly Calendar</h3>
@@ -824,14 +875,55 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                     </button>
                                 </div>
                             </div>
-                            <div className="text-left lg:text-right bg-gray-50 px-4 py-2 rounded-xl border border-gray-100 min-w-[250px]">
-                                <h4 className="text-base font-bold text-gray-800">{singleEmployee?.name || 'No Employee Selected'}</h4>
-                                <div className="text-sm text-gray-600 flex flex-col gap-0.5">
-                                    <span className="font-medium text-gray-500">
-                                        {singleEmployee ? (typeof singleEmployee.department === 'object' ? singleEmployee.department?.name : singleEmployee.department || 'Unassigned') : 'Select an employee from the dropdown'}
-                                    </span>
-                                </div>
+                            
+                            {/* 🟢 MOVED: Cutoff Dropdown and Highlight Toggle replicated to Single View */}
+                            <div className="flex flex-wrap items-center gap-3">
+                                <select
+                                    className="block w-48 sm:w-64 rounded-md border-indigo-300 py-2 pl-3 pr-10 text-sm font-semibold text-indigo-900 bg-indigo-50 shadow-sm cursor-pointer focus:ring-indigo-500 focus:border-indigo-500"
+                                    value={selectedCutoff}
+                                    onChange={(e) => {
+                                        setSelectedCutoff(e.target.value);
+                                        setSelectedCells([]);
+                                        const [start] = e.target.value.split('|');
+                                        const startDate = new Date(`${start}T00:00:00`);
+                                        setCurrentMonth(startDate.getMonth());
+                                        setCurrentYear(startDate.getFullYear());
+                                        setWeekOffset(0);
+                                    }}
+                                >
+                                    {cutoffPeriodsList.map(period => (
+                                        <option key={period.value} value={period.value}>{period.label}</option>
+                                    ))}
+                                </select>
+                                
+                                <button 
+                                    onClick={() => setShowCutoffHighlight(!showCutoffHighlight)}
+                                    className={`flex items-center justify-center w-[150px] whitespace-nowrap gap-1.5 rounded-md border px-4 py-2 text-sm font-bold shadow-sm transition-colors ${
+                                        showCutoffHighlight 
+                                        ? 'border-indigo-300 bg-indigo-100 text-indigo-700 hover:bg-indigo-200' 
+                                        : 'border-indigo-200 bg-white text-indigo-600 hover:bg-indigo-50'
+                                    }`}
+                                >
+                                    {showCutoffHighlight && (
+                                        <span className="relative flex h-2 w-2 shrink-0">
+                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                                          <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                                        </span>
+                                    )}
+                                    {!showCutoffHighlight && (
+                                        <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                    )}
+                                    {showCutoffHighlight ? 'Hide Cut-off' : 'Highlight Cut-off'}
+                                </button>
                             </div>
+                        </div>
+                        
+                        {/* Selected User Header */}
+                        <div className="bg-gray-50 px-6 py-3 border-b border-gray-100 flex justify-between items-center">
+                            <h4 className="text-base font-bold text-gray-800">{singleEmployee?.name || 'No Employee Selected'}</h4>
+                            <span className="text-sm font-medium text-gray-500">
+                                {singleEmployee ? (typeof singleEmployee.department === 'object' ? singleEmployee.department?.name : singleEmployee.department || 'Unassigned') : ''}
+                            </span>
                         </div>
 
                         <div className="w-full p-4 sm:p-6">
@@ -904,8 +996,152 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
             </div>
 
             {/* ========================================== */}
-            {/* OVERRIDE SHIFT MODAL */}
+            {/* 🟢 NEW: 7-DAY BASE SCHEDULE PATTERN MODAL */}
             {/* ========================================== */}
+            {showBaseModal && (
+                <div className="fixed inset-0 z-[60] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+                    <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowBaseModal(false)}></div>
+
+                        <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
+                        <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:align-middle relative z-10">
+                            <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                <h3 className="text-xl font-bold leading-6 text-gray-900 mb-4">Assign Base Schedule Pattern</h3>
+                                
+                                <form onSubmit={submitBaseSchedule} className="space-y-6">
+                                    <div className="mb-4 rounded-md bg-indigo-50 p-4 border border-indigo-100 flex items-start gap-3">
+                                        <svg className="h-5 w-5 text-indigo-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <p className="text-sm text-indigo-800">
+                                            Applying this weekly pattern to <strong className="font-bold">{selectedBatchIds.length} selected employee(s)</strong> for the entire <strong className="font-bold">
+                                            {cutoffPeriodsList.find(c => c.value === baseData.cutoff_period)?.label}
+                                            </strong> cut-off period.
+                                        </p>
+                                    </div>
+
+                                    {/* 🟢 FIXED: Strict grid heights and flex rules to prevent squishing and eliminate scrollbars */}
+                                    <div className="space-y-2 max-h-[55vh] overflow-y-auto px-1 py-1">
+                                        {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                                            <div key={day} className={`flex items-center gap-3 sm:gap-4 p-3 border rounded-lg transition-colors ${baseData.pattern[day].is_off_day ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-300'}`}>
+                                                
+                                                <div className="w-24 sm:w-28 shrink-0 font-bold text-sm text-gray-800 tracking-wide">{day}</div>
+                                                
+                                                <label className="flex items-center gap-2 cursor-pointer w-20 sm:w-24 shrink-0">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="h-4 w-4 text-rose-500 rounded border-gray-300 focus:ring-rose-500 cursor-pointer"
+                                                        checked={baseData.pattern[day].is_off_day}
+                                                        onChange={e => {
+                                                            setBaseData('pattern', {
+                                                                ...baseData.pattern,
+                                                                [day]: { ...baseData.pattern[day], is_off_day: e.target.checked }
+                                                            });
+                                                        }}
+                                                    />
+                                                    <span className={`text-sm font-semibold ${baseData.pattern[day].is_off_day ? 'text-rose-600' : 'text-gray-600'}`}>Off Day</span>
+                                                </label>
+
+                                                <div className="flex-1 min-w-0">
+                                                    {!baseData.pattern[day].is_off_day ? (
+                                                        <select 
+                                                            className="block w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 cursor-pointer bg-white py-2 px-3 h-[38px]"
+                                                            value={baseData.pattern[day].shift_start && baseData.pattern[day].shift_end ? `${baseData.pattern[day].shift_start}-${baseData.pattern[day].shift_end}` : ''}
+                                                            onChange={e => {
+                                                                const [start, end] = e.target.value.split('-');
+                                                                const matchedShift = shifts.find(s => s.start_time.startsWith(start) && s.end_time.startsWith(end));
+                                                                setBaseData('pattern', {
+                                                                    ...baseData.pattern,
+                                                                    [day]: {
+                                                                        ...baseData.pattern[day],
+                                                                        shift_start: start,
+                                                                        shift_end: end,
+                                                                        shift_type: matchedShift ? matchedShift.shift_type : 'Day Shift'
+                                                                    }
+                                                                });
+                                                            }}
+                                                            required={!baseData.pattern[day].is_off_day}
+                                                        >
+                                                            <option value="" disabled>-- Select Assigned Shift --</option>
+                                                            {shifts.map(shift => (
+                                                                <option key={shift.id} value={`${shift.start_time.substring(0,5)}-${shift.end_time.substring(0,5)}`}>
+                                                                    {shift.name} ({dateToAmPm(shift.start_time)} - {dateToAmPm(shift.end_time)})
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    ) : (
+                                                        <div className="flex items-center w-full text-sm text-gray-400 italic px-3 bg-gray-50 h-[38px] rounded-md border border-dashed border-gray-200">
+                                                            No shift assigned for this day
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="mt-6 sm:flex sm:flex-row-reverse border-t border-gray-200 pt-5">
+                                        <button 
+                                            type="submit" 
+                                            disabled={baseProcessing}
+                                            className="inline-flex w-full justify-center rounded-md border border-transparent bg-emerald-600 px-6 py-2 text-base font-bold text-white shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm transition-colors"
+                                        >
+                                            Save Weekly Pattern
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setShowBaseModal(false)}
+                                            className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-6 py-2 text-base font-semibold text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 🟢 NEW: CUSTOM ALERT FOR EMPTY GRID */}
+            {showEmptyGridAlert && (
+                <div className="fixed inset-0 z-[70] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+                    <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowEmptyGridAlert(false)}></div>
+
+                        <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
+                        <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-md sm:align-middle relative z-10">
+                            <div className="bg-white p-6">
+                                <div className="flex items-start gap-4">
+                                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 sm:h-10 sm:w-10">
+                                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="text-lg font-bold text-gray-900" id="modal-title">
+                                            Grid is Empty
+                                        </h3>
+                                        <p className="mt-2 text-sm text-gray-500">
+                                            Please select and add at least one employee to the grid before assigning a base schedule.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="bg-gray-50 px-6 py-4 flex flex-col sm:flex-row-reverse gap-2 border-t border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowEmptyGridAlert(false)}
+                                    className="w-full sm:w-auto inline-flex justify-center rounded-md bg-indigo-600 px-6 py-2 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                                >
+                                    OK, got it
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* OVERRIDE SHIFT MODAL */}
             {showOverrideModal && (
                 <div className="fixed inset-0 z-[60] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
                     <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
@@ -1031,4 +1267,15 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
             )}
         </SidebarLayout>
     );
+}
+
+// Simple helper to format time nicely in the dropdowns
+function dateToAmPm(timeStr) {
+    if (!timeStr) return '';
+    const [h, m] = timeStr.split(':');
+    let hours = parseInt(h, 10);
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; 
+    return `${hours}:${m} ${ampm}`;
 }
