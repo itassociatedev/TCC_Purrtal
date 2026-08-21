@@ -15,7 +15,9 @@ const generateCutoffPeriods = (settings) => {
     const c2s = parseInt(settings?.cutoff_2_start || 6);
     const c2e = parseInt(settings?.cutoff_2_end || 20);
 
-    for (let i = -2; i <= 3; i++) {
+    // 🟢 FIXED: Expanded loop from (-2 to 3) up to (-12 to 24).
+    // This generates 12 months (6 in the past, 6 into the future)
+    for (let i = -6; i <= 6; i++) {
         const targetDate = new Date(year, month + i, 1);
         const y = targetDate.getFullYear();
         const m = targetDate.getMonth();
@@ -622,6 +624,22 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                             
                             {/* 🟢 MOVED: Cutoff Dropdown and Action Buttons moved to the right side of the Weekly Grid */}
                             <div className="flex flex-wrap items-center gap-3">
+                                {/* 🟢 NEW: Current Cut-off Button */}
+                                <button 
+                                    onClick={() => {
+                                        const current = getCurrentCutoffValue(cutoffSettings);
+                                        setSelectedCutoff(current);
+                                        setSelectedCells([]);
+                                        const [start] = current.split('|');
+                                        const startDate = new Date(`${start}T00:00:00`);
+                                        setCurrentMonth(startDate.getMonth());
+                                        setCurrentYear(startDate.getFullYear());
+                                        setWeekOffset(0);
+                                    }}
+                                    className="flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-bold text-gray-700 shadow-sm hover:bg-gray-50 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
+                                >
+                                    Current Cut-off
+                                </button>
                                 <select
                                     className="block w-48 sm:w-64 rounded-md border-indigo-300 py-2 pl-3 pr-10 text-sm font-semibold text-indigo-900 bg-indigo-50 shadow-sm cursor-pointer focus:ring-indigo-500 focus:border-indigo-500"
                                     value={selectedCutoff}
