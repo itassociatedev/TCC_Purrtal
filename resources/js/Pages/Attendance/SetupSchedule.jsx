@@ -468,13 +468,13 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                 onClick={() => { setViewMode('batch'); setSelectedCells([]); }}
                                 className={`rounded-md px-3 py-1 text-sm font-medium transition-all ${viewMode === 'batch' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
                             >
-                                Weekly Grid
+                                Batch View
                             </button>
                             <button
                                 onClick={() => { setViewMode('single'); setSelectedCells([]); }}
                                 className={`rounded-md px-3 py-1 text-sm font-medium transition-all ${viewMode === 'single' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
                             >
-                                Monthly Calendar
+                                Single View
                             </button>
                         </div>
                     </div>

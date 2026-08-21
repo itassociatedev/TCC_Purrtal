@@ -300,7 +300,7 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
                 {/* HEADER & EXPORT */}
                 <div className="flex flex-col sm:flex-row justify-between items-center bg-white rounded-xl shadow-sm border border-gray-200 p-4 gap-4">
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900">Analytics Dashboard</h2>
+                        <h2 className="text-lg font-bold text-gray-900">Schedule Dashboard</h2>
                         <p className="text-xs text-gray-500 mt-1">Showing data from <span className="font-semibold text-indigo-600">{analytics.summaryCounts[0]?.displayDate}</span> to <span className="font-semibold text-indigo-600">{analytics.summaryCounts[analytics.summaryCounts.length - 1]?.displayDate}</span></p>
                     </div>
                     <button
@@ -501,10 +501,20 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
                         <div className="rounded-xl bg-white shadow-sm border border-gray-100 overflow-hidden flex flex-col">
                             <div className="border-b border-rose-100 bg-rose-50 px-6 py-4">
                                 <h3 className="text-base font-bold text-rose-900 flex items-center gap-2">
-                                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
                                     Missing Schedules
+                                    {/* 🟢 NEW: Dynamic Badge Count */}
+                                    {analytics.unassignedStaff.length > 0 && (
+                                        <span className="ml-1 inline-flex items-center justify-center px-2.5 py-0.5 rounded-full bg-rose-200 text-rose-800 text-xs font-black shadow-sm border border-rose-300">
+                                            {analytics.unassignedStaff.length}
+                                        </span>
+                                    )}
                                 </h3>
-                                <p className="text-xs text-rose-700 mt-1">Active staff with no schedule set for the active <strong className="font-bold">Cut-off</strong>.</p>
+                                <p className="text-xs text-rose-700 mt-1">
+                                    Active staff with no schedule set for the active <strong className="font-bold">Cut-off</strong>.
+                                </p>
                             </div>
 
                             <div className="flex-1 overflow-auto max-h-[600px] p-4">
