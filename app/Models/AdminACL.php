@@ -74,6 +74,7 @@ class AdminACL extends Model
     {
         return [
             'admin_overview' => 'Admin Overview',
+            'attendance_settings' => 'Attendance Settings',
             'employees' => 'Employee Management',
             'company_content' => 'Company Content Management',
             'resource_links' => 'Resource Links',
@@ -85,6 +86,8 @@ class AdminACL extends Model
             'duty_meal' => 'Duty Meal Management',
             'duty_meal_setup_roster' => 'Set Up Roster',
             'duty_meal_archive' => 'Duty Meal Archive',
+            'duty_meal_personal' => 'Personal Meal Selection',
+            'duty_meal_branch_requests' => 'Branch Meal Requests', // 🟢 NEW: Admin Approval Board Key
             'access_control' => 'Access Control',
             'form_2316_approvals' => 'Form 2316 Approvals',
             'manpower_requests_form' => 'Manpower Request Form',
@@ -94,10 +97,8 @@ class AdminACL extends Model
             'purchase_requests' => 'Purchase Requests',
             'approval_board' => 'Approval Board',
             'purchase_orders' => 'Purchase Orders',
-            // 🟢 ADDED: Attendance Modules
             'attendance_overview' => 'Attendance Overview',
             'attendance_setup' => 'Setup Schedule',
-            'attendance_schedule_view' => 'Schedule View',
             'attendance_calendar' => 'Calendar',
         ];
     }
@@ -132,13 +133,12 @@ class AdminACL extends Model
                 'duty_meal' => 'Duty Meal Management',
                 'duty_meal_setup_roster' => 'Set Up Roster',
                 'duty_meal_archive' => 'Duty Meal Archive',
-                'duty_meal_personal' => 'Personal Meal Selection', // 🟢 NEW: Added to the ACL Grid
+                'duty_meal_personal' => 'Personal Meal Selection',
+                'duty_meal_branch_requests' => 'Branch Meal Requests', // 🟢 NEW: Added to the ACL Grid
             ],
-            // 🟢 ADDED: Attendance Group
             'Attendance Module' => [
                 'attendance_overview' => 'Attendance Overview',
                 'attendance_setup' => 'Setup Schedule',
-                // 🟢 Fixed: Removed Schedule View from the ACL Grid
                 'attendance_calendar' => 'Calendar',
             ],
             'PR/PO Module' => [

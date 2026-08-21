@@ -199,6 +199,7 @@ const buildRole = (overrides = {}) => ({
     'Attendance Settings': 'NONE',
     'Personal Meal Selection': 'EDIT',
     'Document Repository': 'VIEW', // 🟢 Default access set to VIEW for all standard roles
+    'Branch Meal Requests': 'NONE',
     ...overrides
 });
 
@@ -227,7 +228,8 @@ const ALL_FULL = {
     'Calendar': 'FULL', 
     'Attendance Settings': 'FULL', 
     'Personal Meal Selection': 'FULL',
-    'Document Repository': 'FULL'
+    'Document Repository': 'FULL',
+    'Branch Meal Requests': 'FULL'
 };
 
 const HR_BASE = buildRole({
@@ -352,7 +354,8 @@ const MODULE_NAME_KEY_OVERRIDES = {
   'personal calendar': 'attendance_calendar',
   'attendance settings': 'attendance_settings', 
   'personal meal selection': 'duty_meal_personal', 
-  'document repository': 'documents', // 🟢 Ensures exact backend mapping
+  'document repository': 'documents',
+  'branch meal requests': 'duty_meal_branch_requests',
 };
 
 const POSITION_ORDER = [
