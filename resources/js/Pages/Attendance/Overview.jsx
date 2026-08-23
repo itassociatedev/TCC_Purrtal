@@ -252,27 +252,41 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
                     {/* GLOBAL FILTERS */}
                     <div className="flex flex-col sm:flex-row items-center gap-3">
                         <div className="w-full sm:w-auto flex gap-2">
-                            <select 
-                                className="block w-full sm:w-[150px] rounded-md border-gray-300 py-1.5 pl-3 pr-8 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white cursor-pointer font-medium text-gray-700"
-                                value={globalBranch}
-                                onChange={e => setGlobalBranch(e.target.value)}
-                            >
-                                <option value="">All Branches</option>
-                                {branches.map(b => (
-                                    <option key={b.id} value={b.id}>{b.name}</option>
-                                ))}
-                            </select>
+                            {/* 🟢 FIXED: Dropdown Lock Logic for Branches */}
+                            {branches.length > 1 ? (
+                                <select 
+                                    className="block w-full sm:w-[150px] rounded-md border-gray-300 py-1.5 pl-3 pr-8 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white cursor-pointer font-medium text-gray-700"
+                                    value={globalBranch}
+                                    onChange={e => setGlobalBranch(e.target.value)}
+                                >
+                                    <option value="">{isSuperAdmin ? 'All Branches' : 'All My Branches'}</option>
+                                    {branches.map(b => (
+                                        <option key={b.id} value={b.id}>{b.name}</option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <div className="py-1.5 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-500 font-medium w-full sm:w-[150px] truncate shadow-inner cursor-not-allowed">
+                                    {branches[0]?.name || 'All Branches'}
+                                </div>
+                            )}
 
-                            <select 
-                                className="block w-full sm:w-[160px] rounded-md border-gray-300 py-1.5 pl-3 pr-8 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white cursor-pointer font-medium text-gray-700"
-                                value={globalDept}
-                                onChange={e => setGlobalDept(e.target.value)}
-                            >
-                                <option value="">All Departments</option>
-                                {uniqueDepartments.map(dept => (
-                                    <option key={dept} value={dept}>{dept}</option>
-                                ))}
-                            </select>
+                            {/* 🟢 FIXED: Dropdown Lock Logic for Departments */}
+                            {isSuperAdmin ? (
+                                <select 
+                                    className="block w-full sm:w-[160px] rounded-md border-gray-300 py-1.5 pl-3 pr-8 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white cursor-pointer font-medium text-gray-700"
+                                    value={globalDept}
+                                    onChange={e => setGlobalDept(e.target.value)}
+                                >
+                                    <option value="">All Departments</option>
+                                    {uniqueDepartments.map(dept => (
+                                        <option key={dept} value={dept}>{dept}</option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <div className="py-1.5 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-500 font-medium w-full sm:w-[160px] truncate shadow-inner cursor-not-allowed">
+                                    {auth?.user?.department?.name || uniqueDepartments[0] || 'My Department'}
+                                </div>
+                            )}
                         </div>
 
                         <div className="w-full sm:w-auto flex items-center gap-2 bg-white rounded-lg border border-gray-300 p-1 shadow-sm">

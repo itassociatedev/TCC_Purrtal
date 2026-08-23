@@ -276,14 +276,21 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
                         </div>
                     ) : (
                         <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 w-full xl:w-auto mt-2 xl:mt-0">
-                            <select
-                                className="block w-full sm:w-36 rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white cursor-pointer"
-                                value={branchFilter}
-                                onChange={e => setBranchFilter(e.target.value)}
-                            >
-                                <option value="">All Branches</option>
-                                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                            </select>
+                            {/* 🟢 FIXED: Dropdown Lock Logic for Branches */}
+                            {branches.length > 1 ? (
+                                <select
+                                    className="block w-full sm:w-36 rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white cursor-pointer"
+                                    value={branchFilter}
+                                    onChange={e => setBranchFilter(e.target.value)}
+                                >
+                                    <option value="">{isSuperAdmin ? 'All Branches' : 'All My Branches'}</option>
+                                    {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                </select>
+                            ) : (
+                                <div className="py-2 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-500 font-medium w-full sm:w-36 truncate shadow-inner cursor-not-allowed">
+                                    {branches[0]?.name || 'All Branches'}
+                                </div>
+                            )}
 
                             <div className="relative rounded-md shadow-sm w-full sm:w-auto" ref={dropdownRef}>
                                 <div className="relative flex items-center w-full">
@@ -476,23 +483,37 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
 
                                 {/* Modal Filters */}
                                 <div className="bg-white border-b border-gray-100 px-6 py-3 flex flex-col sm:flex-row gap-3">
-                                    <select
-                                        className="block w-full sm:w-36 rounded-md border-gray-300 py-1.5 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                        value={summaryBranchFilter}
-                                        onChange={e => setSummaryBranchFilter(e.target.value)}
-                                    >
-                                        <option value="">All Branches</option>
-                                        {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                                    </select>
+                                    {/* 🟢 FIXED: Dropdown Lock Logic for Branches */}
+                                    {branches.length > 1 ? (
+                                        <select
+                                            className="block w-full sm:w-36 rounded-md border-gray-300 py-1.5 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                            value={summaryBranchFilter}
+                                            onChange={e => setSummaryBranchFilter(e.target.value)}
+                                        >
+                                            <option value="">{isSuperAdmin ? 'All Branches' : 'All My Branches'}</option>
+                                            {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                        </select>
+                                    ) : (
+                                        <div className="py-1.5 px-3 bg-gray-50 border border-gray-200 rounded-md text-xs text-gray-500 font-medium w-full sm:w-36 truncate shadow-inner cursor-not-allowed">
+                                            {branches[0]?.name || 'All Branches'}
+                                        </div>
+                                    )}
 
-                                    <select
-                                        className="block w-full sm:w-40 rounded-md border-gray-300 py-1.5 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                        value={summaryDeptFilter}
-                                        onChange={e => setSummaryDeptFilter(e.target.value)}
-                                    >
-                                        <option value="">All Departments</option>
-                                        {uniqueDepartments.map(dept => <option key={dept} value={dept}>{dept}</option>)}
-                                    </select>
+                                    {/* 🟢 FIXED: Dropdown Lock Logic for Departments */}
+                                    {isSuperAdmin ? (
+                                        <select
+                                            className="block w-full sm:w-40 rounded-md border-gray-300 py-1.5 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                            value={summaryDeptFilter}
+                                            onChange={e => setSummaryDeptFilter(e.target.value)}
+                                        >
+                                            <option value="">All Departments</option>
+                                            {uniqueDepartments.map(dept => <option key={dept} value={dept}>{dept}</option>)}
+                                        </select>
+                                    ) : (
+                                        <div className="py-1.5 px-3 bg-gray-50 border border-gray-200 rounded-md text-xs text-gray-500 font-medium w-full sm:w-40 truncate shadow-inner cursor-not-allowed">
+                                            {auth?.user?.department?.name || uniqueDepartments[0] || 'My Department'}
+                                        </div>
+                                    )}
 
                                     <div className="relative flex-1">
                                         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5">

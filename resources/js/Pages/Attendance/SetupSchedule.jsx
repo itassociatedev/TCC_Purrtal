@@ -562,23 +562,51 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                             <span className="text-sm font-bold text-gray-700 whitespace-nowrap">Select Employees:</span>
                             <div className="flex flex-wrap items-center gap-4 w-full">
                                 
-                                <select
-                                    className="rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-40 cursor-pointer"
-                                    value={batchBranchFilter}
-                                    onChange={e => { setBatchBranchFilter(e.target.value); setBatchSearch(''); setIsDropdownOpen(true); }}
-                                >
-                                    <option value="">All Branches</option>
-                                    {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                                </select>
+                                <div>
+                                    {/* 🟢 FIXED: Dropdown Lock Logic for Branches */}
+                                    {branches.length > 1 ? (
+                                        <select
+                                            className="rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-40 cursor-pointer"
+                                            value={batchBranchFilter}
+                                            onChange={e => { 
+                                                setBatchBranchFilter(e.target.value); 
+                                                setBatchSearch(''); 
+                                                setIsDropdownOpen(false); 
+                                                setSelectedCells([]); 
+                                            }}
+                                        >
+                                            <option value="">{isSuperAdmin ? 'All Branches' : 'All My Branches'}</option>
+                                            {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                        </select>
+                                    ) : (
+                                        <div className="py-2 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-500 font-medium w-40 truncate shadow-inner cursor-not-allowed">
+                                            {branches[0]?.name || 'All Branches'}
+                                        </div>
+                                    )}
+                                </div>
 
-                                <select
-                                    className="rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-48 cursor-pointer"
-                                    value={batchDeptFilter}
-                                    onChange={e => { setBatchDeptFilter(e.target.value); setBatchSearch(''); setIsDropdownOpen(true); }}
-                                >
-                                    <option value="">All Departments</option>
-                                    {uniqueDepartments.map(dept => <option key={dept} value={dept}>{dept}</option>)}
-                                </select>
+                                <div>
+                                    {/* 🟢 FIXED: Dropdown Lock Logic for Departments */}
+                                    {isSuperAdmin ? (
+                                        <select
+                                            className="rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-48 cursor-pointer"
+                                            value={batchDeptFilter}
+                                            onChange={e => { 
+                                                setBatchDeptFilter(e.target.value); 
+                                                setBatchSearch(''); 
+                                                setIsDropdownOpen(false); 
+                                                setSelectedCells([]); 
+                                            }}
+                                        >
+                                            <option value="">All Departments</option>
+                                            {uniqueDepartments.map(dept => <option key={dept} value={dept}>{dept}</option>)}
+                                        </select>
+                                    ) : (
+                                        <div className="py-2 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-500 font-medium w-48 truncate shadow-inner cursor-not-allowed">
+                                            {auth?.user?.department?.name || uniqueDepartments[0] || 'My Department'}
+                                        </div>
+                                    )}
+                                </div>
 
                                 <div className="relative rounded-md shadow-sm" ref={dropdownRef}>
                                     <div className="relative flex items-center">
@@ -664,6 +692,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                         setCurrentMonth(startDate.getMonth());
                                         setCurrentYear(startDate.getFullYear());
                                         setWeekOffset(0);
+                                        setShowCutoffHighlight(false); // 🟢 FIX BUG 5
                                     }}
                                 >
                                     {cutoffPeriodsList.map(period => (
@@ -757,16 +786,18 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                                         // 🟢 FIXED: Reduced padding to strictly tighten the gap between Batch cells without crushing text.
                                                         return (
                                                             <td key={day.dateString} className={`px-1 py-1.5 align-middle border-l border-gray-100 border-b border-gray-50 ${isCutoff ? 'bg-indigo-50/40' : ''}`}>
+                                                                {/* 🟢 FIXED: Blended Highlight Logic */}
                                                                 <div 
                                                                     onClick={() => {
                                                                         if (canEditSchedule) toggleCellSelection(emp.id, day.dateString);
                                                                     }}
                                                                     className={`min-h-[80px] w-full flex flex-col justify-center items-center gap-1 rounded-lg border p-1.5 shadow-sm transition-colors relative ${
-                                                                        isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500' : 
-                                                                        isOverride ? 'border-amber-200 bg-amber-50/30' : 
-                                                                        isCutoff ? 'border-indigo-200 bg-white ring-1 ring-indigo-100' : 
+                                                                        isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500 z-10' : 
+                                                                        isOverride && isCutoff ? 'border-amber-400 bg-amber-50/80 ring-2 ring-inset ring-indigo-200 shadow-inner' : 
+                                                                        isOverride ? 'border-amber-300 bg-amber-50/40' : 
+                                                                        isCutoff ? 'border-indigo-300 bg-indigo-50/40 ring-1 ring-indigo-100' : 
                                                                         'border-gray-200 bg-white'
-                                                                    } ${canEditSchedule ? (isOverride ? 'hover:bg-amber-50 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer') : 'cursor-default'}`}
+                                                                    } ${canEditSchedule ? (isOverride ? 'hover:bg-amber-100 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer') : 'cursor-default'}`}
                                                                 >
                                                                     {isOverride && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-amber-400 shadow-sm"></span>}
                                                                     <div className="flex flex-col items-center gap-1 pointer-events-none">
@@ -801,37 +832,53 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                             <div className="flex flex-wrap items-center gap-4 w-full">
                                 
                                 <div>
-                                    <select
-                                        className="block rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-40 cursor-pointer"
-                                        value={singleBranchFilter}
-                                        onChange={e => { 
-                                            setSingleBranchFilter(e.target.value); 
-                                            setSingleEmployeeId(''); 
-                                            setSingleSearch('');
-                                            setSelectedCells([]); 
-                                        }}
-                                    >
-                                        <option value="">All Branches</option>
-                                        {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                                    </select>
+                                    {/* 🟢 FIXED: Dropdown Lock Logic for Branches */}
+                                    {branches.length > 1 ? (
+                                        <select
+                                            className="block rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-40 cursor-pointer"
+                                            value={singleBranchFilter}
+                                            onChange={e => { 
+                                                setSingleBranchFilter(e.target.value); 
+                                                setSingleEmployeeId(''); 
+                                                setSingleSearch('');
+                                                setIsSingleDropdownOpen(false);
+                                                setSelectedCells([]); 
+                                            }}
+                                        >
+                                            <option value="">{isSuperAdmin ? 'All Branches' : 'All My Branches'}</option>
+                                            {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                        </select>
+                                    ) : (
+                                        <div className="py-2 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-500 font-medium w-40 truncate shadow-inner cursor-not-allowed">
+                                            {branches[0]?.name || 'All Branches'}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div>
-                                    <select
-                                        className="block rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-48 cursor-pointer"
-                                        value={singleDeptFilter}
-                                        onChange={e => { 
-                                            setSingleDeptFilter(e.target.value); 
-                                            setSingleEmployeeId(''); 
-                                            setSingleSearch('');
-                                            setSelectedCells([]); 
-                                        }}
-                                    >
-                                        <option value="">All Departments</option>
-                                        {uniqueDepartments.map(dept => (
-                                            <option key={dept} value={dept}>{dept}</option>
-                                        ))}
-                                    </select>
+                                    {/* 🟢 FIXED: Dropdown Lock Logic for Departments */}
+                                    {isSuperAdmin ? (
+                                        <select
+                                            className="block rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-48 cursor-pointer"
+                                            value={singleDeptFilter}
+                                            onChange={e => { 
+                                                setSingleDeptFilter(e.target.value); 
+                                                setSingleEmployeeId(''); 
+                                                setSingleSearch('');
+                                                setIsSingleDropdownOpen(false);
+                                                setSelectedCells([]); 
+                                            }}
+                                        >
+                                            <option value="">All Departments</option>
+                                            {uniqueDepartments.map(dept => (
+                                                <option key={dept} value={dept}>{dept}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <div className="py-2 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-500 font-medium w-48 truncate shadow-inner cursor-not-allowed">
+                                            {auth?.user?.department?.name || uniqueDepartments[0] || 'My Department'}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div>
@@ -920,6 +967,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                         setCurrentMonth(startDate.getMonth());
                                         setCurrentYear(startDate.getFullYear());
                                         setWeekOffset(0);
+                                        setShowCutoffHighlight(false); // 🟢 FIX BUG 5
                                     }}
                                 >
                                     {cutoffPeriodsList.map(period => (
@@ -992,11 +1040,12 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                             }}
                                             className={`h-full w-full flex flex-col rounded-md border p-2 sm:p-3 shadow-sm transition-colors relative ${
                                                 !singleEmployee ? 'border-gray-100 bg-white' :
-                                                isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500' : 
-                                                isOverride ? 'border-amber-200 bg-amber-50/30' : 
+                                                isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500 z-10' : 
+                                                isOverride && isCutoff ? 'border-amber-400 bg-amber-50/80 ring-2 ring-inset ring-indigo-200 shadow-inner' : 
+                                                isOverride ? 'border-amber-300 bg-amber-50/40' : 
                                                 isCutoff ? 'border-indigo-300 bg-indigo-50/40 ring-1 ring-indigo-100' : 
                                                 'border-gray-200 bg-white'
-                                            } ${canEditSchedule && singleEmployee ? (isOverride ? 'hover:bg-amber-50 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer') : 'cursor-default'}`}
+                                            } ${canEditSchedule && singleEmployee ? (isOverride ? 'hover:bg-amber-100 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer') : 'cursor-default'}`}
                                         >
                                             <div className="flex justify-between items-start pointer-events-none">
                                                 <span className={`text-sm sm:text-base font-bold ${isOverride ? 'text-amber-700' : 'text-gray-700'}`}>{slot.dayNum}</span>
