@@ -93,7 +93,14 @@ class DutyMealExport implements FromView, ShouldAutoSize, WithStyles
                     
                     // Format any special requests or notes
                     if (!empty($p->custom_request)) {
-                        $name = $p->user ? explode(' ', $p->user->name)[0] : 'Staff';
+                        // 🟢 Extract strictly First Name and Last Name
+                        if ($p->user) {
+                            $nameParts = explode(' ', trim($p->user->name));
+                            $name = count($nameParts) > 1 ? $nameParts[0] . ' ' . end($nameParts) : $nameParts[0];
+                        } else {
+                            $name = 'Staff';
+                        }
+                        
                         $weeks[$weekStart]['days'][$dayKey][$cat]['notes'][] = $name . ': ' . $p->custom_request;
                     }
                 }
