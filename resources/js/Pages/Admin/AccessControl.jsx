@@ -247,6 +247,7 @@ const HR_BASE = buildRole({
     'Setup Schedule': 'FULL',
     'Calendar': 'FULL',
     'Document Repository': 'FULL',
+    'Attendance Settings': 'FULL', 
     'Organizational Directory': 'FULL', 
 });
 
