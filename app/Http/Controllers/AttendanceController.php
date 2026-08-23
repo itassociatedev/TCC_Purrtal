@@ -94,10 +94,11 @@ class AttendanceController extends Controller
                         'start_date' => $sch->start_date,
                         'end_date' => $sch->end_date,
                         'shift_type' => $sch->shift_type,
-                        'off_days' => $sch->off_days ?? [],
+                        // 🟢 BUG FIX: Force JSON decoding so React receives actual objects instead of raw strings!
+                        'off_days' => is_string($sch->off_days) ? json_decode($sch->off_days, true) : ($sch->off_days ?? []),
                         'start_time' => $sch->start_time ? date('g:i A', strtotime($sch->start_time)) : null,
                         'end_time' => $sch->end_time ? date('g:i A', strtotime($sch->end_time)) : null,
-                        'pattern' => $sch->pattern, // 🟢 NEW: Pass pattern to frontend
+                        'pattern' => is_string($sch->pattern) ? json_decode($sch->pattern, true) : $sch->pattern, 
                     ];
                 })->toArray(),
                 'overrides' => $user->scheduleOverrides->keyBy(function($item) {
@@ -105,6 +106,7 @@ class AttendanceController extends Controller
                 })->map(function ($override) {
                     return [
                         'is_off_day' => (bool) $override->is_off_day,
+                        'is_leave' => (bool) $override->is_leave, // 🟢 FEATURE 4: Map the leave status
                         'shift_type' => $override->shift_type,
                         'start_time' => $override->start_time ? date('g:i A', strtotime($override->start_time)) : null,
                         'end_time' => $override->end_time ? date('g:i A', strtotime($override->end_time)) : null,
@@ -253,6 +255,7 @@ class AttendanceController extends Controller
             // Validate the 7-day pattern payload
             'pattern' => 'required|array',
             'pattern.*.is_off_day' => 'boolean',
+            'pattern.*.is_leave' => 'boolean', // 🟢 FEATURE 4: Validate leave pattern
             'pattern.*.shift_start' => 'nullable|string',
             'pattern.*.shift_end' => 'nullable|string',
             'pattern.*.shift_type' => 'nullable|string',
@@ -265,7 +268,9 @@ class AttendanceController extends Controller
 
         // 🟢 FIXED: Grab the first working day from the pattern to use as a fallback 
         // to satisfy the strict database NOT NULL constraints!
-        $firstWorkingDay = collect($request->pattern)->firstWhere('is_off_day', false);
+        $firstWorkingDay = collect($request->pattern)->firstWhere(function ($day) {
+            return !$day['is_off_day'] && !$day['is_leave'];
+        });
         
         $fallbackType = $firstWorkingDay ? $firstWorkingDay['shift_type'] : 'Custom Pattern';
         $fallbackStart = $firstWorkingDay ? $firstWorkingDay['shift_start'] : '00:00:00';
@@ -317,12 +322,14 @@ class AttendanceController extends Controller
         $request->validate([
             'cells' => 'required|array', 
             'is_off_day' => 'required|boolean',
+            'is_leave' => 'required|boolean', // 🟢 FEATURE 4
             'shift_start' => 'nullable',
             'shift_end' => 'nullable',
             'shift_type' => 'nullable|string',
         ]);
 
         $affectedUserIds = [];
+        $isInactive = $request->is_off_day || $request->is_leave;
 
         foreach ($request->cells as $cell) {
             $override = \App\Models\ScheduleOverride::updateOrCreate(
@@ -332,9 +339,10 @@ class AttendanceController extends Controller
                 ],
                 [
                     'is_off_day' => $request->is_off_day,
-                    'shift_type' => $request->is_off_day ? null : $request->shift_type,
-                    'start_time' => $request->is_off_day ? null : $request->shift_start,
-                    'end_time' => $request->is_off_day ? null : $request->shift_end,
+                    'is_leave' => $request->is_leave, // 🟢 FEATURE 4
+                    'shift_type' => $isInactive ? null : $request->shift_type,
+                    'start_time' => $isInactive ? null : $request->shift_start,
+                    'end_time' => $isInactive ? null : $request->shift_end,
                 ]
             );
 
