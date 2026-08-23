@@ -159,11 +159,17 @@ export default function SidebarLayout({
         'duty_meal', 'duty_meal_setup_roster', 'duty_meal_archive', 'duty_meal_branch_requests', 'duty_meal_personal'
     ].some(perm => hasPermission(auth, perm) || canViewModuleCard(auth, perm));
 
-    const routeToDutyMeal = [
-        'duty_meal', 'duty_meal_setup_roster', 'duty_meal_archive', 'duty_meal_branch_requests'
-    ].some(perm => hasPermission(auth, perm) || canViewModuleCard(auth, perm))
-        ? route('admin.duty-meals.index') 
-        : route('staff.duty-meals.index');
+    // 🟢 FIXED: Dynamically route the user to the FIRST Duty Meal module they have access to!
+    const getFirstDutyMealRoute = () => {
+        if (hasPermission(auth, 'duty_meal') || canViewModuleCard(auth, 'duty_meal')) return route('admin.duty-meals.index');
+        if (hasPermission(auth, 'duty_meal_branch_requests') || canViewModuleCard(auth, 'duty_meal_branch_requests')) return route('duty-meals.branch-requests.index');
+        if (hasPermission(auth, 'duty_meal_setup_roster') || canViewModuleCard(auth, 'duty_meal_setup_roster')) return route('admin.duty-meals.create');
+        if (hasPermission(auth, 'duty_meal_archive') || canViewModuleCard(auth, 'duty_meal_archive')) return route('admin.duty-meals.archive');
+        
+        return route('staff.duty-meals.index');
+    };
+
+    const routeToDutyMeal = getFirstDutyMealRoute();
 
     const currentModuleLabel =
         activeModule === 'Admin'
@@ -770,8 +776,8 @@ export default function SidebarLayout({
                                         </Dropdown.Link>
                                     )}
 
-                                    {/* 🟢 FIXED: Properly routes users who ONLY have "Personal" access directly to the Staff portal, bypassing the 403 error on the Admin index! */}
-                                    { canAccessDutyMealModule && (
+                                    {/* 🟢 FIXED: Properly routes users dynamically to the first Duty Meal module they have access to */}
+                                    { canAccessDutyMealModule && routeToDutyMeal && (
                                         <Dropdown.Link href={routeToDutyMeal}>
                                             Duty Meal Module
                                         </Dropdown.Link>
