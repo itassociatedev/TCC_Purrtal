@@ -162,6 +162,7 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
         });
     }, [employees, searchQuery, branchFilter]);
 
+    // 🟢 HELPER: Extracts the precise shift a person has for a specific day
     const getShiftDetails = (emp, dateString, dayName) => {
         if (!emp) return { isOff: false, shiftType: null, startTime: null, endTime: null, isOverride: false };
         
@@ -182,6 +183,19 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
         const activeSchedule = emp.schedules?.find(sch => dateString >= sch.start_date && dateString <= sch.end_date);
 
         if (activeSchedule) {
+            // 🟢 FIXED: Now correctly reads the newly implemented 7-day pattern!
+            if (activeSchedule.pattern && activeSchedule.pattern[dayName]) {
+                const dayConfig = activeSchedule.pattern[dayName];
+                return {
+                    isOff: dayConfig.is_off_day,
+                    shiftType: dayConfig.shift_type,
+                    startTime: dayConfig.shift_start,
+                    endTime: dayConfig.shift_end,
+                    isOverride: false
+                };
+            }
+
+            // Legacy fallback
             return {
                 isOff: activeSchedule.off_days?.includes(dayName),
                 shiftType: activeSchedule.shift_type,
