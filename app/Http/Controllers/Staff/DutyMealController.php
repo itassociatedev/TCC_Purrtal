@@ -156,6 +156,11 @@ class DutyMealController extends Controller
         // 🟢 FIXED: Directly slice the first 10 characters (YYYY-MM-DD) to completely bypass timezone shifts!
         $formattedDate = substr($request->duty_date, 0, 10);
 
+        // 🟢 FIXED: Prevent branch changes for past dates, but allow it up until the exact day
+        if (Carbon::parse($formattedDate)->isBefore(now()->startOfDay())) {
+            return back()->with('error', 'You cannot request a branch change for a date that has already passed.');
+        }
+
         // Prevent users from spamming the same request
         $existingRequest = \App\Models\DutyMealBranchRequest::where('user_id', $userId)
             ->whereDate('duty_date', $formattedDate)

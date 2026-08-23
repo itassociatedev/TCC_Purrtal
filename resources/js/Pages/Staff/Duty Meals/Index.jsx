@@ -98,6 +98,14 @@ const MealCard = ({ meal, selection, onSelectionChange, userBranches, isMultiBra
     const currentSite = isStrictlyLocked ? (meal.site || '') : (selection?.site || '');
     const currentNote = isStrictlyLocked ? (meal.custom_request || '') : (selection?.custom_request || '');
 
+    // 🟢 NEW: Calculate strictly if the local duty date has passed yet
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    // Parse strictly to avoid timezone shift
+    const [y, m, d] = String(meal.duty_date).split(' ')[0].split('-');
+    const mealDateObj = new Date(y, m - 1, d);
+    const hasDatePassed = mealDateObj < today;
+
     // 🟢 NEW: State and ref to manage the inline Branch Request dropdown
     const [showBranchRequest, setShowBranchRequest] = useState(false);
     const dropdownRef = useRef(null);
@@ -171,7 +179,7 @@ const MealCard = ({ meal, selection, onSelectionChange, userBranches, isMultiBra
                             </span>
                         ) : (
                             <span className="inline-flex items-center px-2.5 py-1 bg-amber-50 text-amber-600 text-[10px] font-bold rounded-full uppercase tracking-wide border border-amber-100 animate-pulse">
-                                <div className="w-1.5 h-1.5 bg-amber-500 rounded-full mr-1.5"></div>
+                                <div className="w-1.5 h-1.5 bg-amber-50 rounded-full mr-1.5"></div>
                                 Action Needed
                             </span>
                         )}
@@ -179,8 +187,9 @@ const MealCard = ({ meal, selection, onSelectionChange, userBranches, isMultiBra
                 </div>
 
                 {/* 🟢 NEW: The Branch Request Toggle Button. 
-                    Only visible to multi-branch users while their meal is unlocked! */}
-                {isMultiBranchUser && !isStrictlyLocked && (
+                    Only visible to multi-branch users while their meal is unlocked!
+                    UPDATE: Now accessible up until the exact day of the duty meal, even if locked! */}
+                {isMultiBranchUser && !hasDatePassed && (
                     <div ref={dropdownRef}>
                         <button 
                             onClick={() => setShowBranchRequest(!showBranchRequest)}
