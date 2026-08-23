@@ -412,17 +412,17 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
                                         'border-gray-200 bg-white hover:bg-gray-50'
                                     } ${canViewSummary ? 'cursor-pointer hover:ring-2 hover:ring-indigo-400' : ''}`}
                                 >
-                                    {/* 🟢 NEW: Duty Meal Floating Badge */}
+                                    {/* 🟢 Enlarged Duty Meal Floating Badge */}
                                     {mealChoice && (
                                         <div 
                                             className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 z-10" 
                                             title={isMealLocked ? "Meal choice locked in!" : "Action Required: Select your meal!"}
                                         >
-                                            <span className={`flex items-center justify-center h-4 w-4 sm:h-5 sm:w-5 rounded-full shadow-sm text-[10px] sm:text-[11px] ${
-                                                isMealLocked ? 'bg-emerald-100 ring-1 ring-emerald-300' : 'bg-rose-100 ring-1 ring-rose-300 animate-pulse'
+                                            <span className={`flex items-center justify-center h-6 w-6 sm:h-8 sm:w-8 rounded-full shadow-md text-sm sm:text-base ${
+                                                isMealLocked ? 'bg-emerald-100 ring-2 ring-emerald-300' : 'bg-rose-100 ring-2 ring-rose-300 animate-pulse'
                                             }`}>
                                                 🍽️
-                                                <span className={`absolute -top-1 -right-1 text-[8px] sm:text-[9px] font-black ${
+                                                <span className={`absolute -top-1.5 -right-1.5 text-[10px] sm:text-xs font-black bg-white rounded-full h-4 w-4 flex items-center justify-center shadow-sm ${
                                                     isMealLocked ? 'text-emerald-600' : 'text-rose-600'
                                                 }`}>
                                                     {isMealLocked ? '✓' : '!'}
