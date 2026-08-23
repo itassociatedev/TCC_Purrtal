@@ -10,13 +10,13 @@ const generateCutoffPeriods = (settings) => {
     const month = today.getMonth();
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+    // 🟢 FIXED: Expanded loop from (-2 to 3) up to (-12 to 24).
+    // This generates 12 months (6 in the past, 6 into the future)
     const c1s = parseInt(settings?.cutoff_1_start || 21);
     const c1e = parseInt(settings?.cutoff_1_end || 5);
     const c2s = parseInt(settings?.cutoff_2_start || 6);
     const c2e = parseInt(settings?.cutoff_2_end || 20);
 
-    // 🟢 FIXED: Expanded loop from (-2 to 3) up to (-12 to 24).
-    // This generates 12 months (6 in the past, 6 into the future)
     for (let i = -6; i <= 6; i++) {
         const targetDate = new Date(year, month + i, 1);
         const y = targetDate.getFullYear();
@@ -136,22 +136,31 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
     const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
 
+    // 🟢 NEW: State array for the automatic "Copy to Others" sequence
+    const [showCopyToOthersModal, setShowCopyToOthersModal] = useState(false);
+    const [copyActionType, setCopyActionType] = useState(null); // 'base' or 'override'
+    const [lastSubmittedData, setLastSubmittedData] = useState(null);
+    const [copyTargetIds, setCopyTargetIds] = useState([]);
+    const [isCopying, setIsCopying] = useState(false);
+
     const { data: overrideData, setData: setOverrideData, post: postOverride, processing: overrideProcessing, reset: resetOverride } = useForm({
         cells: [],
         shift_start: '',
         shift_end: '',
         shift_type: '',
-        is_off_day: false
+        is_off_day: false,
+        is_leave: false // 🟢 FEATURE 4
     });
 
     const getShiftDetails = (emp, dateString, dayName) => {
-        if (!emp) return { isOff: false, shiftType: null, startTime: null, endTime: null, isOverride: false };
+        if (!emp) return { isOff: false, isLeave: false, shiftType: null, startTime: null, endTime: null, isOverride: false };
         
         // 1. Priority check: Does this exact date have a manual override?
         const override = emp.overrides?.[dateString];
         if (override) {
             return {
                 isOff: override.is_off_day,
+                isLeave: override.is_leave, // 🟢 FEATURE 4
                 shiftType: override.shift_type,
                 startTime: override.start_time,
                 endTime: override.end_time,
@@ -172,6 +181,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                 const dayConfig = activeSchedule.pattern[dayName];
                 return {
                     isOff: dayConfig.is_off_day,
+                    isLeave: dayConfig.is_leave || false, // 🟢 FEATURE 4
                     shiftType: dayConfig.shift_type,
                     startTime: dayConfig.shift_start,
                     endTime: dayConfig.shift_end,
@@ -182,6 +192,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
             // Fallback to legacy single-shift format
             return {
                 isOff: activeSchedule.off_days?.includes(dayName),
+                isLeave: false, // 🟢 FEATURE 4
                 shiftType: activeSchedule.shift_type,
                 startTime: activeSchedule.start_time,
                 endTime: activeSchedule.end_time,
@@ -192,6 +203,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
         // 3. Fallback: If the date is outside of any assigned cut-off period, it remains empty.
         return {
             isOff: false,
+            isLeave: false, // 🟢 FEATURE 4
             shiftType: null,
             startTime: null,
             endTime: null,
@@ -221,9 +233,62 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
             onSuccess: () => {
                 setShowOverrideModal(false);
                 setSelectedCells([]);
-                resetOverride();
+                
+                // 🟢 TRIGGER COPY SEQUENCE IF IN SINGLE VIEW
+                if (viewMode === 'single') {
+                    setCopyActionType('override');
+                    setLastSubmittedData({ ...overrideData });
+                    setCopyTargetIds([]);
+                    setShowCopyToOthersModal(true);
+                } else {
+                    resetOverride();
+                }
             }
         });
+    };
+
+    // 🟢 NEW: Handles the automatic follow-up modal for copying schedules to department members
+    const handleCopyToOthersSubmit = (e) => {
+        e.preventDefault();
+        if (copyTargetIds.length === 0) return;
+        setIsCopying(true);
+
+        if (copyActionType === 'base') {
+            router.post(route('attendance.setup-schedule.store'), {
+                ...lastSubmittedData,
+                employee_ids: copyTargetIds
+            }, {
+                onSuccess: () => {
+                    setShowCopyToOthersModal(false);
+                    setIsCopying(false);
+                    resetBase();
+                },
+                onError: () => setIsCopying(false)
+            });
+        } else if (copyActionType === 'override') {
+            // Because overrides explicitly name dates AND employee_ids in one array, 
+            // we have to reconstruct the cells array to map to the new target employees
+            const newCells = [];
+            const overriddenDates = [...new Set(lastSubmittedData.cells.map(c => c.date))];
+            
+            copyTargetIds.forEach(targetId => {
+                overriddenDates.forEach(date => {
+                    newCells.push({ employee_id: targetId, date: date });
+                });
+            });
+            
+            router.post(route('attendance.schedule-override.store'), {
+                ...lastSubmittedData,
+                cells: newCells
+            }, {
+                onSuccess: () => {
+                    setShowCopyToOthersModal(false);
+                    setIsCopying(false);
+                    resetOverride();
+                },
+                onError: () => setIsCopying(false)
+            });
+        }
     };
 
     // 🟢 IN-APP RESET: Confirms through the custom Tailwind modal
@@ -250,31 +315,46 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
     const [batchSearch, setBatchSearch] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [weekOffset, setWeekOffset] = useState(0);
+    const [batchViewMode, setBatchViewMode] = useState('weekly'); // 🟢 FEATURE 2: Added View Mode state
 
     // 🟢 REBUILT BATCH GRID: 7-Day Weekly view anchored to the selected cutoff start date!
     const batchDates = useMemo(() => {
-        const [startStr] = selectedCutoff.split('|');
-        const baseDate = new Date(`${startStr}T12:00:00`);
-        
-        const dayOfWeek = baseDate.getDay() === 0 ? 6 : baseDate.getDay() - 1; 
-        
-        const monday = new Date(baseDate);
-        monday.setDate(baseDate.getDate() - dayOfWeek + (weekOffset * 7));
-        
+        const [startStr, endStr] = selectedCutoff.split('|');
+        let startDate, endDate;
+
+        // 🟢 FEATURE 2: Dynamic generation based on view mode
+        if (batchViewMode === 'weekly') {
+            const baseDate = new Date(`${startStr}T12:00:00`);
+            const dayOfWeek = baseDate.getDay() === 0 ? 6 : baseDate.getDay() - 1; 
+            startDate = new Date(baseDate);
+            startDate.setDate(baseDate.getDate() - dayOfWeek + (weekOffset * 7));
+            endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + 6);
+        } else if (batchViewMode === 'cutoff') {
+            startDate = new Date(`${startStr}T12:00:00`);
+            endDate = new Date(`${endStr}T12:00:00`);
+        } else { // monthly
+            const baseDate = new Date(`${startStr}T12:00:00`);
+            const y = baseDate.getFullYear();
+            const m = baseDate.getMonth();
+            startDate = new Date(y, m, 1, 12);
+            endDate = new Date(y, m + 1, 0, 12); // Day 0 gives the last day of the month
+        }
+
         let days = [];
-        for (let i = 0; i < 7; i++) {
-            const d = new Date(monday);
-            d.setDate(monday.getDate() + i);
-            const dateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
-            const display = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-            
+        let cur = new Date(startDate);
+        
+        while (cur <= endDate) {
+            const dateString = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+            const dayName = cur.toLocaleDateString('en-US', { weekday: 'long' });
+            const display = cur.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
             days.push({ dayName, dateString, display });
+            cur.setDate(cur.getDate() + 1);
         }
         return days;
-    }, [weekOffset, selectedCutoff]);
+    }, [weekOffset, selectedCutoff, batchViewMode]);
 
-    const currentWeekRange = `${batchDates[0].display} - ${batchDates[6].display}`;
+    const currentWeekRange = `${batchDates[0].display} - ${batchDates[batchDates.length - 1].display}`;
     const dropdownRef = useRef(null);
 
     useEffect(() => {
@@ -319,14 +399,15 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
     const [showBaseModal, setShowBaseModal] = useState(false);
     const [showEmptyGridAlert, setShowEmptyGridAlert] = useState(false); // 🟢 Custom alert state
     
+    // 🟢 FEATURE 4: Inject is_leave
     const defaultWeekPattern = {
-        Monday: { is_off_day: false, shift_start: '', shift_end: '', shift_type: '' },
-        Tuesday: { is_off_day: false, shift_start: '', shift_end: '', shift_type: '' },
-        Wednesday: { is_off_day: false, shift_start: '', shift_end: '', shift_type: '' },
-        Thursday: { is_off_day: false, shift_start: '', shift_end: '', shift_type: '' },
-        Friday: { is_off_day: false, shift_start: '', shift_end: '', shift_type: '' },
-        Saturday: { is_off_day: true, shift_start: '', shift_end: '', shift_type: '' },
-        Sunday: { is_off_day: true, shift_start: '', shift_end: '', shift_type: '' },
+        Monday: { is_off_day: false, is_leave: false, shift_start: '', shift_end: '', shift_type: '' },
+        Tuesday: { is_off_day: false, is_leave: false, shift_start: '', shift_end: '', shift_type: '' },
+        Wednesday: { is_off_day: false, is_leave: false, shift_start: '', shift_end: '', shift_type: '' },
+        Thursday: { is_off_day: false, is_leave: false, shift_start: '', shift_end: '', shift_type: '' },
+        Friday: { is_off_day: false, is_leave: false, shift_start: '', shift_end: '', shift_type: '' },
+        Saturday: { is_off_day: true, is_leave: false, shift_start: '', shift_end: '', shift_type: '' },
+        Sunday: { is_off_day: true, is_leave: false, shift_start: '', shift_end: '', shift_type: '' },
     };
 
     const { data: baseData, setData: setBaseData, post: postBase, processing: baseProcessing, reset: resetBase } = useForm({
@@ -340,14 +421,15 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
     }, [selectedCutoff]);
 
     const openBaseModal = () => {
-        if (selectedBatchIds.length === 0) {
+        if (viewMode === 'batch' && selectedBatchIds.length === 0) {
             // 🟢 FIXED: Replaced ugly browser alert with our custom in-app modal state
             setShowEmptyGridAlert(true);
             return;
         }
+        
         resetBase();
         setBaseData('cutoff_period', selectedCutoff);
-        setBaseData('employee_ids', selectedBatchIds);
+        setBaseData('employee_ids', viewMode === 'batch' ? selectedBatchIds : [singleEmployeeId]);
         setShowBaseModal(true);
     };
 
@@ -356,7 +438,16 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
         postBase(route('attendance.setup-schedule.store'), {
             onSuccess: () => {
                 setShowBaseModal(false); 
-                resetBase(); 
+                
+                // 🟢 TRIGGER COPY SEQUENCE IF IN SINGLE VIEW
+                if (viewMode === 'single') {
+                    setCopyActionType('base');
+                    setLastSubmittedData({ ...baseData, employee_ids: [singleEmployeeId] }); // clone snapshot
+                    setCopyTargetIds([]);
+                    setShowCopyToOthersModal(true);
+                } else {
+                    resetBase(); 
+                }
             }
         });
     };
@@ -426,6 +517,17 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
         return employees.find(e => e.id.toString() === singleEmployeeId) || null;
     }, [employees, singleEmployeeId]);
 
+    const singleEmployeeDept = typeof singleEmployee?.department === 'object' ? singleEmployee.department?.name : singleEmployee?.department;
+
+    // 🟢 Generate targets for the "Copy to Others" modal dynamically based on the Single Employee's department
+    const availableCopyTargets = useMemo(() => {
+        if (!singleEmployee) return [];
+        return employees.filter(emp => {
+            const empDept = typeof emp.department === 'object' ? emp.department?.name : emp.department;
+            return emp.id.toString() !== singleEmployeeId && empDept === singleEmployeeDept;
+        });
+    }, [employees, singleEmployeeId, singleEmployeeDept]);
+
     const monthDays = useMemo(() => {
         const firstDayIndex = new Date(currentYear, currentMonth, 1).getDay(); 
         const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
@@ -456,8 +558,10 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
         return [...new Set(employees.map(e => (typeof e.department === 'object' ? e.department?.name : e.department) || 'Unassigned'))].filter(dept => dept !== 'Unassigned').sort();
     }, [employees]);
 
+    // 🟢 FEATURE 4: Handle Leave Display
     // 🟢 FIXED: Shortened text to "Day", "Straight", and "Graveyard" to free up cell space!
-    const renderShiftBadge = (shiftType, isOffDay) => {
+    const renderShiftBadge = (shiftType, isOffDay, isLeave = false) => {
+        if (isLeave) return <span className="inline-flex rounded border border-orange-200 bg-orange-100 px-2 py-1 text-[10px] sm:text-xs font-bold text-orange-700 shadow-sm uppercase tracking-wider">Leave</span>;
         if (isOffDay) return <span className="inline-flex rounded border border-gray-200 bg-gray-100 px-2 py-1 text-[10px] sm:text-xs font-medium text-gray-600 shadow-sm">Off Day</span>;
         switch (shiftType) {
             case 'Day Shift': return <span className="inline-flex rounded bg-blue-50 px-2 py-1 text-[10px] sm:text-xs font-medium text-blue-700 shadow-sm">Day</span>;
@@ -513,6 +617,21 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                 </div>
             }
         >
+            {/* 🟢 INJECTED CSS FOR MODAL ANIMATIONS */}
+            <style>{`
+                @keyframes modalPop {
+                    0% { opacity: 0; transform: scale(0.95) translateY(10px); }
+                    100% { opacity: 1; transform: scale(1) translateY(0); }
+                }
+                .animate-modal-pop { animation: modalPop 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+                
+                @keyframes backdropFade {
+                    0% { opacity: 0; }
+                    100% { opacity: 1; }
+                }
+                .animate-backdrop-fade { animation: backdropFade 0.3s ease-out forwards; }
+            `}</style>
+
             {/* FLOATING ACTION BAR FOR OVERRIDES */}
             {mounted && selectedCells.length > 0 && (
                 <div 
@@ -665,6 +784,27 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                             
                             {/* 🟢 MOVED: Cutoff Dropdown and Action Buttons moved to the right side of the Weekly Grid */}
                             <div className="flex flex-wrap items-center gap-3">
+                                {/* 🟢 FEATURE 2: Batch View Filters */}
+                                <div className="flex bg-gray-100 rounded-lg p-1 shadow-inner border border-gray-200">
+                                    {[
+                                        { id: 'weekly', label: 'Week' },
+                                        { id: 'cutoff', label: 'Cut-off' },
+                                        { id: 'monthly', label: 'Month' }
+                                    ].map(mode => (
+                                        <button
+                                            key={mode.id}
+                                            onClick={() => { setBatchViewMode(mode.id); setWeekOffset(0); }}
+                                            className={`px-3 py-1.5 text-[11px] font-bold rounded-md transition-all ${
+                                                batchViewMode === mode.id 
+                                                ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-black/5' 
+                                                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+                                            }`}
+                                        >
+                                            {mode.label}
+                                        </button>
+                                    ))}
+                                </div>
+
                                 {/* 🟢 NEW: Current Cut-off Button */}
                                 <button 
                                     onClick={() => {
@@ -779,7 +919,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                                         <div className="text-xs font-medium text-gray-500 mt-0.5">{typeof emp.department === 'object' ? emp.department?.name : emp.department}</div>
                                                     </td>
                                                     {batchDates.map(day => {
-                                                        const { isOff, shiftType, startTime, endTime, isOverride } = getShiftDetails(emp, day.dateString, day.dayName);
+                                                        const { isOff, isLeave, shiftType, startTime, endTime, isOverride } = getShiftDetails(emp, day.dateString, day.dayName);
                                                         const isSelected = isCellSelected(emp.id, day.dateString);
                                                         const isCutoff = isDateInCurrentCutoff(day.dateString);
                                                         
@@ -801,8 +941,8 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                                                 >
                                                                     {isOverride && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-amber-400 shadow-sm"></span>}
                                                                     <div className="flex flex-col items-center gap-1 pointer-events-none">
-                                                                        {renderShiftBadge(shiftType, isOff)}
-                                                                        {!isOff && startTime && endTime && (
+                                                                        {renderShiftBadge(shiftType, isOff, isLeave)}
+                                                                        {!(isOff || isLeave) && startTime && endTime && (
                                                                             <span className={`text-[10px] font-mono font-bold text-center leading-tight ${isOverride ? 'text-amber-700' : 'text-gray-500'}`}>
                                                                                 {startTime} <br /> {endTime}
                                                                             </span>
@@ -835,7 +975,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                     {/* 🟢 FIXED: Dropdown Lock Logic for Branches */}
                                     {branches.length > 1 ? (
                                         <select
-                                            className="block rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-40 cursor-pointer"
+                                            className="rounded-md border-gray-300 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-40 cursor-pointer"
                                             value={singleBranchFilter}
                                             onChange={e => { 
                                                 setSingleBranchFilter(e.target.value); 
@@ -956,6 +1096,24 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                             
                             {/* 🟢 MOVED: Cutoff Dropdown and Highlight Toggle replicated to Single View */}
                             <div className="flex flex-wrap items-center gap-3">
+                                
+                                {/* 🟢 FEATURE 1: Current Cut-off Button in Single View */}
+                                <button 
+                                    onClick={() => {
+                                        const current = getCurrentCutoffValue(cutoffSettings);
+                                        setSelectedCutoff(current);
+                                        setSelectedCells([]);
+                                        const [start] = current.split('|');
+                                        const startDate = new Date(`${start}T00:00:00`);
+                                        setCurrentMonth(startDate.getMonth());
+                                        setCurrentYear(startDate.getFullYear());
+                                        setWeekOffset(0);
+                                    }}
+                                    className="flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-bold text-gray-700 shadow-sm hover:bg-gray-50 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
+                                >
+                                    Current Cut-off
+                                </button>
+
                                 <select
                                     className="block w-48 sm:w-64 rounded-md border-indigo-300 py-2 pl-3 pr-10 text-sm font-semibold text-indigo-900 bg-indigo-50 shadow-sm cursor-pointer focus:ring-indigo-500 focus:border-indigo-500"
                                     value={selectedCutoff}
@@ -994,6 +1152,16 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                     )}
                                     {showCutoffHighlight ? 'Hide Cut-off' : 'Highlight Cut-off'}
                                 </button>
+
+                                {/* 🟢 FEATURE 1: Assign Base Schedule Button in Single View */}
+                                {canEditSchedule && singleEmployee && (
+                                    <button 
+                                        onClick={openBaseModal}
+                                        className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors whitespace-nowrap"
+                                    >
+                                        + Assign Base Schedule
+                                    </button>
+                                )}
                             </div>
                         </div>
                         
@@ -1027,7 +1195,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                         return <div key={`padding-${index}`} className="h-full w-full rounded-md border border-gray-100 bg-gray-50/50"></div>;
                                     }
 
-                                    const { isOff, shiftType, startTime, endTime, isOverride } = getShiftDetails(singleEmployee, slot.dateString, slot.dayName);
+                                    const { isOff, isLeave, shiftType, startTime, endTime, isOverride } = getShiftDetails(singleEmployee, slot.dateString, slot.dayName);
                                     const isSelected = singleEmployee ? isCellSelected(singleEmployee.id, slot.dateString) : false;
                                     const isCutoff = singleEmployee && isDateInCurrentCutoff(slot.dateString); // 🟢 CHECK CALENDAR CELL
                                     
@@ -1057,8 +1225,8 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
 
                                             {singleEmployee && (
                                                 <div className="mt-2 sm:mt-3 flex flex-col items-center justify-center flex-1 gap-2 pointer-events-none">
-                                                    {renderShiftBadge(shiftType, isOff)}
-                                                    {!isOff && startTime && endTime && (
+                                                    {renderShiftBadge(shiftType, isOff, isLeave)}
+                                                    {!(isOff || isLeave) && startTime && endTime && (
                                                         <span className={`text-[10px] sm:text-[11px] font-bold leading-tight font-mono text-center ${isOverride ? 'text-amber-700' : 'text-gray-500'}`}>
                                                             {startTime}<br/>|<br/>{endTime}
                                                         </span>
@@ -1081,10 +1249,10 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
             {showBaseModal && (
                 <div className="fixed inset-0 z-[60] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
                     <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowBaseModal(false)}></div>
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity animate-backdrop-fade" onClick={() => setShowBaseModal(false)}></div>
 
                         <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
-                        <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:align-middle relative z-10">
+                        <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:align-middle relative z-10 animate-modal-pop">
                             <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                                 <h3 className="text-xl font-bold leading-6 text-gray-900 mb-4">Assign Base Schedule Pattern</h3>
                                 
@@ -1094,7 +1262,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
                                         <p className="text-sm text-indigo-800">
-                                            Applying this weekly pattern to <strong className="font-bold">{selectedBatchIds.length} selected employee(s)</strong> for the entire <strong className="font-bold">
+                                            Applying this weekly pattern to <strong className="font-bold">{viewMode === 'batch' ? selectedBatchIds.length : 1} selected employee(s)</strong> for the entire <strong className="font-bold">
                                             {cutoffPeriodsList.find(c => c.value === baseData.cutoff_period)?.label}
                                             </strong> cut-off period.
                                         </p>
@@ -1103,27 +1271,53 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                     {/* 🟢 FIXED: Strict grid heights and flex rules to prevent squishing and eliminate scrollbars */}
                                     <div className="space-y-2 max-h-[55vh] overflow-y-auto px-1 py-1">
                                         {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
-                                            <div key={day} className={`flex items-center gap-3 sm:gap-4 p-3 border rounded-lg transition-colors ${baseData.pattern[day].is_off_day ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-300'}`}>
+                                            <div key={day} className={`flex items-center gap-3 sm:gap-4 p-3 border rounded-lg transition-colors ${(baseData.pattern[day].is_off_day || baseData.pattern[day].is_leave) ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-300'}`}>
                                                 
                                                 <div className="w-24 sm:w-28 shrink-0 font-bold text-sm text-gray-800 tracking-wide">{day}</div>
                                                 
-                                                <label className="flex items-center gap-2 cursor-pointer w-20 sm:w-24 shrink-0">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        className="h-4 w-4 text-rose-500 rounded border-gray-300 focus:ring-rose-500 cursor-pointer"
-                                                        checked={baseData.pattern[day].is_off_day}
-                                                        onChange={e => {
-                                                            setBaseData('pattern', {
-                                                                ...baseData.pattern,
-                                                                [day]: { ...baseData.pattern[day], is_off_day: e.target.checked }
-                                                            });
-                                                        }}
-                                                    />
-                                                    <span className={`text-sm font-semibold ${baseData.pattern[day].is_off_day ? 'text-rose-600' : 'text-gray-600'}`}>Off Day</span>
-                                                </label>
+                                                {/* 🟢 FEATURE 4: Inject Leave Checkbox */}
+                                                <div className="flex flex-col gap-1 w-20 sm:w-24 shrink-0">
+                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            className="h-4 w-4 text-rose-500 rounded border-gray-300 focus:ring-rose-500 cursor-pointer"
+                                                            checked={baseData.pattern[day].is_off_day}
+                                                            onChange={e => {
+                                                                setBaseData('pattern', {
+                                                                    ...baseData.pattern,
+                                                                    [day]: { 
+                                                                        ...baseData.pattern[day], 
+                                                                        is_off_day: e.target.checked,
+                                                                        is_leave: e.target.checked ? false : baseData.pattern[day].is_leave
+                                                                    }
+                                                                });
+                                                            }}
+                                                        />
+                                                        <span className={`text-sm font-semibold ${baseData.pattern[day].is_off_day ? 'text-rose-600' : 'text-gray-600'}`}>Off Day</span>
+                                                    </label>
+
+                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            className="h-4 w-4 text-orange-500 rounded border-gray-300 focus:ring-orange-500 cursor-pointer"
+                                                            checked={baseData.pattern[day].is_leave}
+                                                            onChange={e => {
+                                                                setBaseData('pattern', {
+                                                                    ...baseData.pattern,
+                                                                    [day]: { 
+                                                                        ...baseData.pattern[day], 
+                                                                        is_leave: e.target.checked,
+                                                                        is_off_day: e.target.checked ? false : baseData.pattern[day].is_off_day
+                                                                    }
+                                                                });
+                                                            }}
+                                                        />
+                                                        <span className={`text-sm font-semibold ${baseData.pattern[day].is_leave ? 'text-orange-600' : 'text-gray-600'}`}>Leave</span>
+                                                    </label>
+                                                </div>
 
                                                 <div className="flex-1 min-w-0">
-                                                    {!baseData.pattern[day].is_off_day ? (
+                                                    {!(baseData.pattern[day].is_off_day || baseData.pattern[day].is_leave) ? (
                                                         <select 
                                                             className="block w-full text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 cursor-pointer bg-white py-2 px-3 h-[38px]"
                                                             value={baseData.pattern[day].shift_start && baseData.pattern[day].shift_end ? `${baseData.pattern[day].shift_start}-${baseData.pattern[day].shift_end}` : ''}
@@ -1140,7 +1334,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                                                     }
                                                                 });
                                                             }}
-                                                            required={!baseData.pattern[day].is_off_day}
+                                                            required={!(baseData.pattern[day].is_off_day || baseData.pattern[day].is_leave)}
                                                         >
                                                             <option value="" disabled>-- Select Assigned Shift --</option>
                                                             {shifts.map(shift => (
@@ -1150,8 +1344,8 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                                             ))}
                                                         </select>
                                                     ) : (
-                                                        <div className="flex items-center w-full text-sm text-gray-400 italic px-3 bg-gray-50 h-[38px] rounded-md border border-dashed border-gray-200">
-                                                            No shift assigned for this day
+                                                        <div className={`flex items-center w-full text-sm italic px-3 h-[38px] rounded-md border border-dashed ${baseData.pattern[day].is_leave ? 'bg-orange-50 border-orange-200 text-orange-400' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>
+                                                            {baseData.pattern[day].is_leave ? 'Marked as Leave/PTO' : 'No shift assigned for this day'}
                                                         </div>
                                                     )}
                                                 </div>
@@ -1182,14 +1376,82 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                 </div>
             )}
 
+            {/* 🟢 FEATURE 3: AUTOMATIC COPY-TO-OTHERS MODAL IN SINGLE VIEW */}
+            {showCopyToOthersModal && (
+                <div className="fixed inset-0 z-[80] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+                    <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity animate-backdrop-fade" onClick={() => { setShowCopyToOthersModal(false); resetBase(); resetOverride(); }}></div>
+
+                        <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
+                        <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-xl sm:align-middle relative z-10 animate-modal-pop">
+                            <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                <h3 className="text-lg sm:text-xl font-black text-indigo-900 mb-3 bg-indigo-50 border border-indigo-100 inline-block px-4 py-2 rounded-xl shadow-sm">
+                                    Would you like to set the same schedule for other employees?
+                                </h3>
+                                <p className="text-sm text-gray-500 mb-6">
+                                    Copying <strong className="text-indigo-600">{singleEmployee?.name}'s</strong> {copyActionType === 'base' ? 'base schedule' : 'manual overrides'} to other members in <strong className="text-gray-800">{singleEmployeeDept || 'Unassigned'}</strong>.
+                                </p>
+                                
+                                <form onSubmit={handleCopyToOthersSubmit} className="space-y-4">
+                                    <div className="border border-gray-200 rounded-lg max-h-64 overflow-y-auto bg-gray-50">
+                                        {availableCopyTargets.length > 0 ? (
+                                            <div className="divide-y divide-gray-200">
+                                                {availableCopyTargets.map(emp => {
+                                                    const isChecked = copyTargetIds.includes(emp.id);
+                                                    return (
+                                                        <label key={emp.id} className={`flex items-center gap-3 p-3 cursor-pointer transition-colors ${isChecked ? 'bg-indigo-50' : 'hover:bg-white'}`}>
+                                                            <input 
+                                                                type="checkbox" 
+                                                                className="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                                                                checked={isChecked}
+                                                                onChange={(e) => {
+                                                                    if (e.target.checked) setCopyTargetIds(prev => [...prev, emp.id]);
+                                                                    else setCopyTargetIds(prev => prev.filter(id => id !== emp.id));
+                                                                }}
+                                                            />
+                                                            <div>
+                                                                <p className={`text-sm font-bold ${isChecked ? 'text-indigo-900' : 'text-gray-900'}`}>{emp.name}</p>
+                                                            </div>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <div className="p-6 text-center text-sm text-gray-500 italic">No other employees available in this department.</div>
+                                        )}
+                                    </div>
+
+                                    <div className="mt-6 sm:flex sm:flex-row-reverse border-t border-gray-200 pt-5">
+                                        <button 
+                                            type="submit" 
+                                            disabled={copyTargetIds.length === 0 || isCopying}
+                                            className="inline-flex w-full justify-center rounded-md border border-transparent bg-indigo-600 px-6 py-2 text-base font-bold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {isCopying ? 'Applying...' : 'Yes Please'}
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => { setShowCopyToOthersModal(false); resetBase(); resetOverride(); }}
+                                            className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-6 py-2 text-base font-semibold text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm transition-colors"
+                                        >
+                                            No Thanks
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* 🟢 NEW: CUSTOM ALERT FOR EMPTY GRID */}
             {showEmptyGridAlert && (
                 <div className="fixed inset-0 z-[70] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
                     <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowEmptyGridAlert(false)}></div>
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity animate-backdrop-fade" onClick={() => setShowEmptyGridAlert(false)}></div>
 
                         <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
-                        <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-md sm:align-middle relative z-10">
+                        <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-md sm:align-middle relative z-10 animate-modal-pop">
                             <div className="bg-white p-6">
                                 <div className="flex items-start gap-4">
                                     <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 sm:h-10 sm:w-10">
@@ -1225,10 +1487,10 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
             {showOverrideModal && (
                 <div className="fixed inset-0 z-[60] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
                     <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowOverrideModal(false)}></div>
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity animate-backdrop-fade" onClick={() => setShowOverrideModal(false)}></div>
 
                         <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
-                        <div className="inline-block transform overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle relative z-10">
+                        <div className="inline-block transform overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle relative z-10 animate-modal-pop">
                             <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                                 <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Override Selected Days</h3>
                                 
@@ -1237,17 +1499,41 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                 </div>
                                 
                                 <form onSubmit={submitOverride} className="space-y-6">
-                                    <label className="flex items-center space-x-3 p-3 border border-gray-200 rounded-md bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
-                                        <input 
-                                            type="checkbox" 
-                                            className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
-                                            checked={overrideData.is_off_day}
-                                            onChange={e => setOverrideData('is_off_day', e.target.checked)}
-                                        />
-                                        <span className="text-sm font-medium text-gray-700">Mark these dates as Off Days</span>
-                                    </label>
+                                    <div className="flex flex-col sm:flex-row gap-4 p-4 border border-gray-200 rounded-md bg-gray-50">
+                                        <label className="flex items-center space-x-3 cursor-pointer">
+                                            <input 
+                                                type="checkbox" 
+                                                className="h-5 w-5 rounded border-gray-300 text-rose-500 focus:ring-rose-500"
+                                                checked={overrideData.is_off_day}
+                                                onChange={e => {
+                                                    setOverrideData(prev => ({
+                                                        ...prev,
+                                                        is_off_day: e.target.checked,
+                                                        is_leave: e.target.checked ? false : prev.is_leave
+                                                    }));
+                                                }}
+                                            />
+                                            <span className="text-sm font-bold text-gray-700">Mark as Off Day</span>
+                                        </label>
 
-                                    {!overrideData.is_off_day && (
+                                        <label className="flex items-center space-x-3 cursor-pointer sm:ml-4">
+                                            <input 
+                                                type="checkbox" 
+                                                className="h-5 w-5 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                                                checked={overrideData.is_leave}
+                                                onChange={e => {
+                                                    setOverrideData(prev => ({
+                                                        ...prev,
+                                                        is_leave: e.target.checked,
+                                                        is_off_day: e.target.checked ? false : prev.is_off_day
+                                                    }));
+                                                }}
+                                            />
+                                            <span className="text-sm font-bold text-gray-700">Mark as Leave/PTO</span>
+                                        </label>
+                                    </div>
+
+                                    {!(overrideData.is_off_day || overrideData.is_leave) && (
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700">New Shift for Selected Days</label>
                                             <select 
@@ -1302,10 +1588,10 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
             {showResetConfirmModal && (
                 <div className="fixed inset-0 z-[60] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
                     <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !isResetting && setShowResetConfirmModal(false)}></div>
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity animate-backdrop-fade" onClick={() => !isResetting && setShowResetConfirmModal(false)}></div>
 
                         <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
-                        <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-md sm:align-middle relative z-10">
+                        <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-md sm:align-middle relative z-10 animate-modal-pop">
                             <div className="bg-white p-6">
                                 <div className="flex items-start gap-4">
                                     <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600 sm:h-10 sm:w-10">
