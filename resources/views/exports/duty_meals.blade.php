@@ -38,7 +38,7 @@
         </tr>
         <tr>
             <td style="font-weight: bold; color: #dc2626;">NOTES</td>
-            @foreach($week['days'] as $day) <td style="color: #4b5563; font-style: italic;">{{ implode(' | ', $day['clinic_lunch']['notes']) }}</td> @endforeach
+            @foreach($week['days'] as $day) <td style="color: #4b5563; font-style: italic;">{!! implode('<br style="mso-data-placement:same-cell;" />', $day['clinic_lunch']['notes']) !!}</td> @endforeach
         </tr>
         
         <tr><td colspan="8"></td></tr> <!-- SPACER ROW -->
@@ -66,7 +66,7 @@
         </tr>
         <tr>
             <td style="font-weight: bold; color: #dc2626;">NOTES</td>
-            @foreach($week['days'] as $day) <td style="color: #4b5563; font-style: italic;">{{ implode(' | ', $day['clinic_dinner']['notes']) }}</td> @endforeach
+            @foreach($week['days'] as $day) <td style="color: #4b5563; font-style: italic;">{!! implode('<br style="mso-data-placement:same-cell;" />', $day['clinic_dinner']['notes']) !!}</td> @endforeach
         </tr>
 
         <tr><td colspan="8"></td></tr> <!-- SPACER ROW -->
@@ -94,7 +94,7 @@
         </tr>
         <tr>
             <td style="font-weight: bold; color: #dc2626;">NOTES</td>
-            @foreach($week['days'] as $day) <td style="color: #4b5563; font-style: italic;">{{ implode(' | ', $day['clinic_whole']['notes']) }}</td> @endforeach
+            @foreach($week['days'] as $day) <td style="color: #4b5563; font-style: italic;">{!! implode('<br style="mso-data-placement:same-cell;" />', $day['clinic_whole']['notes']) !!}</td> @endforeach
         </tr>
 
         <tr><td colspan="8"></td></tr> <!-- SPACER ROW -->
@@ -122,7 +122,7 @@
         </tr>
         <tr>
             <td style="font-weight: bold; color: #dc2626;">NOTES</td>
-            @foreach($week['days'] as $day) <td style="color: #4b5563; font-style: italic;">{{ implode(' | ', $day['back_office']['notes']) }}</td> @endforeach
+            @foreach($week['days'] as $day) <td style="color: #4b5563; font-style: italic;">{!! implode('<br style="mso-data-placement:same-cell;" />', $day['back_office']['notes']) !!}</td> @endforeach
         </tr>
         
         <tr><td colspan="8"></td></tr>

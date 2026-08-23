@@ -122,6 +122,13 @@ class DutyMealExport implements FromView, ShouldAutoSize, WithStyles
     {
         return [
             1 => ['font' => ['bold' => true, 'size' => 14]],
+            // 🟢 NEW: Tell Excel to wrap text and align to the top so cells automatically expand vertically!
+            'A:Z' => [
+                'alignment' => [
+                    'wrapText' => true,
+                    'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_TOP
+                ]
+            ],
         ];
     }
 }
