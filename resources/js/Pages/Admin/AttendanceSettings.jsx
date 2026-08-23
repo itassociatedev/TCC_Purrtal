@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import { getAdminLinks } from '@/Config/navigation';
 
-// 🟢 ADDED: holidays array to props
 export default function AttendanceSettings({ shifts, settings, holidays = [] }) {
     const { auth, flash } = usePage().props;
     const adminLinks = getAdminLinks(auth);
@@ -16,6 +15,10 @@ export default function AttendanceSettings({ shifts, settings, holidays = [] }) 
     const canEditSettings = isSuperAdmin || ['full', 'edit'].includes(aclLevel);
     // FULL access: Can delete shifts.
     const canDeleteSettings = isSuperAdmin || ['full'].includes(aclLevel);
+
+    // 🟢 NEW: Ref and State used to smoothly scroll and highlight the Holiday Editor form
+    const holidayFormRef = useRef(null);
+    const [isHighlighting, setIsHighlighting] = useState(false);
 
     const { data: cutoffData, setData: setCutoffData, post: postCutoff, processing: cutoffProcessing } = useForm({
         cutoff_1_start: settings.cutoff_1_start || '21',
@@ -32,8 +35,9 @@ export default function AttendanceSettings({ shifts, settings, holidays = [] }) 
         shift_type: 'Day Shift'
     });
 
-    // 🟢 NEW: Form for New Holiday
+    // Form for New/Edit Holiday
     const { data: holidayData, setData: setHolidayData, post: postHoliday, reset: resetHoliday, processing: holidayProcessing } = useForm({
+        id: '', // Added ID to support editing
         date: '',
         name: ''
     });
@@ -49,11 +53,11 @@ export default function AttendanceSettings({ shifts, settings, holidays = [] }) 
         is_active: true
     });
 
-    // 🟢 NEW: State for the custom Delete Confirmation Modal
+    // State for the custom Delete Confirmation Modal
     const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    // 🟢 NEW: State for Holiday Deletion Modal
+    // State for Holiday Deletion Modal
     const [holidayToDelete, setHolidayToDelete] = useState(null);
     const [showHolidayDeleteModal, setShowHolidayDeleteModal] = useState(false);
 
@@ -69,7 +73,7 @@ export default function AttendanceSettings({ shifts, settings, holidays = [] }) 
         });
     };
 
-    // 🟢 NEW: Submit handler for holidays
+    // Submit handler for holidays
     const handleHolidaySubmit = (e) => {
         e.preventDefault();
         postHoliday(route('admin.attendance-settings.store-holiday'), {
@@ -100,12 +104,12 @@ export default function AttendanceSettings({ shifts, settings, holidays = [] }) 
         });
     };
 
-    // 🟢 UPDATED: Opens the custom modal instead of the browser popup
+    // Opens the custom modal instead of the browser popup
     const confirmDelete = () => {
         setShowDeleteConfirmModal(true);
     };
 
-    // 🟢 NEW: Executes the actual deletion when confirmed inside the new modal
+    // Executes the actual deletion when confirmed inside the new modal
     const executeDelete = () => {
         setIsDeleting(true);
         router.delete(route('admin.attendance-settings.delete-shift', editData.id), {
@@ -119,7 +123,7 @@ export default function AttendanceSettings({ shifts, settings, holidays = [] }) 
         });
     };
 
-    // 🟢 NEW: Holiday deletion logic
+    // Holiday deletion logic
     const confirmDeleteHoliday = (holiday) => {
         setHolidayToDelete(holiday);
         setShowHolidayDeleteModal(true);
@@ -254,22 +258,31 @@ export default function AttendanceSettings({ shifts, settings, holidays = [] }) 
                                     </form>
                                 </div>
 
-                                {/* 🟢 NEW: HOLIDAY CREATOR */}
-                                <div className="bg-rose-50 rounded-lg border border-rose-200 shadow-sm p-6">
-                                    <h3 className="text-lg font-bold text-rose-900 mb-4 flex items-center gap-2">
-                                        📌 Add Calendar Event / Holiday
+                                {/* 🟢 HOLIDAY CREATOR (WITH REF FOR VISUAL EDIT JUMP) */}
+                                <div ref={holidayFormRef} className={`rounded-lg border shadow-sm p-6 transition-all duration-700 ${isHighlighting ? 'bg-amber-100 border-amber-400 shadow-2xl scale-[1.02]' : holidayData.id ? 'bg-amber-50 border-amber-200' : 'bg-rose-50 border-rose-200'}`}>
+                                    <h3 className={`text-lg font-bold mb-4 flex items-center gap-2 ${holidayData.id ? 'text-amber-900' : 'text-rose-900'}`}>
+                                        📌 {holidayData.id ? 'Edit Calendar Event' : 'Add Calendar Event / Holiday'}
                                     </h3>
                                     <form onSubmit={handleHolidaySubmit} className="space-y-4">
+                                        
+                                        {/* Show editing alert if active */}
+                                        {holidayData.id && (
+                                            <div className="flex items-center justify-between bg-amber-100 px-3 py-2 rounded-md mb-2">
+                                                <span className="text-xs font-bold text-amber-800">Editing existing event</span>
+                                                <button type="button" onClick={() => resetHoliday()} className="text-xs font-bold text-indigo-600 hover:underline">Cancel Edit</button>
+                                            </div>
+                                        )}
+
                                         <div>
-                                            <label className="block text-xs font-bold text-rose-700 uppercase tracking-wider">Date</label>
-                                            <input type="date" className="mt-1 block w-full rounded-md border-rose-300 shadow-sm focus:border-rose-500 focus:ring-rose-500 sm:text-sm font-bold text-gray-900" value={holidayData.date} onChange={e => setHolidayData('date', e.target.value)} required />
+                                            <label className={`block text-xs font-bold uppercase tracking-wider ${holidayData.id ? 'text-amber-700' : 'text-rose-700'}`}>Date</label>
+                                            <input type="date" className={`mt-1 block w-full rounded-md shadow-sm sm:text-sm font-bold text-gray-900 focus:ring-opacity-50 ${holidayData.id ? 'border-amber-300 focus:border-amber-500 focus:ring-amber-500 bg-white' : 'border-rose-300 focus:border-rose-500 focus:ring-rose-500'}`} value={holidayData.date} onChange={e => setHolidayData('date', e.target.value)} required />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-bold text-rose-700 uppercase tracking-wider">Event Name</label>
-                                            <input type="text" placeholder="e.g. Independence Day" className="mt-1 block w-full rounded-md border-rose-300 shadow-sm focus:border-rose-500 focus:ring-rose-500 sm:text-sm font-medium" value={holidayData.name} onChange={e => setHolidayData('name', e.target.value)} required />
+                                            <label className={`block text-xs font-bold uppercase tracking-wider ${holidayData.id ? 'text-amber-700' : 'text-rose-700'}`}>Event Name</label>
+                                            <input type="text" placeholder="e.g. Independence Day" className={`mt-1 block w-full rounded-md shadow-sm sm:text-sm font-medium focus:ring-opacity-50 ${holidayData.id ? 'border-amber-300 focus:border-amber-500 focus:ring-amber-500 bg-white' : 'border-rose-300 focus:border-rose-500 focus:ring-rose-500'}`} value={holidayData.name} onChange={e => setHolidayData('name', e.target.value)} required />
                                         </div>
-                                        <button type="submit" disabled={holidayProcessing} className="w-full bg-rose-600 text-white rounded-md py-2.5 text-sm font-bold shadow-sm hover:bg-rose-700 transition-colors mt-2 disabled:opacity-50">
-                                            {holidayProcessing ? 'Saving...' : 'Save Event'}
+                                        <button type="submit" disabled={holidayProcessing} className={`w-full text-white rounded-md py-2.5 text-sm font-bold shadow-sm transition-colors mt-2 disabled:opacity-50 ${holidayData.id ? 'bg-amber-600 hover:bg-amber-700' : 'bg-rose-600 hover:bg-rose-700'}`}>
+                                            {holidayProcessing ? 'Saving...' : (holidayData.id ? 'Update Event' : 'Save Event')}
                                         </button>
                                     </form>
                                 </div>
@@ -334,7 +347,7 @@ export default function AttendanceSettings({ shifts, settings, holidays = [] }) 
                             </div>
                         </div>
 
-                        {/* 🟢 NEW: HOLIDAY LIST */}
+                        {/* HOLIDAY LIST WITH EDIT ACTION AND JUMP ANIMATION */}
                         <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden flex flex-col">
                             <div className="border-b border-gray-200 bg-rose-50 px-6 py-4">
                                 <h3 className="text-lg font-bold text-rose-900">Event & Holiday Masterlist</h3>
@@ -360,7 +373,21 @@ export default function AttendanceSettings({ shifts, settings, holidays = [] }) 
                                                         📌 {holiday.name}
                                                     </td>
                                                     {canEditSettings && (
-                                                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-right flex justify-end gap-2">
+                                                            <button 
+                                                                onClick={() => {
+                                                                    setHolidayData({ id: holiday.id, date: holiday.date, name: holiday.name });
+                                                                    if (holidayFormRef.current) {
+                                                                        holidayFormRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                                        // 🟢 Triggers the visual flash so the user knows they are editing
+                                                                        setIsHighlighting(true);
+                                                                        setTimeout(() => setIsHighlighting(false), 1500);
+                                                                    }
+                                                                }}
+                                                                className="text-xs font-bold px-4 py-1.5 rounded transition-colors text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200"
+                                                            >
+                                                                Edit
+                                                            </button>
                                                             {canDeleteSettings ? (
                                                                 <button 
                                                                     onClick={() => confirmDeleteHoliday(holiday)}
@@ -369,7 +396,7 @@ export default function AttendanceSettings({ shifts, settings, holidays = [] }) 
                                                                     Delete
                                                                 </button>
                                                             ) : (
-                                                                <span className="text-xs text-gray-400 italic">No access</span>
+                                                                <span className="text-xs text-gray-400 italic mt-1 ml-2">Del locked</span>
                                                             )}
                                                         </td>
                                                     )}
@@ -523,7 +550,7 @@ export default function AttendanceSettings({ shifts, settings, holidays = [] }) 
                 </div>
             )}
 
-            {/* 🟢 NEW: CUSTOM DELETE CONFIRMATION MODAL FOR HOLIDAYS */}
+            {/* CUSTOM DELETE CONFIRMATION MODAL FOR HOLIDAYS */}
             {showHolidayDeleteModal && (
                 <div className="fixed inset-0 z-[60] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
                     <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
