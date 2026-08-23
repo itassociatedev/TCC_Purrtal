@@ -23,7 +23,6 @@ class CheckDutyMealAccess
                 ->with('error', 'Unauthenticated. Please log in to access the Duty Meal module.');
         }
 
-        // 🟢 FIXED: Removed branch requests from clearance
         $canAccessAnyDutyMealModule = 
             $user->canAccessModule('duty_meal') ||
             $user->canAccessModule('duty_meal_setup_roster') ||

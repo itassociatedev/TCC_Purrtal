@@ -87,7 +87,6 @@ class AdminACL extends Model
             'duty_meal_setup_roster' => 'Set Up Roster',
             'duty_meal_archive' => 'Duty Meal Archive',
             'duty_meal_personal' => 'My Duty Meals',
-            'duty_meal_branch_requests' => 'Branch Requests', // 🟢 NEW: Admin Approval Board Key
             'access_control' => 'Access Control',
             'form_2316_approvals' => 'Form 2316 Approvals',
             'manpower_requests_form' => 'Manpower Request Form',
@@ -134,7 +133,6 @@ class AdminACL extends Model
                 'duty_meal_setup_roster' => 'Set Up Roster',
                 'duty_meal_archive' => 'Duty Meal Archive',
                 'duty_meal_personal' => 'My Duty Meals',
-                'duty_meal_branch_requests' => 'Branch Requests', // 🟢 NEW: Added to the ACL Grid
             ],
             'Attendance Module' => [
                 'attendance_overview' => 'Attendance Overview',

@@ -200,7 +200,6 @@ const buildRole = (overrides = {}) => ({
     'Attendance Settings': 'NONE',
     'My Duty Meals': 'EDIT',
     'Document Repository': 'VIEW', // 🟢 Default access set to VIEW for all standard roles
-    'Branch Requests': 'NONE',
     ...overrides
 });
 
@@ -230,8 +229,7 @@ const ALL_FULL = {
     'Calendar': 'FULL', 
     'Attendance Settings': 'FULL', 
     'My Duty Meals': 'FULL',
-    'Document Repository': 'FULL',
-    'Branch Requests': 'FULL'
+    'Document Repository': 'FULL'
 };
 
 const HR_BASE = buildRole({
@@ -313,8 +311,7 @@ const aclDefaultPermissions = {
     'Duty Meal Custodian': buildRole({
                     'Duty Meal Overview': 'FULL', 
                     'Set Up Roster': 'FULL', 
-                    'Duty meal Archive': 'FULL',
-                    'Branch Requests': 'FULL'
+                    'Duty meal Archive': 'FULL'
                 }),
     'Point of Contact': buildRole({}), // 🟢 Added with standard base access
     'Employee': buildRole({}),
@@ -361,8 +358,7 @@ const MODULE_NAME_KEY_OVERRIDES = {
   'personal calendar': 'attendance_calendar',
   'attendance settings': 'attendance_settings', 
   'my duty meals': 'duty_meal_personal', 
-  'document repository': 'documents',
-  'branch requests': 'duty_meal_branch_requests',
+  'document repository': 'documents'
 };
 
 const POSITION_ORDER = [
