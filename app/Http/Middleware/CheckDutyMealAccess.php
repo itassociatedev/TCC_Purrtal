@@ -70,7 +70,7 @@ class CheckDutyMealAccess
         }
 
         if ($request->routeIs('admin.duty-meals.index')) {
-            if (!$user->canViewModule('duty_meal') && !$user->canViewModule('duty_meal_archive') && !$user->canViewModule('duty_meal_setup_roster')) {
+            if (!$user->canViewModule('duty_meal') && !$user->canViewModule('duty_meal_archive') && !$user->canViewModule('duty_meal_setup_roster') && !$user->canViewModule('duty_meal_branch_requests') && !$user->canViewModule('duty_meal_personal')) {
                 return redirect()->route('dashboard')
                     ->with('error', 'You do not have permission to view the Duty Meal module.');
             }
