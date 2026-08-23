@@ -181,6 +181,7 @@ const buildRole = (overrides = {}) => ({
     'Organizational Directory': 'NONE',
     'Resource Links': 'NONE',
     'System Logs & Security': 'NONE',
+    'HR Overview': 'NONE',
     'Document Requests': 'WRITE',
     'Form 2316 Approval': 'NONE',
     'Manpower Request Form': 'NONE',
@@ -197,9 +198,9 @@ const buildRole = (overrides = {}) => ({
     'Setup Schedule': 'NONE',
     'Calendar': 'VIEW',
     'Attendance Settings': 'NONE',
-    'Personal Meal Selection': 'EDIT',
+    'My Duty Meals': 'EDIT',
     'Document Repository': 'VIEW', // 🟢 Default access set to VIEW for all standard roles
-    'Branch Meal Requests': 'NONE',
+    'Branch Requests': 'NONE',
     ...overrides
 });
 
@@ -211,6 +212,7 @@ const ALL_FULL = {
     'Organizational Directory': 'FULL', 
     'Resource Links': 'FULL',
     'System Logs & Security': 'FULL', 
+    'HR Overview': 'FULL',
     'Document Requests': 'FULL', 
     'Form 2316 Approval': 'FULL',
     'Manpower Request Form': 'FULL', 
@@ -227,27 +229,33 @@ const ALL_FULL = {
     'Setup Schedule': 'FULL', 
     'Calendar': 'FULL', 
     'Attendance Settings': 'FULL', 
-    'Personal Meal Selection': 'FULL',
+    'My Duty Meals': 'FULL',
     'Document Repository': 'FULL',
-    'Branch Meal Requests': 'FULL'
+    'Branch Requests': 'FULL'
 };
 
 const HR_BASE = buildRole({
     'Announcements & Notices': 'FULL', 
     'Company Content Management': 'FULL',
-    'Document Requests': 'FULL', 
+    'HR Overview': 'FULL',
+    'Document Requests': 'FULL',
+    'Form 2316 Approval': 'FULL',
     'Manpower Request Form': 'FULL', 
     'Approval Board': 'FULL',
     'Feedback Form': 'FULL', 
     'Attendance Overview': 'FULL', 
     'Setup Schedule': 'FULL',
     'Calendar': 'FULL',
-    'Document Repository': 'FULL' // HR overrides base template to get FULL access
+    'Document Repository': 'FULL',
+    'Organizational Directory': 'FULL', 
 });
 
 const TL_BASE = buildRole({
     'Manpower Request Form': 'WRITE', 
-    'Approval Board': 'VIEW'
+    'Approval Board': 'VIEW', 
+    'Attendance Overview': 'EDIT', 
+    'Setup Schedule': 'EDIT',
+    'Calendar': 'EDIT'
 });
 
 // only map the DIFFERENCES from the base templates
@@ -299,18 +307,16 @@ const aclDefaultPermissions = {
                 },
     'Audit Assist': buildRole({ 'PO Generation': 'VIEW' }),
     'General Accounting': { ...TL_BASE, 'Form 2316 Approval': 'FULL' },
-    'IT TL': { ...TL_BASE, 
-                    'Duty Meal Overview': 'FULL', 
-                    'Set Up Roster': 'FULL', 
-                    'Duty meal Archive': 'FULL' 
+    'IT TL': { ...ALL_FULL,
                 },
-    'Duty Meal Custodian': TL_BASE,
-    'Point of Contact': buildRole({}), // 🟢 Added with standard base access
-    'Employee': buildRole({ 
+    'Duty Meal Custodian': buildRole({
                     'Duty Meal Overview': 'FULL', 
                     'Set Up Roster': 'FULL', 
-                    'Duty meal Archive': 'FULL'
+                    'Duty meal Archive': 'FULL',
+                    'Branch Requests': 'FULL'
                 }),
+    'Point of Contact': buildRole({}), // 🟢 Added with standard base access
+    'Employee': buildRole({}),
     'Intern': buildRole({}),
 };
 
@@ -353,9 +359,9 @@ const MODULE_NAME_KEY_OVERRIDES = {
   'calendar': 'attendance_calendar',
   'personal calendar': 'attendance_calendar',
   'attendance settings': 'attendance_settings', 
-  'personal meal selection': 'duty_meal_personal', 
+  'my duty meals': 'duty_meal_personal', 
   'document repository': 'documents',
-  'branch meal requests': 'duty_meal_branch_requests',
+  'branch requests': 'duty_meal_branch_requests',
 };
 
 const POSITION_ORDER = [
