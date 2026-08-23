@@ -154,6 +154,17 @@ export default function SidebarLayout({
     // 🟢 NEW: Check if the user is currently on the Dashboard
     const isDashboard = route().current('dashboard');
 
+    // 🟢 FIX: Define broad Duty Meal access explicitly
+    const canAccessDutyMealModule = [
+        'duty_meal', 'duty_meal_setup_roster', 'duty_meal_archive', 'duty_meal_branch_requests', 'duty_meal_personal'
+    ].some(perm => hasPermission(auth, perm) || canViewModuleCard(auth, perm));
+
+    const routeToDutyMeal = [
+        'duty_meal', 'duty_meal_setup_roster', 'duty_meal_archive', 'duty_meal_branch_requests'
+    ].some(perm => hasPermission(auth, perm) || canViewModuleCard(auth, perm))
+        ? route('admin.duty-meals.index') 
+        : route('staff.duty-meals.index');
+
     const currentModuleLabel =
         activeModule === 'Admin'
             ? 'Admin Module'
@@ -759,8 +770,11 @@ export default function SidebarLayout({
                                         </Dropdown.Link>
                                     )}
 
-                                    { (canViewModuleCard(auth, 'duty_meal') || canViewModuleCard(auth, 'duty_meal_archive') || canViewModuleCard(auth, 'duty_meal_setup_roster')) && (
-                                        <Dropdown.Link href={route('admin.duty-meals.index')}>Duty Meal Module</Dropdown.Link>
+                                    {/* 🟢 FIXED: Properly routes users who ONLY have "Personal" access directly to the Staff portal, bypassing the 403 error on the Admin index! */}
+                                    { canAccessDutyMealModule && (
+                                        <Dropdown.Link href={routeToDutyMeal}>
+                                            Duty Meal Module
+                                        </Dropdown.Link>
                                     )}
 
                                     {moduleHasAccess(auth, 'attendance') && (
