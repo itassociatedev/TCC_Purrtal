@@ -27,8 +27,8 @@ class AttendanceController extends Controller
         $aclLevel = strtolower($user->aclPermissionForModule($moduleKey));
         $isAdmin = $user->role_id === 1 || strtolower(trim($user->role->name ?? '')) === 'admin';
 
-        // 🟢 FIXED: Treat FULL access identically to an Admin for global data visibility!
-        $hasGlobalVisibility = $isAdmin || $aclLevel === 'full';
+        // 🟢 FIXED: Only ACTUAL Admins get Global Visibility. "Full" access now just means they have permission to delete/reset overrides within their own department!
+        $hasGlobalVisibility = $isAdmin;
 
         $allowedBranchIds = $user->branches->pluck('id')->push($user->branch_id)->filter()->unique();
 
@@ -43,7 +43,7 @@ class AttendanceController extends Controller
         $query = User::with(['department', 'schedules', 'scheduleOverrides', 'branches'])
             ->whereIn('status', ['Active', 'Password reset']);
 
-        // 🟢 GLOBAL BYPASS: Admin or FULL Access sees everyone across all branches
+        // 🟢 GLOBAL BYPASS: Admin sees everyone across all branches
         if ($hasGlobalVisibility) {
             return [$query->orderBy('name', 'asc'), $branches];
         }
@@ -209,16 +209,22 @@ class AttendanceController extends Controller
         if (!Auth::user()->canEditModule('attendance_calendar')) abort(403);
         
         $request->validate([
+            'id' => 'nullable|numeric', // 🟢 Added ID for editing
             'date' => 'required|date',
             'name' => 'required|string|max:255'
         ]);
 
-        Holiday::updateOrCreate(
-            ['date' => $request->date],
-            ['name' => $request->name]
-        );
+        if ($request->filled('id')) {
+            $holiday = Holiday::findOrFail($request->id);
+            $holiday->update(['date' => $request->date, 'name' => $request->name]);
+        } else {
+            Holiday::updateOrCreate(
+                ['date' => $request->date],
+                ['name' => $request->name]
+            );
+        }
 
-        return redirect()->back()->with('success', 'Event/Holiday added successfully.');
+        return redirect()->back()->with('success', 'Event/Holiday saved successfully.');
     }
 
     // 🟢 NEW ENDPOINT: Delete an Event/Holiday

@@ -117,20 +117,26 @@ class AttendanceSettingsController extends Controller
         return redirect()->back()->with('success', 'Shift permanently deleted.');
     }
 
-    // 🟢 STORE A NEW HOLIDAY
+    // 🟢 STORE OR EDIT A HOLIDAY
     public function storeHoliday(Request $request)
     {
         $request->validate([
+            'id' => 'nullable|numeric',
             'date' => 'required|date',
             'name' => 'required|string|max:255'
         ]);
 
-        Holiday::updateOrCreate(
-            ['date' => $request->date],
-            ['name' => $request->name]
-        );
+        if ($request->filled('id')) {
+            $holiday = Holiday::findOrFail($request->id);
+            $holiday->update(['date' => $request->date, 'name' => $request->name]);
+        } else {
+            Holiday::updateOrCreate(
+                ['date' => $request->date],
+                ['name' => $request->name]
+            );
+        }
 
-        return redirect()->back()->with('success', 'Holiday/Event added successfully.');
+        return redirect()->back()->with('success', 'Holiday/Event saved successfully.');
     }
 
     // 🟢 DELETE A HOLIDAY
