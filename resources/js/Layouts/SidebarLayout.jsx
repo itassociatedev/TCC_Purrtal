@@ -156,13 +156,12 @@ export default function SidebarLayout({
 
     // 🟢 FIX: Define broad Duty Meal access explicitly
     const canAccessDutyMealModule = [
-        'duty_meal', 'duty_meal_setup_roster', 'duty_meal_archive', 'duty_meal_branch_requests', 'duty_meal_personal'
+        'duty_meal', 'duty_meal_setup_roster', 'duty_meal_archive', 'duty_meal_personal'
     ].some(perm => hasPermission(auth, perm) || canViewModuleCard(auth, perm));
 
     // 🟢 FIXED: Dynamically route the user to the FIRST Duty Meal module they have access to!
     const getFirstDutyMealRoute = () => {
         if (hasPermission(auth, 'duty_meal') || canViewModuleCard(auth, 'duty_meal')) return route('admin.duty-meals.index');
-        if (hasPermission(auth, 'duty_meal_branch_requests') || canViewModuleCard(auth, 'duty_meal_branch_requests')) return route('duty-meals.branch-requests.index');
         if (hasPermission(auth, 'duty_meal_setup_roster') || canViewModuleCard(auth, 'duty_meal_setup_roster')) return route('admin.duty-meals.create');
         if (hasPermission(auth, 'duty_meal_archive') || canViewModuleCard(auth, 'duty_meal_archive')) return route('admin.duty-meals.archive');
         

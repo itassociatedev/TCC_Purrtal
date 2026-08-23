@@ -23,12 +23,11 @@ class CheckDutyMealAccess
                 ->with('error', 'Unauthenticated. Please log in to access the Duty Meal module.');
         }
 
-        // 🟢 FIXED: Added the new Branch Requests and Personal Duty Meals to the master clearance list!
+        // 🟢 FIXED: Removed branch requests from clearance
         $canAccessAnyDutyMealModule = 
             $user->canAccessModule('duty_meal') ||
             $user->canAccessModule('duty_meal_setup_roster') ||
             $user->canAccessModule('duty_meal_archive') ||
-            $user->canAccessModule('duty_meal_branch_requests') || 
             $user->canAccessModule('duty_meal_personal');
 
         if ($request->routeIs('admin.duty-meals.archive')) {
@@ -37,24 +36,6 @@ class CheckDutyMealAccess
                     ->with('error', 'You do not have permission to access the Duty Meal archive.');
             }
 
-            return $next($request);
-        }
-
-        // 🟢 NEW: Specific clearance for the Branch Request Overview
-        if ($request->routeIs('duty-meals.branch-requests.index')) {
-            if (!$user->canViewModule('duty_meal_branch_requests')) {
-                return redirect()->route('dashboard')
-                    ->with('error', 'You do not have permission to access Branch Requests.');
-            }
-            return $next($request);
-        }
-
-        // 🟢 NEW: Specific clearance so Branch Request Managers can actually Approve/Reject (POST action)
-        if ($request->routeIs('duty-meals.branch-requests.handle')) {
-            if (!$user->canEditModule('duty_meal_branch_requests')) {
-                return redirect()->route('dashboard')
-                    ->with('error', 'You do not have permission to manage Branch Requests.');
-            }
             return $next($request);
         }
 
@@ -91,7 +72,7 @@ class CheckDutyMealAccess
         }
 
         if ($request->routeIs('admin.duty-meals.index')) {
-            if (!$user->canViewModule('duty_meal') && !$user->canViewModule('duty_meal_archive') && !$user->canViewModule('duty_meal_setup_roster') && !$user->canViewModule('duty_meal_branch_requests') && !$user->canViewModule('duty_meal_personal')) {
+            if (!$user->canViewModule('duty_meal') && !$user->canViewModule('duty_meal_archive') && !$user->canViewModule('duty_meal_setup_roster') && !$user->canViewModule('duty_meal_personal')) {
                 return redirect()->route('dashboard')
                     ->with('error', 'You do not have permission to view the Duty Meal module.');
             }

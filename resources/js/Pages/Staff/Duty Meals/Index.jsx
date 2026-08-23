@@ -5,88 +5,6 @@ import { formatAppDate } from '@/Utils/date';
 import { Head, router, usePage, useForm } from '@inertiajs/react';
 import { useEffect, useMemo, useState, useRef } from 'react';
 
-// 🟢 NEW: Inline Component for Requesting Branch Override
-// 🟢 NEW: Inline Component for Requesting Branch Override
-const BranchRequestDropdown = ({ meal, userBranches = [], closeDropdown }) => {
-    // Filter out the branch the user is currently assigned to for this meal
-    const availableBranches = userBranches.filter(b => b.id !== meal.branch_id);
-
-    // 🟢 FIXED: Extract pure local YYYY-MM-DD components to completely bypass timezone shifts
-    const getPureLocalDate = (dateInput) => {
-        if (!dateInput) return '';
-        const d = new Date(dateInput);
-        if (isNaN(d.getTime())) {
-            return String(dateInput).substring(0, 10);
-        }
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
-
-    const { data, setData, post, processing, reset } = useForm({
-        duty_date: getPureLocalDate(meal.duty_date), // 🟢 Strictly local calendar date
-        original_branch_id: meal.branch_id,
-        requested_branch_id: availableBranches.length > 0 ? availableBranches[0].id : '',
-        reason: ''
-    });
-
-    const submitRequest = (e) => {
-        e.preventDefault();
-        post(route('staff.duty-meals.branch-request.store'), {
-            preserveScroll: true,
-            onSuccess: () => {
-                closeDropdown();
-                reset();
-            }
-        });
-    };
-
-    if (availableBranches.length === 0) {
-        return (
-            <div className="absolute top-16 right-5 z-20 bg-white border border-slate-200 shadow-xl rounded-xl p-4 w-72 text-sm text-slate-500 animate-fade-in-up">
-                You do not have any other assigned branches to swap to.
-                <button onClick={closeDropdown} className="block mt-3 text-indigo-600 font-bold w-full text-center">Close</button>
-            </div>
-        );
-    }
-
-    return (
-        <div className="absolute top-16 right-5 z-20 bg-white border border-slate-200 shadow-2xl rounded-xl p-4 w-72 animate-fade-in-up">
-            <h4 className="text-sm font-black text-slate-800 mb-3 uppercase tracking-wider">Request Branch Change</h4>
-            <form onSubmit={submitRequest} className="space-y-3">
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Swap To</label>
-                    <select 
-                        className="w-full text-sm border-slate-200 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 cursor-pointer bg-slate-50 font-medium"
-                        value={data.requested_branch_id}
-                        onChange={e => setData('requested_branch_id', e.target.value)}
-                        required
-                    >
-                        {availableBranches.map(b => (
-                            <option key={b.id} value={b.id}>{b.name}</option>
-                        ))}
-                    </select>
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Reason (Optional)</label>
-                    <input 
-                        type="text"
-                        placeholder="e.g. Assigned to Makati today"
-                        className="w-full text-sm border-slate-200 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-slate-50"
-                        value={data.reason}
-                        onChange={e => setData('reason', e.target.value)}
-                    />
-                </div>
-                <div className="flex gap-2 pt-1">
-                    <button type="button" onClick={closeDropdown} className="flex-1 py-2 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg hover:bg-slate-200 transition-colors">Cancel</button>
-                    <button type="submit" disabled={processing} className="flex-1 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors">Submit</button>
-                </div>
-            </form>
-        </div>
-    );
-};
-
 const MealCard = ({ meal, selection, onSelectionChange, userBranches, isMultiBranchUser }) => {
     const { system } = usePage().props;
     
@@ -106,8 +24,6 @@ const MealCard = ({ meal, selection, onSelectionChange, userBranches, isMultiBra
     const mealDateObj = new Date(y, m - 1, d);
     const hasDatePassed = mealDateObj < today;
 
-    // 🟢 NEW: State and ref to manage the inline Branch Request dropdown
-    const [showBranchRequest, setShowBranchRequest] = useState(false);
     const dropdownRef = useRef(null);
 
     // Auto-clear comment when 'main' or 'alt' is selected so hidden data doesn't submit
@@ -116,17 +32,6 @@ const MealCard = ({ meal, selection, onSelectionChange, userBranches, isMultiBra
             onSelectionChange(meal.participant_id, 'custom_request', '');
         }
     }, [currentChoice]);
-
-    // 🟢 Close the branch dropdown if they click outside of it
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                setShowBranchRequest(false);
-            }
-        };
-        if (showBranchRequest) document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [showBranchRequest]);
 
     // Dynamically change label and placeholder based on current selection
     let noteLabel = "Optional Request";
@@ -185,31 +90,6 @@ const MealCard = ({ meal, selection, onSelectionChange, userBranches, isMultiBra
                         )}
                     </div>
                 </div>
-
-                {/* 🟢 NEW: The Branch Request Toggle Button. 
-                    Only visible to multi-branch users while their meal is unlocked!
-                    UPDATE: Now accessible up until the exact day of the duty meal, even if locked! */}
-                {isMultiBranchUser && !hasDatePassed && (
-                    <div ref={dropdownRef}>
-                        <button 
-                            onClick={() => setShowBranchRequest(!showBranchRequest)}
-                            title="Request Branch Change"
-                            className={`p-2 rounded-full transition-colors border ${showBranchRequest ? 'bg-indigo-50 text-indigo-600 border-indigo-200' : 'bg-white text-slate-400 border-slate-200 hover:text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200'}`}
-                        >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                            </svg>
-                        </button>
-
-                        {showBranchRequest && (
-                            <BranchRequestDropdown 
-                                meal={meal} 
-                                userBranches={userBranches} 
-                                closeDropdown={() => setShowBranchRequest(false)} 
-                            />
-                        )}
-                    </div>
-                )}
             </div>
 
             {/* BODY - PLUSH TILES */}
