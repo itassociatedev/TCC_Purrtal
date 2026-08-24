@@ -35,47 +35,65 @@ const getCutoffValueForDate = (dateObj, settings) => {
 
 // 🟢 HELPER: Extracts the precise shift a person has for a specific day
 const getShiftDetails = (emp, dateString, dayName) => {
-    if (!emp) return { isOff: false, shiftType: null, startTime: null, endTime: null, isOverride: false };
+    if (!emp) return { isOff: false, isLeave: false, shiftType: null, startTime: null, endTime: null, isOverride: false, baseHadShift: false };
     
+    const activeSchedule = emp.schedules?.find(sch => dateString >= sch.start_date && dateString <= sch.end_date);
+    
+    // 🟢 BUG FIX 2: Evaluate if the base schedule actually contained a shift for this day!
+    let baseHadShift = false;
+    if (activeSchedule) {
+        if (activeSchedule.pattern && activeSchedule.pattern[dayName]) {
+            const p = activeSchedule.pattern[dayName];
+            baseHadShift = !!p.shift_type && !p.is_off_day && !p.is_leave;
+        } else {
+            baseHadShift = !!activeSchedule.shift_type && !activeSchedule.off_days?.includes(dayName);
+        }
+    }
+
     // 1. Check for overrides (either manual UI edits or Excel imports)
     const override = emp.overrides?.[dateString];
     if (override) {
         return {
             isOff: override.is_off_day,
+            isLeave: override.is_leave, // 🟢 FEATURE 4
             shiftType: override.shift_type,
             startTime: override.start_time,
             endTime: override.end_time,
-            isOverride: override.is_manual 
+            // 🟢 The Magic Switch: Only shows yellow if it was manually overridden in UI!
+            isOverride: override.is_manual,
+            baseHadShift
         };
     }
 
     // 2. Fall back to Base Schedule rules
-    const activeSchedule = emp.schedules?.find(sch => dateString >= sch.start_date && dateString <= sch.end_date);
-
     if (activeSchedule) {
         // 🟢 FIXED: Now correctly reads the newly implemented 7-day pattern!
         if (activeSchedule.pattern && activeSchedule.pattern[dayName]) {
             const dayConfig = activeSchedule.pattern[dayName];
             return {
                 isOff: dayConfig.is_off_day,
+                isLeave: dayConfig.is_leave || false, // 🟢 FEATURE 4
                 shiftType: dayConfig.shift_type,
                 startTime: dayConfig.shift_start,
                 endTime: dayConfig.shift_end,
-                isOverride: false
+                isOverride: false,
+                baseHadShift
             };
         }
 
         // Legacy fallback
         return {
             isOff: activeSchedule.off_days?.includes(dayName),
+            isLeave: false, // 🟢 FEATURE 4
             shiftType: activeSchedule.shift_type,
             startTime: activeSchedule.start_time,
             endTime: activeSchedule.end_time,
-            isOverride: false
+            isOverride: false,
+            baseHadShift
         };
     }
 
-    return { isOff: false, shiftType: null, startTime: null, endTime: null, isOverride: false };
+    return { isOff: false, isLeave: false, shiftType: null, startTime: null, endTime: null, isOverride: false, baseHadShift: false };
 };
 
 // 🟢 NEW HELPER: Generates the dynamic dates for Weekly, Cut-off, or Monthly views
@@ -204,14 +222,16 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
             const details = getShiftDetails(emp, selectedDate, viewingDayName);
             if (details.isOverride) activeOverridesCount++;
 
-            if (details.shiftType || details.isOff) {
+            if (details.shiftType || details.isOff || details.isLeave) {
                 roster.push({ 
                     ...emp, 
                     ...details, 
+                    // 🟢 BUG FIX 2: Only show "Modified" if a Base Schedule existed and got overridden.
+                    showModifiedBadge: details.isOverride && details.baseHadShift,
                     deptName: typeof emp.department === 'object' ? emp.department?.name : emp.department || 'Unassigned' 
                 });
                 
-                if (details.isOff) offDutyCount++;
+                if (details.isOff || details.isLeave) offDutyCount++;
                 else {
                     scheduledCount++;
                     if (details.shiftType === 'Graveyard Shift' || details.shiftType === 'Straight Duty') specialDutiesCount++;
@@ -221,7 +241,7 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
             // Summary Loop Count
             summaryCounts.forEach((day, index) => {
                 const dayDetails = getShiftDetails(emp, day.dateString, day.dayName);
-                if (dayDetails.shiftType && !dayDetails.isOff) summaryCounts[index].count++;
+                if (dayDetails.shiftType && !dayDetails.isOff && !dayDetails.isLeave) summaryCounts[index].count++;
             });
         });
 
@@ -235,7 +255,9 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
         return analytics.roster.filter(emp => rosterSearch === '' || emp.name.toLowerCase().includes(rosterSearch.toLowerCase()));
     }, [analytics.roster, rosterSearch]);
 
-    const renderShiftBadge = (shiftType, isOffDay) => {
+    // 🟢 FEATURE 4: Handle Leave Display
+    const renderShiftBadge = (shiftType, isOffDay, isLeave = false) => {
+        if (isLeave) return <span className="inline-flex rounded border border-orange-200 bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700 shadow-sm uppercase tracking-wider">Leave</span>;
         if (isOffDay) return <span className="inline-flex rounded border border-gray-200 bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 shadow-sm">Off Day</span>;
         switch (shiftType) {
             case 'Day Shift': return <span className="inline-flex rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 shadow-sm">Day Shift</span>;
@@ -494,12 +516,12 @@ export default function Overview({ employees = [], branches = [], cutoffSettings
                                                 </td>
                                                 <td className="whitespace-nowrap px-6 py-4">
                                                     <div className="flex items-center gap-2">
-                                                        {renderShiftBadge(emp.shiftType, emp.isOff)}
-                                                        {emp.isOverride && <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">Modified</span>}
+                                                        {renderShiftBadge(emp.shiftType, emp.isOff, emp.isLeave)}
+                                                        {emp.showModifiedBadge && <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">Modified</span>}
                                                     </div>
                                                 </td>
                                                 <td className="whitespace-nowrap px-6 py-4 text-right">
-                                                    {!emp.isOff && emp.startTime && emp.endTime ? (
+                                                    {!(emp.isOff || emp.isLeave) && emp.startTime && emp.endTime ? (
                                                         <span className="text-sm font-mono text-gray-700 bg-gray-50 px-2 py-1 rounded border border-gray-100">
                                                             {emp.startTime} - {emp.endTime}
                                                         </span>

@@ -112,6 +112,8 @@ class AttendanceController extends Controller
                         'end_time' => $override->end_time ? date('g:i A', strtotime($override->end_time)) : null,
                         // 🟢 MAGIC FIX: Verifies if the DB timestamp is exactly our forced 2000-01-01 import flag
                         'is_manual' => $override->updated_at ? (Carbon::parse($override->updated_at)->year > 2000) : true,
+                        // 🟢 BUG FIX 1 & 2: Explicitly checks if a manual override was modified after it was first created!
+                        'was_modified' => $override->created_at && $override->updated_at && Carbon::parse($override->created_at)->ne(Carbon::parse($override->updated_at)),
                     ];
                 })->toArray(),
                 'duty_meals' => $user->dutyMealParticipants ? $user->dutyMealParticipants->mapWithKeys(function ($p) {
@@ -332,22 +334,24 @@ class AttendanceController extends Controller
         $isInactive = $request->is_off_day || $request->is_leave;
 
         foreach ($request->cells as $cell) {
-            $override = \App\Models\ScheduleOverride::updateOrCreate(
-                [
-                    'user_id' => $cell['employee_id'],
-                    'date' => $cell['date'],
-                ],
-                [
-                    'is_off_day' => $request->is_off_day,
-                    'is_leave' => $request->is_leave, // 🟢 FEATURE 4
-                    'shift_type' => $isInactive ? null : $request->shift_type,
-                    'start_time' => $isInactive ? null : $request->shift_start,
-                    'end_time' => $isInactive ? null : $request->shift_end,
-                ]
-            );
+            // 🟢 BUG FIX 3 (LEAVE): We use firstOrNew and set properties directly to completely bypass Laravel's $fillable blocker for is_leave!
+            $override = \App\Models\ScheduleOverride::firstOrNew([
+                'user_id' => $cell['employee_id'],
+                'date' => $cell['date'],
+            ]);
+            
+            $override->is_off_day = $request->is_off_day;
+            $override->is_leave = $request->is_leave; // 🟢 Now saves correctly
+            $override->shift_type = $isInactive ? null : $request->shift_type;
+            $override->start_time = $isInactive ? null : $request->shift_start;
+            $override->end_time = $isInactive ? null : $request->shift_end;
 
-            // Force touch to ensure Eloquent stamps this as manually modified (now)
-            $override->touch();
+            // 🟢 BUG FIX 1 (MODIFIED BADGE): Force the updated_at timestamp forward so we know it was modified AFTER creation!
+            if ($override->exists) {
+                $override->updated_at = now(); 
+            }
+
+            $override->save();
             $affectedUserIds[] = $cell['employee_id'];
         }
 
@@ -370,7 +374,7 @@ class AttendanceController extends Controller
             ]);
         } catch (\Exception $e) {}
 
-        return redirect()->back()->with('success', 'Daily overrides applied successfully.');
+        return redirect()->back()->with('success', 'Daily shifts applied successfully.');
     }
 
     // 🟢 NEW: Backend endpoint specifically for the FULL permission "Reset" button
@@ -400,10 +404,9 @@ class AttendanceController extends Controller
             ]);
         } catch (\Exception $e) {}
 
-        return redirect()->back()->with('success', 'Overrides reset successfully.');
+        return redirect()->back()->with('success', 'Shifts reset successfully.');
     }
 
-    // 🟢 FROM SCRATCH: Smart Import Engine
     // 🟢 FROM SCRATCH: Smart Import Engine
     public function importSchedule(Request $request)
     {
@@ -690,6 +693,7 @@ class AttendanceController extends Controller
                     if (isset($overrides[$ds])) {
                         $shiftData = [
                             'is_off' => (bool)$overrides[$ds]['is_off_day'],
+                            'is_leave' => (bool)$overrides[$ds]['is_leave'], // 🟢 FEATURE 4
                             'shift_type' => $overrides[$ds]['shift_type'],
                             'start_time' => $overrides[$ds]['start_time'] ? date('g:i A', strtotime($overrides[$ds]['start_time'])) : null,
                             'end_time' => $overrides[$ds]['end_time'] ? date('g:i A', strtotime($overrides[$ds]['end_time'])) : null,
@@ -704,6 +708,7 @@ class AttendanceController extends Controller
                                     $dayConfig = $sch['pattern'][$dn];
                                     $shiftData = [
                                         'is_off' => (bool)$dayConfig['is_off_day'],
+                                        'is_leave' => (bool)($dayConfig['is_leave'] ?? false), // 🟢 FEATURE 4
                                         'shift_type' => $dayConfig['shift_type'],
                                         'start_time' => $dayConfig['shift_start'] ? date('g:i A', strtotime($dayConfig['shift_start'])) : null,
                                         'end_time' => $dayConfig['shift_end'] ? date('g:i A', strtotime($dayConfig['shift_end'])) : null,
@@ -712,6 +717,7 @@ class AttendanceController extends Controller
                                 } else {
                                     $shiftData = [
                                         'is_off' => in_array($dn, $sch['off_days'] ?? []),
+                                        'is_leave' => false,
                                         'shift_type' => $sch['shift_type'],
                                         'start_time' => $sch['start_time'] ? date('g:i A', strtotime($sch['start_time'])) : null,
                                         'end_time' => $sch['end_time'] ? date('g:i A', strtotime($sch['end_time'])) : null,

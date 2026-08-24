@@ -153,8 +153,11 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
     });
 
     const getShiftDetails = (emp, dateString, dayName) => {
-        if (!emp) return { isOff: false, isLeave: false, shiftType: null, startTime: null, endTime: null, isOverride: false };
+        if (!emp) return { isOff: false, isLeave: false, shiftType: null, startTime: null, endTime: null, isOverride: false, wasModifiedManual: false, hasBaseSchedule: false };
         
+        const activeSchedule = emp.schedules?.find(sch => dateString >= sch.start_date && dateString <= sch.end_date);
+        const hasBaseSchedule = !!activeSchedule;
+
         // 1. Priority check: Does this exact date have a manual override?
         const override = emp.overrides?.[dateString];
         if (override) {
@@ -165,16 +168,13 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                 startTime: override.start_time,
                 endTime: override.end_time,
                 // 🟢 The Magic Switch: Only shows yellow if it was manually overridden in UI!
-                isOverride: override.is_manual
+                isOverride: override.is_manual,
+                wasModifiedManual: override.was_modified, // 🟢 BUG FIX 1
+                hasBaseSchedule
             };
         }
 
         // 2. Check Cut-off Schedules: Does the calendar date fall between ANY of the employee's assigned cut-off ranges?
-        const activeSchedule = emp.schedules?.find(sch => {
-            return dateString >= sch.start_date && dateString <= sch.end_date;
-        });
-
-        // If a cut-off schedule applies to this date, render it.
         if (activeSchedule) {
             // 🟢 NEW: Read the day-by-day pattern we just created!
             if (activeSchedule.pattern && activeSchedule.pattern[dayName]) {
@@ -185,7 +185,9 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                     shiftType: dayConfig.shift_type,
                     startTime: dayConfig.shift_start,
                     endTime: dayConfig.shift_end,
-                    isOverride: false
+                    isOverride: false,
+                    wasModifiedManual: false,
+                    hasBaseSchedule
                 };
             }
 
@@ -196,7 +198,9 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                 shiftType: activeSchedule.shift_type,
                 startTime: activeSchedule.start_time,
                 endTime: activeSchedule.end_time,
-                isOverride: false
+                isOverride: false,
+                wasModifiedManual: false,
+                hasBaseSchedule
             };
         }
 
@@ -207,7 +211,9 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
             shiftType: null,
             startTime: null,
             endTime: null,
-            isOverride: false
+            isOverride: false,
+            wasModifiedManual: false,
+            hasBaseSchedule: false
         };
     };
 
@@ -222,8 +228,52 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
     const isCellSelected = (employee_id, date) => selectedCells.some(c => c.employee_id === employee_id && c.date === date);
 
     const openOverrideModal = () => {
-        resetOverride();
-        setOverrideData('cells', selectedCells);
+        let initialData = {
+            cells: selectedCells,
+            shift_start: '',
+            shift_end: '',
+            shift_type: '',
+            is_off_day: false,
+            is_leave: false
+        };
+
+        // 🟢 FIX BUG: If exactly 1 cell is selected, prefill the modal so modifying it doesn't wipe the Base Schedule out!
+        if (selectedCells.length === 1) {
+            const cell = selectedCells[0];
+            const emp = employees.find(e => e.id.toString() === cell.employee_id.toString());
+            
+            if (emp) {
+                const existingOverride = emp.overrides?.[cell.date];
+                if (existingOverride) {
+                    initialData = {
+                        ...initialData,
+                        shift_start: existingOverride.start_time ? existingOverride.start_time.substring(0,5) : '',
+                        shift_end: existingOverride.end_time ? existingOverride.end_time.substring(0,5) : '',
+                        shift_type: existingOverride.shift_type || '',
+                        is_off_day: !!existingOverride.is_off_day,
+                        is_leave: !!existingOverride.is_leave,
+                    };
+                } else {
+                    const dayObj = new Date(`${cell.date}T12:00:00`);
+                    const dayName = dayObj.toLocaleDateString('en-US', { weekday: 'long' });
+                    const activeSchedule = emp.schedules?.find(sch => cell.date >= sch.start_date && cell.date <= sch.end_date);
+                    
+                    if (activeSchedule && activeSchedule.pattern && activeSchedule.pattern[dayName]) {
+                        const dayConfig = activeSchedule.pattern[dayName];
+                        initialData = {
+                            ...initialData,
+                            shift_start: dayConfig.shift_start ? dayConfig.shift_start.substring(0,5) : '',
+                            shift_end: dayConfig.shift_end ? dayConfig.shift_end.substring(0,5) : '',
+                            shift_type: dayConfig.shift_type || '',
+                            is_off_day: !!dayConfig.is_off_day,
+                            is_leave: !!dayConfig.is_leave,
+                        };
+                    }
+                }
+            }
+        }
+
+        setOverrideData(initialData);
         setShowOverrideModal(true);
     };
 
@@ -240,9 +290,10 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                     setLastSubmittedData({ ...overrideData });
                     setCopyTargetIds([]);
                     setShowCopyToOthersModal(true);
-                } else {
-                    resetOverride();
                 }
+                
+                // 🟢 FIX BUG: Always clear the form immediately so the next click is fresh!
+                resetOverride();
             }
         });
     };
@@ -261,6 +312,9 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                 onSuccess: () => {
                     setShowCopyToOthersModal(false);
                     setIsCopying(false);
+                    setCopyActionType(null); 
+                    setLastSubmittedData(null); 
+                    setCopyTargetIds([]); // 🟢 BUG FIX: Clear out state so it doesn't get stuck in memory
                     resetBase();
                 },
                 onError: () => setIsCopying(false)
@@ -284,6 +338,9 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                 onSuccess: () => {
                     setShowCopyToOthersModal(false);
                     setIsCopying(false);
+                    setCopyActionType(null); 
+                    setLastSubmittedData(null); 
+                    setCopyTargetIds([]); // 🟢 BUG FIX: Clear out state so it doesn't get stuck in memory
                     resetOverride();
                 },
                 onError: () => setIsCopying(false)
@@ -317,12 +374,11 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
     const [weekOffset, setWeekOffset] = useState(0);
     const [batchViewMode, setBatchViewMode] = useState('weekly'); // 🟢 FEATURE 2: Added View Mode state
 
-    // 🟢 REBUILT BATCH GRID: 7-Day Weekly view anchored to the selected cutoff start date!
-    const batchDates = useMemo(() => {
+    // 🟢 FEATURE 2: Automatically chunk dates into perfect 7-day tables dynamically!
+    const batchWeeks = useMemo(() => {
         const [startStr, endStr] = selectedCutoff.split('|');
         let startDate, endDate;
 
-        // 🟢 FEATURE 2: Dynamic generation based on view mode
         if (batchViewMode === 'weekly') {
             const baseDate = new Date(`${startStr}T12:00:00`);
             const dayOfWeek = baseDate.getDay() === 0 ? 6 : baseDate.getDay() - 1; 
@@ -338,23 +394,51 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
             const y = baseDate.getFullYear();
             const m = baseDate.getMonth();
             startDate = new Date(y, m, 1, 12);
-            endDate = new Date(y, m + 1, 0, 12); // Day 0 gives the last day of the month
+            endDate = new Date(y, m + 1, 0, 12);
         }
 
-        let days = [];
-        let cur = new Date(startDate);
-        
-        while (cur <= endDate) {
-            const dateString = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
-            const dayName = cur.toLocaleDateString('en-US', { weekday: 'long' });
-            const display = cur.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-            days.push({ dayName, dateString, display });
+        // Snap startDate to Monday
+        const dayOfStart = startDate.getDay();
+        const diffStart = dayOfStart === 0 ? 6 : dayOfStart - 1;
+        const gridStart = new Date(startDate);
+        gridStart.setDate(startDate.getDate() - diffStart);
+
+        // Snap endDate to Sunday
+        const dayOfEnd = endDate.getDay();
+        const diffEnd = dayOfEnd === 0 ? 0 : 7 - dayOfEnd;
+        const gridEnd = new Date(endDate);
+        gridEnd.setDate(endDate.getDate() + diffEnd);
+
+        let weeks = [];
+        let currentWeek = [];
+        let cur = new Date(gridStart);
+
+        while (cur <= gridEnd) {
+            const y = cur.getFullYear();
+            const mStr = String(cur.getMonth() + 1).padStart(2, '0');
+            const dStr = String(cur.getDate()).padStart(2, '0');
+            const dateStr = `${y}-${mStr}-${dStr}`;
+
+            const isOutOfBounds = cur < startDate || cur > endDate;
+
+            currentWeek.push({
+                dateString: dateStr,
+                dayName: cur.toLocaleDateString('en-US', { weekday: 'long' }),
+                display: cur.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                isOutOfBounds
+            });
+
+            if (currentWeek.length === 7) {
+                weeks.push(currentWeek);
+                currentWeek = [];
+            }
             cur.setDate(cur.getDate() + 1);
         }
-        return days;
+
+        return weeks;
     }, [weekOffset, selectedCutoff, batchViewMode]);
 
-    const currentWeekRange = `${batchDates[0].display} - ${batchDates[batchDates.length - 1].display}`;
+    const currentWeekRange = `${batchWeeks[0][0].display} - ${batchWeeks[batchWeeks.length - 1][6].display}`;
     const dropdownRef = useRef(null);
 
     useEffect(() => {
@@ -427,9 +511,20 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
             return;
         }
         
-        resetBase();
-        setBaseData('cutoff_period', selectedCutoff);
-        setBaseData('employee_ids', viewMode === 'batch' ? selectedBatchIds : [singleEmployeeId]);
+        // 🟢 FIX BUG 1: Explicitly clear the form fields
+        let existingPattern = JSON.parse(JSON.stringify(defaultWeekPattern)); 
+        if (viewMode === 'single' && singleEmployee) {
+            const activeSingleSchedule = singleEmployee.schedules?.find(sch => selectedCutoff.split('|')[0] >= sch.start_date && selectedCutoff.split('|')[0] <= sch.end_date);
+            if (activeSingleSchedule && activeSingleSchedule.pattern) {
+                existingPattern = { ...existingPattern, ...activeSingleSchedule.pattern };
+            }
+        }
+
+        setBaseData({
+            employee_ids: viewMode === 'batch' ? selectedBatchIds : [singleEmployeeId],
+            cutoff_period: selectedCutoff,
+            pattern: existingPattern
+        });
         setShowBaseModal(true);
     };
 
@@ -445,9 +540,9 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                     setLastSubmittedData({ ...baseData, employee_ids: [singleEmployeeId] }); // clone snapshot
                     setCopyTargetIds([]);
                     setShowCopyToOthersModal(true);
-                } else {
-                    resetBase(); 
                 }
+                // 🟢 FIX BUG: Always clear the form immediately so the next click is fresh!
+                resetBase();
             }
         });
     };
@@ -644,7 +739,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                         </div>
                         <div className="flex flex-col">
                             <span className="text-sm font-semibold leading-tight text-white">Days Selected</span>
-                            <span className="text-xs text-indigo-200 leading-tight">Ready for override</span>
+                            <span className="text-xs text-indigo-200 leading-tight">Ready to edit</span>
                         </div>
                     </div>
                     <div className="ml-2 flex items-center gap-3 border-l border-indigo-500 pl-6">
@@ -664,7 +759,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                             onClick={openOverrideModal} 
                             className="rounded-md bg-white px-5 py-2 text-sm font-bold text-indigo-600 shadow-md hover:bg-indigo-50 transition-colors"
                         >
-                            Edit Shifts
+                            Set Custom Shift
                         </button>
                     </div>
                 </div>
@@ -892,67 +987,83 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                 )}
                             </div>
 
-                            {/* THE MASTER GRID */}
+                            {/* 🟢 FEATURE 2: 7-DAY FIXED BATCH VIEW CHUNKS */}
                             {batchEmployeesList.length > 0 && (
                                 <div className="overflow-x-auto pb-4">
-                                    <table className="min-w-full border-collapse">
+                                    <table className="sticky top-0 z-50 bg-white shadow-md w-full px-6 py-4">
                                         <thead className="bg-gray-50 sticky top-0 z-10">
                                             <tr>
                                                 <th className="py-4 pl-4 pr-3 text-left text-sm font-bold text-gray-900 w-1/5 min-w-[200px] border-b border-gray-200 bg-gray-50 z-20 sticky left-0 shadow-[1px_0_0_0_#e5e7eb]">
                                                     Employee
                                                 </th>
-                                                {batchDates.map(day => {
-                                                    const isCutoff = isDateInCurrentCutoff(day.dateString);
-                                                    return (
-                                                        <th key={day.dateString} className={`px-3 py-4 text-center text-sm font-semibold text-gray-900 border-b border-gray-200 border-l border-gray-100 min-w-[120px] ${isCutoff ? 'bg-indigo-50 border-t-4 border-t-indigo-400 shadow-sm' : ''}`}>
-                                                            {day.display}
-                                                        </th>
-                                                    );
-                                                })}
+                                                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                                                    <th key={day} className="px-3 py-4 text-center text-sm font-semibold text-gray-900 border-b border-gray-200 border-l border-gray-100 min-w-[120px]">
+                                                        {day}
+                                                    </th>
+                                                ))}
                                             </tr>
                                         </thead>
                                         <tbody className="bg-white">
-                                            {batchEmployeesList.map((emp, idx) => (
-                                                <tr key={emp.id} className={idx !== batchEmployeesList.length - 1 ? "border-b border-gray-100" : ""}>
-                                                    <td className="whitespace-nowrap py-5 pl-4 pr-3 text-sm font-medium text-gray-900 bg-white sticky left-0 shadow-[1px_0_0_0_#e5e7eb] z-10 border-b border-gray-50">
-                                                        <div className="font-bold text-gray-800 text-base">{emp.name}</div>
-                                                        <div className="text-xs font-medium text-gray-500 mt-0.5">{typeof emp.department === 'object' ? emp.department?.name : emp.department}</div>
-                                                    </td>
-                                                    {batchDates.map(day => {
-                                                        const { isOff, isLeave, shiftType, startTime, endTime, isOverride } = getShiftDetails(emp, day.dateString, day.dayName);
-                                                        const isSelected = isCellSelected(emp.id, day.dateString);
-                                                        const isCutoff = isDateInCurrentCutoff(day.dateString);
-                                                        
-                                                        // 🟢 FIXED: Reduced padding to strictly tighten the gap between Batch cells without crushing text.
-                                                        return (
-                                                            <td key={day.dateString} className={`px-1 py-1.5 align-middle border-l border-gray-100 border-b border-gray-50 ${isCutoff ? 'bg-indigo-50/40' : ''}`}>
-                                                                {/* 🟢 FIXED: Blended Highlight Logic */}
-                                                                <div 
-                                                                    onClick={() => {
-                                                                        if (canEditSchedule) toggleCellSelection(emp.id, day.dateString);
-                                                                    }}
-                                                                    className={`min-h-[80px] w-full flex flex-col justify-center items-center gap-1 rounded-lg border p-1.5 shadow-sm transition-colors relative ${
-                                                                        isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500 z-10' : 
-                                                                        isOverride && isCutoff ? 'border-amber-400 bg-amber-50/80 ring-2 ring-inset ring-indigo-200 shadow-inner' : 
-                                                                        isOverride ? 'border-amber-300 bg-amber-50/40' : 
-                                                                        isCutoff ? 'border-indigo-300 bg-indigo-50/40 ring-1 ring-indigo-100' : 
-                                                                        'border-gray-200 bg-white'
-                                                                    } ${canEditSchedule ? (isOverride ? 'hover:bg-amber-100 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer') : 'cursor-default'}`}
-                                                                >
-                                                                    {isOverride && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-amber-400 shadow-sm"></span>}
-                                                                    <div className="flex flex-col items-center gap-1 pointer-events-none">
-                                                                        {renderShiftBadge(shiftType, isOff, isLeave)}
-                                                                        {!(isOff || isLeave) && startTime && endTime && (
-                                                                            <span className={`text-[10px] font-mono font-bold text-center leading-tight ${isOverride ? 'text-amber-700' : 'text-gray-500'}`}>
-                                                                                {startTime} <br /> {endTime}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            </td>
-                                                        );
-                                                    })}
-                                                </tr>
+                                            {batchEmployeesList.map((emp, empIdx) => (
+                                                <React.Fragment key={emp.id}>
+                                                    {batchWeeks.map((week, weekIdx) => (
+                                                        <tr key={`${emp.id}-${weekIdx}`} className={empIdx !== batchEmployeesList.length - 1 && weekIdx === batchWeeks.length - 1 ? "border-b-4 border-gray-200" : "border-b border-gray-100"}>
+                                                            
+                                                            {/* Render Employee Name only on the first row of their set */}
+                                                            {weekIdx === 0 && (
+                                                                <td rowSpan={batchWeeks.length} className="whitespace-nowrap py-5 pl-4 pr-3 text-sm font-medium text-gray-900 bg-white sticky left-0 shadow-[1px_0_0_0_#e5e7eb] z-10 align-top border-r border-gray-200">
+                                                                    <div className="font-bold text-gray-800 text-base">{emp.name}</div>
+                                                                    <div className="text-xs font-medium text-gray-500 mt-0.5">{typeof emp.department === 'object' ? emp.department?.name : emp.department}</div>
+                                                                </td>
+                                                            )}
+                                                            
+                                                            {week.map(day => {
+                                                                // Empty padded cells for days that fall outside the active cut-off/monthly boundary
+                                                                if (day.isOutOfBounds) {
+                                                                    return <td key={day.dateString} className="px-1 py-1.5 bg-gray-50/50 border-l border-gray-100"></td>;
+                                                                }
+
+                                                                const { isOff, isLeave, shiftType, startTime, endTime, isOverride, hasBaseSchedule, wasModifiedManual } = getShiftDetails(emp, day.dateString, day.dayName);
+                                                                const isSelected = isCellSelected(emp.id, day.dateString);
+                                                                const isCutoff = isDateInCurrentCutoff(day.dateString);
+                                                                
+                                                                // 🟢 BUG FIX 1 & 2: Only show "Modified" if a Base Schedule existed and got overridden, OR if an empty cell manual shift was changed!
+                                                                const showModifiedBadge = (isOverride && hasBaseSchedule) || wasModifiedManual;
+                                                                
+                                                                return (
+                                                                    <td key={day.dateString} className={`px-1 py-1.5 align-middle border-l border-gray-100 ${isCutoff ? 'bg-indigo-50/40' : ''}`}>
+                                                                        <div 
+                                                                            onClick={() => {
+                                                                                if (canEditSchedule) toggleCellSelection(emp.id, day.dateString);
+                                                                            }}
+                                                                            className={`min-h-[80px] w-full flex flex-col justify-center items-center gap-1 rounded-lg border p-1.5 shadow-sm transition-colors relative ${
+                                                                                isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500 z-10' : 
+                                                                                showModifiedBadge && isCutoff ? 'border-amber-400 bg-amber-50/80 ring-2 ring-inset ring-indigo-200 shadow-inner' : 
+                                                                                showModifiedBadge ? 'border-amber-300 bg-amber-50/40' : 
+                                                                                isCutoff ? 'border-indigo-300 bg-indigo-50/40 ring-1 ring-indigo-100' : 
+                                                                                'border-gray-200 bg-white'
+                                                                            } ${canEditSchedule ? (showModifiedBadge ? 'hover:bg-amber-100 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer') : 'cursor-default'}`}
+                                                                        >
+                                                                            {/* Floating date number */}
+                                                                            <div className="absolute top-1 left-2 text-[10px] font-bold text-gray-400">{day.dateString.split('-')[2]}</div>
+                                                                            
+                                                                            {showModifiedBadge && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-amber-400 shadow-sm"></span>}
+                                                                            
+                                                                            <div className="flex flex-col items-center gap-1 pointer-events-none mt-3">
+                                                                                {renderShiftBadge(shiftType, isOff, isLeave)}
+                                                                                {!(isOff || isLeave) && startTime && endTime && (
+                                                                                    <span className={`text-[10px] font-mono font-bold text-center leading-tight ${showModifiedBadge ? 'text-amber-700' : 'text-gray-500'}`}>
+                                                                                        {startTime} <br /> {endTime}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                    ))}
+                                                </React.Fragment>
                                             ))}
                                         </tbody>
                                     </table>
@@ -989,7 +1100,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                                         </select>
                                     ) : (
-                                        <div className="py-2 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-500 font-medium w-40 truncate shadow-inner cursor-not-allowed">
+                                        <div className="py-2 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-500 font-medium w-full sm:w-36 truncate shadow-inner cursor-not-allowed">
                                             {branches[0]?.name || 'All Branches'}
                                         </div>
                                     )}
@@ -1015,7 +1126,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                             ))}
                                         </select>
                                     ) : (
-                                        <div className="py-2 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-500 font-medium w-48 truncate shadow-inner cursor-not-allowed">
+                                        <div className="py-2 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-500 font-medium w-full sm:w-48 truncate shadow-inner cursor-not-allowed">
                                             {auth?.user?.department?.name || uniqueDepartments[0] || 'My Department'}
                                         </div>
                                     )}
@@ -1097,6 +1208,17 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                             {/* 🟢 MOVED: Cutoff Dropdown and Highlight Toggle replicated to Single View */}
                             <div className="flex flex-wrap items-center gap-3">
                                 
+                                {/* 🟢 FEATURE 3: Copy to Others Button (Only visible if active schedule exists) */}
+                                {canEditSchedule && singleEmployee && (
+                                    <button 
+                                        onClick={() => setShowCopyModal(true)}
+                                        className="flex items-center justify-center gap-2 rounded-md border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-700 shadow-sm hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
+                                    >
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                        Copy Sched to Others
+                                    </button>
+                                )}
+
                                 {/* 🟢 FEATURE 1: Current Cut-off Button in Single View */}
                                 <button 
                                     onClick={() => {
@@ -1195,10 +1317,13 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                         return <div key={`padding-${index}`} className="h-full w-full rounded-md border border-gray-100 bg-gray-50/50"></div>;
                                     }
 
-                                    const { isOff, isLeave, shiftType, startTime, endTime, isOverride } = getShiftDetails(singleEmployee, slot.dateString, slot.dayName);
+                                    const { isOff, isLeave, shiftType, startTime, endTime, isOverride, hasBaseSchedule, wasModifiedManual } = getShiftDetails(singleEmployee, slot.dateString, slot.dayName);
                                     const isSelected = singleEmployee ? isCellSelected(singleEmployee.id, slot.dateString) : false;
                                     const isCutoff = singleEmployee && isDateInCurrentCutoff(slot.dateString); // 🟢 CHECK CALENDAR CELL
                                     
+                                    // 🟢 BUG FIX 1 & 2: Only show "Modified" if a Base Schedule existed and got overridden, OR if an empty cell manual shift was changed!
+                                    const showModifiedBadge = (isOverride && hasBaseSchedule) || wasModifiedManual;
+
                                     // 🟢 EDIT ACL LOCK: Removes cursor-pointer and hover colors if user only has VIEW access
                                     return (
                                         <div 
@@ -1209,17 +1334,17 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                             className={`h-full w-full flex flex-col rounded-md border p-2 sm:p-3 shadow-sm transition-colors relative ${
                                                 !singleEmployee ? 'border-gray-100 bg-white' :
                                                 isSelected ? 'border-indigo-500 bg-indigo-50 ring-2 ring-inset ring-indigo-500 z-10' : 
-                                                isOverride && isCutoff ? 'border-amber-400 bg-amber-50/80 ring-2 ring-inset ring-indigo-200 shadow-inner' : 
-                                                isOverride ? 'border-amber-300 bg-amber-50/40' : 
+                                                showModifiedBadge && isCutoff ? 'border-amber-400 bg-amber-50/80 ring-2 ring-inset ring-indigo-200 shadow-inner' : 
+                                                showModifiedBadge ? 'border-amber-300 bg-amber-50/40' : 
                                                 isCutoff ? 'border-indigo-300 bg-indigo-50/40 ring-1 ring-indigo-100' : 
                                                 'border-gray-200 bg-white'
-                                            } ${canEditSchedule && singleEmployee ? (isOverride ? 'hover:bg-amber-100 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer') : 'cursor-default'}`}
+                                            } ${canEditSchedule && singleEmployee ? (showModifiedBadge ? 'hover:bg-amber-100 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer') : 'cursor-default'}`}
                                         >
                                             <div className="flex justify-between items-start pointer-events-none">
-                                                <span className={`text-sm sm:text-base font-bold ${isOverride ? 'text-amber-700' : 'text-gray-700'}`}>{slot.dayNum}</span>
+                                                <span className={`text-sm sm:text-base font-bold ${showModifiedBadge ? 'text-amber-700' : 'text-gray-700'}`}>{slot.dayNum}</span>
                                                 
                                                 <div className="flex flex-col items-end gap-1">
-                                                    {isOverride && <span className="text-[9px] sm:text-[10px] font-bold text-amber-500 uppercase tracking-wider bg-amber-100 px-1.5 sm:px-2 py-0.5 rounded shadow-sm">Modified</span>}
+                                                    {showModifiedBadge && <span className="text-[9px] sm:text-[10px] font-bold text-amber-500 uppercase tracking-wider bg-amber-100 px-1.5 sm:px-2 py-0.5 rounded shadow-sm">Modified</span>}
                                                 </div>
                                             </div>
 
@@ -1227,7 +1352,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                                 <div className="mt-2 sm:mt-3 flex flex-col items-center justify-center flex-1 gap-2 pointer-events-none">
                                                     {renderShiftBadge(shiftType, isOff, isLeave)}
                                                     {!(isOff || isLeave) && startTime && endTime && (
-                                                        <span className={`text-[10px] sm:text-[11px] font-bold leading-tight font-mono text-center ${isOverride ? 'text-amber-700' : 'text-gray-500'}`}>
+                                                        <span className={`text-[10px] sm:text-[11px] font-bold leading-tight font-mono text-center ${showModifiedBadge ? 'text-amber-700' : 'text-gray-500'}`}>
                                                             {startTime}<br/>|<br/>{endTime}
                                                         </span>
                                                     )}
@@ -1380,7 +1505,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
             {showCopyToOthersModal && (
                 <div className="fixed inset-0 z-[80] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
                     <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity animate-backdrop-fade" onClick={() => { setShowCopyToOthersModal(false); resetBase(); resetOverride(); }}></div>
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity animate-backdrop-fade" onClick={() => { setShowCopyToOthersModal(false); setCopyActionType(null); setLastSubmittedData(null); resetBase(); resetOverride(); }}></div>
 
                         <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
                         <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-xl sm:align-middle relative z-10 animate-modal-pop">
@@ -1389,7 +1514,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                     Would you like to set the same schedule for other employees?
                                 </h3>
                                 <p className="text-sm text-gray-500 mb-6">
-                                    Copying <strong className="text-indigo-600">{singleEmployee?.name}'s</strong> {copyActionType === 'base' ? 'base schedule' : 'manual overrides'} to other members in <strong className="text-gray-800">{singleEmployeeDept || 'Unassigned'}</strong>.
+                                    Copying <strong className="text-indigo-600">{singleEmployee?.name}'s</strong> {copyActionType === 'base' ? 'base schedule' : 'manual shifts'} to other members in <strong className="text-gray-800">{singleEmployeeDept || 'Unassigned'}</strong>.
                                 </p>
                                 
                                 <form onSubmit={handleCopyToOthersSubmit} className="space-y-4">
@@ -1431,7 +1556,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                         </button>
                                         <button 
                                             type="button" 
-                                            onClick={() => { setShowCopyToOthersModal(false); resetBase(); resetOverride(); }}
+                                            onClick={() => { setShowCopyToOthersModal(false); setCopyActionType(null); setLastSubmittedData(null); resetBase(); resetOverride(); }}
                                             className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-6 py-2 text-base font-semibold text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm transition-colors"
                                         >
                                             No Thanks
@@ -1492,10 +1617,10 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                         <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
                         <div className="inline-block transform overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle relative z-10 animate-modal-pop">
                             <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                                <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Override Selected Days</h3>
+                                <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Set Custom Shift for Selected Days</h3>
                                 
                                 <div className="mb-4 rounded-md bg-blue-50 p-4 border border-blue-100">
-                                    <p className="text-sm text-blue-700">You are applying a daily override to <strong>{selectedCells.length} specific day(s)</strong>.</p>
+                                    <p className="text-sm text-blue-700">You are setting a custom manual shift for <strong>{selectedCells.length} specific day(s)</strong>.</p>
                                 </div>
                                 
                                 <form onSubmit={submitOverride} className="space-y-6">
@@ -1567,7 +1692,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                             disabled={overrideProcessing}
                                             className="inline-flex w-full justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm"
                                         >
-                                            Apply Override
+                                            Save Custom Shift
                                         </button>
                                         <button 
                                             type="button" 
@@ -1601,10 +1726,10 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                     </div>
                                     <div className="flex-1">
                                         <h3 className="text-lg font-bold text-gray-900" id="modal-title">
-                                            Reset Schedule Overrides?
+                                            Reset Custom Shifts?
                                         </h3>
                                         <p className="mt-2 text-sm text-gray-500">
-                                            Are you sure you want to remove the manual overrides for <strong className="text-gray-800 font-semibold">{selectedCells.length} selected date(s)</strong> and return them to their default cut-off schedule?
+                                            Are you sure you want to remove the custom manual shifts for <strong className="text-gray-800 font-semibold">{selectedCells.length} selected date(s)</strong> and return them to their default cut-off schedule?
                                         </p>
                                     </div>
                                 </div>
@@ -1616,7 +1741,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                     disabled={isResetting}
                                     className="w-full sm:w-auto inline-flex justify-center rounded-md bg-rose-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 transition-colors disabled:opacity-50"
                                 >
-                                    {isResetting ? 'Resetting...' : 'Yes, Reset Overrides'}
+                                    {isResetting ? 'Resetting...' : 'Yes, Reset Shifts'}
                                 </button>
                                 <button
                                     type="button"

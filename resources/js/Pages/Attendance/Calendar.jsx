@@ -164,48 +164,65 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
 
     // 🟢 HELPER: Extracts the precise shift a person has for a specific day
     const getShiftDetails = (emp, dateString, dayName) => {
-        if (!emp) return { isOff: false, shiftType: null, startTime: null, endTime: null, isOverride: false };
+        if (!emp) return { isOff: false, isLeave: false, shiftType: null, startTime: null, endTime: null, isOverride: false, baseHadShift: false };
         
+        const activeSchedule = emp.schedules?.find(sch => dateString >= sch.start_date && dateString <= sch.end_date);
+        
+        // 🟢 BUG FIX 2: Evaluate if the base schedule actually contained a shift for this day!
+        let baseHadShift = false;
+        if (activeSchedule) {
+            if (activeSchedule.pattern && activeSchedule.pattern[dayName]) {
+                const p = activeSchedule.pattern[dayName];
+                baseHadShift = !!p.shift_type && !p.is_off_day && !p.is_leave;
+            } else {
+                baseHadShift = !!activeSchedule.shift_type && !activeSchedule.off_days?.includes(dayName);
+            }
+        }
+
         // 1. Check for overrides (either manual UI edits or Excel imports)
         const override = emp.overrides?.[dateString];
         if (override) {
             return {
                 isOff: override.is_off_day,
+                isLeave: override.is_leave, // 🟢 FEATURE 4
                 shiftType: override.shift_type,
                 startTime: override.start_time,
                 endTime: override.end_time,
                 // 🟢 The Magic Switch: Only shows yellow if it was manually overridden in UI!
-                isOverride: override.is_manual 
+                isOverride: override.is_manual,
+                baseHadShift
             };
         }
 
         // 2. Fall back to Base Schedule rules
-        const activeSchedule = emp.schedules?.find(sch => dateString >= sch.start_date && dateString <= sch.end_date);
-
         if (activeSchedule) {
             // 🟢 FIXED: Now correctly reads the newly implemented 7-day pattern!
             if (activeSchedule.pattern && activeSchedule.pattern[dayName]) {
                 const dayConfig = activeSchedule.pattern[dayName];
                 return {
                     isOff: dayConfig.is_off_day,
+                    isLeave: dayConfig.is_leave || false, // 🟢 FEATURE 4
                     shiftType: dayConfig.shift_type,
                     startTime: dayConfig.shift_start,
                     endTime: dayConfig.shift_end,
-                    isOverride: false
+                    isOverride: false,
+                    baseHadShift
                 };
             }
 
             // Legacy fallback
             return {
                 isOff: activeSchedule.off_days?.includes(dayName),
+                isLeave: false, // 🟢 FEATURE 4
                 shiftType: activeSchedule.shift_type,
                 startTime: activeSchedule.start_time,
                 endTime: activeSchedule.end_time,
-                isOverride: false
+                isOverride: false,
+                baseHadShift
             };
         }
 
-        return { isOff: false, shiftType: null, startTime: null, endTime: null, isOverride: false };
+        return { isOff: false, isLeave: false, shiftType: null, startTime: null, endTime: null, isOverride: false, baseHadShift: false };
     };
 
     const daySummaryData = useMemo(() => {
@@ -239,7 +256,8 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
         });
     }, [daySummaryData, summarySearchQuery, summaryBranchFilter, summaryDeptFilter]);
 
-    const renderShiftBadge = (shiftType, isOffDay) => {
+    const renderShiftBadge = (shiftType, isOffDay, isLeave = false) => {
+        if (isLeave) return <span className="inline-flex rounded border border-orange-200 bg-orange-100 px-2 py-1 text-[10px] sm:text-xs font-bold text-orange-700 shadow-sm uppercase tracking-wider">Leave</span>;
         if (isOffDay) return <span className="inline-flex rounded border border-gray-200 bg-gray-100 px-2 py-1 text-[10px] sm:text-xs font-medium text-gray-600 shadow-sm">Off Day</span>;
         switch (shiftType) {
             case 'Day Shift': return <span className="inline-flex rounded bg-blue-50 px-2 py-1 text-[10px] sm:text-xs font-medium text-blue-700 shadow-sm">Day Shift</span>;
@@ -385,8 +403,11 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
                                 return <div key={`padding-${index}`} className="h-full w-full rounded-md border border-gray-100 bg-gray-50/50"></div>;
                             }
 
-                            const { isOff, shiftType, startTime, endTime, isOverride } = getShiftDetails(activeEmployee, slot.dateString, slot.dayName);
+                            const { isOff, isLeave, shiftType, startTime, endTime, isOverride, baseHadShift } = getShiftDetails(activeEmployee, slot.dateString, slot.dayName);
                             
+                            // 🟢 BUG FIX: Only show "Modified" if a Base Schedule existed and got overridden.
+                            const showModifiedBadge = isOverride && baseHadShift;
+
                             // 🟢 EXTRACT THE EVENT NAME FROM THE DATABASE OBJECT SAFELY
                             const holidayObj = holidays[slot.dateString];
                             const holidayName = holidayObj ? holidayObj.name : null;
@@ -412,7 +433,7 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
                                         'border-gray-200 bg-white hover:bg-gray-50'
                                     } ${canViewSummary ? 'cursor-pointer hover:ring-2 hover:ring-indigo-400' : ''}`}
                                 >
-                                    {/* 🟢 Enlarged Duty Meal Floating Badge */}
+                                    {/* 🟢 FEATURE 1: Changed to a clear Food Icon */}
                                     {mealChoice && (
                                         <div 
                                             className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 z-10" 
@@ -421,7 +442,7 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
                                             <span className={`flex items-center justify-center h-6 w-6 sm:h-8 sm:w-8 rounded-full shadow-md text-sm sm:text-base ${
                                                 isMealLocked ? 'bg-emerald-100 ring-2 ring-emerald-300' : 'bg-rose-100 ring-2 ring-rose-300 animate-pulse'
                                             }`}>
-                                                🍖
+                                                🍔
                                                 <span className={`absolute -top-1.5 -right-1.5 text-[10px] sm:text-xs font-black bg-white rounded-full h-4 w-4 flex items-center justify-center shadow-sm ${
                                                     isMealLocked ? 'text-emerald-600' : 'text-rose-600'
                                                 }`}>
@@ -435,7 +456,7 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
                                         
                                         <div className="flex flex-col gap-0.5">
                                             <div className="flex items-center gap-1.5">
-                                                <span className={`text-xs sm:text-sm ${slot.isToday ? 'font-black text-indigo-700' : isOverride ? 'font-semibold text-amber-700' : holidayName ? 'font-black text-rose-700' : 'font-semibold text-gray-700'}`}>
+                                                <span className={`text-xs sm:text-sm ${slot.isToday ? 'font-black text-indigo-700' : showModifiedBadge ? 'font-semibold text-amber-700' : holidayName ? 'font-black text-rose-700' : 'font-semibold text-gray-700'}`}>
                                                     {slot.dayNum}
                                                 </span>
                                                 {slot.isToday && <span className="text-[8px] sm:text-[9px] font-bold text-indigo-600 bg-indigo-100 px-1 sm:px-1.5 py-0.5 rounded shadow-sm tracking-wider uppercase">Today</span>}
@@ -449,14 +470,14 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
                                                 )}
                                         </div>
 
-                                        {isOverride && <span className="text-[8px] sm:text-[9px] font-bold text-amber-500 uppercase tracking-wider bg-amber-100 px-1 sm:px-1.5 py-0.5 rounded shadow-sm">Modified</span>}
+                                        {showModifiedBadge && <span className="text-[8px] sm:text-[9px] font-bold text-amber-500 uppercase tracking-wider bg-amber-100 px-1 sm:px-1.5 py-0.5 rounded shadow-sm">Modified</span>}
                                     </div>
 
                                     {activeEmployee ? (
                                         <div className="mt-1 sm:mt-2 flex flex-col items-center justify-center flex-1 gap-1 sm:gap-1.5 pointer-events-none">
-                                            {renderShiftBadge(shiftType, isOff)}
-                                            {!isOff && startTime && endTime && (
-                                                <span className={`text-[9px] sm:text-[10px] font-medium leading-tight font-mono text-center ${isOverride ? 'text-amber-700' : 'text-gray-500'}`}>
+                                            {renderShiftBadge(shiftType, isOff, isLeave)}
+                                            {!(isOff || isLeave) && startTime && endTime && (
+                                                <span className={`text-[9px] sm:text-[10px] font-medium leading-tight font-mono text-center ${showModifiedBadge ? 'text-amber-700' : 'text-gray-500'}`}>
                                                     {startTime}<br/>|<br/>{endTime}
                                                 </span>
                                             )}
@@ -564,7 +585,7 @@ export default function Calendar({ employees = [], branches = [], holidays = {} 
                                                         </td>
                                                         <td className="whitespace-nowrap py-4 pr-3">
                                                             <div className="flex items-center gap-2">
-                                                                {renderShiftBadge(emp.shiftType, emp.isOff)}
+                                                                {renderShiftBadge(emp.shiftType, emp.isOff, emp.isLeave)}
                                                                 {emp.isOverride && <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">Modified</span>}
                                                             </div>
                                                         </td>
