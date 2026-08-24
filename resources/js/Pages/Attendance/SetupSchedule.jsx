@@ -153,10 +153,20 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
     });
 
     const getShiftDetails = (emp, dateString, dayName) => {
-        if (!emp) return { isOff: false, isLeave: false, shiftType: null, startTime: null, endTime: null, isOverride: false, wasModifiedManual: false, hasBaseSchedule: false };
+        if (!emp) return { isOff: false, isLeave: false, shiftType: null, startTime: null, endTime: null, isOverride: false, wasModifiedManual: false, baseHadShift: false };
         
         const activeSchedule = emp.schedules?.find(sch => dateString >= sch.start_date && dateString <= sch.end_date);
-        const hasBaseSchedule = !!activeSchedule;
+        
+        // 🟢 BUG FIX 2: Evaluate if the base schedule actually contained a shift for this day!
+        let baseHadShift = false;
+        if (activeSchedule) {
+            if (activeSchedule.pattern && activeSchedule.pattern[dayName]) {
+                const p = activeSchedule.pattern[dayName];
+                baseHadShift = !!p.shift_type && !p.is_off_day && !p.is_leave;
+            } else {
+                baseHadShift = !!activeSchedule.shift_type && !activeSchedule.off_days?.includes(dayName);
+            }
+        }
 
         // 1. Priority check: Does this exact date have a manual override?
         const override = emp.overrides?.[dateString];
@@ -170,7 +180,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                 // 🟢 The Magic Switch: Only shows yellow if it was manually overridden in UI!
                 isOverride: override.is_manual,
                 wasModifiedManual: override.was_modified, // 🟢 BUG FIX 1
-                hasBaseSchedule
+                baseHadShift
             };
         }
 
@@ -187,7 +197,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                     endTime: dayConfig.shift_end,
                     isOverride: false,
                     wasModifiedManual: false,
-                    hasBaseSchedule
+                    baseHadShift
                 };
             }
 
@@ -200,7 +210,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                 endTime: activeSchedule.end_time,
                 isOverride: false,
                 wasModifiedManual: false,
-                hasBaseSchedule
+                baseHadShift
             };
         }
 
@@ -213,7 +223,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
             endTime: null,
             isOverride: false,
             wasModifiedManual: false,
-            hasBaseSchedule: false
+            baseHadShift: false
         };
     };
 
@@ -247,8 +257,9 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                 if (existingOverride) {
                     initialData = {
                         ...initialData,
-                        shift_start: existingOverride.start_time ? existingOverride.start_time.substring(0,5) : '',
-                        shift_end: existingOverride.end_time ? existingOverride.end_time.substring(0,5) : '',
+                        // 🟢 BUG FIX 1: Use raw unformatted time from the backend!
+                        shift_start: existingOverride.raw_start_time || '',
+                        shift_end: existingOverride.raw_end_time || '',
                         shift_type: existingOverride.shift_type || '',
                         is_off_day: !!existingOverride.is_off_day,
                         is_leave: !!existingOverride.is_leave,
@@ -540,9 +551,9 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                     setLastSubmittedData({ ...baseData, employee_ids: [singleEmployeeId] }); // clone snapshot
                     setCopyTargetIds([]);
                     setShowCopyToOthersModal(true);
+                } else {
+                    resetBase(); 
                 }
-                // 🟢 FIX BUG: Always clear the form immediately so the next click is fresh!
-                resetBase();
             }
         });
     };
@@ -987,17 +998,17 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                 )}
                             </div>
 
-                            {/* 🟢 FEATURE 2: 7-DAY FIXED BATCH VIEW CHUNKS */}
+                            {/* 🟢 FEATURE 2: 7-DAY FIXED BATCH VIEW CHUNKS WITH FREEZE PANES */}
                             {batchEmployeesList.length > 0 && (
-                                <div className="overflow-x-auto pb-4">
-                                    <table className="sticky top-0 z-50 bg-white shadow-md w-full px-6 py-4">
-                                        <thead className="bg-gray-50 sticky top-0 z-10">
+                                <div className="overflow-auto max-h-[70vh] pb-4 rounded-xl border border-gray-200 shadow-sm relative">
+                                    <table className="min-w-full border-collapse bg-white">
+                                        <thead className="bg-gray-50 sticky top-0 z-40 shadow-sm">
                                             <tr>
-                                                <th className="py-4 pl-4 pr-3 text-left text-sm font-bold text-gray-900 w-1/5 min-w-[200px] border-b border-gray-200 bg-gray-50 z-20 sticky left-0 shadow-[1px_0_0_0_#e5e7eb]">
+                                                <th className="py-4 pl-4 pr-3 text-left text-sm font-bold text-gray-900 w-1/5 min-w-[200px] border-b border-gray-200 bg-gray-100 z-50 sticky left-0 top-0 shadow-[1px_0_0_0_#e5e7eb]">
                                                     Employee
                                                 </th>
                                                 {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
-                                                    <th key={day} className="px-3 py-4 text-center text-sm font-semibold text-gray-900 border-b border-gray-200 border-l border-gray-100 min-w-[120px]">
+                                                    <th key={day} className="px-3 py-4 text-center text-sm font-semibold text-gray-900 border-b border-gray-200 border-l border-gray-200 min-w-[120px] bg-gray-50 sticky top-0 z-40">
                                                         {day}
                                                     </th>
                                                 ))}
@@ -1007,11 +1018,11 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                             {batchEmployeesList.map((emp, empIdx) => (
                                                 <React.Fragment key={emp.id}>
                                                     {batchWeeks.map((week, weekIdx) => (
-                                                        <tr key={`${emp.id}-${weekIdx}`} className={empIdx !== batchEmployeesList.length - 1 && weekIdx === batchWeeks.length - 1 ? "border-b-4 border-gray-200" : "border-b border-gray-100"}>
+                                                        <tr key={`${emp.id}-${weekIdx}`} className={empIdx !== batchEmployeesList.length - 1 && weekIdx === batchWeeks.length - 1 ? "border-b-4 border-gray-300" : "border-b border-gray-100"}>
                                                             
                                                             {/* Render Employee Name only on the first row of their set */}
                                                             {weekIdx === 0 && (
-                                                                <td rowSpan={batchWeeks.length} className="whitespace-nowrap py-5 pl-4 pr-3 text-sm font-medium text-gray-900 bg-white sticky left-0 shadow-[1px_0_0_0_#e5e7eb] z-10 align-top border-r border-gray-200">
+                                                                <td rowSpan={batchWeeks.length} className="whitespace-nowrap py-5 pl-4 pr-3 text-sm font-medium text-gray-900 bg-gray-50/90 sticky left-0 shadow-[1px_0_0_0_#e5e7eb] z-30 align-top border-r border-gray-200">
                                                                     <div className="font-bold text-gray-800 text-base">{emp.name}</div>
                                                                     <div className="text-xs font-medium text-gray-500 mt-0.5">{typeof emp.department === 'object' ? emp.department?.name : emp.department}</div>
                                                                 </td>
@@ -1023,12 +1034,12 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                                                     return <td key={day.dateString} className="px-1 py-1.5 bg-gray-50/50 border-l border-gray-100"></td>;
                                                                 }
 
-                                                                const { isOff, isLeave, shiftType, startTime, endTime, isOverride, hasBaseSchedule, wasModifiedManual } = getShiftDetails(emp, day.dateString, day.dayName);
+                                                                const { isOff, isLeave, shiftType, startTime, endTime, isOverride, baseHadShift, wasModifiedManual } = getShiftDetails(emp, day.dateString, day.dayName);
                                                                 const isSelected = isCellSelected(emp.id, day.dateString);
                                                                 const isCutoff = isDateInCurrentCutoff(day.dateString);
                                                                 
                                                                 // 🟢 BUG FIX 1 & 2: Only show "Modified" if a Base Schedule existed and got overridden, OR if an empty cell manual shift was changed!
-                                                                const showModifiedBadge = (isOverride && hasBaseSchedule) || wasModifiedManual;
+                                                                const showModifiedBadge = (isOverride && baseHadShift) || wasModifiedManual;
                                                                 
                                                                 return (
                                                                     <td key={day.dateString} className={`px-1 py-1.5 align-middle border-l border-gray-100 ${isCutoff ? 'bg-indigo-50/40' : ''}`}>
@@ -1100,7 +1111,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                                         </select>
                                     ) : (
-                                        <div className="py-2 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-500 font-medium w-full sm:w-36 truncate shadow-inner cursor-not-allowed">
+                                        <div className="py-2 px-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-500 font-medium w-full sm:w-40 truncate shadow-inner cursor-not-allowed">
                                             {branches[0]?.name || 'All Branches'}
                                         </div>
                                     )}
@@ -1317,12 +1328,12 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                         return <div key={`padding-${index}`} className="h-full w-full rounded-md border border-gray-100 bg-gray-50/50"></div>;
                                     }
 
-                                    const { isOff, isLeave, shiftType, startTime, endTime, isOverride, hasBaseSchedule, wasModifiedManual } = getShiftDetails(singleEmployee, slot.dateString, slot.dayName);
+                                    const { isOff, isLeave, shiftType, startTime, endTime, isOverride, baseHadShift, wasModifiedManual } = getShiftDetails(singleEmployee, slot.dateString, slot.dayName);
                                     const isSelected = singleEmployee ? isCellSelected(singleEmployee.id, slot.dateString) : false;
                                     const isCutoff = singleEmployee && isDateInCurrentCutoff(slot.dateString); // 🟢 CHECK CALENDAR CELL
                                     
                                     // 🟢 BUG FIX 1 & 2: Only show "Modified" if a Base Schedule existed and got overridden, OR if an empty cell manual shift was changed!
-                                    const showModifiedBadge = (isOverride && hasBaseSchedule) || wasModifiedManual;
+                                    const showModifiedBadge = (isOverride && baseHadShift) || wasModifiedManual;
 
                                     // 🟢 EDIT ACL LOCK: Removes cursor-pointer and hover colors if user only has VIEW access
                                     return (
@@ -1713,7 +1724,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
             {showResetConfirmModal && (
                 <div className="fixed inset-0 z-[60] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
                     <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity animate-backdrop-fade" onClick={() => !isResetting && setShowResetConfirmModal(false)}></div>
+                        <div className="fixed inset-0 bg-bg-gray-500 bg-opacity-75 transition-opacity animate-backdrop-fade" onClick={() => !isResetting && setShowResetConfirmModal(false)}></div>
 
                         <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
                         <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-md sm:align-middle relative z-10 animate-modal-pop">
