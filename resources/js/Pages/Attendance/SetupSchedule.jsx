@@ -449,7 +449,21 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
         return weeks;
     }, [weekOffset, selectedCutoff, batchViewMode]);
 
-    const currentWeekRange = `${batchWeeks[0][0].display} - ${batchWeeks[batchWeeks.length - 1][6].display}`;
+    // 🟢 FIXED: The true grid header text mapped dynamically to the correct mode
+    const currentGridHeader = useMemo(() => {
+        if (!batchWeeks || batchWeeks.length === 0) return '';
+        if (batchViewMode === 'weekly') {
+            return `${batchWeeks[0][0].display} - ${batchWeeks[batchWeeks.length - 1][6].display}`;
+        } else if (batchViewMode === 'cutoff') {
+            const found = cutoffPeriodsList.find(c => c.value === selectedCutoff);
+            return found ? found.label : '';
+        } else {
+            const [startStr] = selectedCutoff.split('|');
+            const d = new Date(`${startStr}T12:00:00`);
+            return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        }
+    }, [batchWeeks, batchViewMode, selectedCutoff, cutoffPeriodsList]);
+
     const dropdownRef = useRef(null);
 
     useEffect(() => {
@@ -849,7 +863,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                                 setSelectedCells([]); 
                                             }}
                                         >
-                                            <option value="">{isSuperAdmin ? 'All Branches' : 'All Branches'}</option>
+                                            <option value="">{isSuperAdmin ? 'All Branches' : 'All My Branches'}</option>
                                             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                                         </select>
                                     ) : (
@@ -934,7 +948,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                 </h3>
                                 <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-lg border border-gray-200">
                                     <button onClick={handlePrevBatchRange} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-gray-600 shadow-sm hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">&larr;</button>
-                                    <span className="text-sm font-medium text-gray-700 w-56 text-center">{currentWeekRange}</span>
+                                    <span className="text-sm font-medium text-gray-700 w-auto min-w-[200px] px-2 text-center">{currentGridHeader}</span>
                                     <button onClick={handleNextBatchRange} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-gray-600 shadow-sm hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">&rarr;</button>
                                 </div>
                             </div>
@@ -1080,7 +1094,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                                             )}
                                                             
                                                             {week.map(day => {
-                                                                // Empty padded cells for days that fall outside the active cut-off/monthly boundary
+                                                                // 🟢 FIXED: Create distinct grey blank cell blocks for extra grid spaces
                                                                 if (day.isOutOfBounds) {
                                                                     return (
                                                                         <td key={day.dateString} className="px-1 py-1.5 align-middle border-l border-gray-100">
@@ -1164,7 +1178,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                                 setSelectedCells([]); 
                                             }}
                                         >
-                                            <option value="">{isSuperAdmin ? 'All Branches' : 'All Branches'}</option>
+                                            <option value="">{isSuperAdmin ? 'All Branches' : 'All My Branches'}</option>
                                             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                                         </select>
                                     ) : (
@@ -1563,113 +1577,6 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                         </button>
                                     </div>
                                 </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* 🟢 FEATURE 3: AUTOMATIC COPY-TO-OTHERS MODAL IN SINGLE VIEW */}
-            {showCopyToOthersModal && (
-                <div className="fixed inset-0 z-[80] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-                    <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity animate-backdrop-fade" onClick={() => { setShowCopyToOthersModal(false); setCopyActionType(null); setLastSubmittedData(null); resetBase(); resetOverride(); }}></div>
-
-                        <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
-                        <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-xl sm:align-middle relative z-10 animate-modal-pop">
-                            <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                                <h3 className="text-lg sm:text-xl font-black text-indigo-900 mb-3 bg-indigo-50 border border-indigo-100 inline-block px-4 py-2 rounded-xl shadow-sm">
-                                    Would you like to set the same schedule for other employees?
-                                </h3>
-                                <p className="text-sm text-gray-500 mb-6">
-                                    Copying <strong className="text-indigo-600">{singleEmployee?.name}'s</strong> {copyActionType === 'base' ? 'base schedule' : 'manual shifts'} to other members in <strong className="text-gray-800">{singleEmployeeDept || 'Unassigned'}</strong>.
-                                </p>
-                                
-                                <form onSubmit={handleCopyToOthersSubmit} className="space-y-4">
-                                    <div className="border border-gray-200 rounded-lg max-h-64 overflow-y-auto bg-gray-50">
-                                        {availableCopyTargets.length > 0 ? (
-                                            <div className="divide-y divide-gray-200">
-                                                {availableCopyTargets.map(emp => {
-                                                    const isChecked = copyTargetIds.includes(emp.id);
-                                                    return (
-                                                        <label key={emp.id} className={`flex items-center gap-3 p-3 cursor-pointer transition-colors ${isChecked ? 'bg-indigo-50' : 'hover:bg-white'}`}>
-                                                            <input 
-                                                                type="checkbox" 
-                                                                className="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
-                                                                checked={isChecked}
-                                                                onChange={(e) => {
-                                                                    if (e.target.checked) setCopyTargetIds(prev => [...prev, emp.id]);
-                                                                    else setCopyTargetIds(prev => prev.filter(id => id !== emp.id));
-                                                                }}
-                                                            />
-                                                            <div>
-                                                                <p className={`text-sm font-bold ${isChecked ? 'text-indigo-900' : 'text-gray-900'}`}>{emp.name}</p>
-                                                            </div>
-                                                        </label>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : (
-                                            <div className="p-6 text-center text-sm text-gray-500 italic">No other employees available in this department.</div>
-                                        )}
-                                    </div>
-
-                                    <div className="mt-6 sm:flex sm:flex-row-reverse border-t border-gray-200 pt-5">
-                                        <button 
-                                            type="submit" 
-                                            disabled={copyTargetIds.length === 0 || isCopying}
-                                            className="inline-flex w-full justify-center rounded-md border border-transparent bg-indigo-600 px-6 py-2 text-base font-bold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            {isCopying ? 'Applying...' : 'Yes Please'}
-                                        </button>
-                                        <button 
-                                            type="button" 
-                                            onClick={() => { setShowCopyToOthersModal(false); setCopyActionType(null); setLastSubmittedData(null); resetBase(); resetOverride(); }}
-                                            className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-6 py-2 text-base font-semibold text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm transition-colors"
-                                        >
-                                            No Thanks
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* 🟢 NEW: CUSTOM ALERT FOR EMPTY GRID */}
-            {showEmptyGridAlert && (
-                <div className="fixed inset-0 z-[70] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-                    <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity animate-backdrop-fade" onClick={() => setShowEmptyGridAlert(false)}></div>
-
-                        <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
-                        <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-md sm:align-middle relative z-10 animate-modal-pop">
-                            <div className="bg-white p-6">
-                                <div className="flex items-start gap-4">
-                                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 sm:h-10 sm:w-10">
-                                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                        </svg>
-                                    </div>
-                                    <div className="flex-1">
-                                        <h3 className="text-lg font-bold text-gray-900" id="modal-title">
-                                            Grid is Empty
-                                        </h3>
-                                        <p className="mt-2 text-sm text-gray-500">
-                                            Please select and add at least one employee to the grid before assigning a base schedule.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="bg-gray-50 px-6 py-4 flex flex-col sm:flex-row-reverse gap-2 border-t border-gray-100">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowEmptyGridAlert(false)}
-                                    className="w-full sm:w-auto inline-flex justify-center rounded-md bg-indigo-600 px-6 py-2 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
-                                >
-                                    OK, got it
-                                </button>
                             </div>
                         </div>
                     </div>
