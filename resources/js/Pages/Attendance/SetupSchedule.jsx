@@ -180,7 +180,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                 // 🟢 The Magic Switch: Only shows yellow if it was manually overridden in UI!
                 isOverride: override.is_manual,
                 wasModifiedManual: override.was_modified, // 🟢 BUG FIX 1
-                baseHadShift // 🟢 BUG FIX 3: Fixed the return variable to match the declaration
+                baseHadShift
             };
         }
 
@@ -197,7 +197,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                     endTime: dayConfig.shift_end,
                     isOverride: false,
                     wasModifiedManual: false,
-                    baseHadShift // 🟢 BUG FIX 3: Fixed the return variable to match the declaration
+                    baseHadShift
                 };
             }
 
@@ -210,7 +210,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                 endTime: activeSchedule.end_time,
                 isOverride: false,
                 wasModifiedManual: false,
-                baseHadShift // 🟢 BUG FIX 3: Fixed the return variable to match the declaration
+                baseHadShift
             };
         }
 
@@ -486,6 +486,55 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
         setSelectedBatchIds(prev => [...prev, id]);
         // 🟢 FIXED: Clears search so the list resets, but KEEPS dropdown open to add more staff rapidly!
         setBatchSearch('');
+    };
+
+    // 🟢 FEATURE: Handler for Batch Navigation Arrows (Supports Weekly, Cut-off, and Monthly)
+    const handlePrevBatchRange = () => {
+        if (batchViewMode === 'weekly') {
+            setWeekOffset(prev => prev - 1);
+        } else if (batchViewMode === 'cutoff') {
+            const currentIndex = cutoffPeriodsList.findIndex(c => c.value === selectedCutoff);
+            if (currentIndex > 0) {
+                setSelectedCutoff(cutoffPeriodsList[currentIndex - 1].value);
+                // 🟢 BUG FIX: Removed setSelectedCells([]) so selections persist across navigation!
+                setWeekOffset(0);
+            }
+        } else if (batchViewMode === 'monthly') {
+            const currentIndex = cutoffPeriodsList.findIndex(c => c.value === selectedCutoff);
+            if (currentIndex >= 2) {
+                setSelectedCutoff(cutoffPeriodsList[currentIndex - 2].value);
+                // 🟢 BUG FIX: Removed setSelectedCells([]) so selections persist across navigation!
+                setWeekOffset(0);
+            } else if (currentIndex > 0) {
+                setSelectedCutoff(cutoffPeriodsList[0].value);
+                // 🟢 BUG FIX: Removed setSelectedCells([]) so selections persist across navigation!
+                setWeekOffset(0);
+            }
+        }
+    };
+
+    const handleNextBatchRange = () => {
+        if (batchViewMode === 'weekly') {
+            setWeekOffset(prev => prev + 1);
+        } else if (batchViewMode === 'cutoff') {
+            const currentIndex = cutoffPeriodsList.findIndex(c => c.value === selectedCutoff);
+            if (currentIndex < cutoffPeriodsList.length - 1) {
+                setSelectedCutoff(cutoffPeriodsList[currentIndex + 1].value);
+                // 🟢 BUG FIX: Removed setSelectedCells([]) so selections persist across navigation!
+                setWeekOffset(0);
+            }
+        } else if (batchViewMode === 'monthly') {
+            const currentIndex = cutoffPeriodsList.findIndex(c => c.value === selectedCutoff);
+            if (currentIndex < cutoffPeriodsList.length - 2) {
+                setSelectedCutoff(cutoffPeriodsList[currentIndex + 2].value);
+                // 🟢 BUG FIX: Removed setSelectedCells([]) so selections persist across navigation!
+                setWeekOffset(0);
+            } else if (currentIndex < cutoffPeriodsList.length - 1) {
+                setSelectedCutoff(cutoffPeriodsList[cutoffPeriodsList.length - 1].value);
+                // 🟢 BUG FIX: Removed setSelectedCells([]) so selections persist across navigation!
+                setWeekOffset(0);
+            }
+        }
     };
 
     // ==========================================
@@ -800,7 +849,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                                 setSelectedCells([]); 
                                             }}
                                         >
-                                            <option value="">{isSuperAdmin ? 'All Branches' : 'All My Branches'}</option>
+                                            <option value="">{isSuperAdmin ? 'All Branches' : 'All Branches'}</option>
                                             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                                         </select>
                                     ) : (
@@ -880,11 +929,13 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                         {/* 🟢 ROW 2: TIMETABLE OVERVIEW, SLIDER & CUTOFF ACTIONS */}
                         <div className="bg-white border-b border-gray-100 p-4 sm:px-6 sm:py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                             <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
-                                <h3 className="text-xl font-bold text-gray-800">Weekly Grid</h3>
+                                <h3 className="text-xl font-bold text-gray-800">
+                                    {batchViewMode === 'weekly' ? 'Weekly Grid' : batchViewMode === 'cutoff' ? 'Cut-off Grid' : 'Monthly Grid'}
+                                </h3>
                                 <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-lg border border-gray-200">
-                                    <button onClick={() => setWeekOffset(prev => prev - 1)} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-gray-600 shadow-sm hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">&larr;</button>
+                                    <button onClick={handlePrevBatchRange} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-gray-600 shadow-sm hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">&larr;</button>
                                     <span className="text-sm font-medium text-gray-700 w-56 text-center">{currentWeekRange}</span>
-                                    <button onClick={() => setWeekOffset(prev => prev + 1)} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-gray-600 shadow-sm hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">&rarr;</button>
+                                    <button onClick={handleNextBatchRange} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-gray-600 shadow-sm hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">&rarr;</button>
                                 </div>
                             </div>
                             
@@ -1029,7 +1080,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                                             )}
                                                             
                                                             {week.map(day => {
-                                                                // 🟢 FIXED: Create distinct grey blank cell blocks for extra grid spaces
+                                                                // Empty padded cells for days that fall outside the active cut-off/monthly boundary
                                                                 if (day.isOutOfBounds) {
                                                                     return (
                                                                         <td key={day.dateString} className="px-1 py-1.5 align-middle border-l border-gray-100">
@@ -1113,7 +1164,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                                 setSelectedCells([]); 
                                             }}
                                         >
-                                            <option value="">{isSuperAdmin ? 'All Branches' : 'All My Branches'}</option>
+                                            <option value="">{isSuperAdmin ? 'All Branches' : 'All Branches'}</option>
                                             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                                         </select>
                                     ) : (
@@ -1225,6 +1276,17 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                             {/* 🟢 MOVED: Cutoff Dropdown and Highlight Toggle replicated to Single View */}
                             <div className="flex flex-wrap items-center gap-3">
                                 
+                                {/* 🟢 FEATURE 3: Copy to Others Button (Only visible if active schedule exists) */}
+                                {canEditSchedule && singleEmployee && (
+                                    <button 
+                                        onClick={() => setShowCopyToOthersModal(true)}
+                                        className="flex items-center justify-center gap-2 rounded-md border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-700 shadow-sm hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
+                                    >
+                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                        Copy Sched to Others
+                                    </button>
+                                )}
+
                                 {/* 🟢 FEATURE 1: Current Cut-off Button in Single View */}
                                 <button 
                                     onClick={() => {
@@ -1501,6 +1563,113 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                         </button>
                                     </div>
                                 </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 🟢 FEATURE 3: AUTOMATIC COPY-TO-OTHERS MODAL IN SINGLE VIEW */}
+            {showCopyToOthersModal && (
+                <div className="fixed inset-0 z-[80] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+                    <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity animate-backdrop-fade" onClick={() => { setShowCopyToOthersModal(false); setCopyActionType(null); setLastSubmittedData(null); resetBase(); resetOverride(); }}></div>
+
+                        <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
+                        <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-xl sm:align-middle relative z-10 animate-modal-pop">
+                            <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                <h3 className="text-lg sm:text-xl font-black text-indigo-900 mb-3 bg-indigo-50 border border-indigo-100 inline-block px-4 py-2 rounded-xl shadow-sm">
+                                    Would you like to set the same schedule for other employees?
+                                </h3>
+                                <p className="text-sm text-gray-500 mb-6">
+                                    Copying <strong className="text-indigo-600">{singleEmployee?.name}'s</strong> {copyActionType === 'base' ? 'base schedule' : 'manual shifts'} to other members in <strong className="text-gray-800">{singleEmployeeDept || 'Unassigned'}</strong>.
+                                </p>
+                                
+                                <form onSubmit={handleCopyToOthersSubmit} className="space-y-4">
+                                    <div className="border border-gray-200 rounded-lg max-h-64 overflow-y-auto bg-gray-50">
+                                        {availableCopyTargets.length > 0 ? (
+                                            <div className="divide-y divide-gray-200">
+                                                {availableCopyTargets.map(emp => {
+                                                    const isChecked = copyTargetIds.includes(emp.id);
+                                                    return (
+                                                        <label key={emp.id} className={`flex items-center gap-3 p-3 cursor-pointer transition-colors ${isChecked ? 'bg-indigo-50' : 'hover:bg-white'}`}>
+                                                            <input 
+                                                                type="checkbox" 
+                                                                className="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                                                                checked={isChecked}
+                                                                onChange={(e) => {
+                                                                    if (e.target.checked) setCopyTargetIds(prev => [...prev, emp.id]);
+                                                                    else setCopyTargetIds(prev => prev.filter(id => id !== emp.id));
+                                                                }}
+                                                            />
+                                                            <div>
+                                                                <p className={`text-sm font-bold ${isChecked ? 'text-indigo-900' : 'text-gray-900'}`}>{emp.name}</p>
+                                                            </div>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <div className="p-6 text-center text-sm text-gray-500 italic">No other employees available in this department.</div>
+                                        )}
+                                    </div>
+
+                                    <div className="mt-6 sm:flex sm:flex-row-reverse border-t border-gray-200 pt-5">
+                                        <button 
+                                            type="submit" 
+                                            disabled={copyTargetIds.length === 0 || isCopying}
+                                            className="inline-flex w-full justify-center rounded-md border border-transparent bg-indigo-600 px-6 py-2 text-base font-bold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:ml-3 sm:w-auto sm:text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {isCopying ? 'Applying...' : 'Yes Please'}
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => { setShowCopyToOthersModal(false); setCopyActionType(null); setLastSubmittedData(null); resetBase(); resetOverride(); }}
+                                            className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-6 py-2 text-base font-semibold text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm transition-colors"
+                                        >
+                                            No Thanks
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 🟢 NEW: CUSTOM ALERT FOR EMPTY GRID */}
+            {showEmptyGridAlert && (
+                <div className="fixed inset-0 z-[70] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+                    <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity animate-backdrop-fade" onClick={() => setShowEmptyGridAlert(false)}></div>
+
+                        <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
+                        <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-md sm:align-middle relative z-10 animate-modal-pop">
+                            <div className="bg-white p-6">
+                                <div className="flex items-start gap-4">
+                                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600 sm:h-10 sm:w-10">
+                                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="text-lg font-bold text-gray-900" id="modal-title">
+                                            Grid is Empty
+                                        </h3>
+                                        <p className="mt-2 text-sm text-gray-500">
+                                            Please select and add at least one employee to the grid before assigning a base schedule.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="bg-gray-50 px-6 py-4 flex flex-col sm:flex-row-reverse gap-2 border-t border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowEmptyGridAlert(false)}
+                                    className="w-full sm:w-auto inline-flex justify-center rounded-md bg-indigo-600 px-6 py-2 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                                >
+                                    OK, got it
+                                </button>
                             </div>
                         </div>
                     </div>
