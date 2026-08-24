@@ -51,10 +51,13 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
     // 🟢 VIEW MODE TOGGLE (Manual vs Auto) - Defaulted to manual
     const [viewMode, setViewMode] = useState('manual');
 
-    // 🟢 MULTI-BRANCH MODAL STATES
-    const [isMultiBranchModalOpen, setIsMultiBranchModalOpen] = useState(false);
+    // 🟢 MULTI-BRANCH MODAL STATES & UNIFIED PUBLISH MODAL
+    const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
     const [multiBranchStaffList, setMultiBranchStaffList] = useState([]);
     const [keepStaffMap, setKeepStaffMap] = useState({});
+    
+    // 🟢 FEATURE 1: Missing Schedules State
+    const [missingDepts, setMissingDepts] = useState([]);
 
     const { data, setData, post, processing, errors } = useForm({
         branch_id: defaultBranch,
@@ -201,6 +204,18 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
         }, { day: 0, straight: 0, grave: 0, total: 0 });
     }, [activeParticipants]);
 
+    // 🟢 NEW: Compute if any day with scheduled staff is missing their Main or Alt Meal
+    const hasMissingMeals = useMemo(() => {
+        if (!data.schedule) return false;
+        return data.schedule.some(day => {
+            const staffCount = (day.participants || []).length;
+            const mainMeal = (day.main_meal || '').trim();
+            const altMeal = (day.alt_meal || '').trim();
+            // Both meals are strictly required if staff are scheduled for this day
+            return staffCount > 0 && (!mainMeal || !altMeal);
+        });
+    }, [data.schedule]);
+
     // --- LOOKUP & FILTER HELPERS ---
     const getDepartmentName = (deptId) => {
         const found = departments.find(d => String(d.id) === String(deptId));
@@ -284,7 +299,7 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
         setData('schedule', newSchedule);
     };
 
-    // 🟢 SUBMIT INTERCEPTOR FOR MULTI-BRANCH CHECK
+    // 🟢 SUBMIT INTERCEPTOR FOR MULTI-BRANCH CHECK & MISSING SCHEDULES
     const submit = (e) => {
         e.preventDefault();
         if (!canEditDutyMeals) return;
@@ -300,18 +315,39 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
             participantIds.has(emp.id) && emp.assigned_branch_ids && emp.assigned_branch_ids.length > 1
         );
 
-        if (multiBranchEmps.length > 0) {
-            // Default all multi-branch staff to 'Keep' (true)
-            const initialMap = {};
-            multiBranchEmps.forEach(emp => {
-                initialMap[emp.id] = true;
+        // Default all multi-branch staff to 'Keep' (true)
+        const initialMap = {};
+        multiBranchEmps.forEach(emp => {
+            initialMap[emp.id] = true;
+        });
+        setKeepStaffMap(initialMap);
+        setMultiBranchStaffList(multiBranchEmps);
+
+        // 3. 🟢 FEATURE 1: Check for missing attendance schedules in the branch
+        const branchEmps = employees.filter(emp => {
+            const selectedBranchId = Number(data.branch_id);
+            return Number(emp.branch_id) === selectedBranchId || 
+                (emp.assigned_branch_ids && emp.assigned_branch_ids.includes(selectedBranchId));
+        });
+
+        const mDepts = new Set();
+        branchEmps.forEach(emp => {
+            let hasMissing = false;
+            // Scan through all 7 days of the selected week
+            data.schedule.forEach(day => {
+                const shift = getShiftDetails(emp, day.date, day.dayName);
+                if (!shift.isOff && !shift.shiftType) {
+                    hasMissing = true;
+                }
             });
-            setKeepStaffMap(initialMap);
-            setMultiBranchStaffList(multiBranchEmps);
-            setIsMultiBranchModalOpen(true);
-        } else {
-            post(route('admin.duty-meals.store'));
-        }
+            // If they are missing an attendance schedule, flag their department
+            if (hasMissing) {
+                mDepts.add(getDepartmentName(emp.department_id));
+            }
+        });
+
+        setMissingDepts(Array.from(mDepts));
+        setIsPublishModalOpen(true);
     };
 
     // 🟢 FINAL PUBLISH AFTER MODAL CONFIRMATION
@@ -325,7 +361,7 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
             ...data,
             schedule: updatedSchedule
         }, {
-            onSuccess: () => setIsMultiBranchModalOpen(false)
+            onSuccess: () => setIsPublishModalOpen(false)
         });
     };
 
@@ -361,6 +397,21 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
             }>
             <Head title="Setup Weekly Roster" />
 
+            {/* 🟢 INJECTED CSS FOR MODAL ANIMATIONS */}
+            <style>{`
+                @keyframes modalPop {
+                    0% { opacity: 0; transform: scale(0.95) translateY(10px); }
+                    100% { opacity: 1; transform: scale(1) translateY(0); }
+                }
+                .animate-modal-pop { animation: modalPop 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+                
+                @keyframes backdropFade {
+                    0% { opacity: 0; }
+                    100% { opacity: 1; }
+                }
+                .animate-backdrop-fade { animation: backdropFade 0.3s ease-out forwards; }
+            `}</style>
+
             <form onSubmit={submit} className="pb-12">
                 {/* HEADER & GLOBAL ACTIONS */}
                 <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -376,7 +427,12 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
                         <Link href={route('admin.duty-meals.index')}>
                             <SecondaryButton type="button">Cancel</SecondaryButton>
                         </Link>
-                        <PrimaryButton disabled={processing || !hasSelectedWeek || totalWeeklyStaff === 0 || !canEditDutyMeals} className={!canEditDutyMeals ? 'opacity-60 cursor-not-allowed' : ''}>
+                        {/* 🟢 PUBLISH BUTTON LOGIC: Disabled if meal inputs are missing */}
+                        <PrimaryButton 
+                            disabled={processing || !hasSelectedWeek || totalWeeklyStaff === 0 || !canEditDutyMeals || hasMissingMeals} 
+                            className={(!canEditDutyMeals || hasMissingMeals) ? 'opacity-60 cursor-not-allowed' : ''}
+                            title={hasMissingMeals ? 'Please provide both Main and Alternative meals for all days with scheduled staff before publishing.' : ''}
+                        >
                             {canEditDutyMeals ? `Publish Roster (${totalWeeklyStaff} Shifts)` : 'View Only'}
                         </PrimaryButton>
                     </div>
@@ -424,24 +480,31 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
                                             </div>
                                         </div>
                                         <div className="space-y-4 flex-1 bg-gray-50/50 p-3 rounded-lg border border-gray-100">
+                                            {/* 🟢 ADDED: Required validation styling and asterisks */}
                                             <div>
-                                                <InputLabel value="🍗 Main Meal" className="text-xs" />
+                                                <InputLabel className="text-xs">
+                                                    🍗 Main Meal {day.participants.length > 0 && <span className="text-rose-500 ml-1">*</span>}
+                                                </InputLabel>
                                                 <TextInput 
                                                     placeholder="e.g. Chicken Adobo w/ Rice" 
-                                                    className="mt-1.5 block w-full text-sm shadow-sm" 
+                                                    className={`mt-1.5 block w-full text-sm shadow-sm ${day.participants.length > 0 && !(day.main_meal || '').trim() ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500' : ''}`}
                                                     value={day.main_meal || ''} 
                                                     onChange={e => handleMealChangeAuto(index, 'main_meal', e.target.value)} 
                                                     disabled={!canEditDutyMeals} 
+                                                    required={day.participants.length > 0}
                                                 />
                                             </div>
                                             <div>
-                                                <InputLabel value="🥗 Alternative Meal" className="text-xs" />
+                                                <InputLabel className="text-xs">
+                                                    🥗 Alternative Meal {day.participants.length > 0 && <span className="text-rose-500 ml-1">*</span>}
+                                                </InputLabel>
                                                 <TextInput 
                                                     placeholder="e.g. Tofu Stir-fry" 
-                                                    className="mt-1.5 block w-full text-sm shadow-sm" 
+                                                    className={`mt-1.5 block w-full text-sm shadow-sm ${day.participants.length > 0 && !(day.alt_meal || '').trim() ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500' : ''}`}
                                                     value={day.alt_meal || ''} 
                                                     onChange={e => handleMealChangeAuto(index, 'alt_meal', e.target.value)} 
                                                     disabled={!canEditDutyMeals} 
+                                                    required={day.participants.length > 0}
                                                 />
                                             </div>
                                         </div>
@@ -500,15 +563,22 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
                                             <div className="absolute top-0 right-0 bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-bl-lg rounded-tr-lg">
                                                 Editing: {activeDay.dayName}
                                             </div>
+                                            {/* 🟢 ADDED: Required validation styling and asterisks */}
                                             <div>
-                                                <InputLabel value="🍗 Main Meal" />
-                                                <TextInput placeholder="e.g. Chicken Adobo w/ Rice" className="mt-1 block w-full text-sm" 
-                                                    value={activeDay.main_meal || ''} onChange={e => handleMealChange('main_meal', e.target.value)} disabled={!canEditDutyMeals} />
+                                                <InputLabel>
+                                                    🍗 Main Meal {(activeDay.participants || []).length > 0 && <span className="text-rose-500 ml-1">*</span>}
+                                                </InputLabel>
+                                                <TextInput placeholder="e.g. Chicken Adobo w/ Rice" 
+                                                    className={`mt-1 block w-full text-sm ${(activeDay.participants || []).length > 0 && !(activeDay.main_meal || '').trim() ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500' : ''}`} 
+                                                    value={activeDay.main_meal || ''} onChange={e => handleMealChange('main_meal', e.target.value)} disabled={!canEditDutyMeals} required={(activeDay.participants || []).length > 0} />
                                             </div>
                                             <div>
-                                                <InputLabel value="🥗 Alternative Meal" />
-                                                <TextInput placeholder="e.g. Tofu Stir-fry" className="mt-1 block w-full text-sm" 
-                                                    value={activeDay.alt_meal || ''} onChange={e => handleMealChange('alt_meal', e.target.value)} disabled={!canEditDutyMeals} />
+                                                <InputLabel>
+                                                    🥗 Alternative Meal {(activeDay.participants || []).length > 0 && <span className="text-rose-500 ml-1">*</span>}
+                                                </InputLabel>
+                                                <TextInput placeholder="e.g. Tofu Stir-fry" 
+                                                    className={`mt-1 block w-full text-sm ${(activeDay.participants || []).length > 0 && !(activeDay.alt_meal || '').trim() ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500' : ''}`} 
+                                                    value={activeDay.alt_meal || ''} onChange={e => handleMealChange('alt_meal', e.target.value)} disabled={!canEditDutyMeals} required={(activeDay.participants || []).length > 0} />
                                             </div>
                                         </div>
                                     </div>
@@ -660,71 +730,107 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
                 )}
             </form>
 
-            {/* 🟢 MULTI-BRANCH REVIEW MODAL */}
-            <Modal show={isMultiBranchModalOpen} onClose={() => setIsMultiBranchModalOpen(false)} maxWidth="2xl">
-                <div className="p-6">
-                    <div className="flex items-center justify-between pb-4 border-b border-gray-200">
-                        <h2 className="text-lg font-bold text-gray-900">Multi-Branch Staff Detected</h2>
-                        <button onClick={() => setIsMultiBranchModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-full">
-                            ✕
-                        </button>
-                    </div>
+            {/* 🟢 UNIFIED PUBLISH CONFIRMATION MODAL */}
+            {isPublishModalOpen && (
+                <div className="fixed inset-0 z-[60] overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+                    <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity animate-backdrop-fade" onClick={() => setIsPublishModalOpen(false)}></div>
 
-                    <p className="text-sm text-gray-600 mt-3">
-                        The following staff members are assigned to multiple branches. Please choose whether to <strong>Keep</strong> or <strong>Remove</strong> them from this roster before publishing:
-                    </p>
-
-                    <div className="mt-4 max-h-[350px] overflow-y-auto divide-y divide-gray-100 border border-gray-200 rounded-lg bg-gray-50">
-                        {multiBranchStaffList.map(emp => {
-                            const isKeeping = keepStaffMap[emp.id] !== false;
-                            const assignedBranchNames = (emp.assigned_branch_ids || []).map(bId => getBranchName(bId)).join(', ');
-
-                            return (
-                                <div key={emp.id} className="p-4 flex items-center justify-between bg-white">
-                                    <div>
-                                        <p className="text-sm font-bold text-gray-900">{emp.name}</p>
-                                        <p className="text-xs text-gray-500 mt-0.5">Assigned Branches: <span className="font-medium text-indigo-600">{assignedBranchNames}</span></p>
-                                    </div>
-
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => setKeepStaffMap(prev => ({ ...prev, [emp.id]: true }))}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                                                isKeeping 
-                                                ? 'bg-indigo-600 text-white shadow-sm' 
-                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                            }`}
-                                        >
-                                            Keep
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setKeepStaffMap(prev => ({ ...prev, [emp.id]: false }))}
-                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                                                !isKeeping 
-                                                ? 'bg-red-600 text-white shadow-sm' 
-                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                            }`}
-                                        >
-                                            Remove
-                                        </button>
-                                    </div>
+                        <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
+                        <div className="inline-block transform overflow-hidden rounded-xl bg-white text-left align-bottom shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:align-middle relative z-10 animate-modal-pop">
+                            <div className="p-6">
+                                <div className="flex items-center justify-between pb-4 border-b border-gray-200">
+                                    <h2 className="text-lg font-bold text-gray-900">Publish Roster Confirmation</h2>
+                                    <button onClick={() => setIsPublishModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-full">
+                                        ✕
+                                    </button>
                                 </div>
-                            );
-                        })}
-                    </div>
 
-                    <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-gray-200">
-                        <SecondaryButton onClick={() => setIsMultiBranchModalOpen(false)}>
-                            Cancel & Review Roster
-                        </SecondaryButton>
-                        <PrimaryButton onClick={handleConfirmPublish}>
-                            Confirm & Publish Roster
-                        </PrimaryButton>
+                                {/* 🟢 FEATURE 1: MISSING SCHEDULES WARNING */}
+                                {missingDepts.length > 0 && (
+                                    <div className="mt-4 p-4 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-3">
+                                        <svg className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        <div>
+                                            <h3 className="text-sm font-bold text-amber-800">Missing Schedules Detected</h3>
+                                            <p className="text-xs text-amber-700 mt-1">
+                                                Some active employees in the following departments do not have Attendance Schedules set for this week and will be excluded from the Duty Meal roster:
+                                            </p>
+                                            <p className="text-xs font-black text-amber-900 mt-2 block">
+                                                {missingDepts.join(', ')}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* EXISTING MULTI-BRANCH LOGIC */}
+                                {multiBranchStaffList.length > 0 && (
+                                    <div className="mt-6">
+                                        <h3 className="text-sm font-bold text-gray-900 mb-2">Multi-Branch Staff Review</h3>
+                                        <p className="text-xs text-gray-600 mb-3">
+                                            The following staff members are assigned to multiple branches. Please choose whether to <strong>Keep</strong> or <strong>Remove</strong> them from this roster:
+                                        </p>
+                                        <div className="max-h-[250px] overflow-y-auto divide-y divide-gray-100 border border-gray-200 rounded-lg bg-gray-50">
+                                            {multiBranchStaffList.map(emp => {
+                                                const isKeeping = keepStaffMap[emp.id] !== false;
+                                                const assignedBranchNames = (emp.assigned_branch_ids || []).map(bId => getBranchName(bId)).join(', ');
+
+                                                return (
+                                                    <div key={emp.id} className="p-4 flex items-center justify-between bg-white">
+                                                        <div>
+                                                            <p className="text-sm font-bold text-gray-900">{emp.name}</p>
+                                                            <p className="text-xs text-gray-500 mt-0.5">Assigned Branches: <span className="font-medium text-indigo-600">{assignedBranchNames}</span></p>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setKeepStaffMap(prev => ({ ...prev, [emp.id]: true }))}
+                                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                                                    isKeeping 
+                                                                    ? 'bg-indigo-600 text-white shadow-sm' 
+                                                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                                }`}
+                                                            >
+                                                                Keep
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setKeepStaffMap(prev => ({ ...prev, [emp.id]: false }))}
+                                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                                                    !isKeeping 
+                                                                    ? 'bg-red-600 text-white shadow-sm' 
+                                                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                                }`}
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-gray-200">
+                                    <SecondaryButton onClick={() => setIsPublishModalOpen(false)}>
+                                        Cancel & Review
+                                    </SecondaryButton>
+                                    {/* 🟢 FEATURE 7: Removed Text Input, restored normal Publish Button */}
+                                    <PrimaryButton 
+                                        onClick={handleConfirmPublish}
+                                        disabled={processing}
+                                    >
+                                        Confirm & Publish Roster
+                                    </PrimaryButton>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </Modal>
+            )}
         </SidebarLayout>
     );
 }
