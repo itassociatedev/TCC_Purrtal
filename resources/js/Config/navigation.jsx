@@ -35,7 +35,7 @@ const normalizeAclPermissionLevel = (value) => {
 export const isUserAdmin = (auth) => {
     if (!auth?.user?.role) return false;
     const roleName = String(auth.user.role.name || '').toLowerCase().trim();
-    return roleName === 'admin';
+    return roleName === 'admin' || roleName === 'executive vice president';
 };
 
 export const hasPermission = (auth, permissionKey) => {
@@ -43,6 +43,14 @@ export const hasPermission = (auth, permissionKey) => {
     if (!normalizedKey || !auth?.user) return false;
 
     if (isUserAdmin(auth)) return true;
+
+    // 🟢 DEFAULT PERMISSION FALLBACK
+    if (normalizedKey === 'duty_meal_personal') {
+        const aclPermissions = auth.user.acl_permissions;
+        if (!aclPermissions || aclPermissions[normalizedKey] === undefined) {
+            return true;
+        }
+    }
 
     const aclPermissions = auth.user.acl_permissions;
     if (aclPermissions && typeof aclPermissions === 'object' && Object.prototype.hasOwnProperty.call(aclPermissions, normalizedKey)) {
@@ -57,12 +65,20 @@ export const hasPermission = (auth, permissionKey) => {
 };
 
 export const getAclPermissionLevel = (auth, permissionKey) => {
+    const normalizedKey = String(permissionKey).trim().toLowerCase();
+
+    // 🟢 DEFAULT PERMISSION FALLBACK
     if (!auth?.user?.acl_permissions) {
+        if (normalizedKey === 'duty_meal_personal') return 'edit';
         return null;
     }
 
-    const normalizedKey = String(permissionKey).trim().toLowerCase();
     const level = auth.user.acl_permissions[normalizedKey];
+
+    // 🟢 DEFAULT PERMISSION FALLBACK (If key doesn't exist yet)
+    if (level === undefined && normalizedKey === 'duty_meal_personal') {
+        return 'edit';
+    }
 
     return level ? String(level).trim().toLowerCase() : null;
 };
@@ -287,6 +303,7 @@ const MODULE_GROUPS = {
         'duty_meal',
         'duty_meal_setup_roster',
         'duty_meal_archive',
+        'duty_meal_personal'
     ],
     dmc: [
         'duty_meal',
@@ -313,6 +330,12 @@ const MODULE_GROUPS = {
         'system_logs',
         'access_control',
     ],
+    attendance: [
+        'attendance_overview',
+        'attendance_setup',
+        'attendance_schedule_view',
+        'attendance_calendar'
+    ]
 };
 
 export const getModulePermissionCount = (auth, prefixOrGroup) => {
@@ -414,6 +437,20 @@ export const getAdminLinks = (auth) => {
         });
     }
 
+    // 🟢 FIXED: Changed from 'admin_overview' to 'attendance_settings'
+    if (hasPermission(auth, 'attendance_settings')) {
+        links.push({
+            label: 'Attendance Settings',
+            href: route('admin.attendance-settings.index'),
+            active: route().current('admin.attendance-settings.*'),
+            icon: () => (
+                <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            )
+        });
+    }
+
     if (hasPermission(auth, 'announcements')) {
         links.push(announcementsLink);
     }
@@ -486,18 +523,22 @@ export const getDocumentSidebarLinks = (categories = [], activeCategory = 'Overv
 
 // Duty Meal Module Links
 export const getDutyMealLinks = (auth) => {
-    // Hide Duty Meal module if user has no duty meal submodule permissions at all
+    // 🟢 NEW: Check if the user has access to ANY part of the duty meal ecosystem
     const hasDutyMealAccess = [
+        'duty_meal',
         'duty_meal_setup_roster',
         'duty_meal_archive',
-    ].some((module) => hasPermission(auth, module));
+        'duty_meal_personal'
+    ].some((module) => hasPermission(auth, module) || canViewModule(auth, module));
 
     if (!hasDutyMealAccess) return [];
 
-    // 🔐 DYNAMIC ACL CHECKS: Show the roster link for view-level access as well as edit/create access.
+    // 🔐 DYNAMIC ACL CHECKS
+    const canViewOverview = canViewModule(auth, 'duty_meal');
     const canSetupRoster = canViewModule(auth, 'duty_meal_setup_roster');
     const canAccessArchive = canViewModule(auth, 'duty_meal_archive');
-    const canViewOverview = canViewModule(auth, 'duty_meal');
+    const canAccessPersonal = canViewModule(auth, 'duty_meal_personal');
+
     const links = [];
 
     if (canViewOverview) {
@@ -522,7 +563,16 @@ export const getDutyMealLinks = (auth) => {
         links.push({
             label: 'Duty Meal Archive',
             href: route('admin.duty-meals.archive'),
-            active:  route().current('admin.duty-meals.archive'),
+            active: route().current('admin.duty-meals.archive'),
+        });
+    }
+
+    // 🟢 NEW: Now strictly governed by the ACL grid!
+    if (canAccessPersonal) {
+        links.push({
+            label: 'My Duty Meals',
+            href: route('staff.duty-meals.index'),
+            active: route().current('staff.duty-meals.index'),
         });
     }
 
@@ -714,4 +764,15 @@ export const getPRPOLinks = (auth) => {
     }
 
     return links;
+};
+
+// 🟢 FIXED: Changed schedule_view to canViewModule so standard staff can route to it
+export const getFirstAttendanceRoute = (auth) => {
+    if (canViewModule(auth, 'attendance_overview')) return route('attendance.overview');
+    if (canViewModule(auth, 'attendance_calendar')) return route('attendance.calendar');
+    if (canViewModule(auth, 'attendance_schedule_view')) return route('attendance.schedule-view');
+    if (canEditModule(auth, 'attendance_setup')) return route('attendance.setup-schedule');
+    
+    // 🟢 FIXED: If they have no access to anything, return null so the UI knows not to route them!
+    return null; 
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, router, usePage } from '@inertiajs/react';
 import { getAdminLinks, canEditModule } from '@/Config/navigation';
@@ -6,14 +6,6 @@ import ConfirmModal from '@/Components/ConfirmModal';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
 
-/**
- * Normalize permission values to standard lowercase format
- * Handles UI strings and database strings interchangeably:
- * "FULL" / "Full" / "Full Access" → "full"
- * "WRITE" / "EDIT" / "Edit" → "edit"
- * "VIEW" / "View" → "view"
- * "NONE" / "No Access" / "no_access" → "no_access"
- */
 const normalizePermissionValue = (value) => {
     if (!value) return 'no_access';
     const normalized = value.toString().trim().toUpperCase();
@@ -23,17 +15,12 @@ const normalizePermissionValue = (value) => {
     return 'no_access';
 };
 
-/**
- * Check if a module should be visible based on normalized permission logic
- * Ensures both UI display labels and database values are handled consistently
- */
 const shouldModuleBeVisible = (permissionLevel) => {
     const normalized = normalizePermissionValue(permissionLevel);
     return normalized !== 'no_access';
 };
 
 const PermissionBadge = ({ level, onClick, disabled }) => {
-    // Normalize level to handle any permission value format
     const normalizedLevel = normalizePermissionValue(level);
     
     const colors = {
@@ -63,46 +50,71 @@ const PermissionBadge = ({ level, onClick, disabled }) => {
     );
 };
 
-const PermissionSelector = ({ currentLevel, onChange, disabled }) => {
-    // Normalize currentLevel to handle any permission value format
+// 🟢 FIXED: Position: Fixed breaks the dropdown completely out of the scrolling table container!
+const PermissionSelector = ({ currentLevel, onChange, disabled, id, activeDropdown, setActiveDropdown }) => {
     const normalizedCurrentLevel = normalizePermissionValue(currentLevel);
-    const [isOpen, setIsOpen] = useState(false);
+    const isOpen = activeDropdown === id;
     const levels = ['full', 'edit', 'view', 'no_access'];
+    
+    const [dropdownStyle, setDropdownStyle] = useState({});
+    const buttonRef = useRef(null);
 
     const toggleOpen = () => {
-        if (disabled) {
-            return;
+        if (disabled) return;
+        
+        if (!isOpen && buttonRef.current) {
+            const rect = buttonRef.current.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom;
+            const isDroppingUp = spaceBelow < 180; // Flip if less than 180px available below
+            
+            setDropdownStyle({
+                position: 'fixed',
+                left: rect.left + (rect.width / 2),
+                transform: 'translateX(-50%)',
+                top: isDroppingUp ? 'auto' : rect.bottom + 4,
+                bottom: isDroppingUp ? window.innerHeight - rect.top + 4 : 'auto',
+                width: '6rem', // w-24 equivalent
+                zIndex: 9999
+            });
         }
-        setIsOpen((prev) => !prev);
+        
+        setActiveDropdown(isOpen ? null : id);
     };
 
+    // Listen for scrolling events to safely close the dropdown so it doesn't float away from the table cell
+    useEffect(() => {
+        const handleScroll = () => {
+            if (isOpen) setActiveDropdown(null);
+        };
+        if (isOpen) {
+            window.addEventListener('scroll', handleScroll, true); // true = capture phase to catch internal div scrolls
+        }
+        return () => window.removeEventListener('scroll', handleScroll, true);
+    }, [isOpen, setActiveDropdown]);
+
     return (
-        <div className="relative inline-block w-full">
-            <PermissionBadge
-                level={normalizedCurrentLevel}
-                onClick={toggleOpen}
-                disabled={disabled}
-            />
+        <div className="relative inline-block w-full acl-dropdown-container">
+            <div ref={buttonRef}>
+                <PermissionBadge
+                    level={normalizedCurrentLevel}
+                    onClick={toggleOpen}
+                    disabled={disabled}
+                />
+            </div>
             {isOpen && !disabled && (
-                <div className="absolute top-full mt-1 bg-white border border-gray-300 rounded shadow-lg z-10 w-24">
+                <div style={dropdownStyle} className="bg-white border border-gray-300 rounded shadow-2xl overflow-hidden">
                     {levels.map((level) => (
                         <button
                             key={level}
                             onClick={() => {
                                 onChange(level);
-                                setIsOpen(false);
+                                setActiveDropdown(null); 
                             }}
                             className={`w-full text-left px-3 py-2 hover:bg-gray-100 text-sm ${
                                 normalizedCurrentLevel === level ? 'bg-blue-50 font-semibold' : ''
                             }`}
                         >
-                            {level === 'full'
-                                ? 'Full'
-                                : level === 'edit'
-                                ? 'Edit'
-                                : level === 'view'
-                                ? 'View'
-                                : 'No Access'}
+                            {level === 'full' ? 'Full' : level === 'edit' ? 'Edit' : level === 'view' ? 'View' : 'No Access'}
                         </button>
                     ))}
                 </div>
@@ -114,7 +126,11 @@ const PermissionSelector = ({ currentLevel, onChange, disabled }) => {
 const ADMIN_MODULE_KEY = 'admin_overview';
 const getPermissionKey = (roleId, module) => `${roleId}||${module}`;
 
-const isAdminRoleName = (roleName) => normalizeText(roleName) === 'admin';
+const isAdminRoleName = (roleName) => {
+    const normalized = normalizeText(roleName);
+    return normalized === 'admin' || normalized === 'executive vice president';
+};
+
 const isDcsORoleName = (roleName) => [
     'director of corporate sales and operations',
     'director of corporate services and operations',
@@ -127,8 +143,6 @@ const flattenAclMatrix = (matrix) => {
     return Object.entries(matrix).reduce((acc, [roleId, roleData]) => {
         const roleIsAdminOrDCSO = isAdminOrDcsORoleName(roleData.role_name);
         Object.entries(roleData.permissions || {}).forEach(([module, level]) => {
-            // Normalize all permission values to ensure consistency across the component
-            // This prevents string mismatches like "FULL" vs "full" or "WRITE" vs "edit"
             const normalizedLevel = roleIsAdminOrDCSO ? 'full' : normalizePermissionValue(level);
             acc[getPermissionKey(roleId, module)] = normalizedLevel;
         });
@@ -151,498 +165,157 @@ const POSITION_ROLE_MAP = {
 const normalizeText = (text) => text?.toString().trim().toLowerCase() || '';
 
 const abbreviationForRole = (roleName) => {
-    if (!roleName) {
-        return '';
-    }
-
+    if (!roleName) return '';
     const lookupKey = normalizeText(roleName);
     return roleAbbreviationMap[lookupKey] ?? roleName;
 };
 
+// ==========================================
+// 🟢 REFACTORED DEFAULT PERMISSIONS SYSTEM
+// ==========================================
+const buildRole = (overrides = {}) => ({
+    'Admin Overview': 'NONE',
+    'Announcements & Notices': 'NONE',
+    'Employee Management': 'NONE',
+    'Company Content Management': 'NONE',
+    'Organizational Directory': 'NONE',
+    'Resource Links': 'NONE',
+    'System Logs & Security': 'NONE',
+    'HR Overview': 'NONE',
+    'Document Requests': 'WRITE',
+    'Form 2316 Approval': 'NONE',
+    'Manpower Request Form': 'NONE',
+    'Approval Board': 'NONE',
+    'Feedback Form': 'WRITE',
+    'PR Form': 'NONE',
+    'PR Approval Board': 'VIEW',
+    'PO Generation': 'NONE',
+    'Products Masterlist': 'NONE',
+    'Duty Meal Overview': 'NONE',
+    'Set Up Roster': 'NONE',
+    'Duty meal Archive': 'NONE',
+    'Attendance Overview': 'VIEW',
+    'Setup Schedule': 'NONE',
+    'Calendar': 'VIEW',
+    'Attendance Settings': 'NONE',
+    'My Duty Meals': 'EDIT',
+    'Document Repository': 'VIEW', // 🟢 Default access set to VIEW for all standard roles
+    ...overrides
+});
+
+const ALL_FULL = {
+    'Admin Overview': 'FULL', 
+    'Announcements & Notices': 'FULL', 
+    'Employee Management': 'FULL',
+    'Company Content Management': 'FULL', 
+    'Organizational Directory': 'FULL', 
+    'Resource Links': 'FULL',
+    'System Logs & Security': 'FULL', 
+    'HR Overview': 'FULL',
+    'Document Requests': 'FULL', 
+    'Form 2316 Approval': 'FULL',
+    'Manpower Request Form': 'FULL', 
+    'Approval Board': 'FULL', 
+    'Feedback Form': 'FULL',
+    'PR Form': 'FULL', 
+    'PR Approval Board': 'FULL', 
+    'PO Generation': 'FULL', 
+    'Products Masterlist': 'FULL',
+    'Duty Meal Overview': 'FULL', 
+    'Set Up Roster': 'FULL', 
+    'Duty meal Archive': 'FULL',
+    'Attendance Overview': 'FULL', 
+    'Setup Schedule': 'FULL', 
+    'Calendar': 'FULL', 
+    'Attendance Settings': 'FULL', 
+    'My Duty Meals': 'FULL',
+    'Document Repository': 'FULL'
+};
+
+const HR_BASE = buildRole({
+    'Announcements & Notices': 'FULL', 
+    'Company Content Management': 'FULL',
+    'HR Overview': 'FULL',
+    'Document Requests': 'FULL',
+    'Form 2316 Approval': 'FULL',
+    'Manpower Request Form': 'FULL', 
+    'Approval Board': 'FULL',
+    'Feedback Form': 'FULL', 
+    'Attendance Overview': 'FULL', 
+    'Setup Schedule': 'FULL',
+    'Calendar': 'FULL',
+    'Document Repository': 'FULL',
+    'Attendance Settings': 'FULL', 
+    'Organizational Directory': 'FULL', 
+});
+
+const TL_BASE = buildRole({
+    'Manpower Request Form': 'WRITE', 
+    'Approval Board': 'VIEW', 
+    'Attendance Overview': 'EDIT', 
+    'Setup Schedule': 'EDIT',
+    'Calendar': 'EDIT'
+});
+
+// only map the DIFFERENCES from the base templates
 const aclDefaultPermissions = {
-  Admin: {
-    'Admin Overview': 'FULL',
-    'Announcements & Notices': 'FULL',
-    'Employee Management': 'FULL',
-    'Company Content Management': 'FULL',
-    'Organizational Directory': 'FULL',
-    'Resource Links': 'FULL',
-    'System Logs & Security': 'FULL',
-    'Document Requests': 'FULL',
-    'Form 2316 Approval': 'FULL',
-    'Manpower Request Form': 'FULL',
-    'Approval Board': 'FULL',
-    'Feedback Form': 'FULL',
-    'PR Form': 'FULL',
-    'PR Approval Board': 'FULL',
-    'PO Generation': 'FULL',
-    'Products Masterlist': 'FULL',
-    'Duty Meal Overview': 'FULL',
-    'Set Up Roster': 'FULL',
-    'Duty meal Archive': 'FULL',
-  },
-  DCSO: {
-    'Admin Overview': 'FULL',
-    'Announcements & Notices': 'FULL',
-    'Employee Management': 'FULL',
-    'Company Content Management': 'FULL',
-    'Organizational Directory': 'FULL',
-    'Resource Links': 'FULL',
-    'System Logs & Security': 'FULL',
-    'Document Requests': 'FULL',
-    'Form 2316 Approval': 'FULL',
-    'Manpower Request Form': 'FULL',
-    'Approval Board': 'FULL',
-    'Feedback Form': 'FULL',
-    'PR Form': 'FULL',
-    'PR Approval Board': 'FULL (Track only and notif based on WF)',
-    'PO Generation': 'FULL (Track only and notif based on WF)',
-    'Products Masterlist': 'FULL',
-    'Duty Meal Overview': 'FULL',
-    'Set Up Roster': 'FULL',
-    'Duty meal Archive': 'FULL',
-  },
-  HRBP: {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'FULL',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'FULL',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'FULL',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'FULL',
-    'Approval Board': 'FULL',
-    'Feedback Form': 'FULL',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW(CC)',
-    'PO Generation': 'NONE',
-    'Products Masterlist': 'NONE',
-    'Duty Meal Overview': 'NONE',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'NONE',
-  },
-  HR: {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'FULL',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'FULL',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'FULL',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'FULL',
-    'Approval Board': 'FULL',
-    'Feedback Form': 'FULL',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW(CC)',
-    'PO Generation': 'NONE',
-    'Products Masterlist': 'NONE',
-    'Duty Meal Overview': 'NONE',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'NONE',
-  },
-  'HR Assistant': {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'FULL',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'FULL',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'FULL',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'FULL',
-    'Approval Board': 'FULL',
-    'Feedback Form': 'FULL',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW(CC)',
-    'PO Generation': 'NONE',
-    'Products Masterlist': 'NONE',
-    'Duty Meal Overview': 'NONE',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'NONE',
-  },
-  'Operations Manager': {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'WRITE',
-    'Approval Board': 'VIEW',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'FULL',
-    'PO Generation': 'NONE',
-    'Products Masterlist': 'NONE',
-    'Duty Meal Overview': 'NONE',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'NONE',
-  },
-  'Chief Vet': {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'WRITE',
-    'Approval Board': 'VIEW',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW(CC)',
-    'PO Generation': 'NONE',
-    'Products Masterlist': 'NONE',
-    'Duty Meal Overview': 'NONE',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'NONE',
-  },
-  'Vet Tech TL': {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'WRITE',
-    'Approval Board': 'VIEW',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW(CC)',
-    'PO Generation': 'NONE',
-    'Products Masterlist': 'NONE',
-    'Duty Meal Overview': 'NONE',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'NONE',
-  },
-  'Clinic Assistant TL': {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'WRITE',
-    'Approval Board': 'VIEW',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW(CC)',
-    'PO Generation': 'NONE',
-    'Products Masterlist': 'NONE',
-    'Duty Meal Overview': 'NONE',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'NONE',
-  },
-  'Cashier TL': {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'WRITE',
-    'Approval Board': 'VIEW',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW(CC)',
-    'PO Generation': 'NONE',
-    'Products Masterlist': 'NONE',
-    'Duty Meal Overview': 'NONE',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'NONE',
-  },
-  'Inventory TL': {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'WRITE',
-    'Approval Board': 'VIEW',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'FULL',
-    'PR Approval Board': 'FULL',
-    'PO Generation': 'VIEW',
-    'Products Masterlist': 'VIEW',
-    'Duty Meal Overview': 'NONE',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'NONE',
-  },
-  'Inventory Assistant': {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'NONE',
-    'Approval Board': 'NONE',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'WRITE',
-    'PR Approval Board': 'VIEW',
-    'PO Generation': 'VIEW',
-    'Products Masterlist': 'VIEW',
-    'Duty Meal Overview': 'NONE',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'NONE',
-  },
-  'Housekeeping TL': {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'WRITE',
-    'Approval Board': 'VIEW',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW(CC)',
-    'PO Generation': 'NONE',
-    'Products Masterlist': 'NONE',
-    'Duty Meal Overview': 'FULL',
-    'Set Up Roster': 'FULL',
-    'Duty meal Archive': 'FULL',
-  },
-  'Marketing Manager': {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'WRITE',
-    'Approval Board': 'VIEW',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW(CC)',
-    'PO Generation': 'NONE',
-    'Products Masterlist': 'NONE',
-    'Duty Meal Overview': 'NONE',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'NONE',
-  },
-  'Procurement TL': {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'WRITE',
-    'Approval Board': 'VIEW',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW',
-    'PO Generation': 'FULL',
-    'Products Masterlist': 'FULL',
-    'Duty Meal Overview': 'NONE',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'NONE',
-  },
-  'Procurement Assistant': {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'NONE',
-    'Approval Board': 'NONE',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW',
-    'PO Generation': 'FULL',
-    'Products Masterlist': 'FULL',
-    'Duty Meal Overview': 'VIEW',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'VIEW',
-  },
-  'Auditor TL': {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'WRITE',
-    'Approval Board': 'VIEW',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW',
-    'PO Generation': 'VIEW',
-    'Products Masterlist': 'VIEW',
-    'Duty Meal Overview': 'VIEW',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'VIEW',
-  },
-  'Audit Assist': {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'NONENONE',
-    'Approval Board': 'NONENONE',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW',
-    'PO Generation': 'VIEW',
-    'Products Masterlist': 'NONE',
-    'Duty Meal Overview': 'NONE',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'NONE',
-  },
-  'General Accounting': {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'FULL',
-    'Manpower Request Form': 'WRITE',
-    'Approval Board': 'VIEW',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW(CC)',
-    'PO Generation': 'NONE',
-    'Products Masterlist': 'NONE',
-    'Duty Meal Overview': 'NONE',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'NONE',
-  },
-  'IT TL': {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'NONENONE',
-    'Approval Board': 'NONENONE',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW(CC)',
-    'PO Generation': 'NONE',
-    'Products Masterlist': 'NONE',
-    'Duty Meal Overview': 'FULL',
-    'Set Up Roster': 'FULL',
-    'Duty meal Archive': 'FULL',
-  },
-  'Duty Meal Custodian': {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'WRITE',
-    'Approval Board': 'VIEW',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW(CC)',
-    'PO Generation': 'NONE',
-    'Products Masterlist': 'NONE',
-    'Duty Meal Overview': 'NONE',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'NONE',
-  },
-  Employee: {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'NONENONE',
-    'Approval Board': 'NONENONE',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW(CC)',
-    'PO Generation': 'NONE',
-    'Products Masterlist': 'NONE',
-    'Duty Meal Overview': 'FULL',
-    'Set Up Roster': 'FULL',
-    'Duty meal Archive': 'FULL',
-  },
-  Intern: {
-    'Admin Overview': 'NONE',
-    'Announcements & Notices': 'NONE',
-    'Employee Management': 'NONE',
-    'Company Content Management': 'NONE',
-    'Organizational Directory': 'NONE',
-    'Resource Links': 'NONE',
-    'System Logs & Security': 'NONE',
-    'Document Requests': 'WRITE',
-    'Form 2316 Approval': 'NONE',
-    'Manpower Request Form': 'NONENONE',
-    'Approval Board': 'NONENONE',
-    'Feedback Form': 'WRITE',
-    'PR Form': 'NONE',
-    'PR Approval Board': 'VIEW(CC)',
-    'PO Generation': 'NONE',
-    'Products Masterlist': 'NONE',
-    'Duty Meal Overview': 'NONE',
-    'Set Up Roster': 'NONE',
-    'Duty meal Archive': 'NONE',
-  },
+    'Admin': ALL_FULL,
+    'Executive Vice President': ALL_FULL,
+    'DCSO': ALL_FULL,
+    'HRBP': HR_BASE,
+    'HR': HR_BASE,
+    'HR Assistant': HR_BASE,
+    'Operations Manager': { ...TL_BASE, 
+                    'PR Approval Board': 'FULL' },
+    'Chief Vet': TL_BASE,
+    'Vet Tech TL': TL_BASE,
+    'Clinic Assistant TL': TL_BASE,
+    'Cashier TL': TL_BASE,
+    'Inventory TL': { ...TL_BASE, 
+                    'PR Form': 'FULL', 
+                    'PR Approval Board': 'FULL', 
+                    'PO Generation': 'VIEW', 
+                    'Products Masterlist': 'VIEW' 
+                },
+    'Inventory Assistant': buildRole({ 
+                    'PR Form': 'WRITE', 
+                    'PO Generation': 'VIEW', 
+                    'Products Masterlist': 'VIEW'
+                }),
+    'Housekeeping TL': { ...TL_BASE, 
+                    'Duty Meal Overview': 'FULL', 
+                    'Set Up Roster': 'FULL', 
+                    'Duty meal Archive': 'FULL' 
+                },
+    'Marketing Manager': TL_BASE,
+    'Procurement TL': { ...TL_BASE, 
+                    'PO Generation': 'FULL', 
+                    'Products Masterlist': 'FULL' 
+                },
+    'Procurement Assistant': buildRole({ 
+                    'PO Generation': 'FULL', 
+                    'Products Masterlist': 'FULL', 
+                    'Duty Meal Overview': 'VIEW', 
+                    'Duty meal Archive': 'VIEW'
+                }),
+    'Auditor TL': { ...TL_BASE, 
+                    'PO Generation': 'VIEW', 
+                    'Products Masterlist': 'VIEW', 
+                    'Duty Meal Overview': 'VIEW', 
+                    'Duty meal Archive': 'VIEW' 
+                },
+    'Audit Assist': buildRole({ 'PO Generation': 'VIEW' }),
+    'General Accounting': { ...TL_BASE, 'Form 2316 Approval': 'FULL' },
+    'IT TL': { ...ALL_FULL,
+                },
+    'Duty Meal Custodian': buildRole({
+                    'Duty Meal Overview': 'FULL', 
+                    'Set Up Roster': 'FULL', 
+                    'Duty meal Archive': 'FULL'
+                }),
+    'Point of Contact': buildRole({}), // 🟢 Added with standard base access
+    'Employee': buildRole({}),
+    'Intern': buildRole({}),
 };
 
 const DEFAULT_ACL_SETTINGS = aclDefaultPermissions;
@@ -679,10 +352,18 @@ const MODULE_NAME_KEY_OVERRIDES = {
   'duty meal overview': 'duty_meal',
   'set up roster': 'duty_meal_setup_roster',
   'supplier management': 'suppliers',
+  'attendance overview': 'attendance_overview',
+  'setup schedule': 'attendance_setup',
+  'calendar': 'attendance_calendar',
+  'personal calendar': 'attendance_calendar',
+  'attendance settings': 'attendance_settings', 
+  'my duty meals': 'duty_meal_personal', 
+  'document repository': 'documents'
 };
 
 const POSITION_ORDER = [
     'Admin',
+    'Executive Vice President', // placed EVP at the top, sheesh lezgoo RRS
     'DCSO',
     'HRBP',
     'HR',
@@ -703,18 +384,16 @@ const POSITION_ORDER = [
     'General Accounting',
     'IT TL',
     'Duty Meal Custodian',
+    'Point of Contact', // New, incase no TL for a dept.
     'Employee',
     'Intern',
 ];
 
 const getPositionSortOrder = (roleName) => {
     if (!roleName) return Number.MAX_SAFE_INTEGER;
-
-    // Use the abbreviation (display name) to match against POSITION_ORDER
     const abbrev = abbreviationForRole(roleName);
     const normalizedAbbrev = normalizeText(abbrev);
     const positionIndex = POSITION_ORDER.findIndex((position) => normalizeText(position) === normalizedAbbrev);
-
     return positionIndex === -1 ? Number.MAX_SAFE_INTEGER : positionIndex;
 };
 
@@ -722,19 +401,15 @@ const sortRolesByPositionOrder = (roles = []) => {
     return [...roles].sort((a, b) => {
         const orderA = getPositionSortOrder(a?.name);
         const orderB = getPositionSortOrder(b?.name);
-
         if (orderA !== orderB) {
             return orderA - orderB;
         }
-
         return normalizeText(a?.name || '').localeCompare(normalizeText(b?.name || ''));
     });
 };
 
 const roleMatchesQuery = (roleName, query) => {
-    if (!roleName || !query) {
-        return true;
-    }
+    if (!roleName || !query) return true;
 
     const normalizedRole = normalizeText(roleName);
     const normalizedAbbrev = normalizeText(roleAbbreviationMap[normalizedRole] || '');
@@ -755,10 +430,6 @@ const parsePermissionKey = (key) => {
     return { roleId, module };
 };
 
-/**
- * MultiSelectPositionDropdown Component
- * Allows users to select multiple positions using checkboxes in a dropdown
- */
 const MultiSelectPositionDropdown = ({
     allPositions,
     selectedPositions,
@@ -769,14 +440,12 @@ const MultiSelectPositionDropdown = ({
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = React.useRef(null);
 
-    // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
                 setIsOpen(false);
             }
         };
-
         if (isOpen) {
             document.addEventListener('mousedown', handleClickOutside);
             return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -804,7 +473,6 @@ const MultiSelectPositionDropdown = ({
 
     return (
         <div className="relative inline-block w-full" ref={dropdownRef}>
-            {/* Dropdown Trigger Button */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 disabled={disabled}
@@ -819,15 +487,11 @@ const MultiSelectPositionDropdown = ({
                         ? `Select ${label.toLowerCase()}...`
                         : `${selectedPositions.length} ${label.toLowerCase()} selected`}
                 </span>
-                <span className={`transform transition ${isOpen ? 'rotate-180' : ''}`}>
-                    ▼
-                </span>
+                <span className={`transform transition ${isOpen ? 'rotate-180' : ''}`}>▼</span>
             </button>
 
-            {/* Dropdown Menu */}
             {isOpen && !disabled && (
                 <div className="absolute top-full left-0 right-0 z-50 mt-2 bg-white border border-gray-300 rounded-md shadow-lg">
-                    {/* Select All Option */}
                     <div className="border-b border-gray-200 p-2">
                         <label className="flex items-center gap-3 px-3 py-2 rounded hover:bg-gray-100 cursor-pointer">
                             <input
@@ -847,7 +511,6 @@ const MultiSelectPositionDropdown = ({
                         </label>
                     </div>
 
-                    {/* Position Options */}
                     <div className="max-h-72 overflow-y-auto">
                         {allPositions.map((position) => (
                             <label
@@ -865,7 +528,6 @@ const MultiSelectPositionDropdown = ({
                         ))}
                     </div>
 
-                    {/* Footer with Action Buttons */}
                     <div className="border-t border-gray-200 p-3 flex gap-2">
                         <button
                             onClick={() => setIsOpen(false)}
@@ -894,6 +556,19 @@ const MultiSelectPositionDropdown = ({
 export default function AccessControl({ roles, modules, groupedModules, aclMatrix, permissionLevels }) {
     const { flash, auth } = usePage().props;
     const adminLinks = getAdminLinks(auth);
+    
+    const [activeDropdown, setActiveDropdown] = useState(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (!event.target.closest('.acl-dropdown-container')) {
+                setActiveDropdown(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     const [permissions, setPermissions] = useState(() => flattenAclMatrix(aclMatrix));
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState(null);
@@ -935,7 +610,6 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
             }
         }
 
-        // Fallback: try substring matches (loose matching)
         for (const sectionModules of Object.values(groupedModules || {})) {
             for (const [moduleKey, moduleName] of Object.entries(sectionModules)) {
                 const nm = normalizeText(moduleName);
@@ -1049,7 +723,6 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
         const allPositions = Object.keys(DEFAULT_ACL_SETTINGS);
         setLoading(true);
 
-        // Collect permissions for ALL positions
         let allPermissionsArray = [];
         let allMissingModules = [];
 
@@ -1069,7 +742,6 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
             return;
         }
 
-        // Send all permissions to the server
         router.post(route('admin.access-control.bulk-update'), {
             permissions: allPermissionsArray,
         }, {
@@ -1102,7 +774,6 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
         const positionCount = selectedResetPositions.length;
         setLoading(true);
 
-        // Collect permissions for SELECTED positions only
         let selectedPermissionsArray = [];
         let selectedMissingModules = [];
 
@@ -1122,7 +793,6 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
             return;
         }
 
-        // Send selected permissions to the server
         router.post(route('admin.access-control.bulk-update'), {
             permissions: selectedPermissionsArray,
         }, {
@@ -1168,9 +838,6 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
         const permissionKey = getPermissionKey(roleId, module);
         const normalizedLevel = normalizePermissionValue(newLevel);
 
-        // Create a fresh deep object copy to ensure React detects the state change
-        // This is critical for modules like "Admin Overview" and "Form 2316 Approval"
-        // that depend on permission value normalization
         setPermissions((prev) => {
             const updated = { ...prev };
             updated[permissionKey] = normalizedLevel;
@@ -1186,7 +853,6 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
             if (isAdminRoleName(role?.name)) {
                 return acc;
             }
-            // Ensure permission level is normalized before sending to server
             const normalizedLevel = normalizePermissionValue(level);
             acc.push({
                 role_id: parseInt(roleId, 10),
@@ -1221,35 +887,17 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
         handleSaveAll();
     };
 
-    const handleReset = (roleId) => {
-        if (!canEditAccessControl) {
-            return;
-        }
-
-        if (confirm('Are you sure you want to reset all permissions for this role to No Access?')) {
-            router.post(route('admin.access-control.reset'), {
-                role_id: roleId,
-            }, {
-                onSuccess: () => {
-                    router.reload();
-                },
-            });
-        }
-    };
-
     return (
         <SidebarLayout activeModule="Admin" sidebarLinks={adminLinks} user={auth.user}>
             <Head title="Access Control" />
 
             <div className="max-w-7xl mx-auto px-4 py-8">
-                {/* Success Message */}
                 {message && message.type === 'success' && (
                     <div className="mb-6 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg">
                         ✓ {message.text}
                     </div>
                 )}
 
-                {/* Header */}
                 <div className="mb-8">
                     <div>
                         <h1 className="text-3xl font-bold text-gray-900">Access Control Management</h1>
@@ -1259,9 +907,6 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
                     </div>
                 </div>
 
-                {/* Quick Actions removed (replaced later) */}
-
-                {/* Legend */}
                 <div className="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
                     <h2 className="font-semibold text-gray-900 mb-3">Permission Levels</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -1288,7 +933,6 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
                     </div>
                 </div>
 
-                {/* ACL Grouped Sections */}
                 {Object.keys(groupedModules || {}).length === 0 ? (
                     <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-6 text-sm text-yellow-900">
                         No ACL modules are available.
@@ -1307,22 +951,21 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
                             return (
                             <div key={sectionTitle} className="bg-white rounded-lg border border-gray-200 shadow-sm">
                                 <button
-                                                    type="button"
-                                                    onClick={() => toggleSection(sectionTitle)}
-                                                    className="w-full flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50 hover:bg-gray-100 focus:outline-none"
-                                                >
-                                                    <div className="flex-1 text-left">
-                                                        <h3 className="text-lg font-semibold text-gray-900">{sectionTitle}</h3>
-                                                        <p className="text-sm text-gray-600">
-                                                            Manage permissions for the {sectionTitle.toLowerCase()}.
-                                                        </p>
-                                                    </div>
-                                                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white border border-gray-300 text-gray-700">
-                                                        {expanded ? '−' : '+'}
-                                                    </span>
-                                                </button>
+                                    type="button"
+                                    onClick={() => toggleSection(sectionTitle)}
+                                    className="w-full flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50 hover:bg-gray-100 focus:outline-none"
+                                >
+                                    <div className="flex-1 text-left">
+                                        <h3 className="text-lg font-semibold text-gray-900">{sectionTitle}</h3>
+                                        <p className="text-sm text-gray-600">
+                                            Manage permissions for the {sectionTitle.toLowerCase()}.
+                                        </p>
+                                    </div>
+                                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white border border-gray-300 text-gray-700">
+                                        {expanded ? '−' : '+'}
+                                    </span>
+                                </button>
 
-                                {/* Always-visible per-tab search */}
                                 <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
                                     <label htmlFor={`acl-search-${sectionTitle}`} className="block text-sm font-medium text-gray-700 mb-2">
                                         Search position in this tab
@@ -1387,6 +1030,9 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
                                                                             className="px-4 py-4 text-center"
                                                                         >
                                                                             <PermissionSelector
+                                                                                id={permissionKey}
+                                                                                activeDropdown={activeDropdown}
+                                                                                setActiveDropdown={setActiveDropdown}
                                                                                 currentLevel={
                                                                                     roleIsAdminOrDCSO
                                                                                         ? 'full'
@@ -1414,7 +1060,6 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
                     </div>
                 )}
 
-                {/* Action Buttons */}
                 <div className="mt-8 flex flex-col gap-4">
                     {!canEditAccessControl && (
                         <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-900">
@@ -1441,7 +1086,6 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
                     confirmColor="bg-blue-600 hover:bg-blue-500 focus:bg-blue-500 active:bg-blue-700"
                 />
 
-                {/* Reset Single Position Confirmation Modal */}
                 <ConfirmModal
                     show={confirmResetOpen}
                     onClose={() => setConfirmResetOpen(false)}
@@ -1452,7 +1096,6 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
                     confirmColor="bg-orange-600 hover:bg-orange-500 focus:bg-orange-500 active:bg-orange-700"
                 />
 
-                {/* Reset Selected Positions Confirmation Modal */}
                 <ConfirmModal
                     show={confirmBulkSelectedOpen}
                     onClose={() => setConfirmBulkSelectedOpen(false)}
@@ -1463,7 +1106,6 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
                     confirmColor="bg-orange-600 hover:bg-orange-500 focus:bg-orange-500 active:bg-orange-700"
                 />
 
-                {/* Reset All Positions Confirmation Modal */}
                 <ConfirmModal
                     show={confirmBulkAllOpen}
                     onClose={() => setConfirmBulkAllOpen(false)}
@@ -1477,7 +1119,6 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
                 <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <h3 className="font-semibold text-blue-900 mb-3">Quick Actions</h3>
                     
-                    {/* Section 1: Reset Selected Positions (New Multi-Select Dropdown) */}
                     <div className="mb-6 pb-6 border-b border-blue-200">
                         <h4 className="text-sm font-medium text-blue-800 mb-3">
                             Reset Multiple Positions via Dropdown
@@ -1508,7 +1149,6 @@ export default function AccessControl({ roles, modules, groupedModules, aclMatri
                         </div>
                     </div>
 
-                    {/* Section 3: Reset All Positions */}
                     <div>
                         <h4 className="text-sm font-medium text-blue-800 mb-3">Reset All Positions</h4>
                         <PrimaryButton
