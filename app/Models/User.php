@@ -58,6 +58,7 @@ class User extends Authenticatable
         // Add ANY future top-level roles to this array!
         $allowedRoles = [
             'admin',
+            'executive vice president', // 🟢 Added EVP LEZGO RRS
             'director of corporate services and operations',
             'hrbp',
             'hr assistant'
@@ -164,6 +165,13 @@ class User extends Authenticatable
 
         if ($acl) {
             return strtolower(trim($acl->permission_level));
+        }
+        
+        // 🟢 DEFAULT PERMISSION FALLBACK
+        // If the ACL entry doesn't exist in the database at all, 
+        // default to 'edit' so all staff can access their personal duty meals.
+        if ($normalizedModule === 'duty_meal_personal') {
+            return 'edit';
         }
 
         if (strtolower(trim($this->role->name)) === strtolower(trim(config('admin-acl.superadmin_role', 'admin')))) {
@@ -296,5 +304,29 @@ class User extends Authenticatable
     public function hasPermission(string $permission): bool
     {
         return $this->canAccessModule($permission);
+    }
+
+    public function schedule()
+    {
+        return $this->hasOne(Schedule::class);
+    }
+
+    public function schedules()
+    {
+        return $this->hasMany(Schedule::class);
+    }
+
+    // override sched
+    public function scheduleOverrides()
+    {
+        return $this->hasMany(ScheduleOverride::class);
+    }
+
+    /**
+     * Get the duty meal selections for the user.
+     */
+    public function dutyMealParticipants()
+    {
+        return $this->hasMany(\App\Models\DutyMealParticipant::class, 'user_id');
     }
 }

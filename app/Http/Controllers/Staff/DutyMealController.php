@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Staff;
 use App\Models\User;
 use App\Http\Controllers\Controller;
 use App\Models\DutyMealParticipant;
+use App\Models\SystemLog; // 🟢 INJECTED FOR LOGGING
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Notification;
@@ -17,14 +18,15 @@ class DutyMealController extends Controller
 {
     public function index(Request $request)
     {
+        // 🟢 NEW: Enforce ACL Security for Personal Meals
+        if (!\Illuminate\Support\Facades\Auth::user()->canViewModule('duty_meal_personal')) {
+            abort(403, 'You do not have permission to access Personal Duty Meals.');
+        }
+
         $user = $request->user();
         $now = now();
 
-        // 🟢 1. The "Force Main" Rule (3 Days before Roster Week)
-        $pendingParticipants = DutyMealParticipant::with('dutyMeal')
-            ->where('user_id', $user->id)
-            ->where('choice', 'none')
-            ->get();
+        $pendingParticipants = DutyMealParticipant::with('dutyMeal')->where('user_id', $user->id)->where('choice', 'none')->get();
 
         foreach ($pendingParticipants as $participant) {
             if ($participant->dutyMeal) {
@@ -47,23 +49,20 @@ class DutyMealController extends Controller
             ->where('user_id', $user->id)
             ->whereHas('dutyMeal', function ($query) {
                 $query->whereDate('duty_date', '>=', now()->startOfWeek());
-            })
-            ->get() 
-            ->map(function ($participant) {
+            })->get()->map(function ($participant) {
                 return [
                     'participant_id' => $participant->id,
                     'choice' => $participant->choice,
-                    'site' => $participant->site, // Added Site mapping
+                    'site' => $participant->site, 
                     'custom_request' => $participant->custom_request,
-                    'duty_date' => $participant->dutyMeal->duty_date,
+                    'duty_date' => Carbon::parse($participant->dutyMeal->duty_date)->format('Y-m-d'), // 🟢 FIXED: Force Y-m-d string here
                     'main_meal' => $participant->dutyMeal->main_meal,
                     'alt_meal' => $participant->dutyMeal->alt_meal,
                     'is_locked' => $participant->dutyMeal->is_locked,
                     'branch_name' => $participant->dutyMeal->branch->name ?? 'Unknown',
+                    'branch_id' => $participant->dutyMeal->branch_id,
                 ];
-            })
-            ->sortByDesc('duty_date')
-            ->values();
+            })->sortByDesc('duty_date')->values();
 
         return Inertia::render('Staff/Duty Meals/Index', [
             'myDutyMeals' => $myDutyMeals,
@@ -78,18 +77,14 @@ class DutyMealController extends Controller
             'selections.*.participant_id' => 'required|exists:duty_meal_participants,id',
             // ADDED 'special' to the allowed choices below!
             'selections.*.choice' => 'required|in:main,alt,special',
-            'selections.*.site' => 'nullable|string|in:Back Office,Clinic', // Validating Site
+            'selections.*.site' => 'nullable|string|in:Back Office,Clinic', 
             'selections.*.custom_request' => 'nullable|string|max:255',
         ]);
 
         $userId = Auth::id();
         $participantIds = collect($request->selections)->pluck('participant_id');
         
-        $participants = DutyMealParticipant::with('dutyMeal')
-            ->whereIn('id', $participantIds)
-            ->where('user_id', $userId)
-            ->get()
-            ->keyBy('id');
+        $participants = DutyMealParticipant::with('dutyMeal')->whereIn('id', $participantIds)->where('user_id', $userId)->get()->keyBy('id');
 
         $updatedCount = 0;
         $firstUpdated = null;
@@ -103,7 +98,7 @@ class DutyMealController extends Controller
                 if ($participant && !$participant->dutyMeal->is_locked && $participant->choice === 'none') {
                     $participant->update([
                         'choice' => $selection['choice'],
-                        'site' => $selection['site'] ?? null, // Save Site
+                        'site' => $selection['site'] ?? null, 
                         'custom_request' => $selection['custom_request'],
                     ]);
                     $updatedCount++;
@@ -116,7 +111,20 @@ class DutyMealController extends Controller
             }
         });
 
-        // 🟢 4. Notify Admins exactly ONCE for the whole week
+        // 🟢 SYSTEM LOGGING (Tracks User Self-Service)
+        if ($updatedCount > 0) {
+            try {
+                SystemLog::create([
+                    'user_id' => Auth::id(),
+                    'action' => 'Update',
+                    'module' => 'Duty Meal Participant',
+                    'description' => "User self-locked {$updatedCount} duty meal choices for the week.",
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent()
+                ]);
+            } catch (\Exception $e) {}
+        }
+
         if ($updatedCount > 0 && $firstUpdated) {
             $firstUpdated->load('user'); 
             
