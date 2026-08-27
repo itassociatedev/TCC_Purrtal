@@ -180,7 +180,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                 // 🟢 The Magic Switch: Only shows yellow if it was manually overridden in UI!
                 isOverride: override.is_manual,
                 wasModifiedManual: override.was_modified, // 🟢 BUG FIX 1
-                baseHadShift
+                baseHadShift 
             };
         }
 
@@ -197,7 +197,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                     endTime: dayConfig.shift_end,
                     isOverride: false,
                     wasModifiedManual: false,
-                    baseHadShift
+                    baseHadShift 
                 };
             }
 
@@ -210,7 +210,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                 endTime: activeSchedule.end_time,
                 isOverride: false,
                 wasModifiedManual: false,
-                baseHadShift
+                baseHadShift 
             };
         }
 
@@ -223,7 +223,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
             endTime: null,
             isOverride: false,
             wasModifiedManual: false,
-            baseHadShift: false
+            baseHadShift: false 
         };
     };
 
@@ -943,12 +943,14 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                         {/* 🟢 ROW 2: TIMETABLE OVERVIEW, SLIDER & CUTOFF ACTIONS */}
                         <div className="bg-white border-b border-gray-100 p-4 sm:px-6 sm:py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                             <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
-                                <h3 className="text-xl font-bold text-gray-800">
+                                {/* 🟢 BUG FIX: Locked the width of the Header to prevent UI shifting */}
+                                <h3 className="text-xl font-bold text-gray-800 w-32 sm:w-36 shrink-0">
                                     {batchViewMode === 'weekly' ? 'Weekly Grid' : batchViewMode === 'cutoff' ? 'Cut-off Grid' : 'Monthly Grid'}
                                 </h3>
                                 <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-lg border border-gray-200">
                                     <button onClick={handlePrevBatchRange} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-gray-600 shadow-sm hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">&larr;</button>
-                                    <span className="text-sm font-medium text-gray-700 w-auto min-w-[200px] px-2 text-center">{currentGridHeader}</span>
+                                    {/* 🟢 BUG FIX: Locked the width of the Date Container to prevent UI shifting */}
+                                    <span className="text-sm font-medium text-gray-700 w-[200px] sm:w-[240px] shrink-0 px-2 text-center">{currentGridHeader}</span>
                                     <button onClick={handleNextBatchRange} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-gray-600 shadow-sm hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">&rarr;</button>
                                 </div>
                             </div>
@@ -1094,7 +1096,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                                             )}
                                                             
                                                             {week.map(day => {
-                                                                // 🟢 FIXED: Create distinct grey blank cell blocks for extra grid spaces
+                                                                // Empty padded cells for days that fall outside the active cut-off/monthly boundary
                                                                 if (day.isOutOfBounds) {
                                                                     return (
                                                                         <td key={day.dateString} className="px-1 py-1.5 align-middle border-l border-gray-100">
@@ -1267,21 +1269,19 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                         {/* 🟢 ROW 2: TIMETABLE OVERVIEW & SLIDER & CUTOFF */}
                         <div className="bg-white border-b border-gray-100 p-4 sm:px-6 sm:py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                             <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
-                                <h3 className="text-xl font-bold text-gray-800">Monthly Calendar</h3>
+                                {/* 🟢 BUG FIX: Locked the width of the Header to prevent UI shifting */}
+                                <h3 className="text-xl font-bold text-gray-800 w-32 sm:w-36 shrink-0">
+                                    {batchViewMode === 'weekly' ? 'Weekly Grid' : batchViewMode === 'cutoff' ? 'Cut-off Grid' : 'Monthly Grid'}
+                                </h3>
                                 <div className="flex items-center gap-2 bg-gray-50 p-1 rounded-lg border border-gray-200">
-                                    <button 
-                                        onClick={handlePrevMonth}
-                                        className="flex items-center justify-center w-10 h-10 rounded-md border border-gray-300 bg-white text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
-                                    >
+                                    <button onClick={handlePrevMonth} className="flex items-center justify-center w-10 h-10 rounded-md border border-gray-300 bg-white text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors">
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
                                     </button>
-                                    <div className="flex items-center justify-center w-40 h-10 rounded-md border border-gray-300 bg-white text-sm font-black text-gray-800 shadow-sm select-none">
+                                    {/* 🟢 BUG FIX: Locked the width of the Date Container to prevent UI shifting */}
+                                    <div className="flex items-center justify-center w-[200px] sm:w-[240px] shrink-0 h-10 rounded-md border border-gray-300 bg-white text-sm font-black text-gray-800 shadow-sm select-none text-center">
                                         {monthNames[currentMonth]} {currentYear}
                                     </div>
-                                    <button 
-                                        onClick={handleNextMonth}
-                                        className="flex items-center justify-center w-10 h-10 rounded-md border border-gray-300 bg-white text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
-                                    >
+                                    <button onClick={handleNextMonth} className="flex items-center justify-center w-10 h-10 rounded-md border border-gray-300 bg-white text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors">
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
                                     </button>
                                 </div>
@@ -1290,17 +1290,6 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                             {/* 🟢 MOVED: Cutoff Dropdown and Highlight Toggle replicated to Single View */}
                             <div className="flex flex-wrap items-center gap-3">
                                 
-                                {/* 🟢 FEATURE 3: Copy to Others Button (Only visible if active schedule exists) */}
-                                {canEditSchedule && singleEmployee && (
-                                    <button 
-                                        onClick={() => setShowCopyToOthersModal(true)}
-                                        className="flex items-center justify-center gap-2 rounded-md border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-700 shadow-sm hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
-                                    >
-                                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                                        Copy Sched to Others
-                                    </button>
-                                )}
-
                                 {/* 🟢 FEATURE 1: Current Cut-off Button in Single View */}
                                 <button 
                                     onClick={() => {
