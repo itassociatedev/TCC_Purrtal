@@ -34,6 +34,8 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use App\Http\Controllers\AttendanceController;
+use App\Http\Controllers\Admin\AttendanceSettingsController;
 
 Route::get('/', function () {
     return Inertia::render('Auth/Login', []);
@@ -158,7 +160,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // --- ORGANIZATIONAL CHART (USER VIEW) ---
     Route::get('/dashboard/org-chart', [OrgChartController::class, 'userIndex'])->name('dashboard.org-chart');
 
-    Route::get('/admin/documents', [DocumentController::class, 'index'])
+    Route::get('/documents', [DocumentController::class, 'index'])
         ->middleware('auth', 'admin_acl:documents')
         ->name('admin.documents.index');
 
@@ -178,7 +180,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/permissions/clear-session-cache', [PermissionController::class, 'clearSessionCache'])->name('permissions.clear-session-cache');
 
     // Staff Duty Meal Routes
-    Route::get('/my-duty-meals', [\App\Http\Controllers\Staff\DutyMealController::class, 'index'])->name('staff.duty-meals.index');
+    Route::get('/duty-meals/my-duty-meals', [\App\Http\Controllers\Staff\DutyMealController::class, 'index'])->name('staff.duty-meals.index');
     Route::patch('/my-duty-meals/{participantId}/choice', [\App\Http\Controllers\Staff\DutyMealController::class, 'updateChoice'])->name('staff.duty-meals.choice');
     Route::post('/duty-meals/bulk-lock-in', [App\Http\Controllers\Staff\DutyMealController::class, 'bulkLockIn'])
     ->name('staff.duty-meals.bulk-lock-in');
@@ -321,8 +323,8 @@ Route::middleware(['guest'])->group(function () {
 });
 
 Route::middleware(['auth', CheckDutyMealAccess::class])->group(function () {
-    Route::get('/admin/duty-meals', [DutyMealController::class, 'index'])->name('admin.duty-meals.index');
-    Route::get('/admin/duty-meals/create', [DutyMealController::class, 'create'])->name('admin.duty-meals.create');
+    Route::get('/duty-meals/overview', [DutyMealController::class, 'index'])->name('admin.duty-meals.index');
+    Route::get('/duty-meals/set-up', [DutyMealController::class, 'create'])->name('admin.duty-meals.create');
     Route::post('/admin/duty-meals', [DutyMealController::class, 'store'])->name('admin.duty-meals.store');
     Route::patch('admin/duty-meals/{id}/update-meals', [DutyMealController::class, 'updateMeals'])->name('admin.duty-meals.update-meals');
     Route::patch('admin/participants/{id}/update-choice', [DutyMealController::class, 'updateParticipantChoice'])->name('admin.participants.update-choice');
@@ -415,5 +417,33 @@ Route::prefix('prpo')->name('prpo.')->middleware(['auth'])->group(function () {
     Route::get('/purchase-orders/{purchaseOrder}/print', [PurchaseOrderController::class, 'print'])->name('purchase-orders.print');
     Route::get('/prpo/status', [PRPOStatusController::class, 'index'])->name('status.index');
 });
+
+// --- ATTENDANCE MODULE NI MARX HAHAHAHAH ---
+Route::prefix('attendance')->middleware(['auth'])->group(function () {
+    Route::get('/overview', [AttendanceController::class, 'overview'])->name('attendance.overview');
+    Route::get('/setup-schedule', [AttendanceController::class, 'setupSchedule'])->name('attendance.setup-schedule');
+    Route::get('/schedule-view', [AttendanceController::class, 'scheduleView'])->name('attendance.schedule-view');
+    Route::get('/calendar', [AttendanceController::class, 'calendar'])->name('attendance.calendar');
+});
+
+Route::post('/setup-schedule', [AttendanceController::class, 'storeSchedule'])->name('attendance.setup-schedule.store');
+Route::post('/schedule-override', [AttendanceController::class, 'storeOverride'])->name('attendance.schedule-override.store');
+
+Route::get('admin/attendance-settings', [AttendanceSettingsController::class, 'index'])->name('admin.attendance-settings.index');
+Route::post('/attendance-settings/shift', [AttendanceSettingsController::class, 'storeShift'])->name('admin.attendance-settings.store-shift');
+Route::put('/admin/attendance-settings/shift/{id}', [\App\Http\Controllers\Admin\AttendanceSettingsController::class, 'updateShift'])->name('admin.attendance-settings.update-shift');
+Route::delete('/admin/attendance-settings/shift/{id}', [\App\Http\Controllers\Admin\AttendanceSettingsController::class, 'deleteShift'])->name('admin.attendance-settings.delete-shift');
+Route::post('/attendance-settings/cutoffs', [AttendanceSettingsController::class, 'updateCutoffs'])->name('admin.attendance-settings.update-cutoffs');
+
+Route::post('/attendance/schedule-override/reset', [\App\Http\Controllers\AttendanceController::class, 'resetOverride'])->name('attendance.schedule-override.reset');
+
+Route::delete('/admin/attendance-settings/shift/{id}', [\App\Http\Controllers\Admin\AttendanceSettingsController::class, 'deleteShift'])->name('admin.attendance-settings.delete-shift');
+
+Route::get('/attendance/export-overview', [\App\Http\Controllers\AttendanceController::class, 'exportOverview'])->name('attendance.export-overview');
+
+Route::post('/admin/attendance-settings/holiday', [AttendanceSettingsController::class, 'storeHoliday'])->name('admin.attendance-settings.store-holiday');
+Route::delete('/admin/attendance-settings/holiday/{id}', [AttendanceSettingsController::class, 'deleteHoliday'])->name('admin.attendance-settings.delete-holiday');
+
+Route::post('/attendance/setup-schedule/import', [App\Http\Controllers\AttendanceController::class, 'importSchedule'])->name('attendance.setup-schedule.import');
 
 require __DIR__.'/auth.php';

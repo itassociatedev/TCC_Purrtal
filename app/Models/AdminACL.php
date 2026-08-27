@@ -74,6 +74,7 @@ class AdminACL extends Model
     {
         return [
             'admin_overview' => 'Admin Overview',
+            'attendance_settings' => 'Attendance Settings',
             'employees' => 'Employee Management',
             'company_content' => 'Company Content Management',
             'resource_links' => 'Resource Links',
@@ -85,6 +86,7 @@ class AdminACL extends Model
             'duty_meal' => 'Duty Meal Management',
             'duty_meal_setup_roster' => 'Set Up Roster',
             'duty_meal_archive' => 'Duty Meal Archive',
+            'duty_meal_personal' => 'My Duty Meals',
             'access_control' => 'Access Control',
             'form_2316_approvals' => 'Form 2316 Approvals',
             'manpower_requests_form' => 'Manpower Request Form',
@@ -94,6 +96,9 @@ class AdminACL extends Model
             'purchase_requests' => 'Purchase Requests',
             'approval_board' => 'Approval Board',
             'purchase_orders' => 'Purchase Orders',
+            'attendance_overview' => 'Attendance Overview',
+            'attendance_setup' => 'Setup Schedule',
+            'attendance_calendar' => 'Calendar',
         ];
     }
 
@@ -105,6 +110,7 @@ class AdminACL extends Model
         return [
             'Admin Module' => [
                 'admin_overview' => 'Admin Overview',
+                'attendance_settings' => 'Attendance Settings',
                 'announcements' => 'Announcements & Notices',
                 'employees' => 'Employee Management',
                 'company_content' => 'Company Content Management',
@@ -117,6 +123,7 @@ class AdminACL extends Model
                 'hr_overview' => 'HR Overview',
                 'documents' => 'Document Requests',
                 'form_2316_approvals' => 'Form 2316 Approvals',
+                'documents' => 'Document Repository',
                 'manpower_requests_form' => 'Manpower Request Form',
                 'approval_board_hr' => 'Approval Board',
                 'feedback_form' => 'Feedback Form',
@@ -125,6 +132,12 @@ class AdminACL extends Model
                 'duty_meal' => 'Duty Meal Management',
                 'duty_meal_setup_roster' => 'Set Up Roster',
                 'duty_meal_archive' => 'Duty Meal Archive',
+                'duty_meal_personal' => 'My Duty Meals',
+            ],
+            'Attendance Module' => [
+                'attendance_overview' => 'Attendance Overview',
+                'attendance_setup' => 'Setup Schedule',
+                'attendance_calendar' => 'Calendar',
             ],
             'PR/PO Module' => [
                 'products' => 'Products Masterlist',
