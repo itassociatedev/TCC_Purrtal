@@ -10,6 +10,7 @@ use Inertia\Inertia;
 use App\Imports\ProductsImport;
 use App\Exports\ProductsExport;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\ProductTemplateExport;
 
 // Product controller: product CRUD, import/export, status toggling
 class ProductController extends Controller
@@ -143,7 +144,7 @@ public function update(Request $request, Product $product)
             $file = fopen('php://output', 'w');
             
             // Template headers and example row
-            fputcsv($file, ['supplier_name', 'product_name', 'unit', 'details', 'price']);
+            fputcsv($file, ['Supplier Name', 'Product Name', 'Measurement', 'Description', 'Price']);
             fputcsv($file, ['Example Supplier Inc.', 'Paracetamol 500mg', 'BOX', 'Box of 100 tablets', '150.50']);
             
             fclose($file);

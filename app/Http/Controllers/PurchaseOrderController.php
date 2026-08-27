@@ -51,8 +51,11 @@ class PurchaseOrderController extends Controller
         if ($view === 'action_needed') {
             if (in_array($userRole, ['procurement assist', 'procurement tl'])) {
                 $query->where('status', 'drafted'); // Procurement must edit and submit drafts
-            } elseif ($userRole === 'director of corporate services and operations') {
-                $query->where('status', 'pending_approval'); // DCSO must approve submitted POs
+                
+            // 🚩 TIER 5 ROUTING: Send to EVP instead of DCSO
+            } elseif (str_contains($userRole, 'evp') || str_contains($userRole, 'president')) {
+                $query->where('status', 'pending_approval'); // EVP must approve submitted POs
+                
             } elseif ($userRole === 'admin') {
                 $query->whereIn('status', ['drafted', 'pending_approval']);
             }
@@ -63,14 +66,13 @@ class PurchaseOrderController extends Controller
                 $q->where('user_id', Auth::id());
             });
         }
-        // If $view === 'all', it naturally bypasses the above and loads everything.
 
         $purchaseOrders = $query->paginate(15)->withQueryString();
 
         return Inertia::render('PRPO/PurchaseOrdersIndex', [
             'purchaseOrders' => $purchaseOrders,
             'currentView' => $view,
-            'isRestrictedRole' => $isRestricted // 🟢 4. Pass the restriction flag to React
+            'isRestrictedRole' => $isRestricted
         ]);
     }
 
@@ -80,7 +82,6 @@ class PurchaseOrderController extends Controller
     public function update(Request $request, PurchaseOrder $purchaseOrder)
     {
         // 🔐 ACL CHECK: Verify user can EDIT purchase_orders
-        // Permission Hierarchy: Full only can edit
         $user = Auth::user();
         if (!$user->canEditModule('purchase_orders')) {
             abort(403, 'You do not have permission to update purchase orders.');
@@ -94,11 +95,16 @@ class PurchaseOrderController extends Controller
             return back()->withErrors(['status' => 'Procurement Assistants are only authorized to Save Drafts. Please contact your TL to submit.']);
         }
 
+        // 🚩 TIER 5 SECURITY CHECK: Only the EVP can finalize the PO
+        if ($requestedStatus === 'approved' && !str_contains($userRole, 'evp') && !str_contains($userRole, 'president') && $userRole !== 'admin') {
+            return back()->withErrors(['status' => 'Unauthorized Action. Only the Executive Vice President can give final approval for Purchase Orders.']);
+        }
+
         $validated = $request->validate([
             'delivery_date' => 'nullable|date',
             'payment_terms' => 'nullable|string|max:255',
             'ship_to' => 'nullable|string|max:255',
-            'no_of_quotations' => 'required|integer|min:0', // 🟢 NEW REQUIREMENT
+            'no_of_quotations' => 'required|integer|min:0', 
             'discount_total' => 'nullable|numeric|min:0',
             'vat_rate' => 'nullable|numeric|min:0|max:100', 
             'status' => 'required|in:drafted,pending_approval,approved,cancelled',
@@ -164,7 +170,7 @@ class PurchaseOrderController extends Controller
             'delivery_date' => $validated['delivery_date'],
             'payment_terms' => $validated['payment_terms'],
             'ship_to' => $validated['ship_to'],
-            'no_of_quotations' => $validated['no_of_quotations'], // 🟢 SAVE NEW FIELD
+            'no_of_quotations' => $validated['no_of_quotations'], 
             'gross_amount' => $grossAmount,
             'discount_total' => $discount,
             'net_of_discount' => $netOfDiscount,
@@ -180,26 +186,32 @@ class PurchaseOrderController extends Controller
         $originalRequester = $purchaseOrder->purchaseRequest->user ?? null;
 
         if ($status === 'pending_approval') {
-            $message = 'Purchase Order submitted to DCSO for approval.';
-            $dcsoUsers = User::whereHas('role', function($q) {
-                $q->where('name', 'like', '%director%')->orWhere('name', 'admin');
+            $message = 'Purchase Order submitted to the Executive Vice President for final approval.';
+            
+            // 🚩 Ping the EVP
+            $evpUsers = User::whereHas('role', function($q) {
+                $q->where('name', 'like', '%evp%')->orWhere('name', 'like', '%president%')->orWhere('name', 'admin');
             })->get();
             
-            if ($dcsoUsers->isNotEmpty()) {
-                Notification::send($dcsoUsers, new POStatusUpdate($purchaseOrder, "Requires DCSO Approval"));
+            if ($evpUsers->isNotEmpty()) {
+                Notification::send($evpUsers, new POStatusUpdate($purchaseOrder, "Requires Executive Vice President Final Approval"));
             }
+            
         } elseif ($status === 'approved') {
-            $message = 'Purchase Order has been officially Approved by DCSO!';
+            $message = 'Purchase Order has been officially Approved by the Executive Vice President!';
+            
+            // Ping Procurement
             $procurementUsers = User::whereHas('role', function($q) {
                 $q->where('name', 'like', '%procurement%')->orWhere('name', 'admin');
             })->get();
             
             if ($procurementUsers->isNotEmpty()) {
-                Notification::send($procurementUsers, new POStatusUpdate($purchaseOrder, "Officially Approved by DCSO!"));
+                Notification::send($procurementUsers, new POStatusUpdate($purchaseOrder, "Officially Approved by the Executive Vice President!"));
             }
             if ($originalRequester) {
                 $originalRequester->notify(new POStatusUpdate($purchaseOrder, "Great news! Your items have been officially ordered."));
             }
+            
         } elseif ($status === 'cancelled') {
             $message = 'Purchase Order has been cancelled.';
             if ($originalRequester) {
@@ -213,7 +225,7 @@ class PurchaseOrderController extends Controller
         if ($status === 'approved' && $ccUser) {
             $ccUser->notify(new PRPOCcStatusUpdate($purchaseOrder, 'PO', "Items on a request you are copied on have been officially ordered."));
         } elseif ($status === 'cancelled' && $ccUser) {
-            $ccUser->notify(new PRPOCcStatusUpdate($purchaseOrder, 'PO', "Notice: A Purchase Order for a request you are copied on was cancelled."));
+            $ccUser->notify(new PRPOCcStatusUpdate($purchaseOrder, 'PO', "Notice: Your Purchase Order request was cancelled."));
         }
 
         return back()->with('success', $message);
@@ -229,10 +241,10 @@ class PurchaseOrderController extends Controller
         }
 
         $userRole = strtolower(trim(Auth::user()->role->name ?? ''));
-        $allowedRoles = ['procurement assist', 'procurement tl', 'director of corporate services and operations', 'admin'];
+        $allowedRoles = ['procurement assist', 'procurement tl', 'president', 'admin'];
         
         if (!in_array($userRole, $allowedRoles)) {
-            abort(403, 'Unauthorized Action. Only Procurement or Directors can generate Purchase Orders.');
+            abort(403, 'Unauthorized Action. Only the Procurement or the Executive Vice President can generate Purchase Orders.');
         }
 
         if ($purchaseRequest->status !== 'approved') {
@@ -319,7 +331,7 @@ class PurchaseOrderController extends Controller
 
         $ccUser = $purchaseRequest->cc_user; 
         if ($ccUser) {
-            $ccUser->notify(new PRPOCcStatusUpdate($purchaseRequest, 'PR', "A request you are copied on is being processed into Purchase Orders."));
+            $ccUser->notify(new PRPOCcStatusUpdate($purchaseRequest, 'PR', "Your Purchase Request is being processed into Purchase Orders."));
         }
 
         return back()->with('success', 'Purchase Orders drafted successfully! You can now review them.');
