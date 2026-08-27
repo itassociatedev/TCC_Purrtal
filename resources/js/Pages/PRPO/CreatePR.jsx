@@ -404,13 +404,13 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                                 <thead className="bg-gray-50 text-gray-700">
                                     <tr>
                                         <th className="px-3 py-3 text-center font-semibold w-12">#</th>
-                                        <th className="px-3 py-3 text-left font-semibold min-w-[220px]">Product / Item Code</th>
-                                        <th className="px-3 py-3 text-left font-semibold min-w-[150px]">Specifications / Notes</th>
+                                        <th className="px-3 py-3 text-left font-semibold min-w-[220px]">Product Name</th>
+                                        <th className="px-3 py-3 text-left font-semibold min-w-[150px]">Description</th>
                                         <th className="px-3 py-3 text-left font-semibold w-20">Unit</th>
-                                        <th className="px-3 py-3 text-left font-semibold w-24">Qty Req.</th>
-                                        <th className="px-3 py-3 text-left font-semibold w-24">Qty Hand</th>
+                                        <th className="px-3 py-3 text-left font-semibold w-24">Requested Quantity</th>
+                                        <th className="px-3 py-3 text-left font-semibold w-24">Stock Quantity</th>
                                         <th className="px-3 py-3 text-left font-semibold w-24">Reorder</th>
-                                        <th className="px-3 py-3 text-left font-semibold min-w-[200px]">Preferred Supplier</th>
+                                        <th className="px-3 py-3 text-left font-semibold min-w-[200px]">Supplier Name</th>
                                         <th className="px-3 py-3 text-left font-semibold w-28">Unit Cost</th>
                                         <th className="px-3 py-3 text-left font-semibold w-32">Total Cost</th>
                                         <th className="px-3 py-3 text-left font-semibold w-12"></th>
@@ -432,7 +432,7 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                                             : suppliers;
 
                                         return (
-                                            <tr key={index} className="hover:bg-gray-50/50">
+                                            <tr key={index} className="hover:bg-gray-50/50 font-semibold">
                                                 <td className="whitespace-nowrap px-3 py-2 text-center text-gray-500 font-medium">{index + 1}</td>
                                                 
                                                 <td className="whitespace-nowrap px-3 py-2">
@@ -474,7 +474,7 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                                                         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2">
                                                             <span className="text-gray-400 text-xs">₱</span>
                                                         </div>
-                                                        <input type="number" value={item.est_unit_cost} readOnly placeholder="0.00" className="block w-full rounded-md border-gray-200 bg-gray-100 text-gray-500 pl-6 text-xs shadow-sm cursor-not-allowed focus:ring-0"/>
+                                                        <input type="number" value={item.est_unit_cost} placeholder="0.00" className="block w-full rounded-md border-gray-200 text-gray-500 pl-6 text-xs shadow-sm focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"/>
                                                     </div>
                                                 </td>
                                                 <td className="whitespace-nowrap px-3 py-2">
@@ -489,7 +489,7 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                                                     {data.items.length > 1 && (
                                                         <button type="button" onClick={() => removeItemRow(index)} className="text-red-400 hover:text-red-600 bg-white hover:bg-red-50 border border-transparent hover:border-red-100 rounded p-1.5 transition-colors">
                                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                                                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                                             </svg>
                                                         </button>
                                                     )}

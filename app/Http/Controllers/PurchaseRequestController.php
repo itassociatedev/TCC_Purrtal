@@ -460,7 +460,7 @@ if ($isGreenhillsAssistant || $isInventoryTL) {
                 $purchaseRequest->rejection_reason = null;
 
                 $message =
-                    'Purchase request approved by Operations Manager and forwarded to Procurement.';
+                    'Purchase request approved by Operations Manager and forwarded to Procurement Team Leader.';
 
                 break;
 
@@ -474,7 +474,7 @@ if ($isGreenhillsAssistant || $isInventoryTL) {
                 $purchaseRequest->rejection_reason = null;
 
                 $message =
-                    'Purchase request approved by Procurement Team Lead and forwarded to the EVP for final approval.';
+                    'Purchase request approved by Procurement Team Lead and forwarded to the Executive Vice President for final approval.';
 
                 break;
 
