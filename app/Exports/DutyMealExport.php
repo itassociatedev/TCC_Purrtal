@@ -30,7 +30,17 @@ class DutyMealExport implements FromView, ShouldAutoSize, WithStyles
         $weeks = [];
 
         foreach ($meals as $meal) {
-            $date = Carbon::parse($meal->duty_date);
+            // 🟢 BUG FIX: Prevent Carbon crash if duty_date is corrupted
+            if (empty($meal->duty_date)) {
+                continue;
+            }
+
+            try {
+                $date = Carbon::parse($meal->duty_date);
+            } catch (\Exception $e) {
+                continue;
+            }
+
             // Group everything by the start of the week (Monday)
             $weekStart = $date->copy()->startOfWeek()->format('M d, Y');
             
@@ -60,14 +70,14 @@ class DutyMealExport implements FromView, ShouldAutoSize, WithStyles
             $dayKey = $date->format('Y-m-d');
             
             foreach ($meal->participants as $p) {
-                // Ignore if they haven't chosen a meal yet
-                if (!in_array($p->choice, ['main', 'alt', 'special'])) {
+                // Safely extract and validate the choice
+                $choice = strtolower(trim((string)($p->choice ?? '')));
+                if (!in_array($choice, ['main', 'alt', 'special'])) {
                     continue;
                 }
 
-                $site = strtolower(trim($p->site ?? 'Clinic'));
-                $shift = strtolower(trim($p->shift_type ?? 'day'));
-                $choice = strtolower(trim($p->choice));
+                $site = strtolower(trim((string)($p->site ?? 'Clinic')));
+                $shift = strtolower(trim((string)($p->shift_type ?? 'day')));
 
                 $catsToIncrement = [];
                 
@@ -78,7 +88,6 @@ class DutyMealExport implements FromView, ShouldAutoSize, WithStyles
                     if ($shift === 'graveyard') {
                         $catsToIncrement[] = 'clinic_dinner';
                     } elseif ($shift === 'straight') {
-                        // 🟢 FIXED: Straight shifts get tallied in BOTH Lunch and Dinner
                         $catsToIncrement[] = 'clinic_lunch';
                         $catsToIncrement[] = 'clinic_dinner';
                     } else {
@@ -86,22 +95,29 @@ class DutyMealExport implements FromView, ShouldAutoSize, WithStyles
                     }
                 }
 
+                $rawRequest = trim((string)($p->custom_request ?? ''));
+
                 // Increment the counters
                 foreach ($catsToIncrement as $cat) {
                     $weeks[$weekStart]['days'][$dayKey][$cat]['total']++;
                     $weeks[$weekStart]['days'][$dayKey][$cat][$choice]++;
                     
                     // Format any special requests or notes
-                    if (!empty($p->custom_request)) {
-                        // 🟢 Extract strictly First Name and Last Name
-                        if ($p->user) {
-                            $nameParts = explode(' ', trim($p->user->name));
-                            $name = count($nameParts) > 1 ? $nameParts[0] . ' ' . end($nameParts) : $nameParts[0];
-                        } else {
-                            $name = 'Staff';
+                    if ($rawRequest !== '') {
+                        $rawName = 'Staff';
+                        
+                        // 🟢 BUG FIX: Verify the user account wasn't deleted before attempting to read the name
+                        if (!empty($p->user) && !empty($p->user->name)) {
+                            $nameParts = explode(' ', trim((string)$p->user->name));
+                            $rawName = count($nameParts) > 1 ? $nameParts[0] . ' ' . end($nameParts) : $nameParts[0];
                         }
                         
-                        $weeks[$weekStart]['days'][$dayKey][$cat]['notes'][] = $name . ': ' . $p->custom_request;
+                        // 🟢 CRITICAL FIX: Convert "&" symbols and "ñ" characters into safe HTML entities
+                        // This prevents PhpSpreadsheet's DOMDocument from crashing violently when parsing the View
+                        $safeName = htmlspecialchars($rawName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                        $safeRequest = htmlspecialchars($rawRequest, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+                        
+                        $weeks[$weekStart]['days'][$dayKey][$cat]['notes'][] = $safeName . ': ' . $safeRequest;
                     }
                 }
             }
