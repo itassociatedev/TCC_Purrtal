@@ -162,103 +162,289 @@ if ($isGreenhillsAssistant || $isInventoryTL) {
     // =====================================================================
     // APPROVAL BOARD (View Requests based on Role)
     // =====================================================================
-  public function approvalBoard(Request $request)
-    {
-        /** @var \App\Models\User $user */
-        $user = Auth::user();
-        $userRole = strtolower($user->role->name ?? '');
-        $userBranches = $user->branches()->pluck('name')->toArray(); 
-        
-        $isAssistant = str_contains($userRole, 'assist');
-        $defaultView = $isAssistant ? 'my_requests' : 'action_needed';
-        $view = $request->query('view', $defaultView);
+  // =====================================================================
+// APPROVAL BOARD
+// =====================================================================
+public function approvalBoard(Request $request)
+{
+    /** @var \App\Models\User $user */
+    $user = Auth::user();
 
-        $query = PurchaseRequest::with(['user', 'cc_user', 'items.product', 'items.supplier'])->latest();
-        $isAdmin = str_contains($userRole, 'admin');
+    $userRole = strtolower(trim($user->role->name ?? ''));
+    $userBranches = $user->branches()->pluck('name')->toArray();
 
-        if ($view === 'action_needed') {
-            if ($isAdmin) {
+    // -------------------------------------------------------------
+    // ROLE FLAGS
+    // -------------------------------------------------------------
+    $isAdmin = str_contains($userRole, 'admin');
+    $isEVP = $user->role_id === 9;
 
-    $query->whereIn('status', [
-    'pending_inv_tl',
-    'pending_ops_manager',
-    'pending_procurement',
-    'pending_evp_final',
-    'approved',
-]);
+    $isInventoryTL = str_contains($userRole, 'inventory tl');
 
-} elseif ($user->role_id === 9) {
+    $isOperationsManager =
+        str_contains($userRole, 'operations manager') ||
+        str_contains($userRole, 'ops manager');
 
-    // EVP:
-    // 1. OM fallback approval
-    // 2. Final approval after Procurement TL
-    $query->whereIn('status', [
-        'pending_ops_manager',
-        'pending_evp_final',
-    ]);
+    $isProcurementTL = str_contains($userRole, 'procurement tl');
 
-} elseif (str_contains($userRole, 'inventory tl')) {
+    $isProcurementAssistant = str_contains($userRole, 'procurement assist');
 
-    $query->where('status', 'pending_inv_tl');
+    $isProcurementUser =
+        $isProcurementTL ||
+        $isProcurementAssistant ||
+        $isAdmin;
 
-    if (!empty($userBranches)) {
-        $query->whereIn('branch', $userBranches);
+    // -------------------------------------------------------------
+    // CURRENT TAB
+    // -------------------------------------------------------------
+    $view = $request->query('view', 'my_requests');
+
+    $allowedViews = [
+        'my_requests',
+        'for_approval',
+        'for_generation',
+        'po_generated',
+        'history',
+    ];
+
+    if (!in_array($view, $allowedViews, true)) {
+        $view = 'my_requests';
     }
 
-} elseif (
-    str_contains($userRole, 'operations') ||
-    str_contains($userRole, 'ops manager')
-) {
+    // -------------------------------------------------------------
+    // BASE QUERY
+    // -------------------------------------------------------------
+    $query = PurchaseRequest::with([
+        'user',
+        'cc_user',
+        'items.product',
+        'items.supplier',
+        'purchaseOrders',
+    ])->latest();
 
-    $query->where('status', 'pending_ops_manager');
+    // =============================================================
+    // 1. MY REQUESTS
+    // =============================================================
+    if ($view === 'my_requests') {
 
-    if (!empty($userBranches)) {
-        $query->whereIn('branch', $userBranches);
+        // PRs created by the logged-in user
+        $query->where('user_id', $user->id);
     }
 
-} elseif (str_contains($userRole, 'procurement tl')) {
+    // =============================================================
+    // 2. FOR APPROVAL
+    // =============================================================
+    elseif ($view === 'for_approval') {
 
-    // Procurement TL only sees PRs waiting for their approval
-    $query->where('status', 'pending_procurement');
+        // ---------------------------------------------------------
+        // ADMIN
+        // ---------------------------------------------------------
+        if ($isAdmin || $isEVP) {
 
-} else {
+            $query->whereIn('status', [
+                'pending_inv_tl',
+                'pending_ops_manager',
+                'pending_procurement',
+                'pending_evp_final',
+            ]);
+        }
 
-    $query->whereRaw('1 = 0');
-}
-        } 
-        elseif ($view === 'my_requests') {
-            $query->where('user_id', $user->id);
-        } 
-        else {
-            if (!$isAdmin && !empty($userBranches)) {
+        // ---------------------------------------------------------
+        // EVP
+        //
+        // EVP can act as:
+        // 1. OM fallback
+        // 2. Final EVP approval
+        // ---------------------------------------------------------
+//         elseif ($isEVP) {
+
+//     $query->whereIn('status', [
+//         'pending_inv_tl',
+//         'pending_ops_manager',
+//         'pending_procurement',
+//         'pending_evp_final',
+//     ]);
+// }
+
+        // ---------------------------------------------------------
+        // INVENTORY TEAM LEADER
+        // ---------------------------------------------------------
+        elseif ($isInventoryTL) {
+
+            $query->where(
+                'status',
+                'pending_inv_tl'
+            );
+
+            if (!empty($userBranches)) {
                 $query->whereIn('branch', $userBranches);
             }
         }
 
-        $requests = $query->paginate(15)->withQueryString();
+        // ---------------------------------------------------------
+        // OPERATIONS MANAGER
+        // ---------------------------------------------------------
+        elseif ($isOperationsManager) {
 
-        // 🟢 Fetch lookup data so the Edit Modal can add new items/departments
-        $suppliers = Supplier::select('id', 'name')->get();
-        $products = Product::select('id', 'name', 'supplier_id', 'details', 'unit', 'price')->get();
-        $branches = Branch::select('id', 'name')->get();
-        $departments = Department::select('id', 'name')->get();
-        $employees =   User::with('branches:id,name')->where('id', '!=', Auth::id())->select('id', 'name')->orderBy('name')->get();
+            $query->where(
+                'status',
+                'pending_ops_manager'
+            );
 
-        return Inertia::render('PRPO/ApprovalBoard', [
-            'requests' => $requests,
-            'currentView' => $view,
-            'userBranches' => $userBranches, 
-            'isAssistant' => $isAssistant, 
-            'canSeeAll' => $isAdmin || str_contains($userRole, 'director'),
-            
-            // 🟢 Pass data to React
-            'suppliers' => $suppliers,
-            'products' => $products,
-            'branches' => $branches,
-            'departments' => $departments,
-            'employees' => $employees,
-        ]);
+            if (!empty($userBranches)) {
+                $query->whereIn('branch', $userBranches);
+            }
+        }
+
+        // ---------------------------------------------------------
+        // PROCUREMENT TEAM LEADER
+        // ---------------------------------------------------------
+        elseif ($isProcurementTL) {
+
+            $query->where(
+                'status',
+                'pending_procurement'
+            );
+        }
+
+        // ---------------------------------------------------------
+        // EVERYONE ELSE
+        //
+        // Inventory Assistant / Procurement Assistant / etc.
+        // do not have approval items.
+        // ---------------------------------------------------------
+        else {
+
+            $query->whereRaw('1 = 0');
+        }
     }
+
+    // =============================================================
+    // 3. PO GENERATION
+    // =============================================================
+    elseif ($view === 'for_generation') {
+
+        // Only Procurement and Admin should access this queue.
+        if (!$isProcurementUser) {
+
+            $query->whereRaw('1 = 0');
+
+        } else {
+
+            // Fully approved PRs waiting for PO creation.
+            $query->where('status', 'approved');
+
+            // Procurement users can be restricted by their branches
+            // if they are assigned to specific branches.
+            if (!$isAdmin && !empty($userBranches)) {
+                $query->whereIn('branch', $userBranches);
+            }
+        }
+    }
+
+    // =============================================================
+    // 4. PO GENERATED
+    // =============================================================
+    elseif ($view === 'po_generated') {
+
+        $query->where('status', 'po_generated');
+
+        if (!$isAdmin && !empty($userBranches)) {
+            $query->whereIn('branch', $userBranches);
+        }
+    }
+
+    // =============================================================
+    // 5. PURCHASE REQUEST HISTORY
+    // =============================================================
+    elseif ($view === 'history') {
+
+        // Approved PRs remain in history even after the PO is generated.
+        $query->whereIn('status', [
+            'approved',
+            'po_generated',
+        ]);
+
+        if (!$isAdmin && !empty($userBranches)) {
+            $query->whereIn('branch', $userBranches);
+        }
+    }
+
+    // -------------------------------------------------------------
+    // PAGINATION
+    // -------------------------------------------------------------
+    $requests = $query
+        ->paginate(15)
+        ->withQueryString();
+
+    // -------------------------------------------------------------
+    // LOOKUP DATA
+    // -------------------------------------------------------------
+    $suppliers = Supplier::select(
+        'id',
+        'name'
+    )->get();
+
+    $products = Product::select(
+        'id',
+        'name',
+        'supplier_id',
+        'details',
+        'unit',
+        'price'
+    )->get();
+
+    $branches = Branch::select(
+        'id',
+        'name'
+    )->get();
+
+    $departments = Department::select(
+        'id',
+        'name'
+    )->get();
+
+    $employees = User::with(
+        'branches:id,name'
+    )
+        ->where('id', '!=', Auth::id())
+        ->select(
+            'id',
+            'name'
+        )
+        ->orderBy('name')
+        ->get();
+
+    // -------------------------------------------------------------
+    // RETURN APPROVAL BOARD
+    // -------------------------------------------------------------
+    return Inertia::render('PRPO/ApprovalBoard', [
+        'requests' => $requests,
+
+        'currentView' => $view,
+
+        'userBranches' => $userBranches,
+
+        'isAssistant' => str_contains(
+            $userRole,
+            'assist'
+        ),
+
+        'canSeeAll' =>
+            $isAdmin ||
+            str_contains($userRole, 'director'),
+
+        'suppliers' => $suppliers,
+
+        'products' => $products,
+
+        'branches' => $branches,
+
+        'departments' => $departments,
+
+        'employees' => $employees,
+    ]);
+}
 
     // =====================================================================
     // UPDATE STATUS (Approve / Reject Logic)
@@ -682,90 +868,90 @@ if ($isGreenhillsAssistant || $isInventoryTL) {
 }
 
 
-    // public function update(Request $request, $id)
-    // {
-    //     // 🔐 ACL CHECK: Verify user can EDIT purchase_requests (not just approve)
-    //     // Permission Hierarchy: Full only can edit existing requests
-    //     $user = Auth::user();
-    //     if (!$user->canEditModule('purchase_requests')) {
-    //         abort(403, 'You do not have permission to update purchase requests.');
-    //     }
+    public function update(Request $request, $id)
+    {
+        // 🔐 ACL CHECK: Verify user can EDIT purchase_requests (not just approve)
+        // Permission Hierarchy: Full only can edit existing requests
+        $user = Auth::user();
+        if (!$user->canEditModule('purchase_requests')) {
+            abort(403, 'You do not have permission to update purchase requests.');
+        }
 
-    //     $pr = PurchaseRequest::findOrFail($id);
+        $pr = PurchaseRequest::findOrFail($id);
 
-    //     $validated = $request->validate([
-    //         'branch' => 'required|string|max:255',
-    //         'department' => 'required|string|max:255',
-    //         'request_type' => 'nullable|string|max:255',
-    //         'priority' => 'nullable|string|max:255',
-    //         'date_needed' => 'nullable|date',
-    //         'budget_status' => 'nullable|string|max:255',
-    //         'budget_ref' => 'nullable|string|max:255',
-    //         'purpose_of_request' => 'nullable|string',
-    //         'impact_if_not_procured' => 'nullable|string',
-    //         'cc_user_id' => 'nullable|exists:users,id',
+        $validated = $request->validate([
+            'branch' => 'required|string|max:255',
+            'department' => 'required|string|max:255',
+            'request_type' => 'nullable|string|max:255',
+            'priority' => 'nullable|string|max:255',
+            'date_needed' => 'nullable|date',
+            'budget_status' => 'nullable|string|max:255',
+            'budget_ref' => 'nullable|string|max:255',
+            'purpose_of_request' => 'nullable|string',
+            'impact_if_not_procured' => 'nullable|string',
+            'cc_user_id' => 'nullable|exists:users,id',
 
-    //         'items' => 'required|array|min:1',
-    //         'items.*.id' => 'nullable|exists:purchase_request_items,id',
-    //         'items.*.product_id' => 'required|exists:products,id',
-    //         'items.*.supplier_id' => 'nullable|exists:suppliers,id',
-    //         'items.*.specifications' => 'nullable|string|max:255',
-    //         'items.*.unit' => 'nullable|string|max:50',
-    //         'items.*.qty_requested' => 'required|numeric|min:0',
-    //         'items.*.qty_on_hand' => 'nullable|numeric|min:0',
-    //         'items.*.reorder_level' => 'nullable|numeric|min:0',
-    //         'items.*.est_unit_cost' => 'nullable|numeric|min:0',
-    //         'items.*.total_cost' => 'nullable|numeric|min:0',
-    //     ]);
+            'items' => 'required|array|min:1',
+            'items.*.id' => 'nullable|exists:purchase_request_items,id',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.supplier_id' => 'nullable|exists:suppliers,id',
+            'items.*.specifications' => 'nullable|string|max:255',
+            'items.*.unit' => 'nullable|string|max:50',
+            'items.*.qty_requested' => 'required|numeric|min:0',
+            'items.*.qty_on_hand' => 'nullable|numeric|min:0',
+            'items.*.reorder_level' => 'nullable|numeric|min:0',
+            'items.*.est_unit_cost' => 'nullable|numeric|min:0',
+            'items.*.total_cost' => 'nullable|numeric|min:0',
+        ]);
 
-    //     $userRole = strtolower(Auth::user()->role->name ?? '');
-    //     $isGreenhillsAssistant = str_contains($userRole, 'inventory assist') && $validated['branch'] === 'Greenhills';
-    //     $statusAutoForwarded = false;
+        $userRole = strtolower(Auth::user()->role->name ?? '');
+        $isGreenhillsAssistant = str_contains($userRole, 'inventory assist') && $validated['branch'] === 'Greenhills';
+        $statusAutoForwarded = false;
 
-    //     $updateData = [
-    //         'branch' => $validated['branch'],
-    //         'department' => $validated['department'],
-    //         'request_type' => $validated['request_type'],
-    //         'priority' => $validated['priority'],
-    //         'date_needed' => $validated['date_needed'],
-    //         'budget_status' => $validated['budget_status'],
-    //         'budget_ref' => $validated['budget_ref'],
-    //         'purpose_of_request' => $validated['purpose_of_request'],
-    //         'impact_if_not_procured' => $validated['impact_if_not_procured'],
-    //         'cc_user_id' => $validated['cc_user_id'] ?? null,
-    //     ];
+        $updateData = [
+            'branch' => $validated['branch'],
+            'department' => $validated['department'],
+            'request_type' => $validated['request_type'],
+            'priority' => $validated['priority'],
+            'date_needed' => $validated['date_needed'],
+            'budget_status' => $validated['budget_status'],
+            'budget_ref' => $validated['budget_ref'],
+            'purpose_of_request' => $validated['purpose_of_request'],
+            'impact_if_not_procured' => $validated['impact_if_not_procured'],
+            'cc_user_id' => $validated['cc_user_id'] ?? null,
+        ];
 
-    //     // 🟢 UN-STUCK LOGIC FOR GREENHILLS ASSISTANTS
-    //     // If a Greenhills Assistant edits a returned PR, auto-bump it back to the OM
-    //     if ($isGreenhillsAssistant && $pr->status === 'pending_inv_tl') {
-    //         $updateData['status'] = 'pending_ops_manager';
-    //         $updateData['rejection_reason'] = null;
-    //         $statusAutoForwarded = true;
-    //     }
+        // 🟢 UN-STUCK LOGIC FOR GREENHILLS ASSISTANTS
+        // If a Greenhills Assistant edits a returned PR, auto-bump it back to the OM
+        if ($isGreenhillsAssistant && $pr->status === 'pending_inv_tl') {
+            $updateData['status'] = 'pending_ops_manager';
+            $updateData['rejection_reason'] = null;
+            $statusAutoForwarded = true;
+        }
 
-    //     // 1. Update the PR header fields
-    //     $pr->update($updateData);
+        // 1. Update the PR header fields
+        $pr->update($updateData);
 
-    //     // 2. Sync items: Delete items that the user removed in the frontend
-    //     $existingItemIds = collect($validated['items'])->pluck('id')->filter()->all();
-    //     $pr->items()->whereNotIn('id', $existingItemIds)->delete();
+        // 2. Sync items: Delete items that the user removed in the frontend
+        $existingItemIds = collect($validated['items'])->pluck('id')->filter()->all();
+        $pr->items()->whereNotIn('id', $existingItemIds)->delete();
 
-    //     // 3. Update existing items or Create new ones
-    //     foreach ($validated['items'] as $itemData) {
-    //         if (isset($itemData['id'])) {
-    //             $pr->items()->where('id', $itemData['id'])->update($itemData);
-    //         } else {
-    //             $pr->items()->create($itemData);
-    //         }
-    //     }
+        // 3. Update existing items or Create new ones
+        foreach ($validated['items'] as $itemData) {
+            if (isset($itemData['id'])) {
+                $pr->items()->where('id', $itemData['id'])->update($itemData);
+            } else {
+                $pr->items()->create($itemData);
+            }
+        }
 
-    //     // 🟢 Re-trigger the OM notification if the PR was auto-forwarded
-    //     if ($statusAutoForwarded) {
-    //         $this->notifyNextApprovers($pr);
-    //     }
+        // 🟢 Re-trigger the OM notification if the PR was auto-forwarded
+        if ($statusAutoForwarded) {
+            $this->notifyNextApprovers($pr);
+        }
 
-    //     return redirect()->back()->with('success', 'Purchase Request updated successfully.');
-    // }
+        return redirect()->back()->with('success', 'Purchase Request updated successfully.');
+    }
 
     public function index(Request $request)
 {

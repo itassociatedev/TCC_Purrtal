@@ -780,34 +780,44 @@ export default function ApprovalBoard({
     };
 
     const getHeaderContent = () => {
-        switch (currentView) {
-            case "my_requests":
-                return {
-                    title: "My Purchase Requests",
-                    desc: "Track the status of PRs you have submitted.",
-                };
-            case "action_needed":
-                return {
-                    title: "Pending Approvals",
-                    desc: "Review and manage purchase requests awaiting your action.",
-                };
-            case "finished":
-                return {
-                    title: "Approved Purchase Requests",
-                    desc: "History of purchase requests you have already processed.",
-                };
-            case "all":
-                return {
-                    title: "All Active PRs",
-                    desc: "Overview of all purchase requests in the system.",
-                };
-            default:
-                return {
-                    title: "My Purchase Requests",
-                    desc: "Track the status of PRs you have submitted.",
-                };
-        }
-    };
+    switch (currentView) {
+        case "my_requests":
+            return {
+                title: "My Purchase Requests",
+                desc: "Track the status of PRs you have submitted.",
+            };
+
+        case "for_approval":
+            return {
+                title: "Purchase Requests For Approval",
+                desc: "Review and manage purchase requests awaiting your approval.",
+            };
+
+        case "for_generation":
+            return {
+                title: "Purchase Orders To Generate",
+                desc: "Generate purchase orders for fully approved purchase requests.",
+            };
+
+        case "po_generated":
+            return {
+                title: "PO Generated",
+                desc: "View purchase requests that have already been converted into purchase orders.",
+            };
+
+        case "history":
+            return {
+                title: "Purchase Request History",
+                desc: "View completed and approved purchase requests.",
+            };
+
+        default:
+            return {
+                title: "My Purchase Requests",
+                desc: "Track the status of PRs you have submitted.",
+            };
+    }
+};
     const headerContent = getHeaderContent();
 
     return (
@@ -827,48 +837,103 @@ export default function ApprovalBoard({
                 </div>
 
                 {/* Filter Tabs */}
-                <div className="mb-6 flex space-x-1 rounded-lg bg-gray-100 p-1 w-fit border border-gray-200">
-                    <Link
-                        href={route("prpo.approval-board", {
-                            view: "my_requests",
-                        })}
-                        className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${currentView === "my_requests" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"}`}
-                    >
-                        My Active Requests
-                    </Link>
+                <div className="flex flex-wrap items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1">
 
-                    {!userRole.includes("inventory assist") && (
-                        <>
-                            <Link
-                                href={route("prpo.approval-board", {
-                                    view: "action_needed",
-                                })}
-                                className={`px-4 py-2 text-sm font-semibold rounded-md transition-all flex items-center gap-2 ${currentView === "action_needed" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"}`}
-                            >
-                                For Approvals {currentView !== "action_needed"}
-                            </Link>
-                            <Link
-                                href={route("prpo.approval-board", {
-                                    view: "finished",
-                                })}
-                                className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${currentView === "finished" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"}`}
-                            >
-                                Approved Purchase Requests
-                            </Link>
-                        </>
-                    )}
+    {/* =========================================================
+        MY REQUESTS
+    ========================================================= */}
+    <Link
+        href={route("prpo.approval-board", {
+            view: "my_requests",
+        })}
+        className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${
+            currentView === "my_requests"
+                ? "bg-white text-indigo-700 shadow-sm"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+        }`}
+    >
+        My Requests
+    </Link>
 
-                    {(userRole.includes("admin") ||
-                        userRole.includes("president") ||
-                        userRole.includes("audit")) && (
-                        <Link
-                            href={route("prpo.approval-board", { view: "all" })}
-                            className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${currentView === "all" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"}`}
-                        >
-                            All Active PRs
-                        </Link>
-                    )}
-                </div>
+
+    {/* =========================================================
+        FOR APPROVAL
+    ========================================================= */}
+    {(isInvTL ||
+        isOpsManager ||
+        isEVP ||
+        userRole.includes("procurement tl") ||
+        userRole === "admin") && (
+        <Link
+            href={route("prpo.approval-board", {
+                view: "for_approval",
+            })}
+            className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${
+                currentView === "for_approval"
+                    ? "bg-white text-indigo-700 shadow-sm"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+            }`}
+        >
+            For Approval
+        </Link>
+    )}
+
+
+    {/* =========================================================
+        PO GENERATION
+    ========================================================= */}
+    {canManagePO && (
+        <Link
+            href={route("prpo.approval-board", {
+                view: "for_generation",
+            })}
+            className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${
+                currentView === "for_generation"
+                    ? "bg-white text-indigo-700 shadow-sm"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+            }`}
+        >
+            PO Generation
+        </Link>
+    )}
+
+
+    {/* =========================================================
+        PO GENERATED
+    ========================================================= */}
+    {canManagePO && (
+        <Link
+            href={route("prpo.approval-board", {
+                view: "po_generated",
+            })}
+            className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${
+                currentView === "po_generated"
+                    ? "bg-white text-indigo-700 shadow-sm"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+            }`}
+        >
+            PO Generated
+        </Link>
+    )}
+
+
+    {/* =========================================================
+        PURCHASE REQUEST HISTORY
+    ========================================================= */}
+    <Link
+        href={route("prpo.approval-board", {
+            view: "history",
+        })}
+        className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${
+            currentView === "history"
+                ? "bg-white text-indigo-700 shadow-sm"
+                : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+        }`}
+    >
+        Purchase Request History
+    </Link>
+
+</div>
 
                 <div className="mb-6 bg-white p-5 rounded-xl shadow-sm border border-gray-200">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1158,7 +1223,7 @@ export default function ApprovalBoard({
                                                 {pr.status === "approved" &&
                                                     canManagePO &&
                                                     currentView ===
-                                                        "action_needed" && (
+                                                        "for_generation" && (
                                                         <button
                                                             onClick={() =>
                                                                 handleGeneratePO(
@@ -1475,7 +1540,7 @@ export default function ApprovalBoard({
                                         auth,
                                         "purchase_requests",
                                     ) ||
-                                        currentView === "action_needed") && (
+                                        currentView === "for_approval") && (
                                         <>
                                             {/* 🟢 UPDATED: Read-only Modal Ops Manager Return Action - Now works even outside action_needed view for admins */}
                                             {selectedPR.status ===
