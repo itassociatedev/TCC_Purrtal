@@ -178,26 +178,53 @@ if ($isGreenhillsAssistant || $isInventoryTL) {
 
         if ($view === 'action_needed') {
             if ($isAdmin) {
-                $query->whereIn('status', ['pending_inv_tl', 'pending_ops_manager', 'approved']);
-            } 
-            elseif (str_contains($userRole, 'inventory tl')) {
-                $query->where('status', 'pending_inv_tl');
-                if (!empty($userBranches)) {
-                    $query->whereIn('branch', $userBranches); 
-                }
-            } 
-            elseif (str_contains($userRole, 'operations') || str_contains($userRole, 'ops manager')) {
-                $query->where('status', 'pending_ops_manager');
-                if (!empty($userBranches)) {
-                    $query->whereIn('branch', $userBranches); 
-                }
-            } 
-            elseif (str_contains($userRole, 'director') || str_contains($userRole, 'procurement')) {
-                $query->where('status', 'approved');
-            } 
-            else {
-                $query->whereRaw('1 = 0'); 
-            }
+
+    $query->whereIn('status', [
+    'pending_inv_tl',
+    'pending_ops_manager',
+    'pending_procurement',
+    'pending_evp_final',
+    'approved',
+]);
+
+} elseif ($user->role_id === 9) {
+
+    // EVP:
+    // 1. OM fallback approval
+    // 2. Final approval after Procurement TL
+    $query->whereIn('status', [
+        'pending_ops_manager',
+        'pending_evp_final',
+    ]);
+
+} elseif (str_contains($userRole, 'inventory tl')) {
+
+    $query->where('status', 'pending_inv_tl');
+
+    if (!empty($userBranches)) {
+        $query->whereIn('branch', $userBranches);
+    }
+
+} elseif (
+    str_contains($userRole, 'operations') ||
+    str_contains($userRole, 'ops manager')
+) {
+
+    $query->where('status', 'pending_ops_manager');
+
+    if (!empty($userBranches)) {
+        $query->whereIn('branch', $userBranches);
+    }
+
+} elseif (str_contains($userRole, 'procurement tl')) {
+
+    // Procurement TL only sees PRs waiting for their approval
+    $query->where('status', 'pending_procurement');
+
+} else {
+
+    $query->whereRaw('1 = 0');
+}
         } 
         elseif ($view === 'my_requests') {
             $query->where('user_id', $user->id);
@@ -335,8 +362,8 @@ if ($isGreenhillsAssistant || $isInventoryTL) {
 
         // EVP approves on behalf of unavailable OM.
         $purchaseRequest->status = 'pending_procurement';
+        $purchaseRequest->is_evp_override = true;
         $purchaseRequest->rejection_reason = null;
-
         $purchaseRequest->save();
 
         // Notify Procurement TL + requester.
@@ -394,8 +421,13 @@ if ($isGreenhillsAssistant || $isInventoryTL) {
 
     if ($action === 'return_to_creator') {
 
-        $purchaseRequest->status = 'pending_inv_tl';
-        $purchaseRequest->rejection_reason = $validated['rejection_reason'];
+        $purchaseRequest->status =
+        strtolower($purchaseRequest->branch) === 'greenhills'
+            ? 'pending_ops_manager'
+            : 'pending_inv_tl';
+
+        $purchaseRequest->rejection_reason =
+        $validated['rejection_reason'];
 
         $message =
             'Purchase request returned to the Greenhills Inventory Assistant for corrections.';
@@ -435,86 +467,160 @@ if ($isGreenhillsAssistant || $isInventoryTL) {
 
     if ($action === 'approve') {
 
-        switch ($purchaseRequest->status) {
+    switch ($purchaseRequest->status) {
 
-            // -------------------------------------------------------------
-            // Inventory TL
-            // -------------------------------------------------------------
-            case 'pending_inv_tl':
+        // -------------------------------------------------------------
+        // Inventory TL
+        // -------------------------------------------------------------
+        case 'pending_inv_tl':
 
-                $purchaseRequest->status = 'pending_ops_manager';
-                $purchaseRequest->rejection_reason = null;
+    $userRole = strtolower(
+        $user->role->role_name ?? ''
+    );
+
+    $isInventoryTL = str_contains(
+        $userRole,
+        'inventory tl'
+    );
+
+    $isEVP = $user->role_id === 9;
+
+    $isGreenhills = strtolower(
+        trim($purchaseRequest->branch ?? '')
+    ) === 'greenhills';
+
+    // Inventory TL can approve normally
+    // EVP can act as fallback ONLY for Greenhills
+    if (
+        !$isInventoryTL &&
+        !($isEVP && $isGreenhills) &&
+        $user->role_id !== 1
+    ) {
+        abort(
+            403,
+            'Only the Inventory Team Leader can approve this request. EVP fallback is only allowed for Greenhills.'
+        );
+    }
+
+    $purchaseRequest->status = 'pending_ops_manager';
+    $purchaseRequest->rejection_reason = null;
+
+    if ($isEVP && $isGreenhills) {
+
+        $message =
+            'Purchase request approved by the Executive Vice President as Inventory Team Leader fallback for Greenhills and forwarded to the Operations Manager.';
+
+    } else {
+
+        $message =
+            'Purchase request approved by Inventory Team Lead and forwarded to the Operations Manager.';
+    }
+
+    break;
+
+
+        // -------------------------------------------------------------
+        // Operations Manager OR EVP Fallback
+        // -------------------------------------------------------------
+        case 'pending_ops_manager':
+
+            $userRole = strtolower(
+                $user->role->role_name ?? ''
+            );
+
+            $isOperationsManager =
+                str_contains($userRole, 'operations') ||
+                str_contains($userRole, 'ops manager');
+
+            $isEVP = $user->role_id === 9;
+
+            if (!$isOperationsManager && !$isEVP) {
+                abort(
+                    403,
+                    'Only the Operations Manager or Executive Vice President (fallback) can approve at this stage.'
+                );
+            }
+
+            $purchaseRequest->status = 'pending_procurement';
+            $purchaseRequest->rejection_reason = null;
+
+            if ($isEVP) {
 
                 $message =
-                    'Purchase request approved by Inventory Team Lead and forwarded to the Operations Manager.';
+                    'Purchase request approved by the Executive Vice President as Operations Manager fallback and forwarded to Procurement Team Leader.';
 
-                break;
-
-
-            // -------------------------------------------------------------
-            // Operations Manager
-            // -------------------------------------------------------------
-            case 'pending_ops_manager':
-
-                $purchaseRequest->status = 'pending_procurement';
-                $purchaseRequest->rejection_reason = null;
+            } else {
 
                 $message =
                     'Purchase request approved by Operations Manager and forwarded to Procurement Team Leader.';
+            }
 
-                break;
-
-
-            // -------------------------------------------------------------
-            // Procurement TL
-            // -------------------------------------------------------------
-            case 'pending_procurement':
-
-                $purchaseRequest->status = 'pending_evp_final';
-                $purchaseRequest->rejection_reason = null;
-
-                $message =
-                    'Purchase request approved by Procurement Team Lead and forwarded to the Executive Vice President for final approval.';
-
-                break;
+            break;
 
 
-            // -------------------------------------------------------------
-            // EVP FINAL APPROVAL
-            // -------------------------------------------------------------
-            case 'pending_evp_final':
+        // -------------------------------------------------------------
+        // Procurement TL
+        // -------------------------------------------------------------
+        case 'pending_procurement':
 
-                // Only EVP can perform the final approval.
-                if ($user->role_id !== 9) {
-                    abort(
-                        403,
-                        'Only the Executive Vice President can give final approval.'
-                    );
-                }
+            $userRole = strtolower(
+                $user->role->role_name ?? ''
+            );
 
-                $purchaseRequest->status = 'approved';
-                $purchaseRequest->rejection_reason = null;
+            $isProcurementTL =
+                str_contains($userRole, 'procurement tl');
 
-                $message =
-                    'Purchase request has received final approval.';
-
-                break;
-
-
-            default:
-
-                return back()->with(
-                    'error',
-                    'Purchase request cannot be approved from its current status.'
+            if (!$isProcurementTL) {
+                abort(
+                    403,
+                    'Only the Procurement Team Leader can approve at this stage.'
                 );
-        }
+            }
 
-        $purchaseRequest->save();
+            $purchaseRequest->status = 'pending_evp_final';
+            $purchaseRequest->rejection_reason = null;
 
-        $this->notifyNextApprovers($purchaseRequest);
+            $message =
+                'Purchase request approved by Procurement Team Lead and forwarded to the Executive Vice President for final approval.';
 
-        return back()->with('success', $message);
+            break;
+
+
+        // -------------------------------------------------------------
+        // EVP FINAL APPROVAL
+        // -------------------------------------------------------------
+        case 'pending_evp_final':
+
+            if ($user->role_id !== 9) {
+                abort(
+                    403,
+                    'Only the Executive Vice President can give final approval.'
+                );
+            }
+
+            $purchaseRequest->status = 'approved';
+            $purchaseRequest->rejection_reason = null;
+
+            $message =
+                'Purchase request has received final approval by the Executive Vice President.';
+
+            break;
+
+
+        default:
+
+            return back()->with(
+                'error',
+                'Purchase request cannot be approved from its current status.'
+            );
     }
+
+    $purchaseRequest->save();
+
+    $this->notifyNextApprovers($purchaseRequest);
+
+    return back()->with('success', $message);
+}
 
     // =====================================================================
     // 8. CANCEL
@@ -661,17 +767,52 @@ if ($isGreenhillsAssistant || $isInventoryTL) {
     //     return redirect()->back()->with('success', 'Purchase Request updated successfully.');
     // }
 
-    // public function print(PurchaseRequest $purchaseRequest)
-    // {
-    //     $purchaseRequest->load(['user','cc_user', 'items.product', 'items.supplier']);
+    public function index(Request $request)
+{
+    $user = Auth::user();
+    $userRole = strtolower(trim($user->role->name ?? ''));
+    $view = $request->query('view', 'active_prs'); // Set default tab
 
-    //     return Inertia::render('PRPO/PrintablePR', [
-    //         'pr' => $purchaseRequest
-    //     ]);
-    // }
+    $query = PurchaseRequest::with(['user', 'items.product', 'purchaseOrders']);
+
+    if ($view === 'active_prs') {
+        // Show PRs created by the user for them to monitor
+        $query->where('user_id', $user->id)
+              ->whereNotIn('status', ['po_generated', 'cancelled', 'rejected']);
+    } elseif ($view === 'for_approval') {
+        // Show PRs awaiting the user's specific role approval
+        if (str_contains($userRole, 'inventory tl')) {
+            $query->where('status', 'pending_inv_tl');
+        } elseif (str_contains($userRole, 'operations') || str_contains($userRole, 'evp')) {
+            $query->where('status', 'pending_ops_manager');
+        }
+    } elseif ($view === 'for_generation') {
+        // Show approved PRs waiting for Procurement to draft POs
+        $query->where('status', 'approved');
+    } elseif ($view === 'approved_prs') {
+        // Show historical completed PRs
+        $query->whereIn('status', ['po_generated']);
+    }
+
+    $requests = $query->latest()->paginate(15)->withQueryString();
+
+    return Inertia::render('PRPO/ApprovalBoard', [
+        'requests' => $requests,
+        'currentView' => $view,
+    ]);
+}
+
+    public function print(PurchaseRequest $purchaseRequest)
+    {
+        $purchaseRequest->load(['user','cc_user', 'items.product', 'items.supplier']);
+
+        return Inertia::render('PRPO/PrintablePR', [
+            'pr' => $purchaseRequest
+        ]);
+    }
 
     private function notifyNextApprovers(PurchaseRequest $pr)
-{
+    {
     // Always notify the original requester
     $usersToNotify = collect([$pr->user]);
     $message = '';

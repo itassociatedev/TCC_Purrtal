@@ -17,6 +17,7 @@ export default function TrackingStepper({
         { key: "pending_approval", label: "Executive Vice President Approval" },
         { key: "approved", label: "Purchase Order Finalized" },
     ];
+    const isEVPOmOverride = Boolean(pr.is_evp_override);
 
     let workflow = type === "PR" ? prWorkflow : poWorkflow;
 
@@ -83,13 +84,18 @@ export default function TrackingStepper({
 
                                 {/* The EVP Override Marker */}
                                 {pr?.is_evp_override &&
-                                step.key === "pending_ops_manager" ? (
+                                    step.key === "pending_ops_manager" ? (
                                     <span className="text-[10px] italic text-purple-600 font-bold mt-0.5 leading-tight">
-                                        Approved by Executive Vice President as
-                                        OM Fallback
+                                        Approved by the Executive Vice President as
+                                        Operations Manager Fallback
                                     </span>
                                 ) : null}
                             </div>
+                            {isEVPOmOverride && (
+    <span className="text-blue-600">
+        
+    </span>
+)}
                         </span>
                     );
                 })}

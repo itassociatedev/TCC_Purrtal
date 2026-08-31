@@ -15,7 +15,7 @@ class ProductTemplateExport implements FromArray, WithHeadings, WithStyles, With
     public function headings(): array
     {
         // Your exact mapped headers
-        return ['Supplier Name', 'Product Name', 'Measurement', 'Description', 'Price'];
+        return ['Supplier Name', 'Product Name', 'Unit', 'Details', 'Price'];
     }
 
     public function array(): array

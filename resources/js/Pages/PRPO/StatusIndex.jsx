@@ -112,7 +112,7 @@ const TrackerLine = ({ pr }) => {
                 ) : step3 ? (
                     <span className="text-indigo-600">Approved by Operations Manager. Waiting for Procurement to generate the order.</span>
                 ) : step2 ? (
-                    <span className="text-blue-600">Reviewed by Inventory Team Lead. Waiting for Final Approval.</span>
+                    <span className="text-blue-600">Reviewed by Inventory Team Lead. Waiting for final approval.</span>
                 ) : (
                     <span className="text-gray-500">Submitted to the Inventory Team Lead for initial review.</span>
                 )}
@@ -432,7 +432,7 @@ export default function StatusIndex({ auth, requests }) {
 
                             {(() => {
                                 const isDocRejected = (modalView === 'PR' && selectedDoc.status === 'rejected') || 
-                                                      (modalView === 'PO' && selectedDoc.status === 'cancelled');
+                                                    (modalView === 'PO' && selectedDoc.status === 'cancelled');
                                 const docRejectionReason = modalView === 'PR' ? selectedDoc.rejection_reason : selectedDoc.remarks;
 
                                 if (!isDocRejected || !docRejectionReason) return null;
@@ -452,7 +452,7 @@ export default function StatusIndex({ auth, requests }) {
                                         ) : (
                                             <div className="bg-red-50 border border-red-200 rounded-xl p-5 shadow-inner animate-in fade-in slide-in-from-top-2 duration-300">
                                                 <div className="flex justify-between items-start mb-3">
-                                                    <label className="block text-xs font-bold text-red-800 uppercase tracking-wider flex items-center gap-2">
+                                                    <label className="text-xs font-bold text-red-800 uppercase tracking-wider flex items-center gap-2">
                                                         <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                                         </svg>
@@ -477,14 +477,14 @@ export default function StatusIndex({ auth, requests }) {
                             {modalView === 'PR' && (
                                 <>
                                     <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4 rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm">
-                                        <div><span className="block font-semibold text-gray-900">CC</span> {selectedDoc.cc_user?.name || 'N/A'}</div>
+                                        <div><span className="block font-semibold text-gray-900">Carbon Copy (CC)</span> {selectedDoc.cc_user?.name || 'N/A'}</div>
                                         <div><span className="block font-semibold text-gray-900">Branch</span> {selectedDoc.branch}</div>
                                         <div><span className="block font-semibold text-gray-900">Department</span> {selectedDoc.department}</div>
                                         <div><span className="block font-semibold text-gray-900">Request Type</span> {selectedDoc.request_type || 'N/A'}</div>
                                         <div><span className="block font-semibold text-gray-900">Priority</span> {selectedDoc.priority || 'N/A'}</div>
                                         <div><span className="block font-semibold text-gray-900">Date Needed</span> <span className="text-red-600 font-bold">{selectedDoc.date_needed}</span></div>
                                         
-                                        <div><span className="block font-semibold text-gray-900">Budget Status</span> {selectedDoc.budget_status || 'N/A'}</div>
+                                        <div><span className="block font-semibold text-gray-900">Budget Alignment</span> {selectedDoc.budget_status || 'N/A'}</div>
                                         <div><span className="block font-semibold text-gray-900">Status</span> {formatStatus(selectedDoc.status)}</div>
 
                                         {selectedDoc.purpose_of_request && (
@@ -500,9 +500,9 @@ export default function StatusIndex({ auth, requests }) {
                                         <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
                                             <thead className="bg-gray-100">
                                                 <tr>
-                                                    <th className="px-4 py-2 font-semibold">Product</th>
-                                                    <th className="px-4 py-2 font-semibold">Specs</th>
-                                                    <th className="px-4 py-2 font-semibold text-center">Qty</th>
+                                                    <th className="px-4 py-2 font-semibold">Product Name</th>
+                                                    <th className="px-4 py-2 font-semibold">Descriptions</th>
+                                                    <th className="px-4 py-2 font-semibold text-center">Requested Quantity</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-200 bg-white">
@@ -561,11 +561,11 @@ export default function StatusIndex({ auth, requests }) {
                                                 <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
                                                     <thead className="bg-gray-100">
                                                         <tr>
+                                                            <th className="px-4 py-2 font-semibold">Product Name</th>
                                                             <th className="px-4 py-2 font-semibold">Description</th>
-                                                            <th className="px-4 py-2 font-semibold">Notes</th>
-                                                            <th className="px-4 py-2 font-semibold text-center">Qty</th>
+                                                            <th className="px-4 py-2 font-semibold text-center">Requested Quantity</th>
                                                             <th className="px-4 py-2 font-semibold text-right">Unit Price</th>
-                                                            <th className="px-4 py-2 font-semibold text-right">Line Total</th>
+                                                            <th className="px-4 py-2 font-semibold text-right">Total Price</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-gray-200 bg-white">

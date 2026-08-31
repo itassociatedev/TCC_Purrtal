@@ -403,17 +403,17 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                             <table className="min-w-full divide-y divide-gray-200 text-sm">
                                 <thead className="bg-gray-50 text-gray-700">
                                     <tr>
-                                        <th className="px-3 py-3 text-center font-semibold w-12">#</th>
-                                        <th className="px-3 py-3 text-left font-semibold min-w-[220px]">Product Name</th>
-                                        <th className="px-3 py-3 text-left font-semibold min-w-[150px]">Description</th>
-                                        <th className="px-3 py-3 text-left font-semibold w-20">Unit</th>
-                                        <th className="px-3 py-3 text-left font-semibold w-24">Requested Quantity</th>
-                                        <th className="px-3 py-3 text-left font-semibold w-24">Stock Quantity</th>
-                                        <th className="px-3 py-3 text-left font-semibold w-24">Reorder</th>
-                                        <th className="px-3 py-3 text-left font-semibold min-w-[200px]">Supplier Name</th>
-                                        <th className="px-3 py-3 text-left font-semibold w-28">Unit Cost</th>
-                                        <th className="px-3 py-3 text-left font-semibold w-32">Total Cost</th>
-                                        <th className="px-3 py-3 text-left font-semibold w-12"></th>
+                                        <th className="px-3 py-3 text-center font-semibold min-w-[30px]">No.</th>
+                                        <th className="px-3 py-3 text-center font-semibold min-w-[250px]">Product Name</th>
+                                        <th className="px-3 py-3 text-center font-semibold min-w-[90px]">Description</th>
+                                        <th className="px-3 py-3 text-center font-semibold min-w-[80px]">Unit</th>
+                                        <th className="px-3 py-3 text-center font-semibold min-w-[40px]">Requested Quantity</th>
+                                        <th className="px-3 py-3 text-center font-semibold min-w-[40px]">Stock Quantity</th>
+                                        <th className="px-3 py-3 text-center font-semibold min-w-[40px]">Reorder</th>
+                                        <th className="px-3 py-3 text-center font-semibold min-w-[230px]">Supplier Name</th>
+                                        <th className="px-3 py-3 text-center font-semibold min-w-[100px]">Unit Price</th>
+                                        <th className="px-3 py-3 text-center font-semibold min-w-[130px]">Total Cost</th>
+                                        <th className="px-3 py-3 text-center font-semibold min-w-[5px]"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 bg-white">
@@ -474,7 +474,28 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                                                         <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2">
                                                             <span className="text-gray-400 text-xs">₱</span>
                                                         </div>
-                                                        <input type="number" value={item.est_unit_cost} placeholder="0.00" className="block w-full rounded-md border-gray-200 text-gray-500 pl-6 text-xs shadow-sm focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"/>
+                                                        <input
+    type="number"
+    value={item.est_unit_cost ?? ''}
+    onChange={(e) =>
+        handleItemChange(index, 'est_unit_cost', e.target.value)
+    }
+    onBlur={(e) => {
+        const value = parseFloat(e.target.value);
+
+        if (!isNaN(value)) {
+            handleItemChange(
+                index,
+                'est_unit_cost',
+                value.toFixed(2)
+            );
+        }
+    }}
+    placeholder="0.00"
+    step="0.01"
+    min="0"
+    className="block w-full rounded-md border-gray-200 text-gray-500 pl-6 text-xs shadow-sm focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+/>
                                                     </div>
                                                 </td>
                                                 <td className="whitespace-nowrap px-3 py-2">

@@ -10,13 +10,26 @@ class PurchaseRequest extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id', 'branch', 'department', 'date_prepared', 'request_type', 
-        'priority', 'date_needed', 'budget_status', 'budget_ref', 
-        'purpose_of_request', 'impact_if_not_procured', 'status',
-        'rejection_reason', 'cc_user_id' 
-    ];
+    'user_id',
+    'branch',
+    'department',
+    'date_prepared',
+    'request_type',
+    'priority',
+    'date_needed',
+    'budget_status',
+    'budget_ref',
+    'purpose_of_request',
+    'impact_if_not_procured',
+    'status',
+    'rejection_reason',
+    'cc_user_id',
+    'is_evp_override',
+];
 
-    protected $appends = ['pr_number'];
+protected $casts = [
+    'is_evp_override' => 'boolean',
+];
 
     public function getPrNumberAttribute()
     {

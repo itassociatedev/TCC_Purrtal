@@ -144,7 +144,7 @@ public function update(Request $request, Product $product)
             $file = fopen('php://output', 'w');
             
             // Template headers and example row
-            fputcsv($file, ['Supplier Name', 'Product Name', 'Measurement', 'Description', 'Price']);
+            fputcsv($file, ['Supplier Name', 'Product Name', 'Unit', 'Details', 'Price']);
             fputcsv($file, ['Example Supplier Inc.', 'Paracetamol 500mg', 'BOX', 'Box of 100 tablets', '150.50']);
             
             fclose($file);

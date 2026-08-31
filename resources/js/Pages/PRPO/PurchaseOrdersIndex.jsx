@@ -388,9 +388,9 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                     <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap">PO Number</th>
-                                <th className="px-6 py-3 font-semibold text-gray-900 min-w-[150px]">Supplier</th>
-                                <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap">PO Date</th>
+                                <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap">Purchase Order Number</th>
+                                <th className="px-6 py-3 font-semibold text-gray-900 min-w-[150px]">Supplier Name</th>
+                                <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap">Purchase Order Date</th>
                                 <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap">Gross Amt</th>
                                 <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap">Grand Total</th>
                                 <th className="px-6 py-3 font-semibold text-gray-900">Status</th>
@@ -586,12 +586,12 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                                                                         />
                                                                     </th>
                                                                 )}
-                                                                <th className="px-4 py-2 font-semibold text-left min-w-[150px]">Description</th>
-                                                                <th className="px-4 py-2 font-semibold text-left min-w-[150px]">Notes</th>
-                                                                <th className="px-4 py-2 font-semibold text-center whitespace-nowrap">Qty</th>
-                                                                <th className="px-4 py-2 font-semibold text-right whitespace-nowrap">Unit Price</th>
-                                                                <th className="px-4 py-2 font-semibold text-right whitespace-nowrap">Line Total</th>
-                                                                {selectedPO.status === 'drafted' && isProcurement && <th className="px-4 py-2 font-semibold text-center whitespace-nowrap">Action</th>}
+                                                                <th className="px-3 py-2 font-semibold text-center min-w-[90px]">Product Name</th>
+                                                                <th className="px-3 py-2 font-semibold text-center min-w-[70px]">Description</th>
+                                                                <th className="px-3 py-2 font-semibold text-center min-w-[50px]">Requested Quantity</th>
+                                                                <th className="px-3 py-2 font-semibold text-center min-w-[70px]">Unit Price</th>
+                                                                <th className="px-3 py-2 font-semibold text-center min-w-[70px]">Total Cost</th>
+                                                                {selectedPO.status === 'drafted' && isProcurement && <th className="px-3 py-2 font-semibold text-center min-w-[0px]">Action</th>}
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-200 bg-white">

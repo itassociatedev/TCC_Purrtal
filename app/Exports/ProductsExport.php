@@ -47,9 +47,9 @@ class ProductsExport implements FromQuery, WithHeadings, WithMapping, ShouldAuto
         return [
             'Supplier Name',
             'Product Name',
-            'Details / Description',
-            'Unit of Measurement',
-            'Price (PHP)',
+            'Details',
+            'Unit',
+            'Price',
             'Date Added'
         ];
     }
