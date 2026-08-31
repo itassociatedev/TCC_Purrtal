@@ -1,9 +1,4 @@
-export default function TrackingStepper({
-    currentStatus,
-    type = "PR",
-    branch,
-    pr,
-}) {
+export default function TrackingStepper({ currentStatus, type = 'PR', branch, pr = {} }) {
     // 1. Define the full 4-tier workflow steps for PR
     const prWorkflow = [
         { key: "submitted", label: "Purchase Request (Inventory Assistant)" },
@@ -14,7 +9,7 @@ export default function TrackingStepper({
 
     const poWorkflow = [
         { key: "drafted", label: "Procurement Draft" },
-        { key: "pending_approval", label: "Executive Vice President Approval" },
+        { key: "pending_evp_final", label: "Executive Vice President Final Approval" },
         { key: "approved", label: "Purchase Order Finalized" },
     ];
     const isEVPOmOverride = Boolean(pr.is_evp_override);
