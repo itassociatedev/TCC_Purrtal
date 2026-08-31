@@ -93,15 +93,35 @@ class DutyMealController extends Controller
         }
 
         $lockedMealIds = DutyMeal::where('is_locked', true)->whereDate('duty_date', '>=', $today)->pluck('id');
-            
-        if ($lockedMealIds->isNotEmpty()) {
-            DutyMealParticipant::whereIn('duty_meal_id', $lockedMealIds)->where('choice', 'none')->update(['choice' => 'main']);
-        }
-
-        // 3. Catch-all for past meals
         $pastMealIds = DutyMeal::whereDate('duty_date', '<', $today)->pluck('id');
-        if ($pastMealIds->isNotEmpty()) {
-            DutyMealParticipant::whereIn('duty_meal_id', $pastMealIds)->where('choice', 'none')->update(['choice' => 'main']);
+        
+        $allMealsToProcess = $lockedMealIds->merge($pastMealIds)->unique();
+
+        if ($allMealsToProcess->isNotEmpty()) {
+            // 🟢 Eager load user.branches so we can check if they are multi-branch
+            $pendingParticipants = DutyMealParticipant::with(['dutyMeal.branch', 'user.branches'])
+                ->whereIn('duty_meal_id', $allMealsToProcess)
+                ->where('choice', 'none')
+                ->get();
+
+            foreach ($pendingParticipants as $p) {
+                $isMakati = str_contains(strtolower($p->dutyMeal->branch->name ?? ''), 'makati');
+                $site = null;
+                
+                if ($isMakati && $p->user) {
+                    // Combine their primary branch_id with any assigned pivot branches to get their total branch count
+                    $assignedBranchIds = $p->user->branches->pluck('id')->push($p->user->branch_id)->filter()->unique();
+                    $isMultiBranch = $assignedBranchIds->count() > 1;
+                    
+                    // If multi-branch, default to Back Office; else Clinic
+                    $site = $isMultiBranch ? 'Back Office' : 'Clinic';
+                }
+                
+                $p->update([
+                    'choice' => 'main',
+                    'site' => $site
+                ]);
+            }
         }
         
         $allowedBranchIds = $user->branches->pluck('id')->push($user->branch_id)->filter()->unique();
@@ -179,6 +199,7 @@ class DutyMealController extends Controller
                         'end_date' => $sch->end_date,
                         'shift_type' => $sch->shift_type,
                         'off_days' => $sch->off_days ?? [],
+                        'pattern' => $sch->pattern, // 🟢 BUG FIX: Send the new 7-day pattern to the frontend!
                     ];
                 })->toArray();
                 
@@ -187,6 +208,7 @@ class DutyMealController extends Controller
                 })->map(function ($override) {
                     return [
                         'is_off_day' => (bool) $override->is_off_day,
+                        'is_leave' => (bool) $override->is_leave, // 🟢 BUG FIX: Send leave status to block duty meals
                         'shift_type' => $override->shift_type,
                     ];
                 })->toArray();
@@ -371,7 +393,12 @@ class DutyMealController extends Controller
 
     public function addParticipant(Request $request, $id)
     {
-        $request->validate(['user_id' => 'required|exists:users,id']);
+        // 🟢 NEW: Added validation payload rules for custom request notes
+        $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'choice' => 'nullable|in:main,alt,special,none',
+            'custom_request' => 'nullable|string|max:255'
+        ]);
         $meal = DutyMeal::findOrFail($id);
 
         if ($meal->is_locked) return back()->with('error', 'This roster is locked and can no longer be edited.');
@@ -379,9 +406,9 @@ class DutyMealController extends Controller
 
         $meal->participants()->create([
             'user_id' => $request->user_id,
-            'choice' => 'none', 
+            'choice' => $request->choice ?? 'main', // 🟢 Saves exact choice selected
             'shift_type' => 'day', 
-            'custom_request' => null,
+            'custom_request' => $request->custom_request, // 🟢 Saves the special note!
         ]);
 
         // 🟢 SYSTEM LOGGING
