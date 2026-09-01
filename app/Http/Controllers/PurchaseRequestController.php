@@ -215,30 +215,97 @@ class PurchaseRequestController extends Controller
             }
         }
 
-        $requests = $query->paginate(15)->withQueryString();
+    // =============================================================
+    // 5. PURCHASE REQUEST HISTORY
+    // =============================================================
+    elseif ($view === 'history') {
 
-        // 🟢 Fetch lookup data so the Edit Modal can add new items/departments
-        $suppliers = Supplier::select('id', 'name')->get();
-        $products = Product::select('id', 'name', 'supplier_id', 'details', 'unit', 'price')->get();
-        $branches = Branch::select('id', 'name')->get();
-        $departments = Department::select('id', 'name')->get();
-        $employees =   User::with('branches:id,name')->where('id', '!=', Auth::id())->select('id', 'name')->orderBy('name')->get();
-
-        return Inertia::render('PRPO/ApprovalBoard', [
-            'requests' => $requests,
-            'currentView' => $view,
-            'userBranches' => $userBranches, 
-            'isAssistant' => $isAssistant, 
-            'canSeeAll' => $isAdmin || str_contains($userRole, 'director'),
-            
-            // 🟢 Pass data to React
-            'suppliers' => $suppliers,
-            'products' => $products,
-            'branches' => $branches,
-            'departments' => $departments,
-            'employees' => $employees,
+        // Approved PRs remain in history even after the PO is generated.
+        $query->whereIn('status', [
+            'approved',
+            'po_generated',
         ]);
+
+        if (!$isAdmin && !empty($userBranches)) {
+            $query->whereIn('branch', $userBranches);
+        }
     }
+
+    // -------------------------------------------------------------
+    // PAGINATION
+    // -------------------------------------------------------------
+    $requests = $query
+        ->paginate(15)
+        ->withQueryString();
+
+    // -------------------------------------------------------------
+    // LOOKUP DATA
+    // -------------------------------------------------------------
+    $suppliers = Supplier::select(
+        'id',
+        'name'
+    )->get();
+
+    $products = Product::select(
+        'id',
+        'name',
+        'supplier_id',
+        'details',
+        'unit',
+        'price'
+    )->get();
+
+    $branches = Branch::select(
+        'id',
+        'name'
+    )->get();
+
+    $departments = Department::select(
+        'id',
+        'name'
+    )->get();
+
+    $employees = User::with(
+        'branches:id,name'
+    )
+        ->where('id', '!=', Auth::id())
+        ->select(
+            'id',
+            'name'
+        )
+        ->orderBy('name')
+        ->get();
+
+    // -------------------------------------------------------------
+    // RETURN APPROVAL BOARD
+    // -------------------------------------------------------------
+    return Inertia::render('PRPO/ApprovalBoard', [
+        'requests' => $requests,
+
+        'currentView' => $view,
+
+        'userBranches' => $userBranches,
+
+        'isAssistant' => str_contains(
+            $userRole,
+            'assist'
+        ),
+
+        'canSeeAll' =>
+            $isAdmin ||
+            str_contains($userRole, 'director'),
+
+        'suppliers' => $suppliers,
+
+        'products' => $products,
+
+        'branches' => $branches,
+
+        'departments' => $departments,
+
+        'employees' => $employees,
+    ]);
+}
 
     // =====================================================================
     // UPDATE STATUS (Approve / Reject Logic)
@@ -592,81 +659,81 @@ class PurchaseRequestController extends Controller
     //         abort(403, 'You do not have permission to update purchase requests.');
     //     }
 
-    //     $pr = PurchaseRequest::findOrFail($id);
+        $pr = PurchaseRequest::findOrFail($id);
 
-    //     $validated = $request->validate([
-    //         'branch' => 'required|string|max:255',
-    //         'department' => 'required|string|max:255',
-    //         'request_type' => 'nullable|string|max:255',
-    //         'priority' => 'nullable|string|max:255',
-    //         'date_needed' => 'nullable|date',
-    //         'budget_status' => 'nullable|string|max:255',
-    //         'budget_ref' => 'nullable|string|max:255',
-    //         'purpose_of_request' => 'nullable|string',
-    //         'impact_if_not_procured' => 'nullable|string',
-    //         'cc_user_id' => 'nullable|exists:users,id',
+        $validated = $request->validate([
+            'branch' => 'required|string|max:255',
+            'department' => 'required|string|max:255',
+            'request_type' => 'nullable|string|max:255',
+            'priority' => 'nullable|string|max:255',
+            'date_needed' => 'nullable|date',
+            'budget_status' => 'nullable|string|max:255',
+            'budget_ref' => 'nullable|string|max:255',
+            'purpose_of_request' => 'nullable|string',
+            'impact_if_not_procured' => 'nullable|string',
+            'cc_user_id' => 'nullable|exists:users,id',
 
-    //         'items' => 'required|array|min:1',
-    //         'items.*.id' => 'nullable|exists:purchase_request_items,id',
-    //         'items.*.product_id' => 'required|exists:products,id',
-    //         'items.*.supplier_id' => 'nullable|exists:suppliers,id',
-    //         'items.*.specifications' => 'nullable|string|max:255',
-    //         'items.*.unit' => 'nullable|string|max:50',
-    //         'items.*.qty_requested' => 'required|numeric|min:0',
-    //         'items.*.qty_on_hand' => 'nullable|numeric|min:0',
-    //         'items.*.reorder_level' => 'nullable|numeric|min:0',
-    //         'items.*.est_unit_cost' => 'nullable|numeric|min:0',
-    //         'items.*.total_cost' => 'nullable|numeric|min:0',
-    //     ]);
+            'items' => 'required|array|min:1',
+            'items.*.id' => 'nullable|exists:purchase_request_items,id',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.supplier_id' => 'nullable|exists:suppliers,id',
+            'items.*.specifications' => 'nullable|string|max:255',
+            'items.*.unit' => 'nullable|string|max:50',
+            'items.*.qty_requested' => 'required|numeric|min:0',
+            'items.*.qty_on_hand' => 'nullable|numeric|min:0',
+            'items.*.reorder_level' => 'nullable|numeric|min:0',
+            'items.*.est_unit_cost' => 'nullable|numeric|min:0',
+            'items.*.total_cost' => 'nullable|numeric|min:0',
+        ]);
 
-    //     $userRole = strtolower(Auth::user()->role->name ?? '');
-    //     $isGreenhillsAssistant = str_contains($userRole, 'inventory assist') && $validated['branch'] === 'Greenhills';
-    //     $statusAutoForwarded = false;
+        $userRole = strtolower(Auth::user()->role->name ?? '');
+        $isGreenhillsAssistant = str_contains($userRole, 'inventory assist') && $validated['branch'] === 'Greenhills';
+        $statusAutoForwarded = false;
 
-    //     $updateData = [
-    //         'branch' => $validated['branch'],
-    //         'department' => $validated['department'],
-    //         'request_type' => $validated['request_type'],
-    //         'priority' => $validated['priority'],
-    //         'date_needed' => $validated['date_needed'],
-    //         'budget_status' => $validated['budget_status'],
-    //         'budget_ref' => $validated['budget_ref'],
-    //         'purpose_of_request' => $validated['purpose_of_request'],
-    //         'impact_if_not_procured' => $validated['impact_if_not_procured'],
-    //         'cc_user_id' => $validated['cc_user_id'] ?? null,
-    //     ];
+        $updateData = [
+            'branch' => $validated['branch'],
+            'department' => $validated['department'],
+            'request_type' => $validated['request_type'],
+            'priority' => $validated['priority'],
+            'date_needed' => $validated['date_needed'],
+            'budget_status' => $validated['budget_status'],
+            'budget_ref' => $validated['budget_ref'],
+            'purpose_of_request' => $validated['purpose_of_request'],
+            'impact_if_not_procured' => $validated['impact_if_not_procured'],
+            'cc_user_id' => $validated['cc_user_id'] ?? null,
+        ];
 
-    //     // 🟢 UN-STUCK LOGIC FOR GREENHILLS ASSISTANTS
-    //     // If a Greenhills Assistant edits a returned PR, auto-bump it back to the OM
-    //     if ($isGreenhillsAssistant && $pr->status === 'pending_inv_tl') {
-    //         $updateData['status'] = 'pending_ops_manager';
-    //         $updateData['rejection_reason'] = null;
-    //         $statusAutoForwarded = true;
-    //     }
+        // 🟢 UN-STUCK LOGIC FOR GREENHILLS ASSISTANTS
+        // If a Greenhills Assistant edits a returned PR, auto-bump it back to the OM
+        if ($isGreenhillsAssistant && $pr->status === 'pending_inv_tl') {
+            $updateData['status'] = 'pending_ops_manager';
+            $updateData['rejection_reason'] = null;
+            $statusAutoForwarded = true;
+        }
 
-    //     // 1. Update the PR header fields
-    //     $pr->update($updateData);
+        // 1. Update the PR header fields
+        $pr->update($updateData);
 
-    //     // 2. Sync items: Delete items that the user removed in the frontend
-    //     $existingItemIds = collect($validated['items'])->pluck('id')->filter()->all();
-    //     $pr->items()->whereNotIn('id', $existingItemIds)->delete();
+        // 2. Sync items: Delete items that the user removed in the frontend
+        $existingItemIds = collect($validated['items'])->pluck('id')->filter()->all();
+        $pr->items()->whereNotIn('id', $existingItemIds)->delete();
 
-    //     // 3. Update existing items or Create new ones
-    //     foreach ($validated['items'] as $itemData) {
-    //         if (isset($itemData['id'])) {
-    //             $pr->items()->where('id', $itemData['id'])->update($itemData);
-    //         } else {
-    //             $pr->items()->create($itemData);
-    //         }
-    //     }
+        // 3. Update existing items or Create new ones
+        foreach ($validated['items'] as $itemData) {
+            if (isset($itemData['id'])) {
+                $pr->items()->where('id', $itemData['id'])->update($itemData);
+            } else {
+                $pr->items()->create($itemData);
+            }
+        }
 
-    //     // 🟢 Re-trigger the OM notification if the PR was auto-forwarded
-    //     if ($statusAutoForwarded) {
-    //         $this->notifyNextApprovers($pr);
-    //     }
+        // 🟢 Re-trigger the OM notification if the PR was auto-forwarded
+        if ($statusAutoForwarded) {
+            $this->notifyNextApprovers($pr);
+        }
 
-    //     return redirect()->back()->with('success', 'Purchase Request updated successfully.');
-    // }
+        return redirect()->back()->with('success', 'Purchase Request updated successfully.');
+    }
 
     public function index(Request $request)
 {
@@ -750,6 +817,25 @@ class PurchaseRequestController extends Controller
         $usersToNotify = $usersToNotify->merge($approvers);
 
         $message = "PR from {$pr->department} ({$pr->branch}) is now pending Operations Manager approval.";
+
+    } elseif ($pr->status === 'pending_procurement') {
+
+    // Procurement Team Lead is the actual approver.
+    // Procurement Assistant only reviews/supports the PR.
+    $procurementTeam = User::where('role_id', 17)->get();
+
+    $usersToNotify = $usersToNotify->merge($procurementTeam);
+
+    $message = "PR from {$pr->department} ({$pr->branch}) is now pending Procurement Team Lead approval.";
+
+    } elseif ($pr->status === 'pending_evp_final') {
+
+        // EVP Final approval
+        $evp = User::where('role_id', 9)->get();
+
+        $usersToNotify = $usersToNotify->merge($evp);
+
+        $message = "PR from {$pr->department} ({$pr->branch}) is now pending EVP Final approval.";
 
     } elseif ($pr->status === 'approved') {
 

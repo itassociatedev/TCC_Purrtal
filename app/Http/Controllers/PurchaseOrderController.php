@@ -185,7 +185,7 @@ class PurchaseOrderController extends Controller
         $status = $validated['status'];
         $originalRequester = $purchaseOrder->purchaseRequest->user ?? null;
 
-        if ($status === 'pending_approval') {
+        if ($status === 'pending_evp_final') {
             $message = 'Purchase Order submitted to the Executive Vice President for final approval.';
             
             // 🚩 Ping the EVP
