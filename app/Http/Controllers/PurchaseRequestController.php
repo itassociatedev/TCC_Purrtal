@@ -156,7 +156,7 @@ if ($isGreenhillsAssistant || $isInventoryTL) {
         });
 
         return redirect()->route('prpo.approval-board', ['view' => 'my_requests'])
-                         ->with('success', 'Purchase Request submitted successfully!');
+                        ->with('success', 'Purchase Request submitted successfully!');
     }
 
     // =====================================================================
@@ -176,8 +176,8 @@ public function approvalBoard(Request $request)
     // -------------------------------------------------------------
     // ROLE FLAGS
     // -------------------------------------------------------------
-    $isAdmin = str_contains($userRole, 'admin');
-    $isEVP = $user->role_id === 9;
+    $isAdmin = str_contains($userRole, 'admin') || str_contains($userRole, 'executive vice president') || str_contains($userRole, 'evp');
+    $isEVP = str_contains($userRole, 'executive vice president') || str_contains($userRole, 'evp');
 
     $isInventoryTL = str_contains($userRole, 'inventory tl');
 
@@ -192,6 +192,7 @@ public function approvalBoard(Request $request)
     $isProcurementUser =
         $isProcurementTL ||
         $isProcurementAssistant ||
+        $isEVP ||
         $isAdmin;
 
     // -------------------------------------------------------------
@@ -419,31 +420,31 @@ public function approvalBoard(Request $request)
     // RETURN APPROVAL BOARD
     // -------------------------------------------------------------
     return Inertia::render('PRPO/ApprovalBoard', [
-        'requests' => $requests,
+    'requests' => $requests,
 
-        'currentView' => $view,
+    'currentView' => $view,
 
-        'userBranches' => $userBranches,
+    'userBranches' => $userBranches,
 
-        'isAssistant' => str_contains(
-            $userRole,
-            'assist'
-        ),
+    'isAssistant' => str_contains(
+        strtolower($userRole),
+        'assist'
+    ),
 
-        'canSeeAll' =>
-            $isAdmin ||
-            str_contains($userRole, 'director'),
+    'canSeeAll' =>
+        $isAdmin ||
+        str_contains(strtolower($userRole), 'evp'),
 
-        'suppliers' => $suppliers,
+    'suppliers' => $suppliers,
 
-        'products' => $products,
+    'products' => $products,
 
-        'branches' => $branches,
+    'branches' => $branches,
 
-        'departments' => $departments,
+    'departments' => $departments,
 
-        'employees' => $employees,
-    ]);
+    'employees' => $employees,
+]);
 }
 
     // =====================================================================
