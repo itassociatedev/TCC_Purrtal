@@ -324,8 +324,8 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Request Type</label>
                                 <select value={data.request_type} onChange={e => setData('request_type', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                     <option value="">Select Type...</option>
-                                    <option value="Capex">Capex</option>
-                                    <option value="Opex">Opex</option>
+                                    <option value="Capital Expenditure">Capital Expenditure</option>
+                                    <option value="Operating Expenditure">Operating Expenditure</option>
                                     <option value="Inventory">Inventory</option>
                                 </select>
                             </div>
@@ -357,14 +357,14 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Budget Ref.</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Budget Reference</label>
                                 <input type="text" value={data.budget_ref} onChange={e => setData('budget_ref', e.target.value)} className={`block w-full rounded-md shadow-sm sm:text-sm ${errors.budget_ref ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-indigo-500'}`} placeholder="Enter Ref..." />
                                 {errors.budget_ref && <p className="mt-2 text-sm text-red-600">{errors.budget_ref}</p>}
                             </div>
 
                             <div>
                                 <div className="flex justify-between">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">CC (Carbon Copy)</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Carbon Copy(C.C.)</label>
                                 </div>
                                 <CCMultiSelect 
                                     options={branchEmployees}

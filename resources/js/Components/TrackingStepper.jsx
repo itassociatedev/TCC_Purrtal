@@ -8,9 +8,9 @@ export default function TrackingStepper({ currentStatus, type = 'PR', branch, pr
     ];
 
     const poWorkflow = [
-        { key: "drafted", label: "Procurement Draft" },
+        { key: "drafted", label: "Procurement Team Leader Review" },
         { key: "pending_evp_final", label: "Executive Vice President Final Approval" },
-        { key: "approved", label: "Purchase Order Finalized" },
+        { key: "approved", label: "Purchase Order Approved & Finalized" },
     ];
     const isEVPOmOverride = Boolean(pr.is_evp_override);
 

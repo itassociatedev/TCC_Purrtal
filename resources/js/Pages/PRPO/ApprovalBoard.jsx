@@ -486,32 +486,30 @@ export default function ApprovalBoard({
     };
 
     const canApprove = (pr) => {
-        if (!pr) return false;
+    if (!pr) return false;
 
-        // Define the EVP check based on the userRole string
-        const isEVP =
-            userRole.includes("evp") || userRole.includes("president");
+    // Define roles
+    const isEVP = userRole.includes("evp") || userRole.includes("president");
+    const isProcurement = userRole.includes("procurement") || userRole === "admin"; 
+    const hasBranchAccess = userRole === "admin" || isEVP || userBranches.includes(pr.branch);
 
-        // 🚩 THE FIX: Grant the EVP global branch access alongside the admin
-        const hasBranchAccess =
-            userRole === "admin" || isEVP || userBranches.includes(pr.branch);
+    // Stage 2: Inventory TL
+    if (pr.status === "pending_inv_tl" && isInvTL && hasBranchAccess) {
+        return true;
+    }
 
-        // Stage 2: Inventory TL
-        if (pr.status === "pending_inv_tl" && isInvTL && hasBranchAccess) {
-            return true;
-        }
+    // Stage 3: Ops Manager (Allows EVP to step in)
+    if (pr.status === "pending_ops_manager" && (isOpsManager || isEVP) && hasBranchAccess) {
+        return true;
+    }
 
-        // Stage 3: Ops Manager (Now allows EVP to step in!)
-        if (
-            pr.status === "pending_ops_manager" &&
-            (isOpsManager || isEVP) &&
-            hasBranchAccess
-        ) {
-            return true;
-        }
+    // 🚩 Stage 4: Procurement TL (Allows Procurement OR EVP)
+    if (pr.status === "pending_procurement_tl" && (isProcurement || isEVP)) {
+        return true; 
+    }
 
-        return false;
-    };
+    return false;
+};
 
     const formatStatus = (status) => {
         const statusMap = {
@@ -1019,28 +1017,28 @@ export default function ApprovalBoard({
                     <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-6 py-3 font-semibold text-gray-900">
-                                    PR ID / Ref
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900">
+                                    Purchase Request ID
                                 </th>
-                                <th className="px-6 py-3 font-semibold text-gray-900">
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900">
                                     Prepared By
                                 </th>
-                                <th className="px-6 py-3 font-semibold text-gray-900">
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900">
                                     Branch & Dept
                                 </th>
-                                <th className="px-6 py-3 font-semibold text-gray-900">
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900">
                                     Priority
                                 </th>
-                                <th className="px-6 py-3 font-semibold text-gray-900">
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900">
                                     Date Needed
                                 </th>
-                                <th className="px-6 py-3 font-semibold text-gray-900">
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900">
                                     Items Count
                                 </th>
-                                <th className="px-6 py-3 font-semibold text-gray-900">
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900">
                                     Status
                                 </th>
-                                <th className="px-6 py-3 font-semibold text-gray-900"></th>
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900"></th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 bg-white">
@@ -1056,56 +1054,54 @@ export default function ApprovalBoard({
                             ) : (
                                 filteredRequests.map((pr) => (
                                     <tr
-                                        key={pr.pr_number}
-                                        onClick={() => openModal(pr)}
-                                        className="hover:bg-gray-50 transition cursor-pointer"
-                                    >
-                                        <td className="px-6 py-4 font-medium text-indigo-600 hover:text-indigo-900">
-                                            {pr.pr_number}
-                                        </td>
-                                        <td className="px-6 py-4">
+    key={pr.id} /* Changed to pr.id to ensure a unique key always exists */
+    onClick={() => openModal(pr)}
+    className="hover:bg-gray-50 transition cursor-pointer"
+>
+    <td className="px-6 py-4 text-center font-medium text-indigo-600 hover:text-indigo-900">
+        {pr.pr_number || `PR-${pr.id}`} {/* Added fallback to database ID */}
+    </td>
+                                        <td className="px-6 py-4 text-center">
                                             {pr.user?.name || "Unknown"}
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-6 py-4 text-center">
                                             {pr.branch} <br />
-                                            <span className="text-xs text-gray-500">
+                                            <span className="text-xs text-center text-gray-500">
                                                 {pr.department}
                                             </span>
                                         </td>
 
-                                        <td className="px-6 py-4">
+                                        <td className="text-center px-6 py-4">
                                             {pr.priority ? (
                                                 <span
-                                                    className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${
+                                                    className={`inline-flex items-center rounded-md px-2 py-1 text-center text-xs font-bold ring-1 ring-inset ${
                                                         pr.priority === "High"
                                                             ? "bg-red-50 text-red-700 ring-red-600/20"
                                                             : pr.priority ===
                                                                 "Normal"
-                                                              ? "bg-blue-50 text-blue-700 ring-blue-700/10"
-                                                              : "bg-gray-50 text-gray-600 ring-gray-500/10"
+                                                            ? "bg-blue-50 text-blue-700 ring-blue-700/10"
+                                                            : "bg-green-50 text-green-600 ring-green-500/10"
                                                     }`}
                                                 >
                                                     {pr.priority}
                                                 </span>
                                             ) : (
-                                                <span className="text-gray-400 text-xs italic">
+                                                <span className="text-gray-400 text-center text-xs italic">
                                                     N/A
                                                 </span>
                                             )}
                                         </td>
 
-                                        <td className="px-6 py-4">
-                                            {pr.date_needed}
-                                        </td>
-                                        <td className="px-6 py-4 font-medium">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{pr.date_needed ? new Date(pr.date_needed).toLocaleDateString('en-US', {year: 'numeric',month: 'long',day: 'numeric'}): "N/A"}</td>
+                                        <td className="px-6 py-4 text-center font-medium">
                                             {pr.items?.length || 0} Items
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-6 py-4 text-center">
                                             {formatStatus(pr.status)}
                                         </td>
 
                                         <td
-                                            className="whitespace-nowrap px-6 py-4 text-right"
+                                            className="whitespace-nowrap px-6 py-4 text-center"
                                             onClick={(e) => e.stopPropagation()}
                                         >
                                             <div className="flex items-center justify-end gap-2">
@@ -1787,11 +1783,11 @@ export default function ApprovalBoard({
                                                 <option value="">
                                                     Select Type...
                                                 </option>
-                                                <option value="Capex">
-                                                    Capex
+                                                <option value="Capital Expenditure">
+                                                    Capital Expenditure
                                                 </option>
-                                                <option value="Opex">
-                                                    Opex
+                                                <option value="Operating Expenditure">
+                                                    Operating Expenditure
                                                 </option>
                                                 <option value="Inventory">
                                                     Inventory

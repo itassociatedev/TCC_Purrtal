@@ -284,7 +284,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
     const formatStatus = (status) => {
         const statusMap = {
             'drafted': { label: 'Draft', color: 'bg-gray-100 text-gray-800' },
-            'pending_approval': { label: 'Pending DCSO Approval', color: 'bg-yellow-100 text-yellow-800' },
+            'pending_approval': { label: 'Pending EVP Approval', color: 'bg-yellow-100 text-yellow-800' },
             'approved': { label: 'Approved', color: 'bg-green-100 text-green-800' },
             'cancelled': { label: 'Cancelled', color: 'bg-red-100 text-red-800' }
         };
@@ -388,12 +388,12 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                     <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap">Purchase Order Number</th>
-                                <th className="px-6 py-3 font-semibold text-gray-900 min-w-[150px]">Supplier Name</th>
-                                <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap">Purchase Order Date</th>
-                                <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap">Gross Amt</th>
-                                <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap">Grand Total</th>
-                                <th className="px-6 py-3 font-semibold text-gray-900">Status</th>
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Purchase Order Number</th>
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900 min-w-[150px]">Supplier Name</th>
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Purchase Order Date</th>
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Gross Amount</th>
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Grand Total</th>
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900">Status</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 bg-white">
@@ -406,14 +406,12 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                             ) : (
                                 filteredPOs.map((po) => (
                                     <tr key={po.id} onClick={() => openModal(po)} className="hover:bg-gray-50 transition cursor-pointer">
-                                        <td className="px-6 py-4 font-bold text-indigo-600 whitespace-nowrap">{po.po_number}</td>
-                                        <td className="px-6 py-4 font-medium text-gray-900">{po.supplier?.name || 'Unknown Supplier'}</td>
-                                        <td className="px-6 py-4 text-gray-500 whitespace-nowrap">{po.po_date}</td>
-                                        <td className="px-6 py-4 text-gray-500 whitespace-nowrap">{formatCurrency(po.gross_amount)}</td>
-                                        <td className="px-6 py-4 font-bold text-gray-900 whitespace-nowrap">{formatCurrency(po.grand_total)}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            {formatStatus(po.status)}
-                                        </td>
+                                        <td className="px-6 py-4 text-center font-bold text-indigo-600 whitespace-nowrap">{po.po_number || po.purchase_request?.pr_number}</td>
+                                        <td className="px-6 py-4 text-center font-medium text-gray-900">{po.supplier?.name || 'Unknown Supplier'}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">{po.created_at ? new Date(po.created_at).toLocaleDateString('en-US', {year: 'numeric',month: 'long',day: 'numeric'}): "N/A"}</td>
+                                        <td className="px-6 py-4 text-center text-gray-500 whitespace-nowrap">{formatCurrency(po.gross_amount)}</td>
+                                        <td className="px-6 py-4 text-center font-bold text-gray-900 whitespace-nowrap">{formatCurrency(po.grand_total)}</td>
+                                        <td className="px-6 py-4 text-center whitespace-nowrap">{formatStatus(po.status)}</td>
                                     </tr>
                                 ))
                             )}
