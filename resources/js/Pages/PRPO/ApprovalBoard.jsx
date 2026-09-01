@@ -490,30 +490,85 @@ export default function ApprovalBoard({
     };
 
     const canApprove = (pr) => {
-    if (!pr) return false;
+        if (!pr) return false;
 
-    // Define roles
-    const isEVP = userRole.includes("evp") || userRole.includes("president");
-    const isProcurement = userRole.includes("procurement") || userRole === "admin"; 
-    const hasBranchAccess = userRole === "admin" || isEVP || userBranches.includes(pr.branch);
+        // Define roles
+        const isEVP =
+            userRole.includes("evp") ||
+            userRole.includes("executive vice president");
+        const isProcurement =
+            userRole.includes("procurement") || userRole === "admin";
+        const hasBranchAccess =
+            userRole === "admin" || isEVP || userBranches.includes(pr.branch);
 
-    // Stage 2: Inventory TL
-    if (pr.status === "pending_inv_tl" && isInvTL && hasBranchAccess) {
-        return true;
-    }
+        // Stage 2: Inventory TL
+        if (pr.status === "pending_inv_tl" && isInvTL && hasBranchAccess) {
+            return true;
+        }
 
-    // Stage 3: Ops Manager (Allows EVP to step in)
-    if (pr.status === "pending_ops_manager" && (isOpsManager || isEVP) && hasBranchAccess) {
-        return true;
-    }
+        // Stage 3: Ops Manager (Allows EVP to step in)
+        if (
+            pr.status === "pending_ops_manager" &&
+            (isOpsManager || isEVP) &&
+            hasBranchAccess
+        ) {
+            return true;
+        }
 
-    // 🚩 Stage 4: Procurement TL (Allows Procurement OR EVP)
-    if (pr.status === "pending_procurement_tl" && (isProcurement || isEVP)) {
-        return true; 
-    }
+        // 🚩 Stage 4: Procurement TL (Allows Procurement OR EVP)
+        if (
+            pr.status === "pending_procurement_tl" &&
+            (isProcurement || isEVP)
+        ) {
+            return true;
+        }
 
-    return false;
-};
+        return false;
+    };
+
+    const canEditPR = (pr) => {
+        if (!pr) return false;
+
+        // Define roles and branch access (mirroring your canApprove logic)
+        const isEVP =
+            userRole.includes("evp") || userRole.includes("president");
+        const isProcurement = userRole.includes("procurement");
+        const hasBranchAccess =
+            userRole === "admin" || isEVP || userBranches.includes(pr.branch);
+
+        // Global Admin Override
+        if (userRole === "admin") return true;
+
+        // Stage 1: Creator fixing a returned/draft PR
+        if (pr.status === "returned" && pr.user_id === auth.user.id) {
+            return true;
+        }
+
+        // Stage 2: Inventory TL Review
+        if (pr.status === "pending_inv_tl" && isInvTL && hasBranchAccess) {
+            return true;
+        }
+
+        // Stage 3: Ops Manager / EVP Review
+        if (
+            pr.status === "pending_ops_manager" &&
+            (isOpsManager || isEVP) &&
+            hasBranchAccess
+        ) {
+            return true;
+        }
+
+        // Stage 4: Procurement drafting the PO
+        if (
+            (pr.status === "approved" ||
+                pr.status === "pending_procurement_tl") &&
+            isProcurement
+        ) {
+            return true;
+        }
+
+        return false;
+    };
 
     const formatStatus = (status) => {
         const statusMap = {
@@ -778,44 +833,44 @@ export default function ApprovalBoard({
     };
 
     const getHeaderContent = () => {
-    switch (currentView) {
-        case "my_requests":
-            return {
-                title: "My Purchase Requests",
-                desc: "Track the status of PRs you have submitted.",
-            };
+        switch (currentView) {
+            case "my_requests":
+                return {
+                    title: "My Purchase Requests",
+                    desc: "Track the status of PRs you have submitted.",
+                };
 
-        case "for_approval":
-            return {
-                title: "Purchase Requests For Approval",
-                desc: "Review and manage purchase requests awaiting your approval.",
-            };
+            case "for_approval":
+                return {
+                    title: "Purchase Requests For Approval",
+                    desc: "Review and manage purchase requests awaiting your approval.",
+                };
 
-        case "for_generation":
-            return {
-                title: "Purchase Orders To Generate",
-                desc: "Generate purchase orders for fully approved purchase requests.",
-            };
+            case "for_generation":
+                return {
+                    title: "Purchase Orders To Generate",
+                    desc: "Generate purchase orders for fully approved purchase requests.",
+                };
 
-        case "po_generated":
-            return {
-                title: "PO Generated",
-                desc: "View purchase requests that have already been converted into purchase orders.",
-            };
+            case "po_generated":
+                return {
+                    title: "PO Generated",
+                    desc: "View purchase requests that have already been converted into purchase orders.",
+                };
 
-        case "history":
-            return {
-                title: "Purchase Request History",
-                desc: "View completed and approved purchase requests.",
-            };
+            case "history":
+                return {
+                    title: "Purchase Request History",
+                    desc: "View completed and approved purchase requests.",
+                };
 
-        default:
-            return {
-                title: "My Purchase Requests",
-                desc: "Track the status of PRs you have submitted.",
-            };
-    }
-};
+            default:
+                return {
+                    title: "My Purchase Requests",
+                    desc: "Track the status of PRs you have submitted.",
+                };
+        }
+    };
     const headerContent = getHeaderContent();
 
     return (
@@ -836,102 +891,96 @@ export default function ApprovalBoard({
 
                 {/* Filter Tabs */}
                 <div className="flex flex-wrap items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1">
-
-    {/* =========================================================
+                    {/* =========================================================
         MY REQUESTS
     ========================================================= */}
-    <Link
-        href={route("prpo.approval-board", {
-            view: "my_requests",
-        })}
-        className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${
-            currentView === "my_requests"
-                ? "bg-white text-indigo-700 shadow-sm"
-                : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
-        }`}
-    >
-        My Requests
-    </Link>
+                    <Link
+                        href={route("prpo.approval-board", {
+                            view: "my_requests",
+                        })}
+                        className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${
+                            currentView === "my_requests"
+                                ? "bg-white text-indigo-700 shadow-sm"
+                                : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                        }`}
+                    >
+                        My Requests
+                    </Link>
 
-
-    {/* =========================================================
+                    {/* =========================================================
         FOR APPROVAL
     ========================================================= */}
-    {(isInvTL ||
-        isOpsManager ||
-        isEVP ||
-        userRole.includes("procurement tl") ||
-        userRole === "admin") && (
-        <Link
-            href={route("prpo.approval-board", {
-                view: "for_approval",
-            })}
-            className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${
-                currentView === "for_approval"
-                    ? "bg-white text-indigo-700 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
-            }`}
-        >
-            For Approval
-        </Link>
-    )}
+                    {(isInvTL ||
+                        isOpsManager ||
+                        isEVP ||
+                        userRole.includes("procurement tl") ||
+                        userRole === "admin") && (
+                        <Link
+                            href={route("prpo.approval-board", {
+                                view: "for_approval",
+                            })}
+                            className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${
+                                currentView === "for_approval"
+                                    ? "bg-white text-indigo-700 shadow-sm"
+                                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                            }`}
+                        >
+                            For Approval
+                        </Link>
+                    )}
 
-
-    {/* =========================================================
+                    {/* =========================================================
         PO GENERATION
     ========================================================= */}
-    {canManagePO && (
-        <Link
-            href={route("prpo.approval-board", {
-                view: "for_generation",
-            })}
-            className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${
-                currentView === "for_generation"
-                    ? "bg-white text-indigo-700 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
-            }`}
-        >
-            PO Generation
-        </Link>
-    )}
+                    {canManagePO && (
+                        <Link
+                            href={route("prpo.approval-board", {
+                                view: "for_generation",
+                            })}
+                            className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${
+                                currentView === "for_generation"
+                                    ? "bg-white text-indigo-700 shadow-sm"
+                                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                            }`}
+                        >
+                            PO Generation
+                        </Link>
+                    )}
 
-
-    {/* =========================================================
+                    {/* =========================================================
         PO GENERATED
     ========================================================= */}
-    {canManagePO && (
-        <Link
-            href={route("prpo.approval-board", {
-                view: "po_generated",
-            })}
-            className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${
-                currentView === "po_generated"
-                    ? "bg-white text-indigo-700 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
-            }`}
-        >
-            PO Generated
-        </Link>
-    )}
+                    {canManagePO && (
+                        <Link
+                            href={route("prpo.approval-board", {
+                                view: "po_generated",
+                            })}
+                            className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${
+                                currentView === "po_generated"
+                                    ? "bg-white text-indigo-700 shadow-sm"
+                                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                            }`}
+                        >
+                            PO Generated
+                        </Link>
+                    )}
 
-
-    {/* =========================================================
+                    {/* =========================================================
         PURCHASE REQUEST HISTORY
     ========================================================= */}
-    <Link
-        href={route("prpo.approval-board", {
-            view: "history",
-        })}
-        className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${
-            currentView === "history"
-                ? "bg-white text-indigo-700 shadow-sm"
-                : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
-        }`}
-    >
-        Purchase Request History
-    </Link>
-
-</div>
+                    <Link
+                        href={route("prpo.approval-board", {
+                            view: "history",
+                        })}
+                        className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${
+                            currentView === "history"
+                                ? "bg-white text-indigo-700 shadow-sm"
+                                : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                        }`}
+                    >
+                        Purchase Request History
+                    </Link>
+                </div>
 
                 <div className="mb-6 bg-white p-5 rounded-xl shadow-sm border border-gray-200">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1065,13 +1114,16 @@ export default function ApprovalBoard({
                             ) : (
                                 filteredRequests.map((pr) => (
                                     <tr
-    key={pr.id} /* Changed to pr.id to ensure a unique key always exists */
-    onClick={() => openModal(pr)}
-    className="hover:bg-gray-50 transition cursor-pointer"
->
-    <td className="px-6 py-4 text-center font-medium text-indigo-600 hover:text-indigo-900">
-        {pr.pr_number || `PR-${pr.id}`} {/* Added fallback to database ID */}
-    </td>
+                                        key={
+                                            pr.id
+                                        } /* Changed to pr.id to ensure a unique key always exists */
+                                        onClick={() => openModal(pr)}
+                                        className="hover:bg-gray-50 transition cursor-pointer"
+                                    >
+                                        <td className="px-6 py-4 text-center font-medium text-indigo-600 hover:text-indigo-900">
+                                            {pr.pr_number || `PR-${pr.id}`}{" "}
+                                            {/* Added fallback to database ID */}
+                                        </td>
                                         <td className="px-6 py-4 text-center">
                                             {pr.user?.name || "Unknown"}
                                         </td>
@@ -1090,8 +1142,8 @@ export default function ApprovalBoard({
                                                             ? "bg-red-50 text-red-700 ring-red-600/20"
                                                             : pr.priority ===
                                                                 "Normal"
-                                                            ? "bg-blue-50 text-blue-700 ring-blue-700/10"
-                                                            : "bg-green-50 text-green-600 ring-green-500/10"
+                                                              ? "bg-blue-50 text-blue-700 ring-blue-700/10"
+                                                              : "bg-green-50 text-green-600 ring-green-500/10"
                                                     }`}
                                                 >
                                                     {pr.priority}
@@ -1103,7 +1155,20 @@ export default function ApprovalBoard({
                                             )}
                                         </td>
 
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{pr.date_needed ? new Date(pr.date_needed).toLocaleDateString('en-US', {year: 'numeric',month: 'long',day: 'numeric'}): "N/A"}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                            {pr.date_needed
+                                                ? new Date(
+                                                      pr.date_needed,
+                                                  ).toLocaleDateString(
+                                                      "en-US",
+                                                      {
+                                                          year: "numeric",
+                                                          month: "long",
+                                                          day: "numeric",
+                                                      },
+                                                  )
+                                                : "N/A"}
+                                        </td>
                                         <td className="px-6 py-4 text-center font-medium">
                                             {pr.items?.length || 0} Items
                                         </td>
@@ -1501,35 +1566,29 @@ export default function ApprovalBoard({
                                     Close Window
                                 </button>
 
-                                {/* 🔐 PERMISSION OVERRIDE: Allow edit/approve/reject if user has elevated permissions OR currentView is 'action_needed' */}
-                                {isInvTL &&
-                                    selectedPR.status === "pending_inv_tl" &&
-                                    (canUserBypassViewMode(
-                                        auth,
-                                        "purchase_requests",
-                                    ) ||
-                                        currentView === "action_needed") && (
-                                        <button
-                                            onClick={openEditModal}
-                                            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 transition-colors"
+                                {/* 🛡️ DYNAMIC ACL EDIT BUTTON */}
+                                {canEditPR(selectedPR) && (
+                                    <button
+                                        onClick={openEditModal}
+                                        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 transition-colors"
+                                    >
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            strokeWidth={2}
+                                            stroke="currentColor"
+                                            className="w-4 h-4"
                                         >
-                                            <svg
-                                                xmlns="http://www.w3.org/2000/svg"
-                                                fill="none"
-                                                viewBox="0 0 24 24"
-                                                strokeWidth={2}
-                                                stroke="currentColor"
-                                                className="w-4 h-4"
-                                            >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"
-                                                />
-                                            </svg>
-                                            Edit Request
-                                        </button>
-                                    )}
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"
+                                            />
+                                        </svg>
+                                        Edit Request
+                                    </button>
+                                )}
 
                                 {canApprove(selectedPR) &&
                                     (canUserBypassViewMode(
@@ -1613,57 +1672,62 @@ export default function ApprovalBoard({
                                                     strokeWidth={2.5}
                                                     stroke="currentColor"
                                                 >
-                                                    {isEVP && selectedPR.status === "pending_ops_manager" && (
-    <button
-        onClick={() =>
-            handleAction(
-                selectedPR.id,
-                "approve_as_om_fallback",
-            )
-        }
-        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 transition-colors"
-    >
-        <svg
-            className="h-4 w-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2.5}
-            stroke="currentColor"
-        >
-            <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 6v12m6-6H6"
-            />
-        </svg>
-        Approve as OM Fallback
-    </button>
-)}
+                                                    {isEVP &&
+                                                        selectedPR.status ===
+                                                            "pending_ops_manager" && (
+                                                            <button
+                                                                onClick={() =>
+                                                                    handleAction(
+                                                                        selectedPR.id,
+                                                                        "approve_as_om_fallback",
+                                                                    )
+                                                                }
+                                                                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 transition-colors"
+                                                            >
+                                                                <svg
+                                                                    className="h-4 w-4"
+                                                                    fill="none"
+                                                                    viewBox="0 0 24 24"
+                                                                    strokeWidth={
+                                                                        2.5
+                                                                    }
+                                                                    stroke="currentColor"
+                                                                >
+                                                                    <path
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        d="M12 6v12m6-6H6"
+                                                                    />
+                                                                </svg>
+                                                                Approve as OM
+                                                                Fallback
+                                                            </button>
+                                                        )}
 
-<button
-    onClick={() =>
-        handleAction(
-            selectedPR.id,
-            "approve",
-        )
-    }
-    className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 transition-colors"
->
-    <svg
-        className="h-4 w-4"
-        fill="none"
-        viewBox="0 0 24 24"
-        strokeWidth={2.5}
-        stroke="currentColor"
-    >
-        <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M4.5 12.75l6 6 9-13.5"
-        />
-    </svg>
-    Approve Request
-</button>
+                                                    <button
+                                                        onClick={() =>
+                                                            handleAction(
+                                                                selectedPR.id,
+                                                                "approve",
+                                                            )
+                                                        }
+                                                        className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 transition-colors"
+                                                    >
+                                                        <svg
+                                                            className="h-4 w-4"
+                                                            fill="none"
+                                                            viewBox="0 0 24 24"
+                                                            strokeWidth={2.5}
+                                                            stroke="currentColor"
+                                                        >
+                                                            <path
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                                d="M4.5 12.75l6 6 9-13.5"
+                                                            />
+                                                        </svg>
+                                                        Approve Request
+                                                    </button>
                                                 </svg>
                                                 Approve Request
                                             </button>

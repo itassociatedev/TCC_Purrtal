@@ -870,13 +870,34 @@ public function approvalBoard(Request $request)
 
 
     public function update(Request $request, $id)
-    {
-        // 🔐 ACL CHECK: Verify user can EDIT purchase_requests (not just approve)
-        // Permission Hierarchy: Full only can edit existing requests
-        $user = Auth::user();
-        if (!$user->canEditModule('purchase_requests')) {
-            abort(403, 'You do not have permission to update purchase requests.');
+{
+    $pr = PurchaseRequest::findOrFail($id);
+    $user = Auth::user();
+    $role = strtolower(trim($user->role->name ?? ''));
+    $action = $request->input('action');
+
+    if ($action === 'approve') {
+        // 🛡️ STRICT ACL ENFORCEMENT MATRIX FOR APPROVALS
+        $canApprove = match($pr->status) {
+            'pending_inv_tl' => str_contains($role, 'inventory tl') || $role === 'admin',
+            
+            // 🚩 The Fix: explicitly allow EVP and President to clear the OM queue
+            'pending_ops_manager' => str_contains($role, 'operations') || str_contains($role, 'evp') || str_contains($role, 'president') || $role === 'admin',
+            
+            'pending_procurement_tl' => str_contains($role, 'procurement') || $role === 'admin',
+            default => $role === 'admin',
+        };
+
+        if (!$canApprove) {
+            abort(403, 'YOU DO NOT HAVE PERMISSION TO APPROVE PURCHASE REQUESTS.');
         }
+
+        // 🔄 EVP Override Tracking Logic
+        if (str_contains($role, 'evp') && $pr->status === 'pending_ops_manager') {
+            $pr->is_evp_override = true;
+            $pr->approved_by_name = $user->name;
+        }
+    }
 
         $pr = PurchaseRequest::findOrFail($id);
 
