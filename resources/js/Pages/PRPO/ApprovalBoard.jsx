@@ -356,6 +356,7 @@ export default function ApprovalBoard({
     const canManagePO = [
         "procurement assist",
         "procurement tl",
+        "executive vice president", "evp",
         "admin",
     ].includes(userRole);
     const isInvTL = userRole === "inventory tl" || userRole === "admin";
@@ -492,38 +493,21 @@ export default function ApprovalBoard({
     const canApprove = (pr) => {
         if (!pr) return false;
 
-        // Define roles
-        const isEVP =
-            userRole.includes("evp") ||
-            userRole.includes("executive vice president");
-        const isProcurement =
-            userRole.includes("procurement") || userRole === "admin";
-        const hasBranchAccess =
-            userRole === "admin" || isEVP || userBranches.includes(pr.branch);
+    const isEVP = userRole.includes("evp") || userRole.includes("president");
+    const hasBranchAccess = userRole === "admin" || isEVP || userBranches.includes(pr.branch);
 
-        // Stage 2: Inventory TL
-        if (pr.status === "pending_inv_tl" && isInvTL && hasBranchAccess) {
-            return true;
-        }
+    // Stage 2: Inventory TL
+    if (pr.status === "pending_inv_tl" && isInvTL && hasBranchAccess) {
+        return true;
+    }
 
-        // Stage 3: Ops Manager (Allows EVP to step in)
-        if (
-            pr.status === "pending_ops_manager" &&
-            (isOpsManager || isEVP) &&
-            hasBranchAccess
-        ) {
-            return true;
-        }
+    // Stage 3: Ops Manager (Allows EVP to step in)
+    if (pr.status === "pending_ops_manager" && (isOpsManager || isEVP) && hasBranchAccess) {
+        return true;
+    }
 
-        // 🚩 Stage 4: Procurement TL (Allows Procurement OR EVP)
-        if (
-            pr.status === "pending_procurement_tl" &&
-            (isProcurement || isEVP)
-        ) {
-            return true;
-        }
-
-        return false;
+    // ❌ REMOVED: Stage 4 Procurement check. They will no longer see the standard Approve/Reject buttons.
+    return false;
     };
 
     const canEditPR = (pr) => {
@@ -558,15 +542,6 @@ export default function ApprovalBoard({
             return true;
         }
 
-        // Stage 4: Procurement drafting the PO
-        if (
-            (pr.status === "approved" ||
-                pr.status === "pending_procurement_tl") &&
-            isProcurement
-        ) {
-            return true;
-        }
-
         return false;
     };
 
@@ -578,10 +553,6 @@ export default function ApprovalBoard({
             },
             pending_ops_manager: {
                 label: "Pending Approval: Operations Manager",
-                color: "bg-orange-100 text-orange-800",
-            },
-            pending_procurement: {
-                label: "Pending Approval: Procurement Team Leader",
                 color: "bg-orange-100 text-orange-800",
             },
             approved: {
@@ -910,11 +881,7 @@ export default function ApprovalBoard({
                     {/* =========================================================
         FOR APPROVAL
     ========================================================= */}
-                    {(isInvTL ||
-                        isOpsManager ||
-                        isEVP ||
-                        userRole.includes("procurement tl") ||
-                        userRole === "admin") && (
+                    {canManagePO && (
                         <Link
                             href={route("prpo.approval-board", {
                                 view: "for_approval",

@@ -12,7 +12,9 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
 
     const userrole = auth.user.role?.name?.toLowerCase().trim() || '';
     const canManagePO = userrole.includes('procurement') || 
-                    userrole.includes('director') || 
+                    userrole.includes('director') ||
+                    userrole.includes('executive vice president') ||
+                    userrole.includes('evp') ||
                     userrole === 'admin';
 
     // --- FILTER STATES ---
@@ -61,6 +63,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
 
     const userRole = auth.user.role?.name?.toLowerCase() || '';
     const isDCSO = ['director of corporate services and operations', 'admin'].includes(userRole);
+    const isEVP = ['executive vice president', 'admin'].includes(userRole);
     const isProcurement = ['procurement assist', 'procurement tl', 'admin'].includes(userRole);
     // 🟢 ADDED: Specific check for Procurement Assistant to restrict submission
     const isProcurementAssistant = userRole.includes('procurement assist');
@@ -195,7 +198,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
         let title, message, confirmText, confirmColor;
 
         if (newStatus === 'pending_approval') {
-            title = 'Submit for Approval'; message = 'Are you ready to submit this PO to the DCSO for final approval?'; confirmText = 'Submit PO'; confirmColor = 'bg-indigo-600 hover:bg-indigo-500';
+            title = 'Submit for Approval'; message = 'Are you ready to submit this PO to the Executive Vice President for final approval?'; confirmText = 'Submit PO'; confirmColor = 'bg-indigo-600 hover:bg-indigo-500';
         } else if (newStatus === 'approved') {
             title = 'Approve Purchase Order'; message = 'Are you sure you want to finalize and approve this PO? This will lock the document.'; confirmText = 'Approve PO'; confirmColor = 'bg-green-600 hover:bg-green-500';
         } else if (newStatus === 'drafted' && selectedPO.status === 'pending_approval') {

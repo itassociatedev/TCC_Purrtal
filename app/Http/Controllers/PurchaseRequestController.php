@@ -245,7 +245,7 @@ public function approvalBoard(Request $request)
             $query->whereIn('status', [
                 'pending_inv_tl',
                 'pending_ops_manager',
-                'pending_procurement',
+                //'pending_procurement',
                 'pending_evp_final',
             ]);
         }
@@ -304,7 +304,7 @@ public function approvalBoard(Request $request)
 
             $query->where(
                 'status',
-                'pending_procurement'
+                'for_generation'
             );
         }
 
@@ -320,20 +320,15 @@ public function approvalBoard(Request $request)
         }
     }
 
-    // =============================================================
-    // 3. PO GENERATION
-    // =============================================================
-    elseif ($view === 'for_generation') {
 
-        // Only Procurement and Admin should access this queue.
-        if (!$isProcurementUser) {
+    elseif ($view === 'for_generation' || $view === 'po_generation') {
 
+        // Only Procurement, Admin, and Executives should access this queue.
+        if (!$isProcurementUser && !$isAdmin && !$isEVP) {
             $query->whereRaw('1 = 0');
-
         } else {
-
-            // Fully approved PRs waiting for PO creation.
-            $query->where('status', 'approved');
+            // 🚩 REVISED: Include 'pending_procurement_tl' to rescue stuck PR-188 & PR-189
+            $query->whereIn('status', ['approved', 'pending_procurement_tl']);
 
             // Procurement users can be restricted by their branches
             // if they are assigned to specific branches.
@@ -344,11 +339,11 @@ public function approvalBoard(Request $request)
     }
 
     // =============================================================
-    // 4. PO GENERATED
+    // 4. PO GENERATED (HISTORY / COMPLETED)
     // =============================================================
-    elseif ($view === 'po_generated') {
+    elseif ($view === 'po_generated' || $view === 'history') {
 
-        $query->where('status', 'po_generated');
+        $query->whereIn('status', ['po_generated', 'cancelled', 'rejected']);
 
         if (!$isAdmin && !empty($userBranches)) {
             $query->whereIn('branch', $userBranches);
@@ -457,6 +452,10 @@ public function approvalBoard(Request $request)
     // =====================================================================
     $user = Auth::user();
     $action = $request->input('action');
+    $role = strtolower(trim($user->role->name ?? ''));
+    $action = $request->input('action');
+
+    $isExecutive = $role === 'admin' || str_contains($role, 'evp') || str_contains($role, 'president');
 
     // =====================================================================
     // 2. VALIDATE REQUEST
@@ -505,61 +504,6 @@ public function approvalBoard(Request $request)
                 'You do not have permission to cancel purchase requests.'
             );
         }
-    }
-
-    // =====================================================================
-    // 4. EVP APPROVAL ON BEHALF OF UNAVAILABLE OM
-    // =====================================================================
-    //
-    // This is NOT a separate workflow.
-    //
-    // The PR is already:
-    //
-    // pending_ops_manager
-    //
-    // The EVP (role_id 9) chooses:
-    //
-    // "Approve on behalf of OM"
-    //
-    // after confirming that the OM is unavailable.
-    //
-    // The PR then moves directly to:
-    //
-    // pending_procurement
-    //
-    // =====================================================================
-
-    if ($action === 'approve_as_om_fallback') {
-
-        // Only EVP can perform this action.
-        if ($user->role_id !== 9) {
-            abort(
-                403,
-                'Only the Executive Vice President can approve on behalf of the Operations Manager.'
-            );
-        }
-
-        // This action is only valid when the PR is waiting for OM approval.
-        if ($purchaseRequest->status !== 'pending_ops_manager') {
-            abort(
-                403,
-                'This Purchase Request is not awaiting Operations Manager approval.'
-            );
-        }
-
-        // EVP approves on behalf of unavailable OM.
-        $purchaseRequest->status = 'pending_procurement';
-        $purchaseRequest->is_evp_override = true;
-        $purchaseRequest->rejection_reason = null;
-        $purchaseRequest->save();
-
-        // Notify Procurement TL + requester.
-        $this->notifyNextApprovers($purchaseRequest);
-
-        return back()->with(
-            'success',
-            'Purchase request approved on behalf of the unavailable Operations Manager and forwarded to Procurement.'
-        );
     }
 
     // =====================================================================
@@ -719,19 +663,20 @@ public function approvalBoard(Request $request)
                 str_contains($userRole, 'operations') ||
                 str_contains($userRole, 'ops manager');
 
-            $isEVP = $user->role_id === 9;
+            // 👑 FIXED: Properly checks for EVP, President, and Admin (Master Key)
+            $isOMFallback = 
+                str_contains($userRole, 'approve_as_om_fallback')||
+                $userRole === 'admin' || 
+                $user->role_id === 9; // Keeping your role_id fallback just in case
 
-            if (!$isOperationsManager && !$isEVP) {
+            if (!$isOperationsManager && !$isOMFallback) {
                 abort(
                     403,
                     'Only the Operations Manager or Executive Vice President (fallback) can approve at this stage.'
                 );
             }
 
-            $purchaseRequest->status = 'pending_procurement';
-            $purchaseRequest->rejection_reason = null;
-
-            if ($isEVP) {
+            if ($isOMFallback) {
 
                 $message =
                     'Purchase request approved by the Executive Vice President as Operations Manager fallback and forwarded to Procurement Team Leader.';
@@ -745,30 +690,11 @@ public function approvalBoard(Request $request)
             break;
 
 
-        // -------------------------------------------------------------
-        // Procurement TL
-        // -------------------------------------------------------------
-        case 'pending_procurement':
-
-            $userRole = strtolower(
-                $user->role->role_name ?? ''
-            );
-
-            $isProcurementTL =
-                str_contains($userRole, 'procurement tl');
-
-            if (!$isProcurementTL) {
-                abort(
-                    403,
-                    'Only the Procurement Team Leader can approve at this stage.'
-                );
-            }
-
             $purchaseRequest->status = 'pending_evp_final';
             $purchaseRequest->rejection_reason = null;
 
             $message =
-                'Purchase request approved by Procurement Team Lead and forwarded to the Executive Vice President for final approval.';
+                'Purchase request approved by Procurement Team Leader and forwarded to the Executive Vice President for final approval.';
 
             break;
 
@@ -778,7 +704,7 @@ public function approvalBoard(Request $request)
         // -------------------------------------------------------------
         case 'pending_evp_final':
 
-            if ($user->role_id !== 9) {
+            if ($user->role_id !== 9 || $userRole === 'admin') {
                 abort(
                     403,
                     'Only the Executive Vice President can give final approval.'
@@ -876,27 +802,44 @@ public function approvalBoard(Request $request)
     $role = strtolower(trim($user->role->name ?? ''));
     $action = $request->input('action');
 
+    $isExecutive = $role === 'admin' || str_contains($role, 'evp') || str_contains($role, 'president');
+
     if ($action === 'approve') {
-        // 🛡️ STRICT ACL ENFORCEMENT MATRIX FOR APPROVALS
+        
+        // 1. Verify the user has jurisdiction at the CURRENT stage
         $canApprove = match($pr->status) {
-            'pending_inv_tl' => str_contains($role, 'inventory tl') || $role === 'admin',
-            
-            // 🚩 The Fix: explicitly allow EVP and President to clear the OM queue
-            'pending_ops_manager' => str_contains($role, 'operations') || str_contains($role, 'evp') || str_contains($role, 'president') || $role === 'admin',
-            
-            'pending_procurement_tl' => str_contains($role, 'procurement') || $role === 'admin',
-            default => $role === 'admin',
+            'pending_inv_tl' => str_contains($role, 'inventory tl') || $isExecutive,
+            'pending_ops_manager' => str_contains($role, 'operations') || $isExecutive,
+            'pending_procurement_tl' => str_contains($role, 'procurement') || $isExecutive,
+            default => false,
         };
 
         if (!$canApprove) {
-            abort(403, 'YOU DO NOT HAVE PERMISSION TO APPROVE PURCHASE REQUESTS.');
+            abort(403, 'You do not have permission to approve the request at its current stage.');
         }
 
-        // 🔄 EVP Override Tracking Logic
-        if (str_contains($role, 'evp') && $pr->status === 'pending_ops_manager') {
-            $pr->is_evp_override = true;
-            $pr->approved_by_name = $user->name;
+        // 2. Progress the status logically based on where it is NOW
+        if ($pr->status === 'pending_inv_tl') {
+            
+            $pr->status = 'pending_ops_manager';
+            
+        } elseif ($pr->status === 'pending_ops_manager') {
+            
+            // EVP Override Tracking Logic
+            if (str_contains($role, 'evp') || str_contains($role, 'president')) {
+                $pr->is_evp_override = true;
+                $pr->approved_by_name = $user->name;
+            }
+            
+            // 🚩 THE FIX: Skip the Procurement approval queue. 
+            // 'approved' means it is instantly ready for PO Generation.
+            $pr->status = 'approved'; 
+            
         }
+
+        $pr->save();
+        
+        return back()->with('success', 'Purchase Request approved successfully.');
     }
 
         $pr = PurchaseRequest::findOrFail($id);
@@ -981,25 +924,34 @@ public function approvalBoard(Request $request)
     $userRole = strtolower(trim($user->role->name ?? ''));
     $view = $request->query('view', 'active_prs'); // Set default tab
 
+    $isExecutive = $userRole === 'admin' || str_contains($userRole, 'evp') || str_contains($userRole, 'president');
+
     $query = PurchaseRequest::with(['user', 'items.product', 'purchaseOrders']);
 
-    if ($view === 'active_prs') {
-        // Show PRs created by the user for them to monitor
+    if ($view === 'my_requests') {
         $query->where('user_id', $user->id)
-              ->whereNotIn('status', ['po_generated', 'cancelled', 'rejected']);
+            ->whereNotIn('status', ['po_generated', 'cancelled', 'rejected']);
+            
     } elseif ($view === 'for_approval') {
-        // Show PRs awaiting the user's specific role approval
-        if (str_contains($userRole, 'inventory tl')) {
+        // If they are an executive/admin, let them see everything pending approval
+        if ($isExecutive) {
+            $query->whereIn('status', ['pending_inv_tl', 'pending_ops_manager']);
+        } elseif (str_contains($userRole, 'inventory tl')) {
             $query->where('status', 'pending_inv_tl');
-        } elseif (str_contains($userRole, 'operations') || str_contains($userRole, 'evp')) {
+        } elseif (str_contains($userRole, 'operations')) {
             $query->where('status', 'pending_ops_manager');
         }
-    } elseif ($view === 'for_generation') {
-        // Show approved PRs waiting for Procurement to draft POs
-        $query->where('status', 'approved');
-    } elseif ($view === 'approved_prs') {
-        // Show historical completed PRs
-        $query->whereIn('status', ['po_generated']);
+        
+    } elseif ($view === 'po_generation') {
+        // Executives and Procurement can see approved PRs waiting for POs
+        if ($isExecutive || str_contains($userRole, 'procurement')) {
+            $query->where('status', 'approved');
+        }
+        
+    } elseif ($view === 'po_generated') {
+        if ($isExecutive) {
+            $query->where('status', 'po_generated');
+        }
     }
 
     $requests = $query->latest()->paginate(15)->withQueryString();
@@ -1058,15 +1010,10 @@ public function approvalBoard(Request $request)
 
         $message = "PR from {$pr->department} ({$pr->branch}) is now pending Operations Manager approval.";
 
-    } elseif ($pr->status === 'pending_procurement') {
-
-    // Procurement Team Lead is the actual approver.
-    // Procurement Assistant only reviews/supports the PR.
-    $procurementTeam = User::where('role_id', 17)->get();
-
-    $usersToNotify = $usersToNotify->merge($procurementTeam);
-
-    $message = "PR from {$pr->department} ({$pr->branch}) is now pending Procurement Team Lead approval.";
+    // } elseif ($pr->status === 'pending_procurement') {
+    // $procurementTeam = User::where('role_id', 17)->get();
+    // $usersToNotify = $usersToNotify->merge($procurementTeam);
+    // $message = "PR from {$pr->department} ({$pr->branch}) is now pending Procurement Team Lead approval.";
 
     } elseif ($pr->status === 'pending_evp_final') {
 
