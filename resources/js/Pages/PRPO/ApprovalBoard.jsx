@@ -555,6 +555,10 @@ export default function ApprovalBoard({
                 label: "Pending Approval: Operations Manager",
                 color: "bg-orange-100 text-orange-800",
             },
+            pending_procurement_tl: {
+            label: "Pending Procurement / PO Generation",
+            color: "bg-purple-100 text-purple-800",
+            },
             approved: {
                 label: "Purchase Order Ready",
                 color: "bg-indigo-100 text-indigo-800",
@@ -1109,8 +1113,8 @@ export default function ApprovalBoard({
                                                             ? "bg-red-50 text-red-700 ring-red-600/20"
                                                             : pr.priority ===
                                                                 "Normal"
-                                                              ? "bg-blue-50 text-blue-700 ring-blue-700/10"
-                                                              : "bg-green-50 text-green-600 ring-green-500/10"
+                                                            ? "bg-blue-50 text-blue-700 ring-blue-700/10"
+                                                            : "bg-green-50 text-green-600 ring-green-500/10"
                                                     }`}
                                                 >
                                                     {pr.priority}
@@ -1125,15 +1129,15 @@ export default function ApprovalBoard({
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                             {pr.date_needed
                                                 ? new Date(
-                                                      pr.date_needed,
-                                                  ).toLocaleDateString(
-                                                      "en-US",
-                                                      {
-                                                          year: "numeric",
-                                                          month: "long",
-                                                          day: "numeric",
-                                                      },
-                                                  )
+                                                    pr.date_needed,
+                                                ).toLocaleDateString(
+                                                    "en-US",
+                                                    {
+                                                        year: "numeric",
+                                                        month: "long",
+                                                        day: "numeric",
+                                                    },
+                                                )
                                                 : "N/A"}
                                         </td>
                                         <td className="px-6 py-4 text-center font-medium">
@@ -1515,13 +1519,11 @@ export default function ApprovalBoard({
                                 </div>
                                 <div className="px-4 sm:px-12">
                                     <TrackingStepper
-                                        currentStatus={selectedPR.status}
-                                        type="PR"
-                                        branch={selectedPR.branch}
-                                        pr={
-                                            selectedPR
-                                        } /* Must be the object itself! */
-                                    />
+    currentStatus={selectedPR.status}
+    type="PR"
+    branch={selectedPR.branch}
+    pr={selectedPR}
+/>
                                 </div>
                             </div>
 
@@ -1666,8 +1668,7 @@ export default function ApprovalBoard({
                                                                         d="M12 6v12m6-6H6"
                                                                     />
                                                                 </svg>
-                                                                Approve as OM
-                                                                Fallback
+                                                            
                                                             </button>
                                                         )}
 

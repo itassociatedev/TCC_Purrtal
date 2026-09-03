@@ -247,9 +247,15 @@ class PurchaseOrderController extends Controller
             abort(403, 'Unauthorized Action. Only the Procurement or the Executive Vice President can generate Purchase Orders.');
         }
 
-        if ($purchaseRequest->status !== 'approved') {
-            return back()->with('error', 'Only approved Purchase Requests can be converted to Purchase Orders.');
-        }
+        if (!in_array($purchaseRequest->status, [
+    'approved',
+    'pending_procurement_tl',
+], true)) {
+    return back()->with(
+        'error',
+        'This Purchase Request is not ready for Purchase Order generation.'
+    );
+}
 
         if (PurchaseOrder::where('purchase_request_id', $purchaseRequest->id)->exists()) {
             return back()->with('error', 'Purchase Orders have already been generated for this request.');

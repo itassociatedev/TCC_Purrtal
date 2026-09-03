@@ -25,6 +25,16 @@ class PurchaseOrder extends Model
     ];
 
     // Relationships
+
+    // Add this to your model's properties
+    protected $appends = ['po_number'];
+
+    public function getPoNumberAttribute()
+    {
+        // Inherits the parent PR's ID to generate the matching PRPO-00197
+        return 'PRPO-' . str_pad($this->purchase_request_id, 5, '0', STR_PAD_LEFT);
+    }
+
     public function purchaseRequest()
     {
         return $this->belongsTo(PurchaseRequest::class);

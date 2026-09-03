@@ -31,10 +31,12 @@ protected $casts = [
     'is_evp_override' => 'boolean',
 ];
 
+    protected $appends = ['pr_number'];
+
     public function getPrNumberAttribute()
     {
-        $year = $this->created_at ? $this->created_at->format('Y') : date('Y');
-        return 'PR-' . $year . '-' . str_pad($this->id, 4, '0', STR_PAD_LEFT);
+        // Generates PRPO-00197
+        return 'PRPO-' . str_pad($this->id, 5, '0', STR_PAD_LEFT);
     }
 
     public function items()
