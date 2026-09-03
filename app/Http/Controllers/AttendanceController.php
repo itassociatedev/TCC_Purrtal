@@ -9,10 +9,11 @@ use App\Models\Schedule;
 use App\Models\Branch;
 use App\Models\Shift;
 use App\Models\AttendanceSetting;
-use App\Models\Holiday; 
-use App\Models\SystemLog; 
+use App\Models\Holiday; // 🟢 INJECTED FOR EDITABLE HOLIDAYS
+use App\Models\SystemLog; // 🟢 INJECTED FOR LOGGING
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB; 
+use Illuminate\Support\Facades\DB; // 🟢 INJECTED FOR DIRECT DB TIMESTAMPS
+use Illuminate\Database\Eloquent\Builder;
 use Carbon\Carbon;
 
 class AttendanceController extends Controller
@@ -25,32 +26,38 @@ class AttendanceController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
         $aclLevel = strtolower($user->aclPermissionForModule($moduleKey));
         $isAdmin = $user->role_id === 1 || strtolower(trim($user->role->name ?? '')) === 'admin';
 
+        // 🟢 FIXED: Only ACTUAL Admins get Global Visibility. "Full" access now just means they have permission to delete/reset overrides within their own department!
         $hasGlobalVisibility = $isAdmin;
 
         $allowedBranchIds = $user->branches->pluck('id')->push($user->branch_id)->filter()->unique();
 
+        // Base Branches Query
         $branchesQuery = Branch::select('id', 'name')->orderBy('name');
         if (!$hasGlobalVisibility) {
             $branchesQuery->whereIn('id', $allowedBranchIds);
         }
         $branches = $branchesQuery->get();
 
+        // Base Employee Query
+        // 🟢 FIXED: Added 'dutyMealParticipants.dutyMeal' to prevent massive N+1 query lag on initial load!
         $query = User::with(['department', 'schedules', 'scheduleOverrides', 'branches', 'dutyMealParticipants.dutyMeal'])
             ->whereIn('status', ['Active', 'Password reset']);
 
+        // 🟢 GLOBAL BYPASS: Admin sees everyone across all branches
         if ($hasGlobalVisibility) {
             return [$query->orderBy('name', 'asc'), $branches];
         }
 
+        // MATRIX 1: Calendar View = Strictly Own Schedule Only
         if ($moduleKey === 'attendance_calendar' && $aclLevel === 'view') {
             $query->where('id', $user->id);
             return [$query->orderBy('name', 'asc'), $branches];
         }
 
+        // MATRIX 2: VIEW & EDIT = Strictly Own Branch AND Own Department
         $query->where('department_id', $user->department_id)
               ->where(function ($q) use ($allowedBranchIds) {
                   $q->whereIn('branch_id', $allowedBranchIds)
@@ -75,7 +82,8 @@ class AttendanceController extends Controller
         ];
     }
 
-    private function mapEmployeeSchedules($query)
+    // 🟢 API MAPPER HELPER: Consolidated to ensure all views share the exact same logic
+    private function mapEmployeeSchedules(Builder $query)
     {
         return $query->get()->map(function ($user) {
             return [
@@ -89,6 +97,7 @@ class AttendanceController extends Controller
                         'start_date' => $sch->start_date,
                         'end_date' => $sch->end_date,
                         'shift_type' => $sch->shift_type,
+                        // 🟢 BUG FIX: Force JSON decoding so React receives actual objects instead of raw strings!
                         'off_days' => is_string($sch->off_days) ? json_decode($sch->off_days, true) : ($sch->off_days ?? []),
                         'start_time' => $sch->start_time ? date('g:i A', strtotime($sch->start_time)) : null,
                         'end_time' => $sch->end_time ? date('g:i A', strtotime($sch->end_time)) : null,
@@ -100,11 +109,13 @@ class AttendanceController extends Controller
                 })->map(function ($override) {
                     return [
                         'is_off_day' => (bool) $override->is_off_day,
-                        'is_leave' => (bool) $override->is_leave, 
+                        'is_leave' => (bool) $override->is_leave, // 🟢 FEATURE 4: Map the leave status
                         'shift_type' => $override->shift_type,
                         'start_time' => $override->start_time ? date('g:i A', strtotime($override->start_time)) : null,
                         'end_time' => $override->end_time ? date('g:i A', strtotime($override->end_time)) : null,
+                        // 🟢 MAGIC FIX: Verifies if the DB timestamp is exactly our forced 2000-01-01 import flag
                         'is_manual' => $override->updated_at ? (Carbon::parse($override->updated_at)->year > 2000) : true,
+                        // 🟢 BUG FIX 1 & 2: Explicitly checks if a manual override was modified after it was first created!
                         'was_modified' => $override->created_at && $override->updated_at && Carbon::parse($override->created_at)->ne(Carbon::parse($override->updated_at)),
                     ];
                 })->toArray(),
@@ -134,17 +145,21 @@ class AttendanceController extends Controller
         ], $this->getSharedProps()));
     }
     
+    // 🟢 DELETED scheduleView() - It is now entirely replaced by setupSchedule()
+    
     public function setupSchedule()
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
+
         if (!$user->canEditModule('attendance_setup')) {
+            // Allows fallback to View-Only if they originally had Schedule View access
             if (!$user->canViewModule('attendance_schedule_view')) {
                 abort(403, 'Unauthorized access to Setup Schedule.');
             }
         }
 
+        // We use the 'attendance_setup' ACL rules to gather the staff
         list($query, $branches) = $this->getIsolatedQuery('attendance_setup');
 
         return Inertia::render('Attendance/SetupSchedule', array_merge([
@@ -157,13 +172,16 @@ class AttendanceController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
+
+        // 🔐 SECURITY LOCK: Everyone with at least 'view' can see the calendar
         if (!$user->canViewModule('attendance_calendar')) {
             abort(403, 'Unauthorized access to Calendar.');
         }
 
         list($query, $branches) = $this->getIsolatedQuery('attendance_calendar');
+        // 🟢 (Duty meals are now eager-loaded in getIsolatedQuery, so we don't need to call it again here)
 
+        // 🟢 Generate 3 years of standard mathematical holidays
         $currentYear = now()->year;
         $mathHolidaysRaw = array_merge(
             $this->getPhilippineHolidays($currentYear - 1),
@@ -174,11 +192,12 @@ class AttendanceController extends Controller
         $mathHolidays = [];
         foreach ($mathHolidaysRaw as $date => $name) {
             $mathHolidays[$date] = [
-                'id' => null, 
+                'id' => null, // Math holidays don't have DB IDs
                 'name' => $name,
             ];
         }
 
+        // 🟢 Fetch custom editable holidays from the database and key them BY DATE
         $dbHolidaysRaw = \App\Models\Holiday::all();
         $dbHolidays = [];
         foreach ($dbHolidaysRaw as $h) {
@@ -188,6 +207,7 @@ class AttendanceController extends Controller
             ];
         }
         
+        // 🟢 Safely merge them together. If a DB holiday shares the same date as a Math holiday, the DB wins.
         $holidays = array_replace($mathHolidays, $dbHolidays);
 
         return Inertia::render('Attendance/Calendar', array_merge([
@@ -197,15 +217,16 @@ class AttendanceController extends Controller
         ], $this->getSharedProps()));
     }
 
+    // 🟢 NEW ENDPOINT: Store or Update an Event/Holiday
     public function storeHoliday(Request $request)
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
+
         if (!$user->canEditModule('attendance_calendar')) abort(403);
         
         $request->validate([
-            'id' => 'nullable|numeric', 
+            'id' => 'nullable|numeric', // 🟢 Added ID for editing
             'date' => 'required|date',
             'name' => 'required|string|max:255'
         ]);
@@ -223,11 +244,12 @@ class AttendanceController extends Controller
         return redirect()->back()->with('success', 'Event/Holiday saved successfully.');
     }
 
+    // 🟢 NEW ENDPOINT: Delete an Event/Holiday
     public function destroyHoliday(int $id)
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
+
         if (!$user->canEditModule('attendance_calendar')) abort(403);
         
         $holiday = Holiday::find($id);
@@ -242,7 +264,7 @@ class AttendanceController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
+
         if (!$user->canEditModule('attendance_setup')) abort(403);
 
         $request->validate([
@@ -250,9 +272,11 @@ class AttendanceController extends Controller
             'employee_ids' => 'required_without:employee_id|nullable|array',
             'employee_ids.*' => 'exists:users,id',
             'cutoff_period' => 'required|string', 
+            
+            // Validate the 7-day pattern payload
             'pattern' => 'required|array',
             'pattern.*.is_off_day' => 'boolean',
-            'pattern.*.is_leave' => 'boolean', 
+            'pattern.*.is_leave' => 'boolean', // 🟢 FEATURE 4: Validate leave pattern
             'pattern.*.shift_start' => 'nullable|string',
             'pattern.*.shift_end' => 'nullable|string',
             'pattern.*.shift_type' => 'nullable|string',
@@ -260,8 +284,11 @@ class AttendanceController extends Controller
 
         $employeeIds = $request->employee_ids ?: [$request->employee_id];
         
+        // Split the "YYYY-MM-DD|YYYY-MM-DD" string from React
         list($startDate, $endDate) = explode('|', $request->cutoff_period);
 
+        // 🟢 FIXED: Grab the first working day from the pattern to use as a fallback 
+        // to satisfy the strict database NOT NULL constraints!
         $firstWorkingDay = collect($request->pattern)->firstWhere(function ($day) {
             return !$day['is_off_day'] && !$day['is_leave'];
         });
@@ -279,14 +306,15 @@ class AttendanceController extends Controller
                 ],
                 [
                     'pattern' => $request->pattern, 
-                    'shift_type' => $fallbackType,   
-                    'start_time' => $fallbackStart,  
-                    'end_time' => $fallbackEnd,      
+                    'shift_type' => $fallbackType,   // 🟢 Keeps DB happy
+                    'start_time' => $fallbackStart,  // 🟢 Keeps DB happy
+                    'end_time' => $fallbackEnd,      // 🟢 Keeps DB happy
                     'off_days' => [],
                 ]
             );
         }
 
+        // Dispatch Notification to Assigned Users
         try {
             $usersToNotify = User::whereIn('id', $employeeIds)->get();
             $message = "📅Your schedule has been assigned for the cut-off period: $startDate to $endDate.";
@@ -311,13 +339,14 @@ class AttendanceController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
+
+        // Allowed if they can edit setup
         if (!$user->canEditModule('attendance_setup')) abort(403);
 
         $request->validate([
             'cells' => 'required|array', 
             'is_off_day' => 'required|boolean',
-            'is_leave' => 'required|boolean', 
+            'is_leave' => 'required|boolean', // 🟢 FEATURE 4
             'shift_start' => 'nullable',
             'shift_end' => 'nullable',
             'shift_type' => 'nullable|string',
@@ -327,17 +356,19 @@ class AttendanceController extends Controller
         $isInactive = $request->is_off_day || $request->is_leave;
 
         foreach ($request->cells as $cell) {
+            // 🟢 BUG FIX 3 (LEAVE): We use firstOrNew and set properties directly to completely bypass Laravel's $fillable blocker for is_leave!
             $override = \App\Models\ScheduleOverride::firstOrNew([
                 'user_id' => $cell['employee_id'],
                 'date' => $cell['date'],
             ]);
             
             $override->is_off_day = $request->is_off_day;
-            $override->is_leave = $request->is_leave; 
+            $override->is_leave = $request->is_leave; // 🟢 Now saves correctly
             $override->shift_type = $isInactive ? null : $request->shift_type;
             $override->start_time = $isInactive ? null : $request->shift_start;
             $override->end_time = $isInactive ? null : $request->shift_end;
 
+            // 🟢 BUG FIX 1 (MODIFIED BADGE): Force the updated_at timestamp forward so we know it was modified AFTER creation!
             if ($override->exists) {
                 $override->updated_at = now(); 
             }
@@ -346,6 +377,7 @@ class AttendanceController extends Controller
             $affectedUserIds[] = $cell['employee_id'];
         }
 
+        // 🟢 NEW: Dispatch Notification for Overrides
         try {
             $uniqueUserIds = array_unique($affectedUserIds);
             $usersToNotify = User::whereIn('id', $uniqueUserIds)->get();
@@ -367,11 +399,12 @@ class AttendanceController extends Controller
         return redirect()->back()->with('success', 'Daily shifts applied successfully.');
     }
 
+    // 🟢 NEW: Backend endpoint specifically for the FULL permission "Reset" button
     public function resetOverride(Request $request)
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
+
         if (!$user->canDeleteModule('attendance_setup')) abort(403);
 
         $request->validate([
@@ -384,6 +417,7 @@ class AttendanceController extends Controller
                 ->delete();
         }
 
+        // 🟢 SYSTEM LOGGING
         try {
             SystemLog::create([
                 'user_id' => Auth::id(),
@@ -398,11 +432,12 @@ class AttendanceController extends Controller
         return redirect()->back()->with('success', 'Shifts reset successfully.');
     }
 
+    // 🟢 FROM SCRATCH: Smart Import Engine
     public function importSchedule(Request $request)
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
+
         if (!$user->canEditModule('attendance_setup')) abort(403);
 
         $request->validate([
@@ -414,6 +449,7 @@ class AttendanceController extends Controller
             $extension = strtolower($file->getClientOriginalExtension());
             $rows = [];
 
+            // 1. Read the file
             if ($extension === 'csv' || $extension === 'txt') {
                 $path = $file->getRealPath();
                 if (($handle = fopen($path, 'r')) !== FALSE) {
@@ -434,6 +470,7 @@ class AttendanceController extends Controller
                 return redirect()->back()->with('error', 'The uploaded file is empty or formatted incorrectly.');
             }
 
+            // 2. Parse Dates from Header Row
             $headerRow = $rows[1] ?? [];
             $columnDates = [];
             $currentYear = now()->year;
@@ -455,8 +492,10 @@ class AttendanceController extends Controller
             $endDate = max($parsedDateStrings);
             $weekOrder = ['Monday' => 1, 'Tuesday' => 2, 'Wednesday' => 3, 'Thursday' => 4, 'Friday' => 5, 'Saturday' => 6, 'Sunday' => 7];
 
+            // 🟢 NEW: Array to collect the IDs of every user updated by this import
             $importedUserIds = [];
 
+            // 3. Process each Employee Row
             for ($i = 2; $i < count($rows); $i++) {
                 $row = $rows[$i];
                 $employeeName = trim($row[0] ?? '');
@@ -465,15 +504,18 @@ class AttendanceController extends Controller
                 $employee = User::where('name', $employeeName)->first();
                 if (!$employee) continue;
 
+                // Track the successful user for notifications
                 $importedUserIds[] = $employee->id;
 
                 $cellData = [];
                 $shiftCounts = [];
                 $dayOffTally = [];
 
+                // A. Extract and Clean Data for Every Cell
                 foreach ($columnDates as $colIndex => $dateString) {
                     $rawCell = $row[$colIndex] ?? '';
                     
+                    // 🟢 SAFE CLEANING: Removes non-breaking spaces and trailing spaces but KEEPS \n
                     $cellValue = str_replace("\xC2\xA0", ' ', $rawCell);
                     $cellValue = str_replace(["\r\n", "\r"], "\n", $cellValue);
                     $cellValue = preg_replace('/[ \t]+/', ' ', $cellValue); 
@@ -495,6 +537,7 @@ class AttendanceController extends Controller
                         $parsedCell['isOff'] = true;
                         $dayOffTally[$dayName] = ($dayOffTally[$dayName] ?? 0) + 1; 
                     } else {
+                        // Extract shift name and times safely using \n
                         $lines = array_values(array_filter(array_map('trim', explode("\n", $cellValue))));
                         $shiftTypeName = $lines[0] ?? '';
                         $timeRange = $lines[1] ?? '';
@@ -513,6 +556,7 @@ class AttendanceController extends Controller
                             $matchedShift = Shift::where('start_time', 'LIKE', "{$startTime}%")->where('end_time', 'LIKE', "{$endTime}%")->first();
                         }
                         if (!$matchedShift) {
+                            // Strip any accidental time data attached to the name string just in case
                             $cleanName = trim(preg_replace('/[0-9]{1,2}:[0-9]{2}\s*[AP]M\s*-\s*[0-9]{1,2}:[0-9]{2}\s*[AP]M/i', '', $shiftTypeName));
                             $matchedShift = Shift::where('name', $cleanName)->orWhere('shift_type', $cleanName)->first();
                         }
@@ -528,16 +572,19 @@ class AttendanceController extends Controller
                     $cellData[$dateString] = $parsedCell;
                 }
 
+                // B. Construct the Base Schedule
                 if (empty($shiftCounts)) {
                     Schedule::where('user_id', $employee->id)->where('start_date', $startDate)->where('end_date', $endDate)->delete();
                     \App\Models\ScheduleOverride::where('user_id', $employee->id)->whereIn('date', array_keys($cellData))->delete();
                     continue;
                 }
 
+                // Find the primary shift
                 arsort($shiftCounts);
                 $primaryShiftId = array_key_first($shiftCounts);
                 $primaryShift = Shift::find($primaryShiftId);
 
+                // Collect unique off days
                 $baseOffDays = array_keys($dayOffTally);
                 usort($baseOffDays, function ($a, $b) use ($weekOrder) {
                     return ($weekOrder[$a] ?? 0) <=> ($weekOrder[$b] ?? 0);
@@ -548,6 +595,7 @@ class AttendanceController extends Controller
                     ['shift_type' => $primaryShift->shift_type, 'start_time' => $primaryShift->start_time, 'end_time' => $primaryShift->end_time, 'off_days' => $baseOffDays]
                 );
 
+                // C. Compare & Apply Overrides
                 foreach ($cellData as $dateString => $cell) {
                     $expectedIsOff = in_array($cell['dayName'], $baseOffDays);
                     $needsOverride = false;
@@ -565,6 +613,8 @@ class AttendanceController extends Controller
                     }
 
                     if ($needsOverride) {
+                        // 🟢 100% BULLETPROOF BYPASS OF ELOQUENT TIMESTAMPS
+                        // Using raw DB updates ensures Eloquent doesn't forcefully overwrite our 2000-01-01 flag with now()
                         DB::table('schedule_overrides')->updateOrInsert(
                             [
                                 'user_id' => $employee->id,
@@ -585,6 +635,7 @@ class AttendanceController extends Controller
                 }
             }
 
+            // 🟢 NEW: Dispatch Notification to Imported Users
             try {
                 if (!empty($importedUserIds)) {
                     $uniqueUserIds = array_unique($importedUserIds);
@@ -614,9 +665,10 @@ class AttendanceController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-        
+
         if (!$user->canViewModule('attendance_overview')) abort(403);
 
+        // 🟢 NEW: Accept start and end date of the cutoff period, and the format flag
         $request->validate([
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
@@ -630,10 +682,12 @@ class AttendanceController extends Controller
         
         list($query, $branches) = $this->getIsolatedQuery('attendance_overview');
 
+        // Apply Branch Filter
         if ($request->filled('branch_id')) {
             $query->where('branch_id', $request->branch_id);
         }
 
+        // 🟢 NEW: Apply Department Filter directly to the query
         if ($request->filled('department')) {
             $query->whereHas('department', function($q) use ($request) {
                 $q->where('name', $request->department);
@@ -642,6 +696,7 @@ class AttendanceController extends Controller
 
         $rawEmployees = $query->get();
 
+        // 🟢 DYNAMIC LOOP: Build dates array based on Cutoff duration instead of strict 7-days
         $dates = [];
         for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
             $dates[] = [
@@ -656,6 +711,7 @@ class AttendanceController extends Controller
         $employees = $rawEmployees->map(function ($user) use ($dates, $formatOnly) {
             $userShifts = [];
 
+            // Only calculate and map shifts if we are NOT doing a blank format
             if (!$formatOnly) {
                 $schedules = $user->schedules->toArray();
                 $overrides = $user->scheduleOverrides->keyBy('date')->toArray();
@@ -668,20 +724,22 @@ class AttendanceController extends Controller
                     if (isset($overrides[$ds])) {
                         $shiftData = [
                             'is_off' => (bool)$overrides[$ds]['is_off_day'],
-                            'is_leave' => (bool)$overrides[$ds]['is_leave'], 
+                            'is_leave' => (bool)$overrides[$ds]['is_leave'], // 🟢 FEATURE 4
                             'shift_type' => $overrides[$ds]['shift_type'],
                             'start_time' => $overrides[$ds]['start_time'] ? date('g:i A', strtotime($overrides[$ds]['start_time'])) : null,
                             'end_time' => $overrides[$ds]['end_time'] ? date('g:i A', strtotime($overrides[$ds]['end_time'])) : null,
+                            // 🟢 FIXED: Ensures imported dates don't highlight in Excel either!
                             'is_override' => isset($overrides[$ds]['updated_at']) ? (\Carbon\Carbon::parse($overrides[$ds]['updated_at'])->year > 2000) : true,
                         ];
                     } else {
                         foreach ($schedules as $sch) {
                             if ($ds >= $sch['start_date'] && $ds <= $sch['end_date']) {
+                                // 🟢 NEW: Check pattern first for export
                                 if (isset($sch['pattern']) && isset($sch['pattern'][$dn])) {
                                     $dayConfig = $sch['pattern'][$dn];
                                     $shiftData = [
                                         'is_off' => (bool)$dayConfig['is_off_day'],
-                                        'is_leave' => (bool)($dayConfig['is_leave'] ?? false), 
+                                        'is_leave' => (bool)($dayConfig['is_leave'] ?? false), // 🟢 FEATURE 4
                                         'shift_type' => $dayConfig['shift_type'],
                                         'start_time' => $dayConfig['shift_start'] ? date('g:i A', strtotime($dayConfig['shift_start'])) : null,
                                         'end_time' => $dayConfig['shift_end'] ? date('g:i A', strtotime($dayConfig['shift_end'])) : null,
@@ -728,6 +786,7 @@ class AttendanceController extends Controller
         return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\AttendanceExport($employees, $dates, $weekRange, $formatOnly), $fileName);
     }
 
+    // 🟢 NEW: Mathematical Philippine Holiday Generator
     private function getPhilippineHolidays(int $year)
     {
         $holidays = [
@@ -746,6 +805,7 @@ class AttendanceController extends Controller
             "$year-12-31" => "New Year's Eve",
         ];
 
+        // 🟢 MOVABLE 1: Holy Week (Calculated mathematically via Easter)
         $easterDays = easter_days($year);
         $easter = \Carbon\Carbon::createFromDate($year, 3, 21)->addDays($easterDays);
         
@@ -754,6 +814,7 @@ class AttendanceController extends Controller
         $holidays[$easter->copy()->subDays(1)->format('Y-m-d')] = "Black Saturday";
         $holidays[$easter->format('Y-m-d')] = "Easter Sunday";
 
+        // 🟢 MOVABLE 2: National Heroes Day (Always the Last Monday of August)
         $heroesDay = \Carbon\Carbon::parse("last monday of august $year")->format('Y-m-d');
         $holidays[$heroesDay] = "National Heroes Day";
 
