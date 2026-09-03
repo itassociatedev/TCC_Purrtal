@@ -26,7 +26,11 @@ class DutyMealController extends Controller
         $user = $request->user();
         $now = now();
 
-        $pendingParticipants = DutyMealParticipant::with('dutyMeal')->where('user_id', $user->id)->where('choice', 'none')->get();
+        // 🟢 Eager load user.branches so we can check if they are multi-branch
+        $pendingParticipants = DutyMealParticipant::with(['dutyMeal.branch', 'user.branches'])
+            ->where('user_id', $user->id)
+            ->where('choice', 'none')
+            ->get();
 
         foreach ($pendingParticipants as $participant) {
             if ($participant->dutyMeal) {
@@ -39,7 +43,23 @@ class DutyMealController extends Controller
 
                 // If we are past the deadline, force the choice to 'main'
                 if ($now->greaterThanOrEqualTo($deadline)) {
-                    $participant->update(['choice' => 'main']);
+                    
+                    $isMakati = str_contains(strtolower($participant->dutyMeal->branch->name ?? ''), 'makati');
+                    $site = null;
+                    
+                    if ($isMakati && $participant->user) {
+                        // Combine their primary branch_id with any assigned pivot branches to get their total branch count
+                        $assignedBranchIds = $participant->user->branches->pluck('id')->push($participant->user->branch_id)->filter()->unique();
+                        $isMultiBranch = $assignedBranchIds->count() > 1;
+                        
+                        // If multi-branch, default to Back Office; else Clinic
+                        $site = $isMultiBranch ? 'Back Office' : 'Clinic';
+                    }
+                    
+                    $participant->update([
+                        'choice' => 'main',
+                        'site' => $site
+                    ]);
                 }
             }
         }

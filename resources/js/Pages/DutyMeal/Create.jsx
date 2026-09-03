@@ -16,12 +16,23 @@ const getShiftDetails = (emp, dateString, dayName) => {
     // 1. Check Overrides First
     const override = emp.mapped_overrides?.[dateString];
     if (override) {
-        return { isOff: override.is_off_day, shiftType: override.shift_type };
+        // 🟢 BUG FIX: Ensure leaves are also treated as off days for meals
+        return { isOff: override.is_off_day || override.is_leave, shiftType: override.shift_type };
     }
 
     // 2. Check Master Schedules
     const activeSchedule = emp.mapped_schedules?.find(sch => dateString >= sch.start_date && dateString <= sch.end_date);
     if (activeSchedule) {
+        // 🟢 BUG FIX: Read from the new 7-Day Pattern logic instead of the deprecated off_days array!
+        if (activeSchedule.pattern && activeSchedule.pattern[dayName]) {
+            const dayConfig = activeSchedule.pattern[dayName];
+            return {
+                isOff: dayConfig.is_off_day || dayConfig.is_leave,
+                shiftType: dayConfig.shift_type,
+            };
+        }
+
+        // Legacy fallback
         return {
             isOff: activeSchedule.off_days?.includes(dayName),
             shiftType: activeSchedule.shift_type,
@@ -129,6 +140,7 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
 
             branchEmps.forEach(emp => {
                 const shift = getShiftDetails(emp, day.date, day.dayName);
+                // The updated getShiftDetails now properly flags isOff as true for leaves and pattern off-days!
                 if (shift.shiftType && !shift.isOff) {
                     day.participants.push({
                         id: emp.id,
