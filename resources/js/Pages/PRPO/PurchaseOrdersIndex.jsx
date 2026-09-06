@@ -287,7 +287,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
     const formatStatus = (status) => {
         const statusMap = {
             'drafted': { label: 'Draft', color: 'bg-gray-100 text-gray-800' },
-            'pending_approval': { label: 'Pending EVP Approval', color: 'bg-yellow-100 text-yellow-800' },
+            'pending_evp_final': { label: 'Pending EVP Approval', color: 'bg-yellow-100 text-yellow-800' },
             'approved': { label: 'Approved', color: 'bg-green-100 text-green-800' },
             'cancelled': { label: 'Cancelled', color: 'bg-red-100 text-red-800' }
         };

@@ -1,10 +1,11 @@
 export default function TrackingStepper({ currentStatus, type = 'PR', branch, pr = {} }) {
     // 1. Define the full 4-tier workflow steps for PR
     const prWorkflow = [
-        { key: "submitted", label: "Purchase Request (Inventory Assistant)" },
-        { key: "pending_inv_tl", label: "Initial Review (Inventory Team Leader)" },
-        { key: "pending_ops_manager", label: "Approval (Branch Operations Manager)" },
-        { key: "approved", label: "PO Ready (Procurement Team Leader)" },
+        { key: "submitted", label: "Requested" },
+        { key: "pending_inv_tl", label: "Inventory TL Review" },
+        { key: "pending_ops_manager", label: "Operations Manager Approval" },
+        { key: "pending_procurement_tl", label: "Procurement TL Approval" },
+        { key: "pending_procurement", label: "Ready for PO Generation" },
     ];
     
     
@@ -79,13 +80,11 @@ if (type === 'PR' && ['approved', 'po_generated'].includes(currentStatus)) {
                             {/* 🚩 Text is wrapped in a flex-col so the EVP marker stacks neatly below */}
                             <div className="flex flex-col">
                                 <span className={textColor}>{step.label}</span>
-                                {/* The EVP Override Marker */}
-                                {pr?.is_evp_override &&
-                                step.key === "pending_ops_manager" ? (
-                                <span className="text-[10px] italic text-purple-600 font-bold mt-0.5 leading-tight">
-                                Authorized by the Executive Vice President
-                                for the Operations Management role.
-                                </span>
+                                {/* 🟢 THE FIX: Correct Database Column & Target the Text */}
+                                {pr?.is_evp_override && step.key === "pending_ops_manager" ? (
+                                    <span className="text-[10px] italic text-purple-600 font-bold mt-0.5 leading-tight">
+                                        Authorized by the Executive Vice President as Operations Manager fallback.
+                                    </span>
                                 ) : null}
                             </div>
                         </span>

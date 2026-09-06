@@ -30,7 +30,7 @@ const TrackerLine = ({ pr }) => {
             poStatusMsg = "Purchase Order drafted. Procurement is finalizing the details.";
         } else if (statuses.includes('pending_approval')) {
             isPoProcessing = true;
-            poStatusMsg = "Purchase Order submitted. Pending final approval from DCSO.";
+            poStatusMsg = "Purchase Order submitted. Pending final approval from Executive Vice President.";
         } else if (statuses.every(s => s === 'approved')) {
             isFullyOrdered = true;
             poStatusMsg = `Purchase Order approved! Items have been officially ordered. Estimated delivery: ${pr.date_needed || 'TBD'}`;
@@ -145,14 +145,15 @@ export default function StatusIndex({ auth, requests }) {
     
     const formatStatus = (status) => {
         const statusMap = {
-            'pending_inv_tl': { label: 'Pending Inv. TL', color: 'bg-yellow-100 text-yellow-800' },
-            'pending_ops_manager': { label: 'Pending Ops. Manager', color: 'bg-orange-100 text-orange-800' },
+            'pending_inv_tl': { label: 'Pending Inventory Team Leader', color: 'bg-yellow-100 text-yellow-800' },
+            'pending_ops_manager': { label: 'Pending Operations Manager', color: 'bg-orange-100 text-orange-800' },
+            'pending_procurement_tl': { label: 'Pending Procurement Team Leader', color: 'bg-purple-100 text-purple-800' },
             'approved': { label: 'Approved', color: 'bg-green-100 text-green-800' },
             'po_generated': { label: 'PO Generated', color: 'bg-teal-100 text-teal-800' }, 
             'rejected': { label: 'Rejected', color: 'bg-red-100 text-red-800' },
             'cancelled': { label: 'Cancelled', color: 'bg-gray-100 text-gray-500' },
             'drafted': { label: 'Draft', color: 'bg-gray-100 text-gray-800' },
-            'pending_approval': { label: 'Pending DCSO Approval', color: 'bg-yellow-100 text-yellow-800' },
+            'pending_approval': { label: 'Pending Executive Vice President Approval', color: 'bg-yellow-100 text-yellow-800' },
         };
         const mapped = statusMap[status] || { label: status, color: 'bg-gray-100 text-gray-800' };
         return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${mapped.color}`}>{mapped.label}</span>;

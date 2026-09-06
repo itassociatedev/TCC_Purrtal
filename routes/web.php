@@ -402,7 +402,7 @@ Route::prefix('prpo')->name('prpo.')->middleware(['auth'])->group(function () {
     Route::post('/products/batch-destroy', [ProductController::class, 'batchDestroy'])->middleware('admin_acl:products')->name('products.batch-destroy');
     Route::patch('/products/{product}/toggle-status', [ProductController::class, 'toggleStatus'])->middleware('admin_acl:products')->name('products.toggle-status');
 
-    // --- PR/PO WORKFLOW ---
+    // --- PR/PO WORKFLOW --- BUG FIXES AND IMPROVEMENTS BY PRIMO ---
     Route::get('/purchase-request/create', [PurchaseRequestController::class, 'create'])->name('purchase-requests.create');
     Route::post('/purchase-request', [PurchaseRequestController::class, 'store'])->middleware('admin_acl:purchase_requests')->name('purchase-requests.store');
     Route::put('/purchase-requests/{id}', [PurchaseRequestController::class, 'update'])->middleware('admin_acl:purchase_requests')->name('purchase-requests.update');
@@ -419,7 +419,7 @@ Route::prefix('prpo')->name('prpo.')->middleware(['auth'])->group(function () {
 });
 
 // --- ATTENDANCE MODULE NI MARX HAHAHAHAH ---
-Route::prefix('attendance')->middleware(['auth'])->group(function () {
+    Route::prefix('attendance')->middleware(['auth'])->group(function () {
     Route::get('/overview', [AttendanceController::class, 'overview'])->name('attendance.overview');
     Route::get('/setup-schedule', [AttendanceController::class, 'setupSchedule'])->name('attendance.setup-schedule');
     Route::get('/schedule-view', [AttendanceController::class, 'scheduleView'])->name('attendance.schedule-view');
