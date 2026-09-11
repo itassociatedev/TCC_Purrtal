@@ -25,6 +25,8 @@ class PurchaseRequest extends Model
     'rejection_reason',
     'cc_user_id',
     'is_evp_override',
+    'reviewed_by_id',
+    'approved_by_id',
 ];
 
 protected $casts = [
@@ -35,8 +37,9 @@ protected $casts = [
 
     public function getPrNumberAttribute()
     {
-        // Generates PRPO-00197
-        return 'PRPO-' . str_pad($this->id, 5, '0', STR_PAD_LEFT);
+        // Grabs the creation year and pads the ID to 4 digits
+        $year = $this->created_at ? $this->created_at->format('Y') : date('Y');
+        return 'PR-' . $year . '-' . str_pad($this->id, 4, '0', STR_PAD_LEFT);
     }
 
     public function items()
@@ -57,5 +60,15 @@ protected $casts = [
     public function purchaseOrders()
     {
         return $this->hasMany(PurchaseOrder::class);
+    }
+
+    // Add to $fillable array: 'reviewed_by_id', 'approved_by_id'
+
+    public function reviewedBy() {
+        return $this->belongsTo(User::class, 'reviewed_by_id');
+    }
+
+    public function approvedBy() {
+        return $this->belongsTo(User::class, 'approved_by_id');
     }
 }

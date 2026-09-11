@@ -15,16 +15,18 @@ class PRPOStatusController extends Controller
         $userRole = strtolower(trim($user->role->name ?? ''));
 
         // 🟢 1. Define our VIP roles that need to see the PRs regardless of who created them
-        $isGlobalViewer = $userRole === 'admin' 
+        $isGlobalViewer = $userRole === 'admin'
             || str_contains($userRole, 'director')
+            || str_contains($userRole, 'evp')
+            || str_contains($userRole, 'president')
             || str_contains($userRole, 'audit');
 
         // 2. Start the query with eager loading
         $query = PurchaseRequest::with([
-            'user:id,name', 
+            'user:id,name',
             'cc_user:id,name',
-            'purchaseOrders.supplier', 
-            'purchaseOrders.items',    
+            'purchaseOrders.supplier',
+            'purchaseOrders.items',
             'items.product'
         ]);
 
@@ -36,7 +38,7 @@ class PRPOStatusController extends Controller
                   ->orWhere('cc_user_id', $user->id);
             });
         }
-        // If they ARE an Auditor, the code skips the filter above 
+        // If they ARE an Auditor, the code skips the filter above
         // and safely loads all the PRs so they can do their job!
 
         $requests = $query->latest()->paginate(15);
