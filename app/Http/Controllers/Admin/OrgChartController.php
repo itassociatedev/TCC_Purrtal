@@ -47,10 +47,16 @@ class OrgChartController extends Controller
     public function index()
     {
         $members = OrgChartMember::orderBy('sort_order')->latest()->get();
-        
-        $orgChartSvg = Storage::disk('public')->exists('org_chart/org-chart.svg') 
-            ? 'storage/org_chart/org-chart.svg' 
-            : null;
+
+        $orgChartSvg = null;
+        $files = Storage::disk('public')->files('org_chart');
+
+        if (!empty($files)) {
+            // Dynamically grab the first file in the directory, regardless of its name
+            $filePath = $files[0];
+            $timestamp = Storage::disk('public')->lastModified($filePath);
+            $orgChartSvg = 'storage/' . $filePath . '?v=' . $timestamp;
+        }
 
         return Inertia::render('Admin/OrgChart', [
             'members' => $members,
@@ -63,10 +69,16 @@ class OrgChartController extends Controller
     public function userIndex()
     {
         $members = OrgChartMember::orderBy('sort_order')->latest()->get();
-        
-        $orgChartSvg = Storage::disk('public')->exists('org_chart/org-chart.svg') 
-            ? 'storage/org_chart/org-chart.svg' 
-            : null;
+
+        $orgChartSvg = null;
+        $files = Storage::disk('public')->files('org_chart');
+
+        if (!empty($files)) {
+            // Dynamically grab the first file in the directory, regardless of its name
+            $filePath = $files[0];
+            $timestamp = Storage::disk('public')->lastModified($filePath);
+            $orgChartSvg = 'storage/' . $filePath . '?v=' . $timestamp;
+        }
 
         return Inertia::render('OrgChart', [
             'members' => $members,
@@ -78,11 +90,17 @@ class OrgChartController extends Controller
     public function storeAsset(Request $request)
     {
         $request->validate([
-            'org_chart_file' => 'required|file|mimes:svg|max:768000', 
+            'org_chart_file' => 'required|file|mimes:svg|max:768000',
         ]);
 
         if ($request->hasFile('org_chart_file')) {
-            $request->file('org_chart_file')->storeAs('org_chart', 'org-chart.svg', 'public');
+            // 1. Delete any existing files in the directory to ensure only 1 active chart exists
+            $oldFiles = Storage::disk('public')->files('org_chart');
+            Storage::disk('public')->delete($oldFiles);
+
+            // 2. Save the new file using its actual original uploaded name
+            $file = $request->file('org_chart_file');
+            $file->storeAs('org_chart', $file->getClientOriginalName(), 'public');
         }
 
         return back()->with('success', 'Organizational Chart updated successfully!');
@@ -110,7 +128,7 @@ class OrgChartController extends Controller
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:768000',
         ]);
 
-        $data = $request->only(['name', 'position', 'branch']); 
+        $data = $request->only(['name', 'position', 'branch']);
 
         if ($request->hasFile('image')) {
             $data['image_path'] = $request->file('image')->store('org_chart', 'public');
@@ -149,7 +167,7 @@ class OrgChartController extends Controller
         if ($member->image_path) {
             Storage::disk('public')->delete($member->image_path);
         }
-        
+
         $member->delete();
 
         return back()->with('success', 'Member removed successfully.');

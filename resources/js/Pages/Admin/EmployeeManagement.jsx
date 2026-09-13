@@ -3,7 +3,7 @@ import ConfirmModal from '@/Components/ConfirmModal';
 import { getAdminLinks, canEditModule, canDeleteModule, canViewModule } from "@/Config/navigation";
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 import InputError from '@/Components/InputError';
 import InputLabel from '@/Components/InputLabel';
@@ -32,13 +32,13 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     const isAdminRole = (roleId) => {
         if (!roleId) return false;
         const role = roles.find(r => r.id.toString() === roleId.toString());
-        
+
         if (!role) return false;
-        
+
         const roleName = role.name.toLowerCase();
-        
+
         return (
-            roleName === 'admin' || 
+            roleName === 'admin' ||
             roleName === 'director of corporate services and operations'
         );
     };
@@ -162,7 +162,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
     // BULK DEVICE LIMIT STATE
     const [isBulkLimitModalOpen, setBulkLimitModalOpen] = useState(false);
-    
+
     const {
         data: bulkLimitData,
         setData: setBulkLimitData,
@@ -187,7 +187,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     };
 
     const handleSelect = (userId) => {
-        setSelectedUsers(prev => 
+        setSelectedUsers(prev =>
             prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
         );
     };
@@ -246,11 +246,11 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     const confirmToggleStatus = (employee) => {
         setActiveDropdown(null);
         const isDisabling = employee.status !== 'Disabled';
-        
+
         setConfirmDialog({
             isOpen: true,
             title: isDisabling ? 'Disable Account' : 'Enable Account',
-            message: isDisabling 
+            message: isDisabling
                 ? `Are you sure you want to disable access for ${employee.name}? They will immediately be locked out of the system.`
                 : `Are you sure you want to re-enable access for ${employee.name}?`,
             confirmText: isDisabling ? 'Disable Account' : 'Enable Account',
@@ -265,7 +265,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     };
 
     const handleAccountAction = (employee) => {
-        setActiveDropdown(null); 
+        setActiveDropdown(null);
         if (employee.status === 'Pending Setup') {
             router.post(route('employees.send-activation', [employee.id]), {}, {
                 preserveScroll: true,
@@ -346,7 +346,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     // Bulk Actions handler
     const handleBulkAction = (action) => {
         setBulkDropdownOpen(false);
-        
+
         let title = '';
         let messageText = '';
         let confirmText = '';
@@ -358,7 +358,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
             case 'change-limit':
                 setBulkLimitData({ limit: 2, ids: selectedUsers });
                 setBulkLimitModalOpen(true);
-                return; 
+                return;
             case 'password-reset':
                 title = 'Send Password/Activation Links';
                 messageText = `Are you sure you want to send account links to the following ${selectedObjects.length} employee(s): ${displayNames}?`;
@@ -473,12 +473,26 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     // EXTRACTED RENDER METHODS FOR THE TABLE ROWS
     // ==========================================
     const [activeDropdown, setActiveDropdown] = useState(null);
+    const hideTimeoutRef = useRef(null);
+
+    const handleMouseEnter = () => {
+        if (hideTimeoutRef.current) {
+            clearTimeout(hideTimeoutRef.current);
+            hideTimeoutRef.current = null;
+        }
+    };
+
+    const handleMouseLeave = () => {
+        hideTimeoutRef.current = setTimeout(() => {
+            setActiveDropdown(null);
+        }, 1000); // 1-second auto-hide delay
+    };
 
     const renderDesktopRow = (employee, isSelected) => {
         const uniqueKey = getEmployeeKey(employee);
         return (
-            <tr 
-                key={`desktop-${uniqueKey}`} 
+            <tr
+                key={`desktop-${uniqueKey}`}
                 onClick={() => handleSelect(uniqueKey)}
                 className={`border-b cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50/80 hover:bg-indigo-100' : 'bg-white hover:bg-gray-50'}`}
             >
@@ -516,9 +530,9 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${
-                        employee.status === 'Disabled' ? 'bg-gray-100 text-gray-600 ring-gray-500/20' : 
-                        employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 ring-red-600/20' : 
-                        employee.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' : 
+                        employee.status === 'Disabled' ? 'bg-gray-100 text-gray-600 ring-gray-500/20' :
+                        employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 ring-red-600/20' :
+                        employee.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' :
                         employee.status === 'Pending Setup' ? 'bg-yellow-50 text-yellow-800 ring-yellow-600/20' :
                         'bg-gray-50 text-gray-800 ring-gray-600/20'
                     }`}>
@@ -539,10 +553,12 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                     {activeDropdown === uniqueKey && (
                         <div
                             onClick={(e) => e.stopPropagation()}
+                            onMouseEnter={handleMouseEnter}
+                            onMouseLeave={handleMouseLeave}
                             className="absolute right-8 top-10 z-50 w-36 overflow-hidden rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5"
                         >
                             {canManageEmployees ? (
-                                <button 
+                                <button
                                     className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors"
                                     onClick={(e) => {
                                         e.preventDefault(); e.stopPropagation(); handleAccountAction(employee);
@@ -574,8 +590,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 </button>
                             )}
                             {canManageEmployees ? (
-                                <button 
-                                    className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" 
+                                <button
+                                    className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors"
                                     onClick={(e) => {
                                         e.preventDefault(); e.stopPropagation(); confirmToggleStatus(employee);
                                     }}
@@ -592,7 +608,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 <button
                                     className={`block w-full px-4 py-2 text-left text-sm font-medium transition-colors ${employee.is_comment_banned ? 'text-green-600 hover:bg-green-50' : 'text-orange-600 hover:bg-orange-50'}`}
                                     onClick={(e) => {
-                                        e.preventDefault(); 
+                                        e.preventDefault();
                                         e.stopPropagation();
                                         if (confirm(`Are you sure you want to ${employee.is_comment_banned ? 'unban' : 'ban'} ${employee.name} from commenting?`)) {
                                             router.patch(route('admin.users.toggle-comment-ban', employee.id), {}, { preserveScroll: true });
@@ -608,9 +624,9 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 </button>
                             )}
 
-                            <Link 
-                                as="button" 
-                                method="delete" 
+                            <Link
+                                as="button"
+                                method="delete"
                                 className={`block w-full px-4 py-2 text-left text-sm font-medium transition-colors ${canDeleteEmployees ? 'text-black hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}
                                 disabled={!canDeleteEmployees}
                                 onClick={(e) => {
@@ -635,8 +651,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     const renderMobileRow = (employee, isSelected) => {
         const uniqueKey = getEmployeeKey(employee);
         return (
-            <div 
-                key={`mobile-${uniqueKey}`} 
+            <div
+                key={`mobile-${uniqueKey}`}
                 onClick={() => handleSelect(uniqueKey)}
                 className={`p-4 cursor-pointer transition-colors border-b border-gray-100 ${isSelected ? 'bg-indigo-50/80' : 'bg-white'}`}
             >
@@ -676,7 +692,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 className="absolute right-0 top-10 z-50 w-56 overflow-hidden rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5"
                             >
                                 {canManageEmployees ? (
-                                    <button 
+                                    <button
                                         className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors"
                                         onClick={(e) => {
                                             e.preventDefault(); e.stopPropagation(); handleAccountAction(employee);
@@ -708,8 +724,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     </button>
                                 )}
                                 {canManageEmployees ? (
-                                    <button 
-                                        className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" 
+                                    <button
+                                        className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors"
                                         onClick={(e) => {
                                             e.preventDefault(); e.stopPropagation(); confirmToggleStatus(employee);
                                         }}
@@ -726,7 +742,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     <button
                                         className={`block w-full px-4 py-2 text-left text-sm font-medium transition-colors ${employee.is_comment_banned ? 'text-green-600 hover:bg-green-50' : 'text-orange-600 hover:bg-orange-50'}`}
                                         onClick={(e) => {
-                                            e.preventDefault(); 
+                                            e.preventDefault();
                                             e.stopPropagation();
                                             if (confirm(`Are you sure you want to ${employee.is_comment_banned ? 'unban' : 'ban'} ${employee.name} from commenting?`)) {
                                                 router.patch(route('admin.users.toggle-comment-ban', employee.id), {}, { preserveScroll: true });
@@ -741,10 +757,10 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                         {employee.is_comment_banned ? 'Unban Comments' : 'Ban Comments'}
                                     </button>
                                 )}
-                            
-                                <Link 
-                                    as="button" 
-                                    method="delete" 
+
+                                <Link
+                                    as="button"
+                                    method="delete"
                                     className={`block w-full px-4 py-2 text-left text-sm font-medium transition-colors ${canDeleteEmployees ? 'text-black hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}
                                     disabled={!canDeleteEmployees}
                                     onClick={(e) => {
@@ -798,9 +814,9 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                     <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mt-3">Status</div>
                     <div className="mt-1">
                         <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${
-                            employee.status === 'Disabled' ? 'bg-gray-100 text-gray-600 ring-gray-500/20' : 
-                            employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 ring-red-600/20' : 
-                            employee.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' : 
+                            employee.status === 'Disabled' ? 'bg-gray-100 text-gray-600 ring-gray-500/20' :
+                            employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 ring-red-600/20' :
+                            employee.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' :
                             employee.status === 'Pending Setup' ? 'bg-yellow-50 text-yellow-800 ring-yellow-600/20' :
                             'bg-gray-50 text-gray-800 ring-gray-600/20'
                         }`}>
@@ -875,14 +891,14 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     // ==========================================
     const [isPositionModalOpen, setPositionModalOpen] = useState(false);
 
-    const { 
-        data: positionData, 
-        setData: setPositionData, 
-        post: postPosition, 
-        processing: positionProcessing, 
-        errors: positionErrors, 
-        reset: resetPosition, 
-        clearErrors: clearPositionErrors 
+    const {
+        data: positionData,
+        setData: setPositionData,
+        post: postPosition,
+        processing: positionProcessing,
+        errors: positionErrors,
+        reset: resetPosition,
+        clearErrors: clearPositionErrors
     } = useForm({
         department_id: '',
         position_name: '',
@@ -1145,7 +1161,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     </button>
 
                                     {bulkDropdownOpen && (
-                                        <div 
+                                        <div
                                             onClick={(e) => e.stopPropagation()}
                                             className="absolute left-0 z-50 mt-2 w-56 origin-top-left rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
                                         >
@@ -1222,8 +1238,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     else triggerToast('Preparing export. Download will start shortly...', 'success');
                                 }}
                                 className={`inline-flex items-center rounded-md border px-4 py-2 text-xs font-bold uppercase tracking-widest shadow-sm transition flex-shrink-0 ${
-                                    canManageEmployees 
-                                        ? 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100' 
+                                    canManageEmployees
+                                        ? 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
                                         : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
                                 }`}
                                 title={!canManageEmployees ? 'Edit permission required' : ''}
@@ -1339,7 +1355,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                 </div>
 
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-1 min-h-0 flex flex-col md:overflow-hidden relative">
-                    
+
                     {/* 🟢 DESKTOP TABLE */}
                     <div className="hidden md:block overflow-x-auto overflow-y-auto flex-1 relative">
                         <table className="min-w-full divide-y divide-gray-200 text-left text-sm text-gray-500 relative">
@@ -1372,7 +1388,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                         </div>
                                     </th>
                                     <th scope="col" className="px-6 py-3 bg-gray-50 font-bold tracking-wider">Branch</th>
-                                    
+
                                     <th scope="col" className="px-6 py-3 bg-gray-50 font-bold tracking-wider">
                                         <div className="flex items-center">
                                             <span>Status</span>
@@ -1384,7 +1400,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             </thead>
 
                             <tbody className="bg-white divide-y divide-gray-200">
-                                
+
                                 {/* 🟢 GROUP 1: SELECTED USERS PINNED TO THE TOP OF THE TABLE */}
                                 {selectedObjects.length > 0 && (
                                     <>
@@ -1394,7 +1410,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                             </td>
                                         </tr>
                                         {selectedObjects.map(employee => renderDesktopRow(employee, true))}
-                                        
+
                                         {unselectedFilteredUsers.length > 0 && (
                                             <tr className="bg-gray-100 border-b border-gray-200">
                                                 <td colSpan="7" className="px-6 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider shadow-sm">
@@ -1450,7 +1466,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                             Selected for Bulk Actions ({selectedObjects.length})
                                         </div>
                                         {selectedObjects.map(employee => renderMobileRow(employee, true))}
-                                        
+
                                         {unselectedFilteredUsers.length > 0 && (
                                             <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
                                                 Other Filtered Employees
@@ -1503,13 +1519,13 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             />
                             <InputError message={positionErrors.position_name} className="mt-2" />
                         </div>
-                        
+
                         <PrimaryButton className="mt-4 md:mt-0" disabled={positionProcessing || !canManageEmployees} title={!canManageEmployees ? 'Edit permission required' : ''}>Add</PrimaryButton>
                     </form>
 
                     <h3 className="text-sm font-semibold text-gray-700 mb-2">
-                        {positionData.department_id 
-                            ? `Existing Positions (${departments.find(d => d.id === parseInt(positionData.department_id))?.name || 'Selected Dept'})` 
+                        {positionData.department_id
+                            ? `Existing Positions (${departments.find(d => d.id === parseInt(positionData.department_id))?.name || 'Selected Dept'})`
                             : 'All Existing Positions'}
                     </h3>
                     <div className="max-h-60 overflow-y-auto rounded-md border border-gray-200">
@@ -1601,11 +1617,11 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
                             <div className="mt-4">
                                 <InputLabel htmlFor="role_id" value="System Role" />
-                                <select 
-                                    id="role_id" 
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" 
-                                    value={userData.role_id} 
-                                    onChange={(e) => setUserData('role_id', e.target.value)} 
+                                <select
+                                    id="role_id"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                    value={userData.role_id}
+                                    onChange={(e) => setUserData('role_id', e.target.value)}
                                     required
                                 >
                                     <option value="" disabled>Select Role</option>
@@ -1618,14 +1634,14 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
                             <div className="mt-4">
                                 <InputLabel htmlFor="device_limit" value="Device Login Limit" />
-                                <TextInput 
-                                    id="device_limit" 
-                                    type="number" 
-                                    min="1" 
-                                    className={`mt-1 block w-full ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`} 
-                                    value={userData.device_limit} 
-                                    onChange={(e) => setUserData('device_limit', e.target.value)} 
-                                    required 
+                                <TextInput
+                                    id="device_limit"
+                                    type="number"
+                                    min="1"
+                                    className={`mt-1 block w-full ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`}
+                                    value={userData.device_limit}
+                                    onChange={(e) => setUserData('device_limit', e.target.value)}
+                                    required
                                     disabled={!isCurrentUserAdmin}
                                 />
                                 {!isCurrentUserAdmin && (
@@ -1700,11 +1716,11 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
                             <div className="mt-4">
                                 <InputLabel htmlFor="edit_role_id" value="System Role" />
-                                <select 
-                                    id="edit_role_id" 
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" 
-                                    value={editUserData.role_id || ''} 
-                                    onChange={(e) => setEditData('role_id', e.target.value)} 
+                                <select
+                                    id="edit_role_id"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                    value={editUserData.role_id || ''}
+                                    onChange={(e) => setEditData('role_id', e.target.value)}
                                     required
                                 >
                                     <option value="" disabled>Select Role</option>
@@ -1715,14 +1731,14 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
                             <div className="mt-4">
                                 <InputLabel htmlFor="edit_device_limit" value="Device Login Limit" />
-                                <TextInput 
-                                    id="edit_device_limit" 
-                                    type="number" 
-                                    min="1" 
-                                    className={`mt-1 block w-full ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`} 
-                                    value={editUserData.device_limit} 
-                                    onChange={(e) => setEditData('device_limit', e.target.value)} 
-                                    required 
+                                <TextInput
+                                    id="edit_device_limit"
+                                    type="number"
+                                    min="1"
+                                    className={`mt-1 block w-full ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`}
+                                    value={editUserData.device_limit}
+                                    onChange={(e) => setEditData('device_limit', e.target.value)}
+                                    required
                                     disabled={!isCurrentUserAdmin}
                                 />
                                 {!isCurrentUserAdmin && (
@@ -1744,12 +1760,12 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
                             <div className="mt-4">
                                 <InputLabel htmlFor="edit_position" value="Position" />
-                                <select 
-                                    id="edit_position" 
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" 
-                                    value={editUserData.position_id} 
-                                    onChange={(e) => setEditData('position_id', e.target.value)} 
-                                    required 
+                                <select
+                                    id="edit_position"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                    value={editUserData.position_id}
+                                    onChange={(e) => setEditData('position_id', e.target.value)}
+                                    required
                                     disabled={!editUserData.department_id}
                                 >
                                     <option value="" disabled>Select Position</option>

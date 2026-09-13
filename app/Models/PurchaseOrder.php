@@ -37,7 +37,7 @@ class PurchaseOrder extends Model
 
         // Fallback just in case the database column is empty
         $year = $this->created_at ? $this->created_at->format('Y') : date('Y');
-        return 'PO-' . $year . '-' . str_pad($this->purchase_request_id, 4, '0', STR_PAD_LEFT);
+        return 'PO' . $year . '-' . str_pad($this->purchase_request_id, 5, '0', STR_PAD_LEFT);
     }
 
     public function purchaseRequest()

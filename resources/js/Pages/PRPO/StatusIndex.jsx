@@ -91,7 +91,7 @@ const TrackerLine = ({ pr }) => {
                 ) : hasPOs ? (
                     <span className={isFullyOrdered ? "text-green-600" : "text-amber-600"}>{poStatusMsg}</span>
                 ) : step3 ? (
-                    <span className="text-amber-600">Purchase Order Generated. Pending EVP Final Approval.</span>
+                    <span className="text-amber-600">Purchase Order Generated. Pending Executive Vice President Final Approval.</span>
                 ) : step2 ? (
                     <span className="text-indigo-600">Purchase Request Generated. Procurement is reviewing the document.</span>
                 ) : (
@@ -132,7 +132,7 @@ export default function StatusIndex({ auth, requests }) {
             'pending_procurement': { label: 'Pending Procurement Assistant Review', color: 'bg-purple-100 text-purple-800' },
             'pending_procurement_tl': { label: 'Purchase Order Generation: Procurement TL', color: 'bg-purple-100 text-purple-800' },
             'po_generated': { label: 'Purchase Order Generated', color: 'bg-green-100 text-green-800' },
-            'pending_evp_final': { label: 'Pending Executive Vice President Final Approval', color: 'bg-yellow-100 text-yellow-800' },
+            'pending_evp_final': { label: 'Pending EVP Final Approval', color: 'bg-yellow-100 text-yellow-800' },
             'approved': { label: 'Purchase Order Approved', color: 'bg-green-100 text-green-800' },
             'rejected': { label: 'Rejected', color: 'bg-red-100 text-red-800' },
             'cancelled': { label: 'Cancelled', color: 'bg-gray-100 text-gray-500' },
@@ -311,7 +311,7 @@ export default function StatusIndex({ auth, requests }) {
             {isModalOpen && selectedDoc && (
                 <div onClick={closeModal} className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overflow-x-hidden bg-gray-900 bg-opacity-60 backdrop-blur-sm p-4 sm:p-0">
                     <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-5xl rounded-2xl bg-white shadow-2xl transition-all flex flex-col max-h-[90vh]">
-                        <div className="flex items-center justify-between border-b px-6 py-4 shrink-0 bg-gray-50 rounded-t-2xl">
+                        <div className="flex items-center justify-between border-b px-6 py-2 shrink-0 bg-gray-50 rounded-t-2xl">
                             <div>
                                 <h3 className="text-lg font-bold text-gray-900 flex items-center gap-3">{modalView === 'PR' ? selectedDoc.pr_number : selectedDoc.po_number}</h3>
                                 <p className="text-sm text-gray-500 mt-1">{modalView === 'PR' ? `Prepared by ${selectedDoc.user?.name} on ${selectedDoc.date_prepared}` : `Purchase Order dated ${selectedDoc.po_date}`}</p>

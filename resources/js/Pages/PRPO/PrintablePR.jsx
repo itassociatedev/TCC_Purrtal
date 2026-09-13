@@ -97,7 +97,7 @@ export default function PrintablePR({ pr }) {
                         {/* Col 4: Title & Dates */}
                         <div className="w-[20%] text-right flex flex-col justify-center">
                             <h2 className="text-[18px] font-bold text-indigo-600 leading-none m-0 whitespace-nowrap">PURCHASE REQUEST</h2>
-                            <div className="font-bold text-[12px] mt-1">PR #: {pr.pr_number}</div>
+                            <div className="font-bold text-[12px] mt-1">PR ID: {pr.pr_number}</div>
                             <div className="text-[10px] font-semibold text-gray-600 mt-1">
                                 Prepared: <span className="font-normal">{formatDate(pr.date_prepared)}</span><br />
                                 Needed: <span className="font-normal text-red-600">{formatDate(pr.date_needed)}</span>
@@ -136,8 +136,8 @@ export default function PrintablePR({ pr }) {
                                             {item.supplier?.name && <span className="text-[9px] text-indigo-600 ml-1 pl-1 border-l border-gray-400">Pref: {item.supplier.name}</span>}
                                         </td>
 
-                                        <td className="py-[2px] px-2 text-center font-semibold">{item.qty_requested} <span className="text-[10px] text-gray-500">{item.unit}</span></td>
-                                        <td className="py-[2px] px-2 text-right text-gray-600">{formatCurrency(item.est_unit_cost)}</td>
+                                        <td className="py-[2px] px-2 text-center font-bold">{item.qty_requested} <span className="text-[10px] text-gray-500">{item.unit}</span></td>
+                                        <td className="py-[2px] px-2 text-right font-bold text-gray-600">{formatCurrency(item.est_unit_cost)}</td>
                                         <td className="py-[2px] px-2 text-right font-bold text-gray-900">{formatCurrency(item.total_cost)}</td>
                                     </tr>
                                 ))}

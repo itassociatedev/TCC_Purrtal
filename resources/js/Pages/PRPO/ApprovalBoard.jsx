@@ -82,50 +82,54 @@ const SearchableDropdown = ({ options, value, onChange, placeholder }) => {
     );
 };
 
-const CCMultiSelect = ({ options, value, onChange, placeholder }) => {
+const CCMultiSelect = ({ options = [], value = [], onChange, placeholder }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const wrapperRef = useRef(null);
 
-    const selectedOption = options.find((opt) => String(opt.id) === String(value));
-
-    useEffect(() => {
-        if (selectedOption) setSearchTerm(selectedOption.name);
-        else setSearchTerm("");
-    }, [value, selectedOption]);
+    const safeOptions = Array.isArray(options) ? options : [];
+    const safeValue = Array.isArray(value) ? value : [];
+    const selectedOptions = safeOptions.filter((opt) => safeValue.map(String).includes(String(opt.id)));
 
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
                 setIsOpen(false);
-                setSearchTerm(selectedOption ? selectedOption.name : "");
+                setSearchTerm("");
             }
         };
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [selectedOption]);
+    }, []);
 
-    const filteredOptions = options.filter((opt) =>
-        opt.name.toLowerCase().includes(searchTerm.toLowerCase()),
+    const filteredOptions = safeOptions.filter((opt) =>
+        opt.name.toLowerCase().includes(searchTerm.toLowerCase()) && !safeValue.map(String).includes(String(opt.id))
     );
+
+    const handleRemove = (idToRemove) => {
+        onChange(safeValue.filter(id => String(id) !== String(idToRemove)));
+    };
 
     return (
         <div ref={wrapperRef} className="relative w-full">
+            <div className="flex flex-wrap gap-1 mb-2">
+                {selectedOptions.map(opt => (
+                    <span key={opt.id} className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-600/20">
+                        {opt.name}
+                        <button type="button" onClick={() => handleRemove(opt.id)} className="text-indigo-500 hover:text-indigo-900 focus:outline-none ml-1">&times;</button>
+                    </span>
+                ))}
+            </div>
             <input
                 type="text"
                 className="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                 placeholder={placeholder}
                 value={searchTerm}
                 onChange={(e) => {
-                    const newVal = e.target.value;
-                    setSearchTerm(newVal);
+                    setSearchTerm(e.target.value);
                     setIsOpen(true);
-                    if (selectedOption && newVal !== selectedOption.name) onChange("");
                 }}
-                onFocus={() => {
-                    setIsOpen(true);
-                    setSearchTerm(selectedOption ? selectedOption.name : "");
-                }}
+                onFocus={() => setIsOpen(true)}
             />
             {isOpen && (
                 <ul className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-md bg-white py-1 text-sm shadow-lg ring-1 ring-black ring-opacity-5">
@@ -138,8 +142,8 @@ const CCMultiSelect = ({ options, value, onChange, placeholder }) => {
                                 className="cursor-pointer px-3 py-2 hover:bg-indigo-600 hover:text-white transition-colors truncate"
                                 onMouseDown={(e) => {
                                     e.preventDefault();
-                                    setSearchTerm(opt.name);
-                                    onChange(opt.id);
+                                    setSearchTerm("");
+                                    onChange([...safeValue, opt.id]);
                                     setIsOpen(false);
                                 }}
                             >
@@ -159,9 +163,9 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
     const isEVP = userRole.includes("evp") || userRole.includes("president") || auth.user.role_id === 9;
 
     const canManagePO = ["procurement tl", "executive vice president", "evp", "president", "admin"].includes(userRole);
-    const isInvTL = userRole === "inventory tl" || userRole === "admin";
-    const isOpsManager = userRole.includes("operations") || userRole.includes("ops manager") || userRole === "admin";
-    const isUnrestricted = userRole === "admin" || userRole.includes("procurement");
+    const isInvTL = userRole === "inventory tl" || userRole === "admin" || isEVP;
+    const isOpsManager = userRole.includes("operations") || userRole.includes("ops manager") || userRole === "admin" || isEVP;
+    const isUnrestricted = userRole === "admin" || userRole.includes("procurement") || isEVP;
     const isProcurementAssist = userRole.includes("procurement assist") || userRole === "admin" || isEVP;
     const isProcurementTL = userRole.includes("procurement tl") || userRole.includes("procurement team leader") || userRole === "admin" || isEVP;
 
@@ -207,7 +211,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
     const { data: editData, setData: setEditData, put: submitEditPR, processing: isEditing, errors: editErrors } = useForm({
-        branch: "", department: "", request_type: "", priority: "", date_needed: "", budget_status: "", budget_ref: "", purpose_of_request: "", impact_if_not_procured: "", cc_user_id: "", items: []
+        branch: "", department: "", date_prepared: "", request_type: "", priority: "", date_needed: "", budget_status: "", budget_ref: "", purpose_of_request: "", impact_if_not_procured: "", cc_users: [], items: []
     });
     const [actionModal, setActionModal] = useState({ isOpen: false, prId: null, actionType: "", reason: "" });
 
@@ -224,18 +228,18 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
     const canApprove = (pr) => {
         if (!pr) return false;
         const hasBranchAccess = userRole === "admin" || isEVP || userBranches.includes(pr.branch);
-        if (pr.status === "pending_inv_tl" && isInvTL && hasBranchAccess) return true;
+        if (pr.status === "pending_inv_tl" && (isInvTL || isEVP) && hasBranchAccess) return true;
         if (pr.status === "pending_ops_manager" && (isOpsManager || isEVP) && hasBranchAccess) return true;
-        if ((pr.status === "pr_generated" || pr.status === "pending_procurement") && isProcurementAssist) return true;
+        if ((pr.status === "pr_generated" || pr.status === "pending_procurement") && (isProcurementAssist || isEVP)) return true;
         return false;
     };
 
     const canEditPR = (pr) => {
         if (!pr) return false;
         const hasBranchAccess = userRole === "admin" || isEVP || userBranches.includes(pr.branch);
-        if (userRole === "admin") return true;
+        if (userRole === "admin" || isEVP) return true;
         if (pr.status === "returned" && pr.user_id === auth.user.id) return true;
-        if (pr.status === "pending_inv_tl" && isInvTL && hasBranchAccess) return true;
+        if (pr.status === "pending_inv_tl" && (isInvTL || isEVP) && hasBranchAccess) return true;
         if (pr.status === "pending_ops_manager" && (isOpsManager || isEVP) && hasBranchAccess) return true;
         return false;
     };
@@ -275,6 +279,22 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
             return;
         }
 
+        // 🟢 DIRECT ACTION: Instantly open PDF and update status simultaneously
+        if (actionType === 'review_pr') {
+            const pdfWindow = window.open('', '_blank'); // Open immediately to bypass popup blocker
+            router.patch(route("prpo.purchase-requests.update-status", id), { action: actionType }, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    closeModal();
+                    if (pdfWindow) pdfWindow.location.href = route("prpo.purchase-requests.print", id);
+                },
+                onError: () => {
+                    if (pdfWindow) pdfWindow.close();
+                }
+            });
+            return;
+        }
+
         let title = "Approve Request";
         let message = "Are you sure you want to approve this purchase request?";
         let confirmText = "Approve";
@@ -290,11 +310,6 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
             message = "Approve and generate the Purchase Request document?";
             confirmText = "Generate PR";
             confirmColor = "bg-blue-600 hover:bg-blue-500";
-        } else if (actionType === 'review_pr') {
-            title = "Start Initial Review";
-            message = "Begin initial review of this Purchase Request?";
-            confirmText = "Start Review";
-            confirmColor = "bg-purple-600 hover:bg-purple-500";
         } else if (actionType === 'endorse') {
             title = "Endorse Request";
             message = "Endorse this Purchase Request to the Procurement Team Leader?";
@@ -327,7 +342,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
             isOpen: true,
             title: "Generate Purchase Orders",
             message: "Are you sure you want to generate Purchase Orders for this endorsed request? This action cannot be undone.",
-            confirmText: "Generate PO(s)",
+            confirmText: "Generate Purchase Order",
             confirmColor: "bg-teal-600 hover:bg-teal-500",
             onConfirm: () => {
                 router.post(route("prpo.purchase-requests.generate-pos", id), {}, {
@@ -345,7 +360,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
 
     const openEditModal = () => {
         setEditData({
-            branch: selectedPR.branch || "", department: selectedPR.department || "", request_type: selectedPR.request_type || "", priority: selectedPR.priority || "", date_needed: selectedPR.date_needed || "", budget_status: selectedPR.budget_status || "", budget_ref: selectedPR.budget_ref || "", purpose_of_request: selectedPR.purpose_of_request || "", impact_if_not_procured: selectedPR.impact_if_not_procured || "", cc_user_id: selectedPR.cc_user_id || "",
+            branch: selectedPR.branch || "", department: selectedPR.department || "", date_prepared: selectedPR.date_prepared || "", request_type: selectedPR.request_type || "", priority: selectedPR.priority || "", date_needed: selectedPR.date_needed || "", budget_status: selectedPR.budget_status || "", budget_ref: selectedPR.budget_ref || "", purpose_of_request: selectedPR.purpose_of_request || "", impact_if_not_procured: selectedPR.impact_if_not_procured || "", cc_users: Array.isArray(selectedPR.cc_users) ? selectedPR.cc_users : (typeof selectedPR.cc_users === 'string' ? JSON.parse(selectedPR.cc_users || '[]') : []),
             items: selectedPR.items.map((item) => ({ ...item, historical_product_name: item.product?.name || item.product_name || "Unknown Product", historical_supplier_name: item.supplier?.name || "Unknown Supplier" })),
         });
         setIsModalOpen(false);
@@ -406,9 +421,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                         <Link href={route("prpo.approval-board", { view: "for_approval" })} className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${currentView === "for_approval" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"}`}>For Approval</Link>
                     )}
 
-                    {(canManagePO || isProcurementAssist) && (
-                        <Link href={route("prpo.approval-board", { view: "po_generated" })} className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${currentView === "po_generated" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"}`}>PO Generated(Review)</Link>
-                    )}
+
                     <Link href={route("prpo.approval-board", { view: "history" })} className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${currentView === "history" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"}`}>Purchase Request History</Link>
                 </div>
 
@@ -451,12 +464,12 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                             <tr>
                                 <th className="px-6 py-3 text-center font-semibold text-gray-900">Purchase Request ID</th>
                                 <th className="px-6 py-3 text-center font-semibold text-gray-900">Prepared By</th>
-                                <th className="px-6 py-3 text-center font-semibold text-gray-900">Branch & Dept</th>
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900">Branch & Department</th>
                                 <th className="px-6 py-3 text-center font-semibold text-gray-900">Priority</th>
                                 <th className="px-6 py-3 text-center font-semibold text-gray-900">Date Needed</th>
                                 <th className="px-6 py-3 text-center font-semibold text-gray-900">Items Count</th>
                                 <th className="px-6 py-3 text-center font-semibold text-gray-900">Status</th>
-                                <th className="px-6 py-3 text-center font-semibold text-gray-900"></th>
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 bg-white">
@@ -465,19 +478,24 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                             ) : (
                                 paginatedRequests.map((pr) => (
                                     <tr key={pr.id} onClick={() => openModal(pr)} className="hover:bg-gray-50 transition cursor-pointer">
-                                        <td className="px-6 py-4 text-center font-medium text-indigo-600 hover:text-indigo-900">{pr.pr_number || `PR-${pr.id}`}</td>
-                                        <td className="px-6 py-4 text-center">{pr.user?.name || "Unknown"}</td>
-                                        <td className="px-6 py-4 text-center">{pr.branch} <br /><span className="text-xs text-center text-gray-500">{pr.department}</span></td>
+                                        <td className="px-6 py-2 text-center font-medium text-indigo-600 hover:text-indigo-900">{pr.pr_number || `PR-${pr.id}`}</td>
+                                        <td className="px-6 py-2 text-center">{pr.user?.name || "Unknown"}</td>
+                                        <td className="px-6 py-2 text-center">{pr.branch} <br /><span className="text-xs text-center text-gray-500">{pr.department}</span></td>
                                         <td className="text-center px-6 py-4">
                                             {pr.priority ? (
                                                 <span className={`inline-flex items-center rounded-md px-2 py-1 text-center text-xs font-bold ring-1 ring-inset ${pr.priority === "High" ? "bg-red-50 text-red-700 ring-red-600/20" : pr.priority === "Normal" ? "bg-blue-50 text-blue-700 ring-blue-700/10" : "bg-green-50 text-green-600 ring-green-500/10"}`}>{pr.priority}</span>
                                             ) : (<span className="text-gray-400 text-center text-xs italic">N/A</span>)}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{pr.date_needed ? new Date(pr.date_needed).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "N/A"}</td>
-                                        <td className="px-6 py-4 text-center font-medium">{pr.items?.length || 0} Items</td>
-                                        <td className="px-6 py-4 text-center">{formatStatus(pr.status)}</td>
-                                        <td className="whitespace-nowrap px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
-                                            <div className="flex items-center justify-end gap-2">
+                                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{pr.date_needed ? new Date(pr.date_needed).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "N/A"}</td>
+                                        <td className="px-6 py-2 text-center font-medium">{pr.items?.length || 0} Items</td>
+                                        <td className="px-6 py-2 text-center">{formatStatus(pr.status)}</td>
+                                        <td className="whitespace-nowrap px-6 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex items-center justify-center gap-2">
+                                                {['pr_generated', 'pending_procurement', 'pending_procurement_tl', 'po_generated', 'pending_evp_final', 'approved'].includes(pr.status) && (
+                                                    <a href={route('prpo.purchase-requests.print', pr.id)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-800 border border-blue-200">
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> View PDF
+                                                    </a>
+                                                )}
                                                 {canApprove(pr) && (canUserBypassViewMode(auth, "purchase_requests") || currentView === "for_approval") && (
                                                     <>
                                                         {pr.status === "pending_inv_tl" && (
@@ -486,13 +504,13 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                                             </button>
                                                         )}
                                                         {pr.status === "pending_ops_manager" && (
-                                                            <button onClick={() => handleAction(pr.id, "generate_pr")} title="Generate PR" className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-800">
-                                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg> Generate PR
+                                                            <button onClick={() => handleAction(pr.id, isEVP ? "generate_pr_as_om_fallback" : "generate_pr")} title="Generate PR" className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-800">
+                                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg> Generate PR
                                                             </button>
                                                         )}
                                                         {pr.status === "pr_generated" && (
-                                                            <button onClick={() => handleAction(pr.id, "review_pr")} title="Start Review" className="inline-flex items-center gap-1.5 rounded-lg bg-purple-50 px-3 py-1.5 text-xs font-bold text-purple-700 transition-colors hover:bg-purple-100 hover:text-purple-800">
-                                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> Review
+                                                            <button onClick={() => handleAction(pr.id, "review_pr")} title="View PDF & Start Review" className="inline-flex items-center gap-1.5 rounded-lg bg-purple-50 px-3 py-1.5 text-xs font-bold text-purple-700 transition-colors hover:bg-purple-100 hover:text-purple-800">
+                                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> Start Review
                                                             </button>
                                                         )}
                                                         {pr.status === "pending_procurement" && (
@@ -536,7 +554,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                 {isModalOpen && selectedPR && (
                     <div onClick={closeModal} className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto overflow-x-hidden bg-gray-900 bg-opacity-50 p-4 sm:p-0">
                         <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-5xl rounded-xl bg-white shadow-2xl transition-all flex flex-col max-h-[90vh]">
-                            <div className="flex items-center justify-between border-b px-6 py-4 shrink-0">
+                            <div className="flex items-center justify-between border-b px-6 py-2 shrink-0">
                                 <div>
                                     <h3 className="text-lg font-bold text-gray-900">{selectedPR.pr_number}</h3>
                                     <p className="text-sm text-gray-500">Prepared by {selectedPR.user?.name} on {selectedPR.date_prepared}</p>
@@ -551,9 +569,14 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                 </div>
                             </div>
 
-                            <div className="overflow-y-auto px-6 py-4 flex-grow">
+                            <div className="overflow-y-auto px-6 py-2 flex-grow">
                                 <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4 rounded-lg bg-gray-50 p-4 text-sm border border-gray-100">
-                                    <div><span className="block font-semibold text-gray-900">Carbon Copy (CC)</span> {selectedPR.cc_user?.name || "N/A"}</div>
+                                    <div>
+    <span className="block font-semibold text-gray-900">Carbon Copy (CC)</span>
+    {selectedPR.cc_users && Array.isArray(selectedPR.cc_users) && selectedPR.cc_users.length > 0
+        ? selectedPR.cc_users.map(id => employees?.find(e => String(e.id) === String(id))?.name).filter(Boolean).join(', ')
+        : "N/A"}
+</div>
                                     <div><span className="block font-semibold text-gray-900">Branch</span> {selectedPR.branch}</div>
                                     <div><span className="block font-semibold text-gray-900">Department</span> {selectedPR.department}</div>
                                     <div><span className="block font-semibold text-gray-900">Request Type</span> {selectedPR.request_type || "N/A"}</div>
@@ -619,59 +642,83 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                             </div>
 
                             <div className="flex items-center justify-end gap-3 rounded-b-xl border-t bg-gray-50 px-6 py-4 shrink-0">
-                                <button onClick={closeModal} className="text-sm font-semibold text-gray-700 hover:text-gray-900 px-4 py-2 border border-gray-300 rounded-md bg-white hover:bg-gray-100">Close Window</button>
+    <button onClick={closeModal} className="text-sm font-semibold text-gray-700 hover:text-gray-900 px-4 py-2 border border-gray-300 rounded-md bg-white hover:bg-gray-100 flex items-center justify-center gap-1.5">
+        Close Window
+    </button>
 
-                                {canEditPR(selectedPR) && (
-                                    <button onClick={openEditModal} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 transition-colors">
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" /></svg> Edit Request
-                                    </button>
-                                )}
+    {canEditPR(selectedPR) && (
+        <button onClick={openEditModal} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 transition-colors">
+            {/* Pencil Icon */}
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 shrink-0">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+            </svg>
+            Edit Request
+        </button>
+    )}
 
-                                {canApprove(selectedPR) && (canUserBypassViewMode(auth, "purchase_requests") || currentView === "for_approval") && (
-                                    <>
-                                        {selectedPR.status === "pending_ops_manager" && (
-                                            <button onClick={() => openActionModal(selectedPR.id, selectedPR.branch === "Greenhills" ? "return_to_creator" : "return_to_inv_tl")} className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-400 transition-colors">
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
-                                                {selectedPR.branch === "Greenhills" ? "Return to Inv Assistant" : "Return to Inv TL"}
-                                            </button>
-                                        )}
-                                        <button onClick={() => handleAction(selectedPR.id, "reject")} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 transition-colors">
-                                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg> Reject Request
-                                        </button>
+    {canApprove(selectedPR) && (canUserBypassViewMode(auth, "purchase_requests") || currentView === "for_approval") && (
+        <>
+            {selectedPR.status === "pending_ops_manager" && (
+                <button onClick={() => openActionModal(selectedPR.id, selectedPR.branch === "Greenhills" ? "return_to_creator" : "return_to_inv_tl")} className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-400 transition-colors">
+                    {/* Return/Arrow Left Icon */}
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 shrink-0">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                    </svg>
+                    {selectedPR.branch === "Greenhills" ? "Return to Inv Assistant" : "Return to Inv TL"}
+                </button>
+            )}
+            <button onClick={() => handleAction(selectedPR.id, "reject")} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 transition-colors">
+                {/* Cross/X Icon */}
+                <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Reject Request
+            </button>
 
-                                        {selectedPR.status === "pending_inv_tl" && (
-                                            <button onClick={() => handleAction(selectedPR.id, "approve")} className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 transition-colors">
-                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg> Approve Request
-                                            </button>
-                                        )}
+            {selectedPR.status === "pending_inv_tl" && (
+                <button onClick={() => handleAction(selectedPR.id, "approve")} className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 transition-colors">
+                    {/* Checkmark Icon */}
+                    <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                    Approve Request
+                </button>
+            )}
 
-                                        {selectedPR.status === "pending_ops_manager" && (
-                                            <>
-                                                {isEVP && (
-                                                    <button onClick={() => handleAction(selectedPR.id, "generate_pr_as_om_fallback")} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 transition-colors">
-                                                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg> EVP: Generate PR (OM Fallback)
-                                                    </button>
-                                                )}
-                                                <button onClick={() => handleAction(selectedPR.id, "generate_pr")} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 transition-colors">
-                                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg> Generate PR
-                                                </button>
-                                            </>
-                                        )}
+            {selectedPR.status === "pending_ops_manager" && (
+                <button
+                    onClick={() => handleAction(selectedPR.id, isEVP ? "generate_pr_as_om_fallback" : "generate_pr")}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 transition-colors"
+                >
+                    <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                    </svg>
+                    Generate PR
+                </button>
+            )}
+            {selectedPR.status === "pr_generated" && (
+                <button onClick={() => handleAction(selectedPR.id, "review_pr")} className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-purple-500 transition-colors">
+                    {/* Eye/Review Icon */}
+                    <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    View PDF & Start Review
+                </button>
+            )}
 
-                                        {selectedPR.status === "pr_generated" && (
-                                            <button onClick={() => handleAction(selectedPR.id, "review_pr")} className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-purple-500 transition-colors">
-                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> Start Initial Review
-                                            </button>
-                                        )}
-
-                                        {selectedPR.status === "pending_procurement" && (
-                                            <button onClick={() => handleAction(selectedPR.id, "endorse")} className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-purple-500 transition-colors">
-                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg> Endorse to Proc TL
-                                            </button>
-                                        )}
-                                    </>
-                                )}
-                            </div>
+            {selectedPR.status === "pending_procurement" && (
+                <button onClick={() => handleAction(selectedPR.id, "endorse")} className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-purple-500 transition-colors">
+                    {/* Checkmark Icon */}
+                    <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                    Endorse to Proc TL
+                </button>
+            )}
+        </>
+    )}
+</div>
                         </div>
                     </div>
                 )}
@@ -681,7 +728,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overflow-x-hidden bg-gray-900 bg-opacity-70 p-4 sm:p-0">
                         {/* Edit form content identical to original */}
                         <div className="relative w-full max-w-6xl rounded-2xl bg-white shadow-2xl transition-all flex flex-col max-h-[90vh]">
-                            <div className="flex items-center justify-between border-b px-6 py-4 shrink-0 bg-blue-50 rounded-t-2xl">
+                            <div className="flex items-center justify-between border-b px-6 py-2 shrink-0 bg-blue-50 rounded-t-2xl">
                                 <div>
                                     <h3 className="text-lg font-bold text-blue-900 flex items-center gap-2">
                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" /></svg>
@@ -692,8 +739,157 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                 <button onClick={() => setIsEditModalOpen(false)} className="text-blue-400 hover:text-blue-600"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="h-6 w-6"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
                             </div>
                             <form onSubmit={handleSaveEdit} className="overflow-y-auto flex-grow flex flex-col">
-                                {/* The rest of the form is identical */}
-                                <div className="px-6 py-4 bg-gray-50 border-t flex justify-end gap-3 shrink-0 rounded-b-2xl">
+                                <div className="px-6 py-6 flex-grow">
+                                    <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-3 mb-6">
+                                        {/* Row 1 */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Branch <span className="text-red-500">*</span></label>
+                                            <select value={editData.branch} onChange={e => setEditData('branch', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" required>
+                                                <option value="" disabled>Select Branch...</option>
+                                                {(typeof availableBranches !== 'undefined' ? availableBranches : []).map((b) => <option key={b.id} value={b.name}>{b.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Department <span className="text-red-500">*</span></label>
+                                            <select value={editData.department} onChange={e => setEditData('department', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" required>
+                                                <option value="" disabled>Select Department...</option>
+                                                {(typeof departments !== 'undefined' ? departments : []).map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Date Prepared</label>
+                                            <input type="date" value={editData.date_prepared || ''} className="block w-full rounded-md border-gray-300 bg-gray-50 text-gray-500 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm cursor-not-allowed" readOnly />
+                                        </div>
+
+                                        {/* Row 2 */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Request Type</label>
+                                            <select value={editData.request_type} onChange={e => setEditData('request_type', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                                <option value="">Select Type...</option>
+                                                <option value="Capital Expenditure">Capital Expenditure</option>
+                                                <option value="Operating Expenditure">Operating Expenditure</option>
+                                                <option value="Inventory">Inventory</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                                            <select value={editData.priority} onChange={e => setEditData('priority', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                                <option value="">Select Priority...</option>
+                                                <option value="Low">Low</option>
+                                                <option value="Normal">Normal</option>
+                                                <option value="High">High</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Date Needed</label>
+                                            <input type="date" value={editData.date_needed} onChange={e => setEditData('date_needed', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+                                        </div>
+
+                                        {/* Row 3 */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Budget Status</label>
+                                            <select value={editData.budget_status} onChange={e => setEditData('budget_status', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                                <option value="">Select Status...</option>
+                                                <option value="Budgeted">Budgeted</option>
+                                                <option value="Unbudgeted">Unbudgeted</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Budget Reference</label>
+                                            <input type="text" value={editData.budget_ref} onChange={e => setEditData('budget_ref', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="Enter Ref..." />
+                                        </div>
+                                        <div className="sm:col-span-2">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Carbon Copy (C.C.)</label>
+                                            <CCMultiSelect
+    options={typeof branchEmployees !== 'undefined' ? branchEmployees : []}
+    value={editData.cc_users}
+    onChange={(val) => setEditData('cc_users', val)}
+    placeholder={!editData.branch ? "Select branch first..." : "Search employees..."}
+/>
+                                        </div>
+
+                                        {/* Textareas */}
+                                        <div className="sm:col-span-3">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Purpose of Request</label>
+                                            <textarea rows={2} value={editData.purpose_of_request} onChange={e => setEditData('purpose_of_request', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+                                        </div>
+                                        <div className="sm:col-span-3">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Impact if Not Procured</label>
+                                            <textarea rows={2} value={editData.impact_if_not_procured} onChange={e => setEditData('impact_if_not_procured', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+                                        </div>
+                                    </div>
+
+                                    {/* Items Table */}
+                                    <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                        <h4 className="font-bold text-gray-900">Items</h4>
+                                        <button type="button" onClick={addEditItemRow} className="text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 px-3 py-1.5 rounded transition shadow-sm">Add Item</button>
+                                    </div>
+
+                                    <div className="overflow-x-auto rounded-lg border border-gray-200 pb-24">
+                                        <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="px-3 py-2 font-semibold">Product Name</th>
+                                                    <th className="px-3 py-2 font-semibold">Description</th>
+                                                    <th className="px-3 py-2 font-semibold text-center w-20">Qty Req.</th>
+                                                    <th className="px-3 py-2 font-semibold text-center w-20">Stock</th>
+                                                    <th className="px-3 py-2 font-semibold text-center w-20">Reorder</th>
+                                                    <th className="px-3 py-2 font-semibold">Supplier</th>
+                                                    <th className="px-3 py-2 font-semibold text-right w-24">Est. Cost</th>
+                                                    <th className="px-3 py-2 font-semibold text-right w-28">Total</th>
+                                                    <th className="px-3 py-2 font-semibold text-center w-12"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-200 bg-white">
+                                                {editData.items.map((item, idx) => {
+                                                    const availableProducts = item.supplier_id ? (typeof products !== 'undefined' ? products : []).filter(p => String(p.supplier_id) === String(item.supplier_id)) : (typeof products !== 'undefined' ? products : []);
+                                                    const availableSuppliers = item.product_id ? (typeof suppliers !== 'undefined' ? suppliers : []).filter(s => {
+                                                        const linkedProduct = (typeof products !== 'undefined' ? products : []).find(p => String(p.id) === String(item.product_id));
+                                                        return linkedProduct && String(linkedProduct.supplier_id) === String(s.id);
+                                                    }) : (typeof suppliers !== 'undefined' ? suppliers : []);
+
+                                                    return (
+                                                        <tr key={idx} className="hover:bg-gray-50">
+                                                            <td className="px-2 py-2 min-w-[200px]">
+                                                                <SearchableDropdown options={availableProducts} value={item.product_id} onChange={(val) => handleEditItemChange(idx, 'product_id', val)} placeholder="Search Product..." />
+                                                            </td>
+                                                            <td className="px-2 py-2 min-w-[150px]">
+                                                                <input type="text" value={item.specifications || ''} onChange={(e) => handleEditItemChange(idx, 'specifications', e.target.value)} className="block w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                                                            </td>
+                                                            <td className="px-2 py-2 min-w-[70px]">
+                                                                <input type="number" min="1" value={item.qty_requested || ''} onChange={(e) => handleEditItemChange(idx, 'qty_requested', e.target.value)} className="block w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-center" />
+                                                            </td>
+                                                            <td className="px-2 py-2 min-w-[70px]">
+                                                                <input type="number" min="0" value={item.qty_on_hand || ''} onChange={(e) => handleEditItemChange(idx, 'qty_on_hand', e.target.value)} className="block w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-center" />
+                                                            </td>
+                                                            <td className="px-2 py-2 min-w-[70px]">
+                                                                <input type="number" min="0" value={item.reorder_level || ''} onChange={(e) => handleEditItemChange(idx, 'reorder_level', e.target.value)} className="block w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-center" />
+                                                            </td>
+                                                            <td className="px-2 py-2 min-w-[200px]">
+                                                                <SearchableDropdown options={availableSuppliers} value={item.supplier_id} onChange={(val) => handleEditItemChange(idx, 'supplier_id', val)} placeholder="Search Supplier..." />
+                                                            </td>
+                                                            <td className="px-2 py-2 min-w-[100px]">
+                                                                <input type="number" step="0.01" value={item.est_unit_cost ?? ''} onChange={(e) => handleEditItemChange(idx, 'est_unit_cost', e.target.value)} className="block w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-right" />
+                                                            </td>
+                                                            <td className="px-2 py-2 text-right font-bold text-indigo-700 min-w-[100px] whitespace-nowrap">
+                                                                ₱{Number(item.total_cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                            </td>
+                                                            <td className="px-2 py-2 text-center">
+                                                                {editData.items.length > 1 && (
+                                                                    <button type="button" onClick={() => removeEditItemRow(idx)} className="text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1.5 rounded transition">
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    )
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div className="px-6 py-2 bg-gray-50 border-t flex justify-end gap-3 shrink-0 rounded-b-2xl">
                                     <button type="button" onClick={() => setIsEditModalOpen(false)} className="bg-white border border-gray-300 px-4 py-2 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-100 shadow-sm transition">Cancel Edit</button>
                                     <button type="submit" disabled={isEditing} className="bg-blue-600 text-white px-6 py-2 rounded-md text-sm font-bold shadow-sm hover:bg-blue-500 transition disabled:opacity-50">Save Changes</button>
                                 </div>
@@ -705,7 +901,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                 {actionModal.isOpen && (
                     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
                         <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-                            <div className={`px-6 py-4 border-b border-gray-200 ${actionModal.actionType === "reject" ? "bg-red-50" : "bg-orange-50"}`}>
+                            <div className={`px-6 py-2 border-b border-gray-200 ${actionModal.actionType === "reject" ? "bg-red-50" : "bg-orange-50"}`}>
                                 <h3 className={`text-lg font-bold ${actionModal.actionType === "reject" ? "text-red-900" : "text-orange-900"}`}>
                                     {actionModal.actionType === "reject" ? "Reject Purchase Request" : actionModal.actionType === "return_to_creator" ? "Return Request to Inventory Assistant" : "Return Request to Inventory TL"}
                                 </h3>
@@ -716,7 +912,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                 </label>
                                 <textarea className={`w-full border-gray-300 rounded-md shadow-sm sm:text-sm ${actionModal.actionType === "reject" ? "focus:ring-red-500 focus:border-red-500" : "focus:ring-orange-500 focus:border-orange-500"}`} rows="4" value={actionModal.reason} onChange={(e) => setActionModal({ ...actionModal, reason: e.target.value })} placeholder={actionModal.actionType === "reject" ? "Explain why this request is being rejected..." : "Explain what needs to be fixed..."} autoFocus></textarea>
                             </div>
-                            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
+                            <div className="px-6 py-2 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
                                 <button onClick={closeActionModal} className="px-4 py-2 text-sm font-bold text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-100">Cancel</button>
                                 <button onClick={submitActionModal} className={`px-6 py-2 text-sm font-bold text-white rounded-md shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${actionModal.actionType === "reject" ? "bg-red-600 hover:bg-red-700" : "bg-orange-500 hover:bg-orange-600"}`} disabled={!actionModal.reason.trim()}>
                                     {actionModal.actionType === "reject" ? "Submit Rejection" : "Confirm Return"}

@@ -6,7 +6,7 @@ export default function TrackingStepper({ currentStatus, type = 'PR', branch, pr
         { key: "pending_procurement", label: "PR Review: Proc Assistant" },
         { key: "pending_procurement_tl", label: "PO Generation: Procurement TL" },
         { key: "po_generated", label: "Purchase Order Generated" },
-        { key: "pending_evp_final", label: "EVP Final Approval" },
+        { key: "pending_evp_final", label: "Executive Vice President Final Approval" },
         { key: "approved", label: "Purchase Order Approved" },
     ];
 
@@ -17,7 +17,7 @@ export default function TrackingStepper({ currentStatus, type = 'PR', branch, pr
         { key: "pending_procurement", label: "PR Review: Proc Assistant" },
         { key: "pending_procurement_tl", label: "PO Generation: Procurement TL" },
         { key: "po_generated", label: "Purchase Order Generated" },
-        { key: "pending_evp_final", label: "EVP Final Approval" },
+        { key: "pending_evp_final", label: "Executive Vice President Final Approval" },
         { key: "approved", label: "Purchase Order Approved" },
     ];
 
@@ -98,7 +98,7 @@ export default function TrackingStepper({ currentStatus, type = 'PR', branch, pr
                                 }`}>
                                 <span className={`h-3 w-3 rounded-full shrink-0 ${dotColor}`}></span>
                                 <div className="flex flex-col">
-                                    <span className={`text-xs ${isFinishLine && !isRejected ? "font-extrabold text-emerald-900" : "font-medium " + textColor}`}>
+                                    <span className={`text-xs ${isFinishLine && !isRejected && index <= currentIndex ? "font-extrabold text-emerald-900" : "font-medium " + textColor}`}>
                                         {isRejected && index === currentIndex ? (type === "PR" ? "Rejected" : "Cancelled") : step.label}
                                     </span>
 
@@ -110,7 +110,7 @@ export default function TrackingStepper({ currentStatus, type = 'PR', branch, pr
 
                                     {pr?.is_evp_override && step.key === "pending_ops_manager" ? (
                                         <span className="text-[10px] italic text-purple-600 font-bold mt-0.5 leading-tight">
-                                            Authorized by Executive VP as OM Fallback
+                                            Authorized by Executive Vice President
                                         </span>
                                     ) : null}
                                 </div>

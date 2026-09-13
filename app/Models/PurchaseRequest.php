@@ -31,6 +31,7 @@ class PurchaseRequest extends Model
 
 protected $casts = [
     'is_evp_override' => 'boolean',
+    'cc_users' => 'array',
 ];
 
     protected $appends = ['pr_number'];
@@ -39,7 +40,7 @@ protected $casts = [
     {
         // Grabs the creation year and pads the ID to 4 digits
         $year = $this->created_at ? $this->created_at->format('Y') : date('Y');
-        return 'PR-' . $year . '-' . str_pad($this->id, 4, '0', STR_PAD_LEFT);
+        return 'PR' . $year . '-' . str_pad($this->id, 5, '0', STR_PAD_LEFT);
     }
 
     public function items()

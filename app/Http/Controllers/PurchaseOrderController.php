@@ -248,7 +248,7 @@ class PurchaseOrderController extends Controller
 
                     // Inherits the parent PR's ID but switches to the PO-YYYY format
                     $year = date('Y');
-                    $poNumber = 'PO-' . $year . '-' . str_pad($purchaseRequest->id, 4, '0', STR_PAD_LEFT);
+                    $poNumber = 'PO' . $year . '-' . str_pad($purchaseRequest->id, 5, '0', STR_PAD_LEFT);
 
                     $po = PurchaseOrder::create([
                         'purchase_request_id' => $lockedPR->id,

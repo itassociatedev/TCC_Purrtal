@@ -89,7 +89,7 @@ export default function PrintablePO({ po }) {
                         {/* Col 4: Title & PO # */}
                         <div className="w-[20%] text-right flex flex-col justify-right">
                             <h2 className="text-[21px] font-bold text-indigo-600 leading-none m-0">PURCHASE ORDER</h2>
-                            <div className="font-bold text-[12px] mt-1">Ref. #: {po.po_number}</div>
+                            <div className="font-bold text-[12px] mt-1">PO ID: {po.po_number}</div>
                             <div className="text-[10px] font-semibold text-gray-600 mt-1">
                                 Date: <span className="font-normal">{formatDate(po.po_date)}</span>
                             </div>

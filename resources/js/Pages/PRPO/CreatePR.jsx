@@ -23,7 +23,7 @@ const SearchableDropdown = ({ options, value, onChange, placeholder }) => {
         const handleClickOutside = (event) => {
             if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
                 setIsOpen(false);
-                setSearchTerm(selectedOption ? selectedOption.name : ''); 
+                setSearchTerm(selectedOption ? selectedOption.name : '');
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -45,7 +45,7 @@ const SearchableDropdown = ({ options, value, onChange, placeholder }) => {
                     const newVal = e.target.value;
                     setSearchTerm(newVal);
                     setIsOpen(true);
-                    
+
                     if (selectedOption && newVal !== selectedOption.name) {
                         onChange('');
                     }
@@ -55,7 +55,7 @@ const SearchableDropdown = ({ options, value, onChange, placeholder }) => {
                     setSearchTerm(selectedOption ? selectedOption.name : '');
                 }}
             />
-            
+
             {isOpen && (
                 <ul className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-md bg-white py-1 text-xs shadow-lg ring-1 ring-black ring-opacity-5">
                     {filteredOptions.length === 0 ? (
@@ -66,7 +66,7 @@ const SearchableDropdown = ({ options, value, onChange, placeholder }) => {
                                 key={opt.id}
                                 className="cursor-pointer px-3 py-2 hover:bg-indigo-600 hover:text-white transition-colors truncate"
                                 onMouseDown={(e) => {
-                                    e.preventDefault(); 
+                                    e.preventDefault();
                                     onChange(opt.id);
                                     setIsOpen(false);
                                     setSearchTerm(opt.name);
@@ -85,72 +85,69 @@ const SearchableDropdown = ({ options, value, onChange, placeholder }) => {
 // =====================================================================
 // CUSTOM MULTI-SELECT COMPONENT (For CC)
 // =====================================================================
-const CCMultiSelect  = ({ options, value, onChange, placeholder }) => {
+const CCMultiSelect = ({ options = [], value = [], onChange, placeholder }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchTerm, setSearchTerm] = useState("");
     const wrapperRef = useRef(null);
 
-    const selectedOption = options.find(opt => String(opt.id) === String(value));
-
-    useEffect(() => {
-        if (selectedOption) {
-            setSearchTerm(selectedOption.name);
-        } else {
-            setSearchTerm('');
-        }
-    }, [value, selectedOption]);
+    const safeOptions = Array.isArray(options) ? options : [];
+    const safeValue = Array.isArray(value) ? value : [];
+    const selectedOptions = safeOptions.filter((opt) => safeValue.map(String).includes(String(opt.id)));
 
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
                 setIsOpen(false);
-                setSearchTerm(selectedOption ? selectedOption.name : ''); 
+                setSearchTerm("");
             }
         };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [selectedOption]);
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
-    const filteredOptions = options.filter(opt =>
-        opt.name.toLowerCase().includes(searchTerm.toLowerCase())
+    const filteredOptions = safeOptions.filter((opt) =>
+        opt.name.toLowerCase().includes(searchTerm.toLowerCase()) && !safeValue.map(String).includes(String(opt.id))
     );
+
+    const handleRemove = (idToRemove) => {
+        onChange(safeValue.filter(id => String(id) !== String(idToRemove)));
+    };
 
     return (
         <div ref={wrapperRef} className="relative w-full">
+            <div className="flex flex-wrap gap-1 mb-2">
+                {selectedOptions.map(opt => (
+                    <span key={opt.id} className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 ring-1 ring-inset ring-indigo-600/20">
+                        {opt.name}
+                        <button type="button" onClick={() => handleRemove(opt.id)} className="text-indigo-500 hover:text-indigo-900 focus:outline-none ml-1">&times;</button>
+                    </span>
+                ))}
+            </div>
             <input
                 type="text"
                 className="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                 placeholder={placeholder}
-                value={searchTerm} 
+                value={searchTerm}
                 onChange={(e) => {
-                    const newVal = e.target.value;
-                    setSearchTerm(newVal);
+                    setSearchTerm(e.target.value);
                     setIsOpen(true);
-                    
-                    if (selectedOption && newVal !== selectedOption.name) {
-                        onChange('');
-                    }
                 }}
-                onFocus={() => {
-                    setIsOpen(true);
-                    setSearchTerm(selectedOption ? selectedOption.name : '');
-                }}
+                onFocus={() => setIsOpen(true)}
             />
-            
             {isOpen && (
                 <ul className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-md bg-white py-1 text-sm shadow-lg ring-1 ring-black ring-opacity-5">
                     {filteredOptions.length === 0 ? (
                         <li className="px-3 py-2 text-gray-500">No results found</li>
                     ) : (
-                        filteredOptions.map(opt => (
+                        filteredOptions.map((opt) => (
                             <li
                                 key={opt.id}
                                 className="cursor-pointer px-3 py-2 hover:bg-indigo-600 hover:text-white transition-colors truncate"
                                 onMouseDown={(e) => {
-                                    e.preventDefault(); 
-                                    setSearchTerm(opt.name); 
-                                    onChange(opt.id);        
-                                    setIsOpen(false);        
+                                    e.preventDefault();
+                                    setSearchTerm("");
+                                    onChange([...safeValue, opt.id]);
+                                    setIsOpen(false);
                                 }}
                             >
                                 {opt.name}
@@ -167,20 +164,22 @@ const CCMultiSelect  = ({ options, value, onChange, placeholder }) => {
 // MAIN PAGE COMPONENT
 // =====================================================================
 export default function CreatePR({ auth, suppliers, products, branches = [], departments = [],  userBranches = [], employees = []}) {
-    const today = new Date().toISOString().split('T')[0];
+    // Get local time instead of UTC to avoid incorrect dates (e.g. PST timezone shift)
+    const now = new Date();
+    const today = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
     const userRole = auth.user.role?.name?.toLowerCase() || '';
 
     const isUnrestricted = userRole === 'admin' || userRole.includes('director') || userRole.includes('procurement');
     const isAssistant = userRole.includes('assistant');
- 
-   const availableBranches = isUnrestricted 
-        ? branches 
+
+   const availableBranches = isUnrestricted
+        ? branches
         : branches.filter(b => userBranches.includes(b.name));
 
     const { data, setData, post, processing, errors } = useForm({
-        branch: '', 
-        department: '', 
+        branch: '',
+        department: '',
         date_prepared: today,
         date_needed: '',
         request_type: '',
@@ -191,16 +190,16 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
         impact_if_not_procured: '',
         cc_user_id: '',
         items: [
-            { 
-                product_id: '', 
-                specifications: '', 
-                unit: '', 
-                qty_requested: '', 
-                qty_on_hand: '', 
-                reorder_level: '', 
-                supplier_id: '', 
-                est_unit_cost: '', 
-                total_cost: 0 
+            {
+                product_id: '',
+                specifications: '',
+                unit: '',
+                qty_requested: '',
+                qty_on_hand: '',
+                reorder_level: '',
+                supplier_id: '',
+                est_unit_cost: '',
+                total_cost: 0
             }
         ],
     });
@@ -217,8 +216,8 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
     }, [availableBranches, isUnrestricted]);
 
     const addItemRow = () => {
-        setData('items', [...data.items, { 
-            product_id: '', specifications: '', unit: '', qty_requested: '', qty_on_hand: '', reorder_level: '', supplier_id: '', est_unit_cost: '', total_cost: 0 
+        setData('items', [...data.items, {
+            product_id: '', specifications: '', unit: '', qty_requested: '', qty_on_hand: '', reorder_level: '', supplier_id: '', est_unit_cost: '', total_cost: 0
         }]);
     };
 
@@ -229,18 +228,18 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
     };
 
     const handleItemChange = (index, field, value) => {
-        const newItems = [...data.items]; 
+        const newItems = [...data.items];
         newItems[index][field] = value;
 
         // 1. Product Change Logic
         if (field === 'product_id') {
             const selectedProduct = products.find(p => String(p.id) === String(value));
-            
+
             if (selectedProduct) {
                 newItems[index].supplier_id = selectedProduct.supplier_id || '';
                 newItems[index].unit = selectedProduct.unit || '';
-                newItems[index].est_unit_cost = selectedProduct.price || 0; 
-                
+                newItems[index].est_unit_cost = selectedProduct.price || 0;
+
                 const qty = parseFloat(newItems[index].qty_requested) || 0;
                 newItems[index].total_cost = qty * parseFloat(newItems[index].est_unit_cost);
             } else {
@@ -251,14 +250,13 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
             }
         }
 
-        // 2. Quantity Change Logic (Dynamic Math)
-        if (field === 'qty_requested') {
-            const qty = parseFloat(value) || 0;
+        if (field === 'qty_requested' || field === 'est_unit_cost') {
+            const qty = parseFloat(newItems[index].qty_requested) || 0;
             const cost = parseFloat(newItems[index].est_unit_cost) || 0;
             newItems[index].total_cost = qty * cost;
         }
 
-        setData('items', newItems); 
+        setData('items', newItems);
     };
 
     const submit = (e) => {
@@ -281,22 +279,22 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                 </div>
 
                 <form onSubmit={submit} className="space-y-8">
-                    
+
                     {/* --- 1. PR HEADER DETAILS --- */}
                     <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl p-6 lg:p-8">
                         <h3 className="text-lg font-bold leading-7 text-gray-900 mb-6 border-b border-gray-200 pb-3">1. Requisition Details</h3>
-                        
+
                         {/* Perfect 3-column grid for the 9 inputs */}
                         <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-3">
-                            
+
                             {/* ROW 1 */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Branch <span className="text-red-500">*</span></label>
-                                <select 
-                                    value={data.branch} 
-                                    onChange={e => setData('branch', e.target.value)} 
-                                    disabled={!isUnrestricted && availableBranches.length === 1} 
-                                    className={`block w-full rounded-md shadow-sm sm:text-sm ${!isUnrestricted && availableBranches.length === 1 ? 'bg-gray-100 cursor-not-allowed text-gray-500' : ''} ${errors.branch ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-500'}`} 
+                                <select
+                                    value={data.branch}
+                                    onChange={e => setData('branch', e.target.value)}
+                                    disabled={!isUnrestricted && availableBranches.length === 1}
+                                    className={`block w-full rounded-md shadow-sm sm:text-sm ${!isUnrestricted && availableBranches.length === 1 ? 'bg-gray-100 cursor-not-allowed text-gray-500' : ''} ${errors.branch ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-500'}`}
                                     required
                                 >
                                     <option value="" disabled>Select Branch...</option>
@@ -329,7 +327,7 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                                     <option value="Inventory">Inventory</option>
                                 </select>
                             </div>
-                            
+
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
                                 <select value={data.priority} onChange={e => setData('priority', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
@@ -366,7 +364,7 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                                 <div className="flex justify-between">
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Carbon Copy(C.C.)</label>
                                 </div>
-                                <CCMultiSelect 
+                                <CCMultiSelect
                                     options={branchEmployees}
                                     value={data.cc_user_id}
                                     onChange={(val) => setData('cc_user_id', val)}
@@ -398,7 +396,7 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                                 Add Item Row
                             </button>
                         </div>
-                        
+
                         <div className="overflow-x-auto rounded-lg border border-gray-200 pb-32">
                             <table className="min-w-full divide-y divide-gray-200 text-sm">
                                 <thead className="bg-gray-50 text-gray-700">
@@ -418,9 +416,9 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                                 </thead>
                                 <tbody className="divide-y divide-gray-100 bg-white">
                                     {data.items.map((item, index) => {
-                                        
+
                                         // DYNAMIC FILTERING LOGIC
-                                        const availableProducts = item.supplier_id 
+                                        const availableProducts = item.supplier_id
                                             ? products.filter(p => String(p.supplier_id) === String(item.supplier_id))
                                             : products;
 
@@ -434,9 +432,9 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                                         return (
                                             <tr key={index} className="hover:bg-gray-50/50 font-semibold">
                                                 <td className="whitespace-nowrap px-3 py-2 text-center text-gray-500 font-medium">{index + 1}</td>
-                                                
+
                                                 <td className="whitespace-nowrap px-3 py-2">
-                                                    <SearchableDropdown 
+                                                    <SearchableDropdown
                                                         options={availableProducts}
                                                         value={item.product_id}
                                                         onChange={(val) => handleItemChange(index, 'product_id', val)}
@@ -459,9 +457,9 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                                                 <td className="whitespace-nowrap px-3 py-2">
                                                     <input type="number" min="0" value={item.reorder_level} onChange={(e) => handleItemChange(index, 'reorder_level', e.target.value)} className="block w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500" required />
                                                 </td>
-                                                
+
                                                 <td className="whitespace-nowrap px-3 py-2">
-                                                    <SearchableDropdown 
+                                                    <SearchableDropdown
                                                         options={availableSuppliers}
                                                         value={item.supplier_id}
                                                         onChange={(val) => handleItemChange(index, 'supplier_id', val)}
@@ -523,7 +521,7 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                         </div>
                     </div>
 
-                    <div className="flex items-center justify-end gap-x-4 bg-gray-50 px-6 py-4 rounded-xl border border-gray-200">
+                    <div className="flex items-center justify-end gap-x-4 bg-gray-50 px-6 py-2 rounded-xl border border-gray-200">
                         <button type="button" onClick={() => window.history.back()} className="text-sm font-semibold leading-6 text-gray-700 hover:text-gray-900 bg-white border border-gray-300 px-6 py-2.5 rounded-md shadow-sm transition">Cancel</button>
                         <button type="submit" disabled={processing} className="rounded-md bg-indigo-600 px-8 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 transition">
                             Submit Request

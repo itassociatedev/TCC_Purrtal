@@ -69,7 +69,8 @@ class PurchaseRequestController extends Controller
             'budget_ref' => 'nullable|string|max:255',
             'purpose_of_request' => 'nullable|string',
             'impact_if_not_procured' => 'nullable|string',
-            'cc_user_id' => 'nullable|exists:users,id',
+            'cc_users' => 'nullable|array',
+            'cc_users.*' => 'exists:users,id',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.supplier_id' => 'nullable|exists:suppliers,id',
@@ -109,7 +110,7 @@ class PurchaseRequestController extends Controller
                 'purpose_of_request' => $validated['purpose_of_request'],
                 'impact_if_not_procured' => $validated['impact_if_not_procured'],
                 'status' => $initialStatus,
-                'cc_user_id' => $validated['cc_user_id'] ?? null,
+                'cc_users' => $validated['cc_users'] ?? null,
             ]);
 
             foreach ($validated['items'] as $item) {
@@ -119,9 +120,11 @@ class PurchaseRequestController extends Controller
             $this->notifyNextApprovers($pr);
 
             $ccRecipients = collect();
-            if ($pr->cc_user_id) {
-                $manualCc = User::find($pr->cc_user_id);
-                if ($manualCc) $ccRecipients->push($manualCc);
+            $ccUserIds = $validated['cc_users'] ?? [];
+
+            if (!empty($ccUserIds)) {
+                $manualCcs = User::whereIn('id', $ccUserIds)->get();
+                $ccRecipients = $ccRecipients->merge($manualCcs);
             }
 
             $auditors = User::whereHas('role', function ($query) {
@@ -131,7 +134,7 @@ class PurchaseRequestController extends Controller
             $allCcUsers = $ccRecipients->merge($auditors)->unique('id');
 
             foreach ($allCcUsers as $recipient) {
-                $reason = $recipient->id == $pr->cc_user_id
+                $reason = in_array($recipient->id, $ccUserIds)
                     ? "You were CC'd on a new Purchase Request by " . Auth::user()->name
                     : "A new Purchase Request was submitted for Audit review by " . Auth::user()->name;
 
@@ -166,7 +169,7 @@ class PurchaseRequestController extends Controller
         }
         elseif ($view === 'for_approval') {
             $query->where(function ($q) use ($userRole, $isEVP, $isAdmin) {
-                if ($isAdmin) {
+                if ($isAdmin || $isEVP) {
                     $q->whereIn('status', ['pending_inv_tl', 'pending_ops_manager', 'pr_generated', 'pending_procurement']);
                 } else {
                     if (str_contains($userRole, 'inventory tl')) {
@@ -213,7 +216,7 @@ class PurchaseRequestController extends Controller
         $products = Product::select('id', 'name', 'supplier_id', 'details', 'unit', 'price')->get();
         $branches = Branch::select('id', 'name')->get();
         $departments = Department::select('id', 'name')->get();
-        $employees = User::with('branches:id,name')->where('id', '!=', Auth::id())->select('id', 'name')->orderBy('name')->get();
+        $employees = User::with('branches:id,name')->select('id', 'name')->orderBy('name')->get();
 
         return Inertia::render('PRPO/ApprovalBoard', [
             'requests' => $requests,
