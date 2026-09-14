@@ -3,9 +3,7 @@ import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, useForm } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 
-// =====================================================================
-// CUSTOM SEARCHABLE DROPDOWN COMPONENT
-// =====================================================================
+
 const SearchableDropdown = ({ options, value, onChange, placeholder }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -81,10 +79,6 @@ const SearchableDropdown = ({ options, value, onChange, placeholder }) => {
         </div>
     );
 };
-
-// =====================================================================
-// CUSTOM MULTI-SELECT COMPONENT (For CC)
-// =====================================================================
 const CCMultiSelect = ({ options = [], value = [], onChange, placeholder }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
@@ -160,11 +154,8 @@ const CCMultiSelect = ({ options = [], value = [], onChange, placeholder }) => {
     );
 };
 
-// =====================================================================
-// MAIN PAGE COMPONENT
-// =====================================================================
 export default function CreatePR({ auth, suppliers, products, branches = [], departments = [],  userBranches = [], employees = []}) {
-    // Get local time instead of UTC to avoid incorrect dates (e.g. PST timezone shift)
+
     const now = new Date();
     const today = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
@@ -188,7 +179,7 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
         budget_ref: '',
         purpose_of_request: '',
         impact_if_not_procured: '',
-        cc_user_id: '',
+        cc_users: [],
         items: [
             {
                 product_id: '',
@@ -231,7 +222,6 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
         const newItems = [...data.items];
         newItems[index][field] = value;
 
-        // 1. Product Change Logic
         if (field === 'product_id') {
             const selectedProduct = products.find(p => String(p.id) === String(value));
 
@@ -280,11 +270,9 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
 
                 <form onSubmit={submit} className="space-y-8">
 
-                    {/* --- 1. PR HEADER DETAILS --- */}
                     <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl p-6 lg:p-8">
                         <h3 className="text-lg font-bold leading-7 text-gray-900 mb-6 border-b border-gray-200 pb-3">1. Requisition Details</h3>
 
-                        {/* Perfect 3-column grid for the 9 inputs */}
                         <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-3">
 
                             {/* ROW 1 */}
@@ -317,7 +305,6 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                                 <input type="date" value={data.date_prepared} onChange={e => setData('date_prepared', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm bg-gray-50 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-gray-600 cursor-not-allowed" readOnly />
                             </div>
 
-                            {/* ROW 2 */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Request Type</label>
                                 <select value={data.request_type} onChange={e => setData('request_type', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
@@ -329,7 +316,7 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Priority <span className="text-red-500">*</span></label>
                                 <select value={data.priority} onChange={e => setData('priority', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                                     <option value="">Select Priority...</option>
                                     <option value="Low">Low</option>
@@ -339,12 +326,11 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Date Needed</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Date Needed <span className="text-red-500">*</span></label>
                                 <input type="date" value={data.date_needed} onChange={e => setData('date_needed', e.target.value)} min={today} className={`block w-full rounded-md shadow-sm sm:text-sm ${errors.date_needed ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-indigo-500'}`} />
                                 {errors.date_needed && <p className="mt-2 text-sm text-red-600">{errors.date_needed}</p>}
                             </div>
 
-                            {/* ROW 3 */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Budget Status</label>
                                 <select value={data.budget_status} onChange={e => setData('budget_status', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
@@ -356,25 +342,24 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Budget Reference</label>
-                                <input type="text" value={data.budget_ref} onChange={e => setData('budget_ref', e.target.value)} className={`block w-full rounded-md shadow-sm sm:text-sm ${errors.budget_ref ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-indigo-500'}`} placeholder="Enter Ref..." />
+                                <input type="text" value={data.budget_ref} onChange={e => setData('budget_ref', e.target.value)} className={`block w-full rounded-md shadow-sm sm:text-sm ${errors.budget_ref ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-indigo-500'}`} placeholder="Enter Reference" />
                                 {errors.budget_ref && <p className="mt-2 text-sm text-red-600">{errors.budget_ref}</p>}
                             </div>
 
                             <div>
                                 <div className="flex justify-between">
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Carbon Copy(C.C.)</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Carbon Copy</label>
                                 </div>
                                 <CCMultiSelect
                                     options={branchEmployees}
-                                    value={data.cc_user_id}
-                                    onChange={(val) => setData('cc_user_id', val)}
-                                    placeholder={!data.branch ? "Select branch first..." : "Search employee..."}
+                                    value={data.cc_users}
+                                    onChange={(val) => setData('cc_users', val)}
+                                    placeholder={!data.branch ? "Select branch first..." : "Search employees..."}
                                 />
-                                {errors.cc_user_id && <p className="mt-2 text-sm text-red-600">{errors.cc_user_id}</p>}
-                                <p className="mt-1 text-[11px] text-gray-500">Gets status notifications.</p>
+                                {errors.cc_users && <p className="mt-2 text-sm text-red-600">{errors.cc_users}</p>}
+                                <p className="mt-1 text-[11px] text-gray-500">Selected employees will receive status notifications.</p>
                             </div>
 
-                            {/* WIDE TEXT AREAS */}
                             <div className="sm:col-span-3 mt-2 border-t border-gray-100 pt-6">
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Purpose of Request</label>
                                 <textarea rows={2} value={data.purpose_of_request} onChange={e => setData('purpose_of_request', e.target.value)} placeholder="Provide the general justification for this request..." className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
@@ -386,8 +371,6 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                             </div>
                         </div>
                     </div>
-
-                    {/* --- 2. DYNAMIC ITEM DETAILS TABLE --- */}
                     <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl p-6 lg:p-8">
                         <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-6 border-b border-gray-200 pb-3 gap-4">
                             <h3 className="text-lg font-bold leading-7 text-gray-900">2. Item Details</h3>
@@ -417,7 +400,6 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                                 <tbody className="divide-y divide-gray-100 bg-white">
                                     {data.items.map((item, index) => {
 
-                                        // DYNAMIC FILTERING LOGIC
                                         const availableProducts = item.supplier_id
                                             ? products.filter(p => String(p.supplier_id) === String(item.supplier_id))
                                             : products;

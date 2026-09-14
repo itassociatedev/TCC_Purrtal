@@ -1,5 +1,5 @@
 <?php
-// Purchase request controller: manage PR lifecycle
+
 
 namespace App\Http\Controllers;
 
@@ -19,12 +19,8 @@ use App\Notifications\PRPOCcStatusUpdate;
 
 class PurchaseRequestController extends Controller
 {
-    // =====================================================================
-    // CREATE REQUEST (Frontend Form)
-    // =====================================================================
     public function create()
     {
-        /** @var \App\Models\User $user */
         $user = Auth::user();
         $userBranches = $user->branches()->pluck('name')->toArray();
 
@@ -33,7 +29,6 @@ class PurchaseRequestController extends Controller
         $branches = Branch::select('id', 'name')->get();
         $departments = Department::select('id', 'name')->get();
         $employees = User::with('branches:id,name')
-                        ->where('id', '!=', Auth::id())
                         ->select('id', 'name')
                         ->orderBy('name')
                         ->get();
@@ -48,9 +43,6 @@ class PurchaseRequestController extends Controller
         ]);
     }
 
-    // =====================================================================
-    // STORE REQUEST (Save to Database)
-    // =====================================================================
     public function store(Request $request)
     {
         $user = Auth::user();
@@ -58,13 +50,21 @@ class PurchaseRequestController extends Controller
             abort(403, 'You do not have permission to create purchase requests.');
         }
 
+        $ccData = $request->input('cc_users');
+        if (empty($ccData) && $request->has('cc_user_id')) {
+            $legacyCc = $request->input('cc_user_id');
+            $request->merge([
+                'cc_users' => is_array($legacyCc) ? $legacyCc : (!empty($legacyCc) ? [$legacyCc] : [])
+            ]);
+        }
+
         $validated = $request->validate([
             'branch' => 'required|string|max:255',
             'department' => 'required|string|max:255',
             'date_prepared' => 'required|date',
             'request_type' => 'nullable|string|max:255',
-            'priority' => 'nullable|string|max:255',
-            'date_needed' => 'nullable|date|after_or_equal:today',
+            'priority' => 'required|string|max:255',
+            'date_needed' => 'required|date|after_or_equal:today',
             'budget_status' => 'nullable|string|max:255',
             'budget_ref' => 'nullable|string|max:255',
             'purpose_of_request' => 'nullable|string',
@@ -89,7 +89,6 @@ class PurchaseRequestController extends Controller
         $isGreenhills = strtolower(trim($validated['branch'])) === 'greenhills';
         $isInventoryAssist = str_contains(strtolower(trim($user->role->name ?? '')), 'inventory assist');
 
-        // Greenhills bypasses Inventory TL entirely.
         if (($isGreenhills && $isInventoryAssist) || $userRoleId === 15) {
             $initialStatus = 'pending_ops_manager';
         } else {
@@ -146,9 +145,84 @@ class PurchaseRequestController extends Controller
                         ->with('success', 'Purchase Request submitted successfully!');
     }
 
-    // =====================================================================
-    // APPROVAL BOARD (View Requests based on Role)
-    // =====================================================================
+public function update(Request $request, $id)
+    {
+
+        $purchaseRequest = PurchaseRequest::findOrFail($id);
+
+        $user = Auth::user();
+        if (!$user->canEditModule('purchase_requests')) {
+            abort(403, 'You do not have permission to edit purchase requests.');
+        }
+
+        $validated = $request->validate([
+            'branch' => 'required|string|max:255',
+            'department' => 'required|string|max:255',
+            'request_type' => 'nullable|string|max:255',
+            'priority' => 'nullable|string|max:255',
+            'date_needed' => 'nullable|date|after_or_equal:today',
+            'budget_status' => 'nullable|string|max:255',
+            'budget_ref' => 'nullable|string|max:255',
+            'purpose_of_request' => 'nullable|string',
+            'impact_if_not_procured' => 'nullable|string',
+            'cc_users' => 'nullable|array',
+            'cc_users.*' => 'exists:users,id',
+            'items' => 'required|array|min:1',
+            'items.*.id' => 'nullable',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.supplier_id' => 'nullable|exists:suppliers,id',
+            'items.*.specifications' => 'nullable|string|max:255',
+            'items.*.unit' => 'nullable|string|max:50',
+            'items.*.qty_requested' => 'required|numeric|min:0',
+            'items.*.qty_on_hand' => 'nullable|numeric|min:0',
+            'items.*.reorder_level' => 'nullable|numeric|min:0',
+            'items.*.est_unit_cost' => 'nullable|numeric|min:0',
+            'items.*.total_cost' => 'nullable|numeric|min:0',
+        ]);
+
+        DB::transaction(function () use ($validated, $purchaseRequest) {
+            $purchaseRequest->update([
+                'branch' => $validated['branch'],
+                'department' => $validated['department'],
+                'request_type' => $validated['request_type'],
+                'priority' => $validated['priority'],
+                'date_needed' => $validated['date_needed'],
+                'budget_status' => $validated['budget_status'],
+                'budget_ref' => $validated['budget_ref'],
+                'purpose_of_request' => $validated['purpose_of_request'],
+                'impact_if_not_procured' => $validated['impact_if_not_procured'],
+                'cc_users' => $validated['cc_users'] ?? [],
+            ]);
+
+            $incomingItemIds = collect($validated['items'])->pluck('id')->filter()->toArray();
+            $purchaseRequest->items()->whereNotIn('id', $incomingItemIds)->delete();
+
+            foreach ($validated['items'] as $itemData) {
+                $product = Product::find($itemData['product_id']);
+                $itemData['product_name'] = $product ? $product->name : 'Unknown Product';
+
+                if (!empty($itemData['id'])) {
+                    $purchaseRequest->items()->where('id', $itemData['id'])->update([
+                        'product_id' => $itemData['product_id'],
+                        'product_name' => $itemData['product_name'],
+                        'supplier_id' => $itemData['supplier_id'] ?? null,
+                        'specifications' => $itemData['specifications'] ?? null,
+                        'unit' => $itemData['unit'] ?? null,
+                        'qty_requested' => $itemData['qty_requested'],
+                        'qty_on_hand' => $itemData['qty_on_hand'] ?? 0,
+                        'reorder_level' => $itemData['reorder_level'] ?? 0,
+                        'est_unit_cost' => $itemData['est_unit_cost'],
+                        'total_cost' => $itemData['total_cost'],
+                    ]);
+                } else {
+                    $purchaseRequest->items()->create($itemData);
+                }
+            }
+        });
+
+        return back()->with('success', 'Purchase Request updated successfully.');
+    }
+
     public function approvalBoard(Request $request)
     {
         $user = Auth::user();
@@ -189,7 +263,6 @@ class PurchaseRequestController extends Controller
             }
         }
         elseif ($view === 'for_generation') {
-            // PO Generation logic has been transferred strictly to PurchaseOrderController
             $query->whereRaw('1 = 0');
         }
         elseif ($view === 'po_generated') {
@@ -232,9 +305,6 @@ class PurchaseRequestController extends Controller
         ]);
     }
 
-    // =====================================================================
-    // UPDATE STATUS (Approve / Reject Logic)
-    // =====================================================================
     public function updateStatus(Request $request, PurchaseRequest $purchaseRequest)
     {
         $user = Auth::user();
@@ -247,9 +317,7 @@ class PurchaseRequestController extends Controller
             'rejection_reason' => 'required_if:action,reject|required_if:action,return_to_inv_tl|required_if:action,return_to_creator|nullable|string',
         ]);
 
-        // =====================================================================
-        // REJECTION / RETURN LOGIC
-        // =====================================================================
+
         if (in_array($action, ['reject', 'return_to_inv_tl', 'return_to_creator', 'cancel'])) {
             if ($action === 'reject') {
                 $purchaseRequest->status = 'rejected';
@@ -273,9 +341,7 @@ class PurchaseRequestController extends Controller
             return back()->with('success', $message);
         }
 
-        // =====================================================================
-        // STANDARD APPROVE (Inventory TL)
-        // =====================================================================
+
         if ($action === 'approve') {
             if ($purchaseRequest->status === 'pending_inv_tl') {
                 $userRole = strtolower(trim($user->role->name ?? ''));
@@ -373,10 +439,12 @@ class PurchaseRequestController extends Controller
         }
 
         $requests = $query->latest()->paginate(15)->withQueryString();
+        $employees = User::select('id', 'name')->orderBy('name')->get();
 
         return Inertia::render('PRPO/ApprovalBoard', [
             'requests' => $requests,
             'currentView' => $view,
+            'employees' => $employees,
         ]);
     }
 
@@ -390,7 +458,7 @@ class PurchaseRequestController extends Controller
             'items.product',
             'items.supplier'
         ]);
-        // 👇 Added 'user.role' to the eager-loaded array
+
         $purchaseRequest->load(['user.role', 'cc_user', 'items.product', 'items.supplier']);
 
         return Inertia::render('PRPO/PrintablePR', [

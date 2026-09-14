@@ -1003,8 +1003,14 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
         }
     };
 
+    useEffect(() => {
+        if (userData.department_id) {
+            setUserData('position_id', '');
+        }
+    }, [userData.department_id]);
+
     const filteredPositionsForUser = positions.filter(
-        pos => pos.department_id === parseInt(userData.department_id)
+        pos => String(pos.department_id) === String(userData.department_id)
     );
 
     // ==========================================
@@ -1072,8 +1078,14 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
         }
     };
 
+    useEffect(() => {
+        if (editUserData.department_id && editingUser && String(editUserData.department_id) !== String(editingUser.department_id)) {
+            setEditData('position_id', '');
+        }
+    }, [editUserData.department_id]);
+
     const filteredEditPositions = positions.filter(
-        (pos) => pos.department_id === parseInt(editUserData.department_id)
+        (pos) => String(pos.department_id) === String(editUserData.department_id)
     );
 
     const { processing: importProcessing, reset: resetImport } = useForm({
@@ -1619,12 +1631,12 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 <InputLabel htmlFor="role_id" value="System Role" />
                                 <select
                                     id="role_id"
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm capitalize"
                                     value={userData.role_id}
                                     onChange={(e) => setUserData('role_id', e.target.value)}
                                     required
                                 >
-                                    <option value="" disabled>Select Role</option>
+                                    <option value="" disabled className="normal-case">Select Role</option>
                                     {roles.map((role) => (
                                         <option key={role.id} value={role.id} className="capitalize">{role.name}</option>
                                     ))}
@@ -1656,7 +1668,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 <InputLabel htmlFor="user_department" value="Department" />
                                 <select id="user_department" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={userData.department_id} onChange={(e) => setUserData('department_id', e.target.value)} required>
                                     <option value="" disabled>Select Department</option>
-                                    {departments.map((dept) => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
+                                    {departments.map((dept) => <option key={dept.id} value={String(dept.id)}>{dept.name}</option>)}
                                 </select>
                                 <InputError message={userErrors.department_id} className="mt-2" />
                             </div>
@@ -1718,12 +1730,12 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 <InputLabel htmlFor="edit_role_id" value="System Role" />
                                 <select
                                     id="edit_role_id"
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm capitalize"
                                     value={editUserData.role_id || ''}
                                     onChange={(e) => setEditData('role_id', e.target.value)}
                                     required
                                 >
-                                    <option value="" disabled>Select Role</option>
+                                    <option value="" disabled className="normal-case">Select Role</option>
                                     {roles.map((role) => <option key={role.id} value={role.id} className="capitalize">{role.name}</option>)}
                                 </select>
                                 <InputError message={editErrors.role_id} className="mt-2" />
@@ -1753,7 +1765,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 <InputLabel htmlFor="edit_department" value="Department" />
                                 <select id="edit_department" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={editUserData.department_id} onChange={(e) => setEditData('department_id', e.target.value)} required>
                                     <option value="" disabled>Select Department</option>
-                                    {departments.map((dept) => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
+                                    {departments.map((dept) => <option key={dept.id} value={String(dept.id)}>{dept.name}</option>)}
                                 </select>
                                 <InputError message={editErrors.department_id} className="mt-2" />
                             </div>

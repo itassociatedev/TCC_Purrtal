@@ -22,7 +22,7 @@ export default function PrintablePR({ pr }) {
         <div className="min-h-screen bg-gray-200 print:bg-white py-8 print:py-0 font-sans">
             <Head title={`Purchase Request #${pr.id}`} />
 
-            {/* FORCE LANDSCAPE WITH TIGHT MARGINS */}
+
             <style>
                 {`
                     @media print {
@@ -38,7 +38,7 @@ export default function PrintablePR({ pr }) {
                 `}
             </style>
 
-            {/* ACTION BUTTONS (Hidden when printing) */}
+
             <div className="max-w-5xl mx-auto mb-4 flex justify-between items-center print:hidden px-4">
                 <button
                     onClick={() => window.close()}
@@ -54,15 +54,10 @@ export default function PrintablePR({ pr }) {
                 </button>
             </div>
 
-            {/* FULL HEIGHT CONTAINER WITH FLEX PINNING */}
+
             <div className="max-w-5xl mx-auto bg-white p-8 shadow-xl print:shadow-none print:p-0 border border-gray-300 print:border-none w-full flex flex-col justify-between min-h-[92vh] text-[10px] leading-[1.15] text-[#333]">
-
-                {/* TOP CONTENT WRAPPER */}
                 <div>
-                    {/* MASTER HEADER */}
                     <div className="flex border-b-2 border-gray-900 pb-2 mb-3">
-
-                        {/* Col 1: Logo & Clinic */}
                         <div className="w-[25%] flex items-start gap-2 pr-2 pt-0.5">
                             <div className="w-12 h-12 flex-shrink-0">
                                 <ApplicationLogo className="w-full h-full text-indigo-900" />
@@ -72,8 +67,6 @@ export default function PrintablePR({ pr }) {
                                 <div className="text-[10px] text-gray-600 mt-0.5">Makati City, Metro Manila</div>
                             </div>
                         </div>
-
-                        {/* Col 2: Prepared By */}
                         <div className="w-[30%] border-l border-gray-300 pl-3">
                             <span className="text-[9px] font-bold text-gray-500 uppercase block mb-0.5">Prepared By:</span>
                             <span className="text-[11px] font-bold text-gray-900 uppercase">{pr.user?.name}</span><br />
@@ -86,15 +79,11 @@ export default function PrintablePR({ pr }) {
                                 </div>
                             )}
                         </div>
-
-                        {/* Col 3: Budget Info */}
                         <div className="w-[25%] border-l border-gray-300 pl-3">
                             <span className="text-[9px] font-bold text-gray-500 uppercase block mb-0.5">Budget Information:</span>
                             <span className="text-[11px] font-bold text-gray-900 block">Ref: <span className="font-normal">{pr.budget_ref}</span></span>
                             <span className="text-[11px] font-bold text-gray-900 block mt-0.5">Status: <span className="font-normal">{pr.budget_status || 'N/A'}</span></span>
                         </div>
-
-                        {/* Col 4: Title & Dates */}
                         <div className="w-[20%] text-right flex flex-col justify-center">
                             <h2 className="text-[18px] font-bold text-indigo-600 leading-none m-0 whitespace-nowrap">PURCHASE REQUEST</h2>
                             <div className="font-bold text-[12px] mt-1">PR ID: {pr.pr_number}</div>
@@ -104,16 +93,12 @@ export default function PrintablePR({ pr }) {
                             </div>
                         </div>
                     </div>
-
-                    {/* Purpose of Request */}
                     {pr.purpose_of_request && (
                         <div className="mb-2 p-2 bg-gray-50 border border-gray-200 rounded-sm">
                             <span className="text-[9px] font-bold text-gray-500 uppercase block mb-0.5">Purpose of Request</span>
                             <p className="text-[10px] text-gray-800 italic m-0">{pr.purpose_of_request}</p>
                         </div>
                     )}
-
-                    {/* Items Table */}
                     <div>
                         <table className="w-full text-[10px] text-left mb-2 border-collapse">
                             <thead className="bg-gray-100 border-y border-gray-300">
@@ -141,8 +126,6 @@ export default function PrintablePR({ pr }) {
                                         <td className="py-[2px] px-2 text-right font-bold text-gray-900">{formatCurrency(item.total_cost)}</td>
                                     </tr>
                                 ))}
-
-                                {/* Grand Total Row */}
                                 <tr className="border-t-2 border-gray-800 break-inside-avoid">
                                     <td colSpan="4" className="py-2 px-2 text-right font-bold uppercase text-gray-700 text-[11px]">Estimated Grand Total:</td>
                                     <td className="py-2 px-2 text-right font-black text-[13px] text-gray-900 bg-gray-50">
@@ -153,8 +136,6 @@ export default function PrintablePR({ pr }) {
                         </table>
                     </div>
                 </div>
-
-                {/* SIGNATURES SECTION - PINNED TO THE BOTTOM */}
                 <div className="mt-auto pt-6 pb-2 break-inside-avoid w-full flex justify-between gap-12">
                     <div className="w-[30%]">
                         <div className="border-b border-gray-900 h-8 mb-1"></div>

@@ -21,8 +21,6 @@ export default function PrintablePO({ po }) {
     return (
         <div className="min-h-screen bg-gray-200 print:bg-white py-8 print:py-0 font-sans">
             <Head title={`Purchase Order #${po.po_number}`} />
-
-            {/* FORCE LANDSCAPE WITH TIGHT MARGINS */}
             <style>
                 {`
                     @media print {
@@ -37,8 +35,6 @@ export default function PrintablePO({ po }) {
                     }
                 `}
             </style>
-
-            {/* ACTION BUTTONS (Hidden when printing) */}
             <div className="max-w-5xl mx-auto mb-4 flex justify-between items-center print:hidden px-4">
                 <button
                     onClick={() => window.close()}
@@ -53,11 +49,8 @@ export default function PrintablePO({ po }) {
                     Print Purchase Order / Save as PDF
                 </button>
             </div>
-
-            {/* FULL HEIGHT CONTAINER WITH FLEX PINNING */}
             <div className="max-w-5xl mx-auto bg-white p-8 shadow-xl print:shadow-none print:p-0 border border-gray-300 print:border-none w-full flex flex-col justify-between min-h-[92vh] text-[10px] leading-[1.15] text-[#333]">
                 <div>
-                    {/* MASTER HEADER */}
                     <div className="flex border-b-2 border-gray-900 pb-2 mb-3">
                         {/* Col 1: Logo & Clinic */}
                         <div className="w-[25%] flex items-start gap-2 pr-2 pt-0.5">
@@ -69,24 +62,18 @@ export default function PrintablePO({ po }) {
                                 <div className="text-[10px] text-gray-600 mt-0.5">Makati City, Metro Manila</div>
                             </div>
                         </div>
-
-                        {/* Col 2: Supplier Details */}
                         <div className="w-[28%] border-l border-gray-300 pl-3">
                             <span className="text-[9px] font-bold text-gray-500 uppercase block mb-0.5">To Supplier:</span>
                             <span className="text-[11px] font-bold text-gray-900 uppercase">{po.supplier?.name}</span><br />
                             <span className="text-[10px] text-gray-600 block truncate">{po.supplier?.address || ''}</span>
                             <span className="text-[10px] text-gray-600 block">TIN: {po.supplier?.tin || 'N/A'}</span>
                         </div>
-
-                        {/* Col 3: Shipping & Terms */}
                         <div className="w-[27%] border-l border-gray-300 pl-3">
                             <span className="text-[9px] font-bold text-gray-500 uppercase block mb-0.5">Shipping Details:</span>
                             <span className="text-[10px] font-bold text-gray-900 block">Ship To: <span className="font-normal">{po.ship_to || 'Main Clinic'}</span></span>
                             <span className="text-[10px] font-bold text-gray-900 block mt-0.5">Target Delivery: <span className="font-normal">{formatDate(po.delivery_date)}</span></span>
                             <span className="text-[10px] font-bold text-gray-900 block mt-0.5">Terms: <span className="font-normal">{po.payment_terms || '30 Days'}</span></span>
                         </div>
-
-                        {/* Col 4: Title & PO # */}
                         <div className="w-[20%] text-right flex flex-col justify-right">
                             <h2 className="text-[21px] font-bold text-indigo-600 leading-none m-0">PURCHASE ORDER</h2>
                             <div className="font-bold text-[12px] mt-1">PO ID: {po.po_number}</div>
@@ -95,16 +82,12 @@ export default function PrintablePO({ po }) {
                             </div>
                         </div>
                     </div>
-
-                    {/* Purpose / Remarks */}
                     {po.purpose && (
                         <div className="mb-2 p-2 bg-gray-50 border border-gray-200 rounded-sm">
                             <span className="text-[9px] font-bold text-gray-500 uppercase block mb-0.5">Purpose / Remarks</span>
                             <p className="text-[10px] text-gray-800 italic m-0">{po.purpose}</p>
                         </div>
                     )}
-
-                    {/* Items Table */}
                     <div>
                         <table className="w-full text-[10px] text-left mb-2 border-collapse">
                             <thead className="bg-gray-100 border-y border-gray-300">
@@ -153,8 +136,6 @@ export default function PrintablePO({ po }) {
                                         </td>
                                     </tr>
                                 ))}
-
-                                {/* Grand Total Row */}
                                 <tr className="border-t-2 border-gray-800 break-inside-avoid">
                                     <td colSpan="5" className="py-2 px-2 text-right font-bold uppercase text-gray-700 text-[11px]">Grand Total:</td>
                                     <td className="py-2 px-2 text-right font-black text-[13px] text-gray-900 bg-gray-50">
@@ -165,10 +146,7 @@ export default function PrintablePO({ po }) {
                         </table>
                     </div>
                 </div>
-
-                {/* BOTTOM SUMMARY & SIGNATURES WRAPPER */}
                 <div>
-                    {/* Amount Summary Table */}
                     <div className="flex justify-end mb-6">
                         <div className="w-[35%] text-[10px] space-y-1 bg-gray-50 p-3 border border-gray-200 rounded-sm">
                             <div className="flex justify-between">
@@ -195,8 +173,6 @@ export default function PrintablePO({ po }) {
                             </div>
                         </div>
                     </div>
-
-                    {/* Signatures Section */}
                     <div className="mt-auto pt-4 pb-2 break-inside-avoid w-full flex justify-between gap-12">
                         <div className="w-[30%]">
                             <div className="border-b border-gray-900 h-8 mb-1"></div>

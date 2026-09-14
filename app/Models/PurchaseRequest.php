@@ -23,7 +23,7 @@ class PurchaseRequest extends Model
     'impact_if_not_procured',
     'status',
     'rejection_reason',
-    'cc_user_id',
+    'cc_users',
     'is_evp_override',
     'reviewed_by_id',
     'approved_by_id',
@@ -38,7 +38,6 @@ protected $casts = [
 
     public function getPrNumberAttribute()
     {
-        // Grabs the creation year and pads the ID to 4 digits
         $year = $this->created_at ? $this->created_at->format('Y') : date('Y');
         return 'PR' . $year . '-' . str_pad($this->id, 5, '0', STR_PAD_LEFT);
     }
@@ -62,8 +61,6 @@ protected $casts = [
     {
         return $this->hasMany(PurchaseOrder::class);
     }
-
-    // Add to $fillable array: 'reviewed_by_id', 'approved_by_id'
 
     public function reviewedBy() {
         return $this->belongsTo(User::class, 'reviewed_by_id');

@@ -2,11 +2,8 @@ import TrackingStepper from '@/Components/TrackingStepper';
 import { getPRPOLinks } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head } from '@inertiajs/react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-// =====================================================================
-// MINI TRACKING STEPPER (Delivery Style)
-// =====================================================================
 const TrackerLine = ({ pr }) => {
     const isPRRejected = pr.status === 'rejected';
     const isPRCancelled = pr.status === 'cancelled';
@@ -102,7 +99,7 @@ const TrackerLine = ({ pr }) => {
     );
 };
 
-export default function StatusIndex({ auth, requests }) {
+export default function StatusIndex({ auth, requests, employees = [] }) {
     const sidebarLinks = getPRPOLinks(auth);
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -115,6 +112,7 @@ export default function StatusIndex({ auth, requests }) {
     const [modalView, setModalView] = useState('PR');
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [showRejection, setShowRejection] = useState(false);
+
 
     const formatCurrency = (amount) => `₱${parseFloat(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -163,7 +161,28 @@ export default function StatusIndex({ auth, requests }) {
     const uniquePriorities = useMemo(() => [...new Set(requests.data.map(pr => pr.priority).filter(Boolean))].sort(), [requests.data]);
 
     const filteredRequests = useMemo(() => {
+        const currentUserId = String(auth.user.id);
+
         return requests.data.filter(pr => {
+            // 🔒 VISIBILITY CHECK: Hide PRs unless the user created them OR is CC'd on them
+            const isCreator = String(pr.user_id) === currentUserId || (pr.user && String(pr.user.id) === currentUserId);
+
+            let isCC = false;
+            try {
+                const raw = pr.cc_users;
+                let ccArray = [];
+                if (Array.isArray(raw)) ccArray = raw;
+                else if (typeof raw === 'string') {
+                    const parsed = JSON.parse(raw);
+                    ccArray = Array.isArray(parsed) ? parsed : (typeof parsed === 'string' ? JSON.parse(parsed) : []);
+                }
+                isCC = ccArray.map(String).includes(currentUserId);
+            } catch(e) { }
+
+            // If the user didn't create it AND isn't in the Carbon Copy list, filter it out completely
+            if (!isCreator && !isCC) return false;
+
+            // --- Original Search & Filtering Logic ---
             const searchLower = searchQuery.toLowerCase().trim();
             const prId = (pr.pr_number || '').toLowerCase();
             const preparedBy = (pr.user?.name || '').toLowerCase();
@@ -187,7 +206,7 @@ export default function StatusIndex({ auth, requests }) {
 
             return matchesSearch && matchesBranch && matchesPriority && matchesType && matchesDate;
         });
-    }, [requests.data, searchQuery, filterBranch, filterPriority, filterType, filterDate]);
+    }, [requests.data, searchQuery, filterBranch, filterPriority, filterType, filterDate, auth.user.id]);
 
     // 🟢 Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -298,10 +317,54 @@ export default function StatusIndex({ auth, requests }) {
                     {totalPages > 1 && (
                         <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-200 mt-4">
                             <span className="text-sm text-gray-600">Showing <span className="font-bold text-gray-900">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-bold text-gray-900">{Math.min(currentPage * itemsPerPage, filteredRequests.length)}</span> of <span className="font-bold text-gray-900">{filteredRequests.length}</span> tracking records</span>
-                            <div className="flex items-center gap-2 mt-3 sm:mt-0">
-                                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-4 py-2 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Previous</button>
-                                <span className="text-sm font-medium text-gray-700 px-2">Page {currentPage} of {totalPages}</span>
-                                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-4 py-2 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Next</button>
+                            <div className="flex flex-wrap items-center gap-2 mt-3 sm:mt-0">
+                                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Prev</button>
+
+                                <div className="hidden sm:flex items-center gap-1">
+                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+                                        if (totalPages <= 7 || page === 1 || page === totalPages || Math.abs(currentPage - page) <= 1) {
+                                            return (
+                                                <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 text-sm font-semibold rounded-md border ${currentPage === page ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 transition-colors'}`}>
+                                                    {page}
+                                                </button>
+                                            );
+                                        }
+                                        if (page === currentPage - 2 || page === currentPage + 2) {
+                                            return <span key={page} className="px-2 text-gray-400">...</span>;
+                                        }
+                                        return null;
+                                    })}
+                                </div>
+
+                                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Next</button>
+
+                                <div className="flex items-center gap-2 border-l border-gray-300 pl-2 sm:pl-4 ml-1 sm:ml-2">
+                                    <span className="text-sm font-medium text-gray-600 hidden sm:block">Go to:</span>
+                                    <input
+                                        key={currentPage}
+                                        type="number"
+                                        min="1"
+                                        max={totalPages}
+                                        defaultValue={currentPage}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                const val = parseInt(e.target.value);
+                                                if (val >= 1 && val <= totalPages) setCurrentPage(val);
+                                            }
+                                        }}
+                                        className="w-14 rounded-md border-gray-300 py-1.5 text-sm text-center shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            const val = parseInt(e.currentTarget.previousElementSibling.value);
+                                            if (val >= 1 && val <= totalPages) setCurrentPage(val);
+                                        }}
+                                        className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-gray-50 hover:bg-gray-100 transition-colors shadow-sm"
+                                    >
+                                        Go
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -355,7 +418,24 @@ export default function StatusIndex({ auth, requests }) {
                             {modalView === 'PR' && (
                                 <>
                                     <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4 rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm">
-                                        <div><span className="block font-semibold text-gray-900">Carbon Copy (CC)</span> {selectedDoc.cc_user?.name || 'N/A'}</div>
+                                        <div>
+                                            <span className="block font-semibold text-gray-900">Carbon Copy (CC)</span>
+                                            {(() => {
+                                                let ccArray = [];
+                                                try {
+                                                    const raw = selectedDoc.cc_users;
+                                                    if (Array.isArray(raw)) ccArray = raw;
+                                                    else if (typeof raw === 'string') {
+                                                        const parsed = JSON.parse(raw);
+                                                        ccArray = Array.isArray(parsed) ? parsed : (typeof parsed === 'string' ? JSON.parse(parsed) : []);
+                                                    }
+                                                } catch(e) { ccArray = []; }
+
+                                                if (!Array.isArray(ccArray)) ccArray = [];
+                                                const names = ccArray.map(id => employees?.find(e => String(e.id) === String(id))?.name).filter(Boolean);
+                                                return names.length > 0 ? names.join(', ') : "N/A";
+                                            })()}
+                                        </div>
                                         <div><span className="block font-semibold text-gray-900">Branch</span> {selectedDoc.branch}</div>
                                         <div><span className="block font-semibold text-gray-900">Department</span> {selectedDoc.department}</div>
                                         <div><span className="block font-semibold text-gray-900">Request Type</span> {selectedDoc.request_type || 'N/A'}</div>

@@ -1,5 +1,4 @@
 <?php
-// Purchase order controller: PO creation and management
 
 namespace App\Http\Controllers;
 
@@ -19,9 +18,6 @@ use App\Notifications\PRPOCcStatusUpdate;
 
 class PurchaseOrderController extends Controller
 {
-    // =====================================================================
-    // 1. VIEW ALL PURCHASE ORDERS (Procurement Dashboard)
-    // =====================================================================
     public function index(Request $request)
     {
         $user = Auth::user();
@@ -44,31 +40,31 @@ class PurchaseOrderController extends Controller
             'purchaseRequest.user', 'purchaseRequest.items.product', 'purchaseRequest.items.supplier'
         ])->latest();
 
-        // 🟢 STRICT SEGREGATION: Map each frontend view exclusively to its intended PO status
+
         if ($view === 'action_needed') {
-            // "For PO Generation" - Strictly show ONLY pending PRs. Hide all existing POs.
+
             $query->whereRaw('1 = 0');
         } elseif ($view === 'po_generation') {
-            // "POs For EVP Submission"
+
             $query->where('status', 'po_generated');
         } elseif ($view === 'po_generated') {
-            // "Pending POs For EVP Approvals"
+
             $query->where('status', 'pending_evp_final');
         } elseif ($view === 'all') {
-            // "Approved Purchase Orders"
+
             $query->where('status', 'approved');
         } elseif ($view === 'my_request') {
             $query->whereHas('purchaseRequest', function ($q) {
                 $q->where('user_id', Auth::id());
             });
         } else {
-            // Prevent data bleed on unrecognized views
+
             $query->whereRaw('1 = 0');
         }
 
         $purchaseOrders = $query->paginate(15)->withQueryString();
 
-        // 🟢 STRICT SEGREGATION: Fetch PRs waiting for PO Generation
+
         $pendingPRs = [];
         if ($view === 'action_needed') {
             $pendingPRs = PurchaseRequest::with(['user', 'items.product', 'items.supplier'])
@@ -78,17 +74,18 @@ class PurchaseOrderController extends Controller
                 ->get();
         }
 
+        $employees = User::select('id', 'name')->orderBy('name')->get();
+
         return Inertia::render('PRPO/PurchaseOrdersIndex', [
             'purchaseOrders' => $purchaseOrders,
             'currentView' => $view,
             'isRestrictedRole' => $isRestricted,
-            'pendingPRs' => $pendingPRs
+            'pendingPRs' => $pendingPRs,
+            'employees' => $employees
         ]);
     }
 
-    // =====================================================================
-    // 2. UPDATE / FINALIZE A PURCHASE ORDER
-    // =====================================================================
+
     public function update(Request $request, PurchaseOrder $purchaseOrder)
     {
         $user = Auth::user();
@@ -229,7 +226,6 @@ class PurchaseOrderController extends Controller
 
         try {
             DB::transaction(function () use ($purchaseRequest) {
-                // RACE CONDITION PREVENTION: Lock the PR row for update
                 $lockedPR = PurchaseRequest::where('id', $purchaseRequest->id)->lockForUpdate()->first();
 
                 if (!$lockedPR || $lockedPR->status !== 'pending_procurement_tl') {
@@ -246,7 +242,7 @@ class PurchaseOrderController extends Controller
                 foreach ($groupedBySupplier as $supplierId => $supplierItems) {
                     if (!$supplierId) continue;
 
-                    // Inherits the parent PR's ID but switches to the PO-YYYY format
+
                     $year = date('Y');
                     $poNumber = 'PO' . $year . '-' . str_pad($purchaseRequest->id, 5, '0', STR_PAD_LEFT);
 
@@ -260,7 +256,7 @@ class PurchaseOrderController extends Controller
                         'purpose' => $lockedPR->purpose_of_request,
                         'department' => $lockedPR->department,
                         'no_of_quotations' => 0,
-                        'status' => 'po_generated' // PO is generated and awaiting EVP submission
+                        'status' => 'po_generated'
                     ]);
 
                     $grossAmount = 0;
@@ -298,7 +294,6 @@ class PurchaseOrderController extends Controller
                     ]);
                 }
 
-                // Update the original PR status to indicate POs exist
                 DB::table('purchase_requests')
                     ->where('id', $lockedPR->id)
                     ->update([
@@ -330,7 +325,7 @@ class PurchaseOrderController extends Controller
             'preparedBy.role',
             'purchaseRequest.user.role',
             'purchaseRequest.reviewedBy.role',
-            'purchaseRequest.approvedBy.role', // Loads the user who executed the final PO approval
+            'purchaseRequest.approvedBy.role',
             'purchaseRequest.cc_user',
             'items' => fn($query) => $query->where('status', 'active')
         ]);

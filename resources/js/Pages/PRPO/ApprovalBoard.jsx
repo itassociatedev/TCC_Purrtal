@@ -157,8 +157,26 @@ const CCMultiSelect = ({ options = [], value = [], onChange, placeholder }) => {
     );
 };
 
+const SortIcon = ({ active, direction }) => {
+    if (!active) return <svg className="w-3 h-3 text-gray-400 opacity-50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>;
+    return direction === 'asc' ? (
+        <svg className="w-3 h-3 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 15l7-7 7 7" /></svg>
+    ) : (
+        <svg className="w-3 h-3 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+    );
+};
+
 export default function ApprovalBoard({ auth, requests, currentView, userBranches = [], suppliers = [], products = [], branches = [], departments = [], employees = [] }) {
     const sidebarLinks = getPRPOLinks(auth);
+
+    const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
+
+    const handleSort = (key) => {
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+        setSortConfig({ key, direction });
+    };
+
     const userRole = auth.user.role?.name?.toLowerCase().trim() || "";
     const isEVP = userRole.includes("evp") || userRole.includes("president") || auth.user.role_id === 9;
 
@@ -178,7 +196,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
     const uniquePriorities = useMemo(() => [...new Set(requestList.map((req) => req.priority).filter(Boolean))].sort(), [requestList]);
 
     const filteredRequests = useMemo(() => {
-        return requestList.filter((req) => {
+        const filtered = requestList.filter((req) => {
             const searchLower = searchQuery.toLowerCase().trim();
             const prId = (req.pr_number || "").toLowerCase();
             const preparedBy = (req.user?.name || "").toLowerCase();
@@ -187,14 +205,30 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
             const matchesPriority = !filterPriority || req.priority === filterPriority;
             return matchesSearch && matchesBranch && matchesPriority;
         });
-    }, [requestList, searchQuery, filterBranch, filterPriority]);
 
-    // 🟢 Pagination State
+        return filtered.sort((a, b) => {
+            let valA, valB;
+            if (sortConfig.key === 'id') {
+                valA = a.pr_number || "";
+                valB = b.pr_number || "";
+                return sortConfig.direction === 'asc'
+                    ? valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' })
+                    : valB.localeCompare(valA, undefined, { numeric: true, sensitivity: 'base' });
+            } else if (sortConfig.key === 'date') {
+                valA = new Date(a.date_needed || 0).getTime();
+                valB = new Date(b.date_needed || 0).getTime();
+                return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+            }
+            return 0;
+        });
+    }, [requestList, searchQuery, filterBranch, filterPriority, sortConfig]);
+
+
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10; // Change this number to show more/less rows per page
+    const itemsPerPage = 10;
 
     useEffect(() => {
-        setCurrentPage(1); // Reset to page 1 if the user types in the search bar
+        setCurrentPage(1);
     }, [searchQuery, filterBranch, filterPriority, currentView]);
 
     const paginatedRequests = useMemo(() => {
@@ -279,7 +313,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
             return;
         }
 
-        // 🟢 DIRECT ACTION: Instantly open PDF and update status simultaneously
+
         if (actionType === 'review_pr') {
             const pdfWindow = window.open('', '_blank'); // Open immediately to bypass popup blocker
             router.patch(route("prpo.purchase-requests.update-status", id), { action: actionType }, {
@@ -462,11 +496,21 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                     <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-6 py-3 text-center font-semibold text-gray-900">Purchase Request ID</th>
+                                <th className="px-6 py-3 font-semibold text-gray-900 cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handleSort('id')}>
+                                    <div className="flex items-center justify-center gap-1">
+                                        Purchase Request ID
+                                        <SortIcon active={sortConfig.key === 'id'} direction={sortConfig.direction} />
+                                    </div>
+                                </th>
                                 <th className="px-6 py-3 text-center font-semibold text-gray-900">Prepared By</th>
                                 <th className="px-6 py-3 text-center font-semibold text-gray-900">Branch & Department</th>
                                 <th className="px-6 py-3 text-center font-semibold text-gray-900">Priority</th>
-                                <th className="px-6 py-3 text-center font-semibold text-gray-900">Date Needed</th>
+                                <th className="px-6 py-3 font-semibold text-gray-900 cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handleSort('date')}>
+                                    <div className="flex items-center justify-center gap-1">
+                                        Date Needed
+                                        <SortIcon active={sortConfig.key === 'date'} direction={sortConfig.direction} />
+                                    </div>
+                                </th>
                                 <th className="px-6 py-3 text-center font-semibold text-gray-900">Items Count</th>
                                 <th className="px-6 py-3 text-center font-semibold text-gray-900">Status</th>
                                 <th className="px-6 py-3 text-center font-semibold text-gray-900">Action</th>
@@ -491,45 +535,9 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                         <td className="px-6 py-2 text-center">{formatStatus(pr.status)}</td>
                                         <td className="whitespace-nowrap px-6 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-center gap-2">
-                                                {['pr_generated', 'pending_procurement', 'pending_procurement_tl', 'po_generated', 'pending_evp_final', 'approved'].includes(pr.status) && (
-                                                    <a href={route('prpo.purchase-requests.print', pr.id)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-800 border border-blue-200">
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> View PDF
-                                                    </a>
-                                                )}
-                                                {canApprove(pr) && (canUserBypassViewMode(auth, "purchase_requests") || currentView === "for_approval") && (
-                                                    <>
-                                                        {pr.status === "pending_inv_tl" && (
-                                                            <button onClick={() => handleAction(pr.id, "approve")} title="Approve Request" className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-bold text-green-700 transition-colors hover:bg-green-100 hover:text-green-800">
-                                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg> Approve
-                                                            </button>
-                                                        )}
-                                                        {pr.status === "pending_ops_manager" && (
-                                                            <button onClick={() => handleAction(pr.id, isEVP ? "generate_pr_as_om_fallback" : "generate_pr")} title="Generate PR" className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 hover:text-blue-800">
-                                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg> Generate PR
-                                                            </button>
-                                                        )}
-                                                        {pr.status === "pr_generated" && (
-                                                            <button onClick={() => handleAction(pr.id, "review_pr")} title="View PDF & Start Review" className="inline-flex items-center gap-1.5 rounded-lg bg-purple-50 px-3 py-1.5 text-xs font-bold text-purple-700 transition-colors hover:bg-purple-100 hover:text-purple-800">
-                                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> Start Review
-                                                            </button>
-                                                        )}
-                                                        {pr.status === "pending_procurement" && (
-                                                            <button onClick={() => handleAction(pr.id, "endorse")} title="Endorse to TL" className="inline-flex items-center gap-1.5 rounded-lg bg-purple-50 px-3 py-1.5 text-xs font-bold text-purple-700 transition-colors hover:bg-purple-100 hover:text-purple-800">
-                                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg> Endorse
-                                                            </button>
-                                                        )}
-
-                                                        {pr.status === "pending_ops_manager" && (
-                                                            <button onClick={() => openActionModal(pr.id, pr.branch === "Greenhills" ? "return_to_creator" : "return_to_inv_tl")} title={pr.branch === "Greenhills" ? "Return to Inv Assistant" : "Return to Inv TL"} className="inline-flex items-center gap-1.5 rounded-lg bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700 transition-colors hover:bg-orange-100 hover:text-orange-800">
-                                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg> Return
-                                                            </button>
-                                                        )}
-                                                        <button onClick={() => handleAction(pr.id, "reject")} title="Reject Request" className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700 transition-colors hover:bg-red-100 hover:text-red-800">
-                                                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg> Reject
-                                                        </button>
-                                                    </>
-                                                )}
-
+                                                <button onClick={() => openModal(pr)} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100 hover:text-indigo-800 border border-indigo-200">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> View Purchase Request
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -538,14 +546,57 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                         </tbody>
                     </table>
 
-                    {/* 🟢 Pagination UI Controls */}
                     {totalPages > 1 && (
                         <div className="flex flex-col sm:flex-row justify-between items-center border-t border-gray-200 bg-gray-50 px-6 py-4">
                             <span className="text-sm text-gray-600">Showing <span className="font-bold text-gray-900">{((currentPage - 1) * itemsPerPage) + 1}</span> to <span className="font-bold text-gray-900">{Math.min(currentPage * itemsPerPage, filteredRequests.length)}</span> of <span className="font-bold text-gray-900">{filteredRequests.length}</span> entries</span>
-                            <div className="flex items-center gap-2 mt-3 sm:mt-0">
-                                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-4 py-2 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Previous</button>
-                                <span className="text-sm font-medium text-gray-700 px-2">Page {currentPage} of {totalPages}</span>
-                                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-4 py-2 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Next</button>
+                            <div className="flex flex-wrap items-center gap-2 mt-3 sm:mt-0">
+                                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Prev</button>
+
+                                <div className="hidden sm:flex items-center gap-1">
+                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+                                        if (totalPages <= 7 || page === 1 || page === totalPages || Math.abs(currentPage - page) <= 1) {
+                                            return (
+                                                <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 text-sm font-semibold rounded-md border ${currentPage === page ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 transition-colors'}`}>
+                                                    {page}
+                                                </button>
+                                            );
+                                        }
+                                        if (page === currentPage - 2 || page === currentPage + 2) {
+                                            return <span key={page} className="px-2 text-gray-400">...</span>;
+                                        }
+                                        return null;
+                                    })}
+                                </div>
+
+                                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Next</button>
+
+                                <div className="flex items-center gap-2 border-l border-gray-300 pl-2 sm:pl-4 ml-1 sm:ml-2">
+                                    <span className="text-sm font-medium text-gray-600 hidden sm:block">Go to:</span>
+                                    <input
+                                        key={currentPage}
+                                        type="number"
+                                        min="1"
+                                        max={totalPages}
+                                        defaultValue={currentPage}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                const val = parseInt(e.target.value);
+                                                if (val >= 1 && val <= totalPages) setCurrentPage(val);
+                                            }
+                                        }}
+                                        className="w-14 rounded-md border-gray-300 py-1.5 text-sm text-center shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            const val = parseInt(e.currentTarget.previousElementSibling.value);
+                                            if (val >= 1 && val <= totalPages) setCurrentPage(val);
+                                        }}
+                                        className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-gray-50 hover:bg-gray-100 transition-colors shadow-sm"
+                                    >
+                                        Go
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -572,11 +623,23 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                             <div className="overflow-y-auto px-6 py-2 flex-grow">
                                 <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4 rounded-lg bg-gray-50 p-4 text-sm border border-gray-100">
                                     <div>
-    <span className="block font-semibold text-gray-900">Carbon Copy (CC)</span>
-    {selectedPR.cc_users && Array.isArray(selectedPR.cc_users) && selectedPR.cc_users.length > 0
-        ? selectedPR.cc_users.map(id => employees?.find(e => String(e.id) === String(id))?.name).filter(Boolean).join(', ')
-        : "N/A"}
-</div>
+                                        <span className="block font-semibold text-gray-900">Carbon Copy (CC)</span>
+                                        {(() => {
+                                            let ccArray = [];
+                                            try {
+                                                const raw = selectedPR.cc_users;
+                                                if (Array.isArray(raw)) ccArray = raw;
+                                                else if (typeof raw === 'string') {
+                                                    const parsed = JSON.parse(raw);
+                                                    ccArray = Array.isArray(parsed) ? parsed : (typeof parsed === 'string' ? JSON.parse(parsed) : []);
+                                                }
+                                            } catch(e) { ccArray = []; }
+
+                                            if (!Array.isArray(ccArray)) ccArray = [];
+                                            const names = ccArray.map(id => employees?.find(e => String(e.id) === String(id))?.name).filter(Boolean);
+                                            return names.length > 0 ? names.join(', ') : "N/A";
+                                        })()}
+                                    </div>
                                     <div><span className="block font-semibold text-gray-900">Branch</span> {selectedPR.branch}</div>
                                     <div><span className="block font-semibold text-gray-900">Department</span> {selectedPR.department}</div>
                                     <div><span className="block font-semibold text-gray-900">Request Type</span> {selectedPR.request_type || "N/A"}</div>
@@ -677,7 +740,6 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
 
             {selectedPR.status === "pending_inv_tl" && (
                 <button onClick={() => handleAction(selectedPR.id, "approve")} className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 transition-colors">
-                    {/* Checkmark Icon */}
                     <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                     </svg>
@@ -709,7 +771,6 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
 
             {selectedPR.status === "pending_procurement" && (
                 <button onClick={() => handleAction(selectedPR.id, "endorse")} className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-purple-500 transition-colors">
-                    {/* Checkmark Icon */}
                     <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                     </svg>
@@ -723,10 +784,8 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                     </div>
                 )}
 
-                {/* EDIT MODAL and ACTION MODAL stay structurally the same, omitting here for brevity as no logic changed internally to the form inputs... (Retain exact original structure for Edit/Action Modals) */}
                 {isEditModalOpen && selectedPR && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overflow-x-hidden bg-gray-900 bg-opacity-70 p-4 sm:p-0">
-                        {/* Edit form content identical to original */}
                         <div className="relative w-full max-w-6xl rounded-2xl bg-white shadow-2xl transition-all flex flex-col max-h-[90vh]">
                             <div className="flex items-center justify-between border-b px-6 py-2 shrink-0 bg-blue-50 rounded-t-2xl">
                                 <div>
@@ -741,7 +800,6 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                             <form onSubmit={handleSaveEdit} className="overflow-y-auto flex-grow flex flex-col">
                                 <div className="px-6 py-6 flex-grow">
                                     <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-3 mb-6">
-                                        {/* Row 1 */}
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Branch <span className="text-red-500">*</span></label>
                                             <select value={editData.branch} onChange={e => setEditData('branch', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" required>
@@ -761,7 +819,6 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                             <input type="date" value={editData.date_prepared || ''} className="block w-full rounded-md border-gray-300 bg-gray-50 text-gray-500 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm cursor-not-allowed" readOnly />
                                         </div>
 
-                                        {/* Row 2 */}
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Request Type</label>
                                             <select value={editData.request_type} onChange={e => setEditData('request_type', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
@@ -772,20 +829,18 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-                                            <select value={editData.priority} onChange={e => setEditData('priority', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                                <option value="">Select Priority...</option>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Priority <span className="text-red-500">*</span></label>
+                                            <select value={editData.priority} onChange={e => setEditData('priority', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" required>
+                                                <option value="" disabled>Select Priority...</option>
                                                 <option value="Low">Low</option>
                                                 <option value="Normal">Normal</option>
                                                 <option value="High">High</option>
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Date Needed</label>
-                                            <input type="date" value={editData.date_needed} onChange={e => setEditData('date_needed', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Date Needed <span className="text-red-500">*</span></label>
+                                            <input type="date" value={editData.date_needed} onChange={e => setEditData('date_needed', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" required />
                                         </div>
-
-                                        {/* Row 3 */}
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Budget Status</label>
                                             <select value={editData.budget_status} onChange={e => setEditData('budget_status', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
@@ -799,7 +854,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                             <input type="text" value={editData.budget_ref} onChange={e => setEditData('budget_ref', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="Enter Ref..." />
                                         </div>
                                         <div className="sm:col-span-2">
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Carbon Copy (C.C.)</label>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Carbon Copy</label>
                                             <CCMultiSelect
     options={typeof branchEmployees !== 'undefined' ? branchEmployees : []}
     value={editData.cc_users}
@@ -808,7 +863,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
 />
                                         </div>
 
-                                        {/* Textareas */}
+
                                         <div className="sm:col-span-3">
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Purpose of Request</label>
                                             <textarea rows={2} value={editData.purpose_of_request} onChange={e => setEditData('purpose_of_request', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
@@ -819,7 +874,6 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                         </div>
                                     </div>
 
-                                    {/* Items Table */}
                                     <div className="flex justify-between items-center mb-4 border-b pb-2">
                                         <h4 className="font-bold text-gray-900">Items</h4>
                                         <button type="button" onClick={addEditItemRow} className="text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 px-3 py-1.5 rounded transition shadow-sm">Add Item</button>

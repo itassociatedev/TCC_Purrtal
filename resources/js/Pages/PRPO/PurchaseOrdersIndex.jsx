@@ -6,9 +6,33 @@ import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 
-export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView, isRestrictedRole, pendingPRs = [] }) {
+const SortIcon = ({ active, direction }) => {
+    if (!active) return <svg className="w-3 h-3 text-gray-400 opacity-50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>;
+    return direction === 'asc' ? (
+        <svg className="w-3 h-3 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 15l7-7 7 7" /></svg>
+    ) : (
+        <svg className="w-3 h-3 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>
+    );
+};
+
+export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView, isRestrictedRole, pendingPRs = [], employees = [] }) {
     const sidebarLinks = getPRPOLinks(auth);
     const pos = purchaseOrders?.data || [];
+
+    const [prSort, setPrSort] = useState({ key: 'id', direction: 'desc' });
+    const [poSort, setPoSort] = useState({ key: 'id', direction: 'desc' });
+
+    const handlePrSort = (key) => {
+        let direction = 'asc';
+        if (prSort.key === key && prSort.direction === 'asc') direction = 'desc';
+        setPrSort({ key, direction });
+    };
+
+    const handlePoSort = (key) => {
+        let direction = 'asc';
+        if (poSort.key === key && poSort.direction === 'asc') direction = 'desc';
+        setPoSort({ key, direction });
+    };
 
     const userrole = auth.user.role?.name?.toLowerCase().trim() || '';
     const canManagePO = userrole.includes('procurement') ||
@@ -45,11 +69,25 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
         });
 
         return filtered.sort((a, b) => {
-            const idA = a.po_number || a.purchase_request?.pr_number || '';
-            const idB = b.po_number || b.purchase_request?.pr_number || '';
-            return idB.localeCompare(idA, undefined, { numeric: true, sensitivity: 'base' });
+            let valA, valB;
+            if (poSort.key === 'id') {
+                valA = a.po_number || a.purchase_request?.pr_number || '';
+                valB = b.po_number || b.purchase_request?.pr_number || '';
+                return poSort.direction === 'asc'
+                    ? valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' })
+                    : valB.localeCompare(valA, undefined, { numeric: true, sensitivity: 'base' });
+            } else if (poSort.key === 'supplier') {
+                valA = a.supplier?.name || '';
+                valB = b.supplier?.name || '';
+                return poSort.direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            } else if (poSort.key === 'date') {
+                valA = new Date(a.created_at || 0).getTime();
+                valB = new Date(b.created_at || 0).getTime();
+                return poSort.direction === 'asc' ? valA - valB : valB - valA;
+            }
+            return 0;
         });
-    }, [pos, searchQuery, filterBranch, filterPriority]);
+    }, [pos, searchQuery, filterBranch, filterPriority, poSort]);
 
     const filteredPendingPRs = useMemo(() => {
         if (!pendingPRs) return [];
@@ -66,16 +104,31 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
         });
 
         return filtered.sort((a, b) => {
-            const idA = a.pr_number || '';
-            const idB = b.pr_number || '';
-            return idB.localeCompare(idA, undefined, { numeric: true, sensitivity: 'base' });
+            let valA, valB;
+            if (prSort.key === 'id') {
+                valA = a.pr_number || '';
+                valB = b.pr_number || '';
+                return prSort.direction === 'asc'
+                    ? valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' })
+                    : valB.localeCompare(valA, undefined, { numeric: true, sensitivity: 'base' });
+            } else if (prSort.key === 'supplier') {
+                const getSuppliers = (items) => [...new Set(items?.map(i => i.supplier?.name).filter(Boolean))].join(', ');
+                valA = getSuppliers(a.items) || '';
+                valB = getSuppliers(b.items) || '';
+                return prSort.direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            } else if (prSort.key === 'date') {
+                valA = new Date(a.date_needed || 0).getTime();
+                valB = new Date(b.date_needed || 0).getTime();
+                return prSort.direction === 'asc' ? valA - valB : valB - valA;
+            }
+            return 0;
         });
-    }, [pendingPRs, searchQuery, filterBranch, filterPriority]);
+    }, [pendingPRs, searchQuery, filterBranch, filterPriority, prSort]);
 
-    // 🟢 Double Pagination States
+
     const [prPage, setPrPage] = useState(1);
     const [poPage, setPoPage] = useState(1);
-    const itemsPerPage = 10; // Change to your desired page size
+    const itemsPerPage = 10;
 
     useEffect(() => {
         setPrPage(1);
@@ -174,7 +227,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                 delivery_date: formattedDeliveryDate, payment_terms: doc.payment_terms || '30 Days', ship_to: doc.ship_to || 'Main Clinic', no_of_quotations: doc.no_of_quotations || '', discount_total: doc.discount_total || 0, vat_rate: 12, status: doc.status, items: doc.items || [],
             });
         } else {
-            reset(); // Safely clear the form if we are just viewing a PR
+            reset();
         }
         setIsModalOpen(true);
     };
@@ -351,16 +404,30 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                     )}
                 </div>
 
-                {/* NEW: Render the waiting PRs directly above the PO table */}
                 {currentView === 'action_needed' && pendingPRs && pendingPRs.length > 0 && (
                     <div className="mb-8 bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl overflow-x-auto border border-indigo-100">
 
                         <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
                             <thead className="bg-gray-100">
                                 <tr>
-                                    <th className="px-3 py-2 text-center font-semibold text-gray-900 whitespace-nowrap">Purchase Request ID</th>
-                                    <th className="px-3 py-2 text-center font-semibold text-gray-900 min-w-[150px]">Supplier Name</th>
-                                    <th className="px-3 py-2 text-center font-semibold text-gray-900 whitespace-nowrap">Date Needed</th>
+                                    <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handlePrSort('id')}>
+                                        <div className="flex items-center justify-center gap-1">
+                                            Purchase Request ID
+                                            <SortIcon active={prSort.key === 'id'} direction={prSort.direction} />
+                                        </div>
+                                    </th>
+                                    <th className="px-6 py-3 font-semibold text-gray-900 min-w-[150px] cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handlePrSort('supplier')}>
+                                        <div className="flex items-center justify-center gap-1">
+                                            Supplier Name
+                                            <SortIcon active={prSort.key === 'supplier'} direction={prSort.direction} />
+                                        </div>
+                                    </th>
+                                    <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handlePrSort('date')}>
+                                        <div className="flex items-center justify-center gap-1">
+                                            Date Needed
+                                            <SortIcon active={prSort.key === 'date'} direction={prSort.direction} />
+                                        </div>
+                                    </th>
                                     <th className="px-3 py-2 text-center font-semibold text-gray-900 whitespace-nowrap">Est. Gross Amount</th>
                                     <th className="px-3 py-2 text-center font-semibold text-gray-900 whitespace-nowrap">Est. Grand Total</th>
                                     <th className="px-3 py-2 text-center font-semibold text-gray-900">Status</th>
@@ -372,10 +439,10 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                                     <tr><td colSpan="7" className="px-6 py-8 text-center text-gray-500">No requests found matching your filters.</td></tr>
                                 ) : (
                                     paginatedPRs.map((pr) => {
-                                        // Dynamically calculate the totals and suppliers for the PR to match the PO styling
+
                                         const estTotal = pr.items?.reduce((sum, item) => sum + (parseFloat(item.total_cost) || 0), 0) || 0;
 
-                                        // Pull all unique suppliers from the PR items
+
                                         const suppliers = [...new Set(pr.items?.map(i => i.supplier?.name).filter(Boolean))];
                                         const supplierText = suppliers.length > 1 ? 'Multiple Suppliers' : (suppliers[0] || 'Unknown Supplier');
 
@@ -390,8 +457,8 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                                                     <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold bg-purple-100 text-purple-800">PO Generation Ready</span>
                                                 </td>
                                                 <td className="px-6 py-2 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                                    <button onClick={(e) => handleGeneratePO(pr.id, e)} className="inline-flex items-center gap-2 rounded-md bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-500 transition-all">
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> Generate PO
+                                                    <button onClick={() => openModal({ purchase_request: pr, status: 'pending_procurement_tl' }, 'PR')} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100 hover:text-indigo-800 border border-indigo-200">
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> View Purchase Request
                                                     </button>
                                                 </td>
                                             </tr>
@@ -404,10 +471,54 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                         {prTotalPages > 1 && (
                             <div className="flex flex-col sm:flex-row justify-between items-center border-t border-gray-200 bg-gray-50 px-6 py-4">
                                 <span className="text-sm text-gray-600">Showing <span className="font-bold text-gray-900">{((prPage - 1) * itemsPerPage) + 1}</span> to <span className="font-bold text-gray-900">{Math.min(prPage * itemsPerPage, filteredPendingPRs.length)}</span> of <span className="font-bold text-gray-900">{filteredPendingPRs.length}</span> entries</span>
-                                <div className="flex items-center gap-2 mt-3 sm:mt-0">
-                                    <button onClick={() => setPrPage(p => Math.max(1, p - 1))} disabled={prPage === 1} className="px-4 py-2 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Previous</button>
-                                    <span className="text-sm font-medium text-gray-700 px-2">Page {prPage} of {prTotalPages}</span>
-                                    <button onClick={() => setPrPage(p => Math.min(prTotalPages, p + 1))} disabled={prPage === prTotalPages} className="px-4 py-2 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Next</button>
+                                <div className="flex flex-wrap items-center gap-2 mt-3 sm:mt-0">
+                                    <button onClick={() => setPrPage(p => Math.max(1, p - 1))} disabled={prPage === 1} className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Prev</button>
+
+                                    <div className="hidden sm:flex items-center gap-1">
+                                        {Array.from({ length: prTotalPages }, (_, i) => i + 1).map(page => {
+                                            if (prTotalPages <= 7 || page === 1 || page === prTotalPages || Math.abs(prPage - page) <= 1) {
+                                                return (
+                                                    <button key={page} onClick={() => setPrPage(page)} className={`px-3 py-1.5 text-sm font-semibold rounded-md border ${prPage === page ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 transition-colors'}`}>
+                                                        {page}
+                                                    </button>
+                                                );
+                                            }
+                                            if (page === prPage - 2 || page === prPage + 2) {
+                                                return <span key={page} className="px-2 text-gray-400">...</span>;
+                                            }
+                                            return null;
+                                        })}
+                                    </div>
+
+                                    <button onClick={() => setPrPage(p => Math.min(prTotalPages, p + 1))} disabled={prPage === prTotalPages} className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Next</button>
+
+                                    <div className="flex items-center gap-2 border-l border-gray-300 pl-2 sm:pl-4 ml-1 sm:ml-2">
+                                        <span className="text-sm font-medium text-gray-600 hidden sm:block">Go to:</span>
+                                        <input
+                                            key={`pr-${prPage}`}
+                                            type="number"
+                                            min="1"
+                                            max={prTotalPages}
+                                            defaultValue={prPage}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    const val = parseInt(e.target.value);
+                                                    if (val >= 1 && val <= prTotalPages) setPrPage(val);
+                                                }
+                                            }}
+                                            className="w-14 rounded-md border-gray-300 py-1.5 text-sm text-center shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                const val = parseInt(e.currentTarget.previousElementSibling.value);
+                                                if (val >= 1 && val <= prTotalPages) setPrPage(val);
+                                            }}
+                                            className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-gray-50 hover:bg-gray-100 transition-colors shadow-sm"
+                                        >
+                                            Go
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -419,9 +530,24 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                     <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-6 py-2 text-center font-semibold text-gray-900 whitespace-nowrap">Purchase Order ID</th>
-                                <th className="px-2 py-2 text-center font-semibold text-gray-900 w-56">Supplier Name</th>
-                                <th className="px-6 py-2 text-center font-semibold text-gray-900 whitespace-nowrap">Purchase Order Date</th>
+                                <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handlePoSort('id')}>
+                                    <div className="flex items-center justify-center gap-1">
+                                        Purchase Order ID
+                                        <SortIcon active={poSort.key === 'id'} direction={poSort.direction} />
+                                    </div>
+                                </th>
+                                <th className="px-6 py-3 font-semibold text-gray-900 min-w-[150px] cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handlePoSort('supplier')}>
+                                    <div className="flex items-center justify-center gap-1">
+                                        Supplier Name
+                                        <SortIcon active={poSort.key === 'supplier'} direction={poSort.direction} />
+                                    </div>
+                                </th>
+                                <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handlePoSort('date')}>
+                                    <div className="flex items-center justify-center gap-1">
+                                        Purchase Order Date
+                                        <SortIcon active={poSort.key === 'date'} direction={poSort.direction} />
+                                    </div>
+                                </th>
                                 <th className="px-6 py-2 text-center font-semibold text-gray-900 whitespace-nowrap">Gross Amount</th>
                                 <th className="px-6 py-2 text-center font-semibold text-gray-900 whitespace-nowrap">Grand Total</th>
                                 <th className="px-6 py-2 text-center font-semibold text-gray-900 w-56">Status</th>
@@ -440,6 +566,13 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                                         <td className="px-6 py-2 text-center text-gray-500 whitespace-nowrap">{formatCurrency(po.gross_amount)}</td>
                                         <td className="px-6 py-2 text-center font-bold text-gray-900 whitespace-nowrap">{formatCurrency(po.grand_total)}</td>
                                         <td className="px-6 py-2 text-center w-56 whitespace-normal break-words">{formatStatus(po.status)}</td>
+                                        <td className="px-6 py-2 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex items-center justify-center gap-2">
+                                                <button onClick={() => openModal(po)} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100 hover:text-indigo-800 border border-indigo-200">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> View Purchase Order
+                                                </button>
+                                            </div>
+                                        </td>
                                     </tr>
                                 ))
                             )}
@@ -449,10 +582,54 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                     {poTotalPages > 1 && (
                         <div className="flex flex-col sm:flex-row justify-between items-center border-t border-gray-200 bg-gray-50 px-6 py-2 rounded-b-xl">
                             <span className="text-sm text-gray-600">Showing <span className="font-bold text-gray-900">{((poPage - 1) * itemsPerPage) + 1}</span> to <span className="font-bold text-gray-900">{Math.min(poPage * itemsPerPage, filteredPOs.length)}</span> of <span className="font-bold text-gray-900">{filteredPOs.length}</span> entries</span>
-                            <div className="flex items-center gap-2 mt-3 sm:mt-0">
-                                <button onClick={() => setPoPage(p => Math.max(1, p - 1))} disabled={poPage === 1} className="px-4 py-2 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Previous</button>
-                                <span className="text-sm font-medium text-gray-700 px-2">Page {poPage} of {poTotalPages}</span>
-                                <button onClick={() => setPoPage(p => Math.min(poTotalPages, p + 1))} disabled={poPage === poTotalPages} className="px-4 py-2 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Next</button>
+                            <div className="flex flex-wrap items-center gap-2 mt-3 sm:mt-0">
+                                <button onClick={() => setPoPage(p => Math.max(1, p - 1))} disabled={poPage === 1} className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Prev</button>
+
+                                <div className="hidden sm:flex items-center gap-1">
+                                    {Array.from({ length: poTotalPages }, (_, i) => i + 1).map(page => {
+                                        if (poTotalPages <= 7 || page === 1 || page === poTotalPages || Math.abs(poPage - page) <= 1) {
+                                            return (
+                                                <button key={page} onClick={() => setPoPage(page)} className={`px-3 py-1.5 text-sm font-semibold rounded-md border ${poPage === page ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 transition-colors'}`}>
+                                                    {page}
+                                                </button>
+                                            );
+                                        }
+                                        if (page === poPage - 2 || page === poPage + 2) {
+                                            return <span key={page} className="px-2 text-gray-400">...</span>;
+                                        }
+                                        return null;
+                                    })}
+                                </div>
+
+                                <button onClick={() => setPoPage(p => Math.min(poTotalPages, p + 1))} disabled={poPage === poTotalPages} className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Next</button>
+
+                                <div className="flex items-center gap-2 border-l border-gray-300 pl-2 sm:pl-4 ml-1 sm:ml-2">
+                                    <span className="text-sm font-medium text-gray-600 hidden sm:block">Go to:</span>
+                                    <input
+                                        key={`po-${poPage}`}
+                                        type="number"
+                                        min="1"
+                                        max={poTotalPages}
+                                        defaultValue={poPage}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                const val = parseInt(e.target.value);
+                                                if (val >= 1 && val <= poTotalPages) setPoPage(val);
+                                            }
+                                        }}
+                                        className="w-14 rounded-md border-gray-300 py-1.5 text-sm text-center shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            const val = parseInt(e.currentTarget.previousElementSibling.value);
+                                            if (val >= 1 && val <= poTotalPages) setPoPage(val);
+                                        }}
+                                        className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-gray-50 hover:bg-gray-100 transition-colors shadow-sm"
+                                    >
+                                        Go
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -595,7 +772,24 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                                 ) : (
                                     <div className="animate-in fade-in duration-300">
                                         <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4 rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm">
-                                            <div><span className="block font-semibold text-gray-900">Carbon Copy (CC)</span> {selectedPO.purchase_request?.cc_user?.name || selectedPO.cc_user?.name || "N/A"}</div>
+                                            <div>
+                                                <span className="block font-semibold text-gray-900">Carbon Copy (CC)</span>
+                                                {(() => {
+                                                    const ccData = selectedPO.purchase_request?.cc_users || selectedPO.cc_users;
+                                                    let ccArray = [];
+                                                    try {
+                                                        if (Array.isArray(ccData)) ccArray = ccData;
+                                                        else if (typeof ccData === 'string') {
+                                                            const parsed = JSON.parse(ccData);
+                                                            ccArray = Array.isArray(parsed) ? parsed : (typeof parsed === 'string' ? JSON.parse(parsed) : []);
+                                                        }
+                                                    } catch(e) { ccArray = []; }
+
+                                                    if (!Array.isArray(ccArray)) ccArray = [];
+                                                    const names = ccArray.map(id => employees?.find(e => String(e.id) === String(id))?.name).filter(Boolean);
+                                                    return names.length > 0 ? names.join(', ') : "N/A";
+                                                })()}
+                                            </div>
                                             <div><span className="block font-semibold text-gray-900">Branch</span> {selectedPO.purchase_request?.branch || selectedPO.branch}</div>
                                             <div><span className="block font-semibold text-gray-900">Department</span> {selectedPO.purchase_request?.department || selectedPO.department}</div>
                                             <div><span className="block font-semibold text-gray-900">Request Type</span> {selectedPO.purchase_request?.request_type || selectedPO.request_type || 'N/A'}</div>
@@ -701,7 +895,6 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                 )}
             </div>
 
-            {/* Removed Items / Modal implementations exact as provided original */}
             <ConfirmModal show={confirmDialog.isOpen} onClose={closeConfirmModal} title={confirmDialog.title} message={confirmDialog.message} confirmText={confirmDialog.confirmText} confirmColor={confirmDialog.confirmColor} onConfirm={confirmDialog.onConfirm} />
             <Modal show={isRejectModalOpen} onClose={() => setIsRejectModalOpen(false)} maxWidth="md">
                 <div className="p-4 sm:p-6 max-h-[85vh] overflow-y-auto">
