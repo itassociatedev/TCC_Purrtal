@@ -2,6 +2,7 @@ import ApplicationLogo from '@/Components/ApplicationLogo';
 import { Head } from '@inertiajs/react';
 
 export default function PrintablePR({ pr }) {
+    const isGreenhills = pr.branch?.toLowerCase().includes('greenhills');
 
     const formatCurrency = (amount) => {
         return `₱${parseFloat(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -103,55 +104,64 @@ export default function PrintablePR({ pr }) {
                         <table className="w-full text-[10px] text-left mb-2 border-collapse">
                             <thead className="bg-gray-100 border-y border-gray-300">
                                 <tr>
-                                    <th className="py-[3px] px-2 font-bold text-gray-800 w-[3%] text-center">#</th>
-                                    <th className="py-[3px] px-2 font-bold text-gray-800 w-[45%]">Product & Supplier Name</th>
-                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-center w-[12%]">Quantity</th>
-                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-right w-[20%]">Estimated Unit Cost</th>
-                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-right w-[20%]">Total Cost</th>
+                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-center w-[10%]">Quantity</th>
+                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-center w-[10%]">Unit</th>
+                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-center w-[35%]">Product Name</th>
+                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-right w-[15%]">Unit Price</th>
+                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-right w-[15%]">Old Price</th>
+                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-right w-[15%]">Total Price</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {pr.items.map((item, index) => (
-                                    <tr key={item.id} className="border-b border-gray-200 break-inside-avoid">
-                                        <td className="py-[2px] px-2 text-center text-gray-500">{index + 1}</td>
+                                {pr.items.map((item, index) => {
+                                    const currentPrice = item.product ? Number(item.product.price || 0) : Number(item.est_unit_cost || 0);
+                                    const oldPrice = Number(item.est_unit_cost || 0);
+                                    const qty = Number(item.qty_requested || 0);
+                                    const totalPrice = qty * currentPrice;
 
-                                        <td className="py-[2px] px-2">
-                                            <strong className="text-gray-900">{item.product?.name || `Product ID: ${item.product_id}`}</strong>
-                                            {item.specifications && <span className="text-[10px] text-gray-500 ml-1 pl-1 border-l border-gray-400"> {item.specifications}</span>}
-                                            {item.supplier?.name && <span className="text-[9px] text-indigo-600 ml-1 pl-1 border-l border-gray-400">Pref: {item.supplier.name}</span>}
-                                        </td>
-
-                                        <td className="py-[2px] px-2 text-center font-bold">{item.qty_requested} <span className="text-[10px] text-gray-500">{item.unit}</span></td>
-                                        <td className="py-[2px] px-2 text-right font-bold text-gray-600">{formatCurrency(item.est_unit_cost)}</td>
-                                        <td className="py-[2px] px-2 text-right font-bold text-gray-900">{formatCurrency(item.total_cost)}</td>
-                                    </tr>
-                                ))}
+                                    return (
+                                        <tr key={item.id} className="border-b border-gray-200 break-inside-avoid">
+                                            <td className="py-[2px] px-2 text-center font-bold">{parseFloat(qty)}</td>
+                                            <td className="py-[2px] px-2 text-center text-gray-500">{item.unit || '-'}</td>
+                                            <td className="py-[2px] px-2 text-center">
+                                                <strong className="text-gray-900 block">{item.product?.name || item.product_name || `Product ID: ${item.product_id}`}</strong>
+                                                {item.specifications && <span className="text-[10px] text-gray-500 block mt-0.5">{item.specifications}</span>}
+                                                {item.supplier?.name && <span className="text-[9px] text-indigo-600 block mt-0.5">Supplier Name: {item.supplier.name}</span>}
+                                            </td>
+                                            <td className="py-[2px] px-2 text-right font-bold text-blue-600">{formatCurrency(currentPrice)}</td>
+                                            <td className="py-[2px] px-2 text-right text-gray-500">{formatCurrency(oldPrice)}</td>
+                                            <td className="py-[2px] px-2 text-right font-bold text-gray-900">{formatCurrency(totalPrice)}</td>
+                                        </tr>
+                                    );
+                                })}
                                 <tr className="border-t-2 border-gray-800 break-inside-avoid">
-                                    <td colSpan="4" className="py-2 px-2 text-right font-bold uppercase text-gray-700 text-[11px]">Estimated Grand Total:</td>
+                                    <td colSpan="5" className="py-2 px-2 text-right font-bold uppercase text-gray-700 text-[11px]">Estimated Grand Total:</td>
                                     <td className="py-2 px-2 text-right font-black text-[13px] text-gray-900 bg-gray-50">
-                                        {formatCurrency(pr.items.reduce((sum, item) => sum + Number(item.total_cost), 0))}
+                                        {formatCurrency(pr.items.reduce((sum, item) => sum + (Number(item.qty_requested || 0) * (item.product ? Number(item.product.price || 0) : Number(item.est_unit_cost || 0))), 0))}
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
-                <div className="mt-auto pt-6 pb-2 break-inside-avoid w-full flex justify-between gap-12">
-                    <div className="w-[30%]">
+                <div className={`mt-auto pt-6 pb-2 break-inside-avoid w-full flex ${isGreenhills ? 'justify-center gap-24' : 'justify-between gap-12'}`}>
+                    <div className={isGreenhills ? 'w-[40%]' : 'w-[30%]'}>
                         <div className="border-b border-gray-900 h-8 mb-1"></div>
                         <div className="text-[10px] text-gray-500 text-center leading-tight">Requested By</div>
                         <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-tight">{pr.user?.name}</div>
                         <div className="text-[9px] font-semibold text-gray-600 text-center mt-0.5">{pr.user?.role?.name || 'Employee'}</div>
                     </div>
 
-                    <div className="w-[30%]">
-                        <div className="border-b border-gray-900 h-8 mb-1"></div>
-                        <div className="text-[10px] text-gray-500 text-center leading-tight">Reviewed By</div>
-                        <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-tight">{pr.reviewed_by?.name || 'PENDING'}</div>
-                        <div className="text-[9px] font-semibold text-gray-600 text-center mt-0.5">{pr.reviewed_by?.role?.name || ''}</div>
-                    </div>
+                    {!isGreenhills && (
+                        <div className="w-[30%]">
+                            <div className="border-b border-gray-900 h-8 mb-1"></div>
+                            <div className="text-[10px] text-gray-500 text-center leading-tight">Reviewed By</div>
+                            <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-tight">{pr.reviewed_by?.name || 'PENDING'}</div>
+                            <div className="text-[9px] font-semibold text-gray-600 text-center mt-0.5">{pr.reviewed_by?.role?.name || ''}</div>
+                        </div>
+                    )}
 
-                    <div className="w-[30%]">
+                    <div className={isGreenhills ? 'w-[40%]' : 'w-[30%]'}>
                         <div className="border-b border-gray-900 h-8 mb-1"></div>
                         <div className="text-[10px] text-gray-500 text-center leading-tight">Approved By</div>
                         <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-tight">{pr.approved_by?.name || 'PENDING'}</div>

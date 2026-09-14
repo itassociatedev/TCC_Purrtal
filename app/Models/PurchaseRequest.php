@@ -38,8 +38,14 @@ protected $casts = [
 
     public function getPrNumberAttribute()
     {
-        $year = $this->created_at ? $this->created_at->format('Y') : date('Y');
-        return 'PR' . $year . '-' . str_pad($this->id, 5, '0', STR_PAD_LEFT);
+        $branch = strtoupper(trim($this->branch));
+        $branchInitials = 'UNK';
+
+        if (str_contains($branch, 'MAKATI')) $branchInitials = 'MKT';
+        elseif (str_contains($branch, 'GREENHILLS')) $branchInitials = 'GH';
+        elseif (str_contains($branch, 'ALABANG')) $branchInitials = 'ALB';
+
+        return 'PR-' . $branchInitials . '-' . str_pad($this->id, 5, '0', STR_PAD_LEFT);
     }
 
     public function items()

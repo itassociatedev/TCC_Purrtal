@@ -28,11 +28,19 @@ class PurchaseOrder extends Model
 
     public function getPoNumberAttribute($value)
     {
+
         if ($value) {
             return $value;
         }
-        $year = $this->created_at ? $this->created_at->format('Y') : date('Y');
-        return 'PO' . $year . '-' . str_pad($this->purchase_request_id, 5, '0', STR_PAD_LEFT);
+
+        $branch = $this->purchaseRequest ? strtoupper(trim($this->purchaseRequest->branch)) : 'UNK';
+        $branchInitials = 'UNK';
+
+        if (str_contains($branch, 'MAKATI')) $branchInitials = 'MKT';
+        elseif (str_contains($branch, 'GREENHILLS')) $branchInitials = 'GH';
+        elseif (str_contains($branch, 'ALABANG')) $branchInitials = 'ALB';
+
+        return 'PO-' . $branchInitials . '-' . str_pad($this->purchase_request_id, 5, '0', STR_PAD_LEFT);
     }
 
     public function purchaseRequest()

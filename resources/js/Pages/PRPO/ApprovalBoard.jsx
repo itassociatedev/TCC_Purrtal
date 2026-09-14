@@ -211,9 +211,11 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
             if (sortConfig.key === 'id') {
                 valA = a.pr_number || "";
                 valB = b.pr_number || "";
-                return sortConfig.direction === 'asc'
-                    ? valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' })
-                    : valB.localeCompare(valA, undefined, { numeric: true, sensitivity: 'base' });
+
+                const numA = parseInt(valA.replace(/\D/g, ''), 10) || a.id || 0;
+                const numB = parseInt(valB.replace(/\D/g, ''), 10) || b.id || 0;
+
+                return sortConfig.direction === 'asc' ? numA - numB : numB - numA;
             } else if (sortConfig.key === 'date') {
                 valA = new Date(a.date_needed || 0).getTime();
                 valB = new Date(b.date_needed || 0).getTime();
@@ -527,7 +529,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                         <td className="px-6 py-2 text-center">{pr.branch} <br /><span className="text-xs text-center text-gray-500">{pr.department}</span></td>
                                         <td className="text-center px-6 py-4">
                                             {pr.priority ? (
-                                                <span className={`inline-flex items-center rounded-md px-2 py-1 text-center text-xs font-bold ring-1 ring-inset ${pr.priority === "High" ? "bg-red-50 text-red-700 ring-red-600/20" : pr.priority === "Normal" ? "bg-blue-50 text-blue-700 ring-blue-700/10" : "bg-green-50 text-green-600 ring-green-500/10"}`}>{pr.priority}</span>
+                                                <span className={`inline-flex items-center rounded-md px-2 py-1 text-center text-xs font-bold ring-1 ring-inset ${pr.priority === "High" ? "bg-red-100 text-red-800 ring-red-500/30" : pr.priority === "Normal" ? "bg-blue-100 text-blue-800 ring-blue-500/30" : "bg-green-100 text-green-800 ring-green-500/30"}`}>{pr.priority}</span>
                                             ) : (<span className="text-gray-400 text-center text-xs italic">N/A</span>)}
                                         </td>
                                         <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{pr.date_needed ? new Date(pr.date_needed).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "N/A"}</td>

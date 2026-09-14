@@ -69,7 +69,7 @@ class PurchaseOrderController extends Controller
         if ($view === 'action_needed') {
             $pendingPRs = PurchaseRequest::with(['user', 'items.product', 'items.supplier'])
                 ->where('status', 'pending_procurement_tl')
-                ->whereDoesntHave('purchaseOrders') // 🟢 FIX: Prevent duplicate PO generation and bleed
+                ->whereDoesntHave('purchaseOrders')
                 ->latest()
                 ->get();
         }
@@ -243,8 +243,13 @@ class PurchaseOrderController extends Controller
                     if (!$supplierId) continue;
 
 
-                    $year = date('Y');
-                    $poNumber = 'PO' . $year . '-' . str_pad($purchaseRequest->id, 5, '0', STR_PAD_LEFT);
+                    $branch = strtoupper(trim($lockedPR->branch));
+                    $branchInitials = 'UNK';
+                    if (str_contains($branch, 'MAKATI')) $branchInitials = 'MKT';
+                    elseif (str_contains($branch, 'GREENHILLS')) $branchInitials = 'GH';
+                    elseif (str_contains($branch, 'ALABANG')) $branchInitials = 'ALB';
+
+                    $poNumber = 'PO-' . $branchInitials . '-' . str_pad($lockedPR->id, 5, '0', STR_PAD_LEFT);
 
                     $po = PurchaseOrder::create([
                         'purchase_request_id' => $lockedPR->id,

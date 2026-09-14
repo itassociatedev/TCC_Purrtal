@@ -73,9 +73,12 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
             if (poSort.key === 'id') {
                 valA = a.po_number || a.purchase_request?.pr_number || '';
                 valB = b.po_number || b.purchase_request?.pr_number || '';
-                return poSort.direction === 'asc'
-                    ? valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' })
-                    : valB.localeCompare(valA, undefined, { numeric: true, sensitivity: 'base' });
+
+                // Extract only the trailing numbers
+                const numA = parseInt(valA.replace(/\D/g, ''), 10) || a.id || 0;
+                const numB = parseInt(valB.replace(/\D/g, ''), 10) || b.id || 0;
+
+                return poSort.direction === 'asc' ? numA - numB : numB - numA;
             } else if (poSort.key === 'supplier') {
                 valA = a.supplier?.name || '';
                 valB = b.supplier?.name || '';
@@ -108,9 +111,12 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
             if (prSort.key === 'id') {
                 valA = a.pr_number || '';
                 valB = b.pr_number || '';
-                return prSort.direction === 'asc'
-                    ? valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' })
-                    : valB.localeCompare(valA, undefined, { numeric: true, sensitivity: 'base' });
+
+                // Extract only the trailing numbers
+                const numA = parseInt(valA.replace(/\D/g, ''), 10) || a.id || 0;
+                const numB = parseInt(valB.replace(/\D/g, ''), 10) || b.id || 0;
+
+                return prSort.direction === 'asc' ? numA - numB : numB - numA;
             } else if (prSort.key === 'supplier') {
                 const getSuppliers = (items) => [...new Set(items?.map(i => i.supplier?.name).filter(Boolean))].join(', ');
                 valA = getSuppliers(a.items) || '';

@@ -18,6 +18,20 @@ export default function PrintablePO({ po }) {
         });
     };
 
+    // DYNAMIC CALCULATIONS BASED ON UP-TO-DATE PRODUCT PRICE
+    const liveGrossAmount = po.items.reduce((sum, item) => {
+        const currentPrice = item.product ? Number(item.product.price || 0) : Number(item.unit_price || 0);
+        return sum + (Number(item.qty || 0) * currentPrice);
+    }, 0);
+
+    const discountAmount = Number(po.discount_total || 0);
+    const liveNetOfDiscount = Math.max(0, liveGrossAmount - discountAmount);
+
+    const hasVat = Number(po.vat_total || 0) > 0;
+    const vatRate = hasVat ? 0.12 : 0;
+    const liveVatTotal = liveNetOfDiscount * vatRate;
+    const liveGrandTotal = liveNetOfDiscount + liveVatTotal;
+
     return (
         <div className="min-h-screen bg-gray-200 print:bg-white py-8 print:py-0 font-sans">
             <Head title={`Purchase Order #${po.po_number}`} />
@@ -92,54 +106,46 @@ export default function PrintablePO({ po }) {
                         <table className="w-full text-[10px] text-left mb-2 border-collapse">
                             <thead className="bg-gray-100 border-y border-gray-300">
                                 <tr>
-                                    <th className="py-[3px] px-2 font-bold text-gray-800 w-[3%] text-center">#</th>
-                                    <th className="py-[3px] px-2 font-bold text-gray-800 w-[42%]">Product & Supplier Name</th>
-                                    <th className="py-[3px] px-2 font-bold text-gray-800 w-[15%]">Notes / Freebies</th>
                                     <th className="py-[3px] px-2 font-bold text-gray-800 text-center w-[10%]">Quantity</th>
+                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-center w-[10%]">Unit</th>
+                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-center w-[35%]">Product Name</th>
                                     <th className="py-[3px] px-2 font-bold text-gray-800 text-right w-[15%]">Unit Price</th>
-                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-right w-[15%]">Line Total</th>
+                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-right w-[15%]">Old Price</th>
+                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-right w-[15%]">Total Price</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {po.items.map((item, index) => (
-                                    <tr key={item.id} className="border-b border-gray-200 break-inside-avoid">
-                                        <td className="py-[2px] px-2 text-center text-gray-500">{index + 1}</td>
+                                {po.items.map((item, index) => {
+                                    const currentPrice = item.product ? Number(item.product.price || 0) : Number(item.unit_price || 0);
+                                    const oldPrice = Number(item.unit_price || 0);
+                                    const qty = Number(item.qty || 0);
+                                    const totalPrice = qty * currentPrice;
 
-                                        <td className="py-[2px] px-2">
-                                            <strong className="text-gray-900">{item.product?.name || item.description}</strong>
-                                            {item.specifications && (
-                                                <span className="text-[10px] text-gray-500 ml-1 pl-1 border-l border-gray-400">
-                                                    {item.specifications}
-                                                </span>
-                                            )}
-                                            {po.supplier?.name && (
-                                                <span className="text-[9px] text-indigo-600 ml-1 pl-1 border-l border-gray-400">
-                                                    Supplier: {po.supplier.name}
-                                                </span>
-                                            )}
-                                        </td>
-
-                                        <td className="py-[2px] px-2 text-gray-500">
-                                            {item.notes || '-'}
-                                        </td>
-
-                                        <td className="py-[2px] px-2 text-center font-semibold">
-                                            {parseFloat(item.qty)} <span className="text-[10px] text-gray-500">{item.unit}</span>
-                                        </td>
-
-                                        <td className="py-[2px] px-2 text-right text-gray-600">
-                                            {formatCurrency(item.unit_price)}
-                                        </td>
-
-                                        <td className="py-[2px] px-2 text-right font-bold text-gray-900">
-                                            {formatCurrency(item.net_payable)}
-                                        </td>
-                                    </tr>
-                                ))}
+                                    return (
+                                        <tr key={item.id} className="border-b border-gray-200 break-inside-avoid">
+                                            <td className="py-[2px] px-2 text-center font-bold">{parseFloat(qty)}</td>
+                                            <td className="py-[2px] px-2 text-center text-gray-500">{item.unit || '-'}</td>
+                                            <td className="py-[2px] px-2 text-center">
+                                                <strong className="text-gray-900 block">{item.product?.name || item.description}</strong>
+                                                {item.specifications && (
+                                                    <span className="text-[10px] text-gray-500 block mt-0.5">
+                                                        {item.specifications}
+                                                    </span>
+                                                )}
+                                                {item.notes && (
+                                                    <span className="text-[9px] text-gray-500 block mt-0.5">Note: {item.notes}</span>
+                                                )}
+                                            </td>
+                                            <td className="py-[2px] px-2 text-right font-bold text-blue-600">{formatCurrency(currentPrice)}</td>
+                                            <td className="py-[2px] px-2 text-right text-gray-500">{formatCurrency(oldPrice)}</td>
+                                            <td className="py-[2px] px-2 text-right font-bold text-gray-900">{formatCurrency(totalPrice)}</td>
+                                        </tr>
+                                    );
+                                })}
                                 <tr className="border-t-2 border-gray-800 break-inside-avoid">
-                                    <td colSpan="5" className="py-2 px-2 text-right font-bold uppercase text-gray-700 text-[11px]">Grand Total:</td>
+                                    <td colSpan="5" className="py-2 px-2 text-right font-bold uppercase text-gray-700 text-[11px]">Gross Total:</td>
                                     <td className="py-2 px-2 text-right font-black text-[13px] text-gray-900 bg-gray-50">
-                                        {formatCurrency(po.grand_total || po.items.reduce((sum, item) => sum + Number(item.net_payable || 0), 0))}
+                                        {formatCurrency(liveGrossAmount)}
                                     </td>
                                 </tr>
                             </tbody>
@@ -151,25 +157,25 @@ export default function PrintablePO({ po }) {
                         <div className="w-[35%] text-[10px] space-y-1 bg-gray-50 p-3 border border-gray-200 rounded-sm">
                             <div className="flex justify-between">
                                 <span className="text-gray-600">Gross Amount:</span>
-                                <span className="font-medium text-gray-900">{formatCurrency(po.gross_amount)}</span>
+                                <span className="font-medium text-gray-900">{formatCurrency(liveGrossAmount)}</span>
                             </div>
-                            {Number(po.discount_total) > 0 && (
+                            {discountAmount > 0 && (
                                 <div className="flex justify-between text-indigo-600">
                                     <span>Less: Discount:</span>
-                                    <span>-{formatCurrency(po.discount_total)}</span>
+                                    <span>-{formatCurrency(discountAmount)}</span>
                                 </div>
                             )}
                             <div className="flex justify-between border-t border-gray-200 pt-1 font-semibold">
                                 <span className="text-gray-700">Net of Discount:</span>
-                                <span>{formatCurrency(po.net_of_discount || po.gross_amount)}</span>
+                                <span>{formatCurrency(liveNetOfDiscount)}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-600">VAT (12%):</span>
-                                <span>{formatCurrency(po.vat_total)}</span>
+                                <span>{formatCurrency(liveVatTotal)}</span>
                             </div>
                             <div className="flex justify-between border-t-2 border-gray-800 pt-1 font-black text-[12px] text-gray-900">
                                 <span>GRAND TOTAL:</span>
-                                <span>{formatCurrency(po.grand_total)}</span>
+                                <span>{formatCurrency(liveGrandTotal)}</span>
                             </div>
                         </div>
                     </div>
