@@ -235,7 +235,7 @@ export default function PrintablePO({ pos = [] }) {
                                     ) : (
                                         <>
                                             <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-tight">PENDING</div>
-                                            <div className="text-[9px] font-semibold text-gray-600 text-center mt-0.5">Executive Vice President</div>
+                                            <div className="text-[9px] font-semibold text-gray-600 text-center mt-0.5"></div>
                                         </>
                                     )}
                                 </div>
