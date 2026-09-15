@@ -17,12 +17,17 @@ class Product extends Model
         'details',
         'unit',
         'price',
-        'status', 
+        'status',
     ];
 
     // A Product belongs to one Supplier
     public function supplier()
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    public function setNameAttribute($value)
+    {
+        $this->attributes['name'] = ucwords(strtolower(trim($value)));
     }
 }

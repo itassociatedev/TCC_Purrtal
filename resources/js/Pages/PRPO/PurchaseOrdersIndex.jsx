@@ -146,13 +146,39 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
         return filteredPendingPRs.slice(start, start + itemsPerPage);
     }, [filteredPendingPRs, prPage]);
 
+    const groupedPOs = useMemo(() => {
+        const groups = {};
+        filteredPOs.forEach(po => {
+            const key = po.po_number || po.purchase_request?.pr_number || po.id;
+            if (!groups[key]) {
+                groups[key] = {
+                    ...po,
+                    supplier_names: [po.supplier?.name].filter(Boolean),
+                    gross_amount: Number(po.gross_amount || 0),
+                    grand_total: Number(po.grand_total || 0),
+                    items: po.items ? [...po.items] : [],
+                };
+            } else {
+                if (po.supplier?.name && !groups[key].supplier_names.includes(po.supplier?.name)) {
+                    groups[key].supplier_names.push(po.supplier.name);
+                }
+                groups[key].gross_amount += Number(po.gross_amount || 0);
+                groups[key].grand_total += Number(po.grand_total || 0);
+                if (po.items) {
+                    groups[key].items = [...groups[key].items, ...po.items];
+                }
+            }
+        });
+        return Object.values(groups);
+    }, [filteredPOs]);
+
     const paginatedPOs = useMemo(() => {
         const start = (poPage - 1) * itemsPerPage;
-        return filteredPOs.slice(start, start + itemsPerPage);
-    }, [filteredPOs, poPage]);
+        return groupedPOs.slice(start, start + itemsPerPage);
+    }, [groupedPOs, poPage]);
 
     const prTotalPages = Math.ceil(filteredPendingPRs.length / itemsPerPage);
-    const poTotalPages = Math.ceil(filteredPOs.length / itemsPerPage);
+    const poTotalPages = Math.ceil(groupedPOs.length / itemsPerPage);
 
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', confirmText: '', confirmColor: '', onConfirm: () => {} });
     const closeConfirmModal = () => setConfirmDialog({ ...confirmDialog, isOpen: false });
@@ -196,7 +222,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
     const [rejectReason, setRejectReason] = useState('');
 
     const { data, setData, processing, reset, errors, setError, clearErrors } = useForm({
-        delivery_date: '', payment_terms: '', ship_to: '', no_of_quotations: '', discount_total: 0, vat_rate: 12, status: 'po_generated', items: [],
+        delivery_date: '', payment_terms: '', ship_to: '', no_of_quotations: '1', discount_total: 0, vat_rate: 12, status: 'po_generated', items: [],
     });
 
     const [liveTotals, setLiveTotals] = useState({ gross: 0, actualDiscount: 0, net: 0, vat: 0, grand: 0 });
@@ -230,7 +256,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
         if (viewType === 'PO') {
             const formattedDeliveryDate = doc.delivery_date ? doc.delivery_date.split('T')[0] : '';
             setData({
-                delivery_date: formattedDeliveryDate, payment_terms: doc.payment_terms || '30 Days', ship_to: doc.ship_to || 'Main Clinic', no_of_quotations: doc.no_of_quotations || '', discount_total: doc.discount_total || 0, vat_rate: 12, status: doc.status, items: doc.items || [],
+                delivery_date: formattedDeliveryDate, payment_terms: doc.payment_terms || '30 Days', ship_to: doc.ship_to || 'Main Clinic', no_of_quotations: doc.no_of_quotations || '1', discount_total: doc.discount_total || 0, vat_rate: 12, status: doc.status, items: doc.items || [],
             });
         } else {
             reset();
@@ -247,7 +273,19 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
         router.post(route('prpo.purchase-orders.update', selectedPO.id), {
             ...data, discount_total: liveTotals.actualDiscount, status: newStatus, _method: 'put', new_attachments: newFiles, removed_item_ids: removedItemIds
         }, {
-            preserveScroll: true, forceFormData: true, onSuccess: () => closeModal(),
+            preserveScroll: true, forceFormData: true, onSuccess: (page) => {
+                if (newStatus === selectedPO.status) {
+                    const updatedPOs = page.props.purchaseOrders?.data || [];
+                    const freshPO = updatedPOs.find(p => p.id === selectedPO.id);
+                    if (freshPO) {
+                        openModal(freshPO, 'PO');
+                    } else {
+                        closeModal();
+                    }
+                } else {
+                    closeModal();
+                }
+            },
         });
     };
 
@@ -348,7 +386,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
     return (
         <SidebarLayout activeModule="PR/PO Module" sidebarLinks={sidebarLinks}>
             <Head title="Purchase Orders" />
-            <div className="mx-auto max-w-7xl py-6 relative px-4 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-[95%] py-6 relative px-4 sm:px-6 lg:px-8">
                 <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between">
                     <div>
                         <h2 className="text-2xl font-bold text-gray-900">Purchase Orders</h2>
@@ -480,19 +518,23 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                                 <div className="flex flex-wrap items-center gap-2 mt-3 sm:mt-0">
                                     <button onClick={() => setPrPage(p => Math.max(1, p - 1))} disabled={prPage === 1} className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Prev</button>
 
-                                    <div className="hidden sm:flex items-center gap-1">
-                                        {Array.from({ length: prTotalPages }, (_, i) => i + 1).map(page => {
-                                            if (prTotalPages <= 7 || page === 1 || page === prTotalPages || Math.abs(prPage - page) <= 1) {
-                                                return (
-                                                    <button key={page} onClick={() => setPrPage(page)} className={`px-3 py-1.5 text-sm font-semibold rounded-md border ${prPage === page ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 transition-colors'}`}>
-                                                        {page}
-                                                    </button>
-                                                );
+                                    <div className="flex flex-wrap items-center gap-1">
+                                        {(prTotalPages <= 5
+                                            ? Array.from({ length: prTotalPages }, (_, i) => i + 1)
+                                            : prPage <= 3
+                                                ? [1, 2, 3, '...', prTotalPages]
+                                                : prPage >= prTotalPages - 2
+                                                    ? [1, '...', prTotalPages - 2, prTotalPages - 1, prTotalPages]
+                                                    : [1, '...', prPage - 1, prPage, prPage + 1, '...', prTotalPages]
+                                        ).map((page, index) => {
+                                            if (page === '...') {
+                                                return <span key={`ellipsis-${index}`} className="px-2 text-gray-400">...</span>;
                                             }
-                                            if (page === prPage - 2 || page === prPage + 2) {
-                                                return <span key={page} className="px-2 text-gray-400">...</span>;
-                                            }
-                                            return null;
+                                            return (
+                                                <button key={page} onClick={() => setPrPage(page)} className={`px-3 py-1.5 text-sm font-semibold rounded-md border ${prPage === page ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 transition-colors'}`}>
+                                                    {page}
+                                                </button>
+                                            );
                                         })}
                                     </div>
 
@@ -564,10 +606,18 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                             {paginatedPOs.length === 0 ? (
                                 <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-500">{searchQuery || filterBranch || filterPriority ? 'No Purchase Orders match your filters.' : 'No Purchase Orders found.'}</td></tr>
                             ) : (
-                                paginatedPOs.map((po) => (
-                                    <tr key={po.id} onClick={() => openModal(po)} className="hover:bg-gray-50 transition cursor-pointer">
+                                paginatedPOs.map((po, index) => (
+                                    <tr key={po.id || index} onClick={() => openModal(po)} className="hover:bg-gray-50 transition cursor-pointer">
                                         <td className="px-6 py-2 text-center font-bold text-indigo-600 whitespace-nowrap">{po.po_number || po.purchase_request?.pr_number}</td>
-                                        <td className="px-2 py-2 text-center font-medium text-gray-900 w-56 whitespace-normal break-words">{po.supplier?.name || 'Unknown Supplier'}</td>
+                                        <td className="px-2 py-2 text-center font-medium text-gray-900 w-56 whitespace-normal break-words">
+                                            {po.supplier_names?.length > 1 ? (
+                                                <span className="text-[11px] font-bold bg-gray-100 text-gray-700 px-2 py-1 rounded-sm border border-gray-200 shadow-sm">
+                                                    Multiple Suppliers ({po.supplier_names.length})
+                                                </span>
+                                            ) : (
+                                                po.supplier_names?.[0] || 'Unknown Supplier'
+                                            )}
+                                        </td>
                                         <td className="px-6 py-2 whitespace-nowrap text-center">{po.created_at ? new Date(po.created_at).toLocaleDateString('en-US', {year: 'numeric',month: 'long',day: 'numeric'}): "N/A"}</td>
                                         <td className="px-6 py-2 text-center text-gray-500 whitespace-nowrap">{formatCurrency(po.gross_amount)}</td>
                                         <td className="px-6 py-2 text-center font-bold text-gray-900 whitespace-nowrap">{formatCurrency(po.grand_total)}</td>
@@ -591,19 +641,23 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                             <div className="flex flex-wrap items-center gap-2 mt-3 sm:mt-0">
                                 <button onClick={() => setPoPage(p => Math.max(1, p - 1))} disabled={poPage === 1} className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Prev</button>
 
-                                <div className="hidden sm:flex items-center gap-1">
-                                    {Array.from({ length: poTotalPages }, (_, i) => i + 1).map(page => {
-                                        if (poTotalPages <= 7 || page === 1 || page === poTotalPages || Math.abs(poPage - page) <= 1) {
-                                            return (
-                                                <button key={page} onClick={() => setPoPage(page)} className={`px-3 py-1.5 text-sm font-semibold rounded-md border ${poPage === page ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 transition-colors'}`}>
-                                                    {page}
-                                                </button>
-                                            );
+                                <div className="flex flex-wrap items-center gap-1">
+                                    {(poTotalPages <= 5
+                                        ? Array.from({ length: poTotalPages }, (_, i) => i + 1)
+                                        : poPage <= 3
+                                            ? [1, 2, 3, '...', poTotalPages]
+                                            : poPage >= poTotalPages - 2
+                                                ? [1, '...', poTotalPages - 2, poTotalPages - 1, poTotalPages]
+                                                : [1, '...', poPage - 1, poPage, poPage + 1, '...', poTotalPages]
+                                    ).map((page, index) => {
+                                        if (page === '...') {
+                                            return <span key={`ellipsis-${index}`} className="px-2 text-gray-400">...</span>;
                                         }
-                                        if (page === poPage - 2 || page === poPage + 2) {
-                                            return <span key={page} className="px-2 text-gray-400">...</span>;
-                                        }
-                                        return null;
+                                        return (
+                                            <button key={page} onClick={() => setPoPage(page)} className={`px-3 py-1.5 text-sm font-semibold rounded-md border ${poPage === page ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 transition-colors'}`}>
+                                                {page}
+                                            </button>
+                                        );
                                     })}
                                 </div>
 
@@ -644,7 +698,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
 
                 {isModalOpen && selectedPO && (
                     <div onClick={closeModal} className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overflow-x-hidden bg-gray-900 bg-opacity-60 backdrop-blur-sm p-4 sm:p-6">
-                        <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-6xl rounded-2xl bg-white shadow-2xl transition-all flex flex-col max-h-[90vh]">
+                        <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-[95%] rounded-2xl bg-white shadow-2xl transition-all flex flex-col max-h-[90vh]">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b px-4 sm:px-6 py-2 shrink-0 bg-gray-50 rounded-t-2xl relative">
                                 <div className="pr-8 mb-3 sm:mb-0">
                                     <h3 className="text-xl font-bold text-gray-900 flex flex-wrap items-center gap-2 sm:gap-3">
@@ -728,18 +782,20 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                                                 )}
 
                                                 <div className="overflow-x-auto rounded-lg border border-gray-200 w-full">
-                                                    <table className="min-w-full divide-y divide-gray-200 text-sm">
+                                                    <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
                                                         <thead className="bg-gray-100">
                                                             <tr>
                                                                 {isEditMode && (
                                                                     <th className="px-4 py-2 w-10 text-center"><input type="checkbox" className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer" checked={selectedItemIds.length === activeItems.length && activeItems.length > 0} onChange={handleSelectAll} /></th>
                                                                 )}
-                                                                <th className="px-3 py-2 font-semibold text-center min-w-[90px]">Product Name</th>
-                                                                <th className="px-3 py-2 font-semibold text-center min-w-[70px]">Description</th>
-                                                                <th className="px-3 py-2 font-semibold text-center min-w-[50px]">Requested Quantity</th>
-                                                                <th className="px-3 py-2 font-semibold text-center min-w-[70px]">Unit Price</th>
-                                                                <th className="px-3 py-2 font-semibold text-center min-w-[70px]">Total Cost</th>
-                                                                {isEditMode && <th className="px-3 py-2 font-semibold text-center min-w-[0px]">Action</th>}
+                                                                <th className="px-4 py-2 font-semibold w-1/4">Product Name</th>
+                                                                <th className="px-4 py-2 font-semibold w-1/4">Supplier Name</th>
+                                                                <th className="px-4 py-2 font-semibold w-1/5">Description</th>
+                                                                <th className="px-4 py-2 font-semibold text-center w-20">Quantity</th>
+                                                                <th className="px-4 py-2 font-semibold text-center w-20">Unit</th>
+                                                                <th className="px-4 py-2 font-semibold text-right w-24">Unit Price</th>
+                                                                <th className="px-4 py-2 font-semibold text-right w-24">Total Cost</th>
+                                                                {isEditMode && <th className="px-4 py-2 font-semibold text-center w-16">Action</th>}
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-200 bg-white">
@@ -748,11 +804,13 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                                                                     {isEditMode && (
                                                                         <td className="px-4 py-2 text-center"><input type="checkbox" className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer" checked={selectedItemIds.includes(item.id)} onChange={() => handleSelectItem(item.id)} /></td>
                                                                     )}
-                                                                    <td className="px-4 py-2 font-medium text-gray-900 min-w-[150px]">{item.description}</td>
-                                                                    <td className="px-4 py-2 min-w-[150px]"><input type="text" value={item.notes || ''} onChange={(e) => handleItemNoteChange(item.id, e.target.value)} disabled={!isEditMode} placeholder="e.g. 15+1 Freebie" className="block w-full min-w-[120px] rounded-md border-gray-300 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-transparent disabled:border-transparent disabled:p-0 disabled:text-gray-600 font-medium" /></td>
-                                                                    <td className="px-4 py-2 text-center font-bold">{parseFloat(item.qty)} {item.unit}</td>
-                                                                    <td className="px-4 py-2 text-right whitespace-nowrap">₱{item.unit_price}</td>
-                                                                    <td className="px-4 py-2 text-right font-medium whitespace-nowrap">₱{item.net_payable}</td>
+                                                                    <td className="px-4 py-3 font-medium text-gray-900 truncate" title={item.description}>{item.description}</td>
+                                                                    <td className="px-4 py-3 text-gray-500 truncate" title={selectedPO.supplier?.name || '-'}>{selectedPO.supplier?.name || '-'}</td>
+                                                                    <td className="px-4 py-2"><input type="text" value={item.notes || ''} onChange={(e) => handleItemNoteChange(item.id, e.target.value)} disabled={!isEditMode} placeholder="e.g. 15+1 Freebie" className="block w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-transparent disabled:border-transparent disabled:p-0 disabled:text-gray-600 font-medium" /></td>
+                                                                    <td className="px-4 py-3 text-center font-bold text-gray-900">{parseFloat(item.qty || 0)}</td>
+                                                                    <td className="px-4 py-3 text-center text-gray-500">{item.unit || '-'}</td>
+                                                                    <td className="px-4 py-3 text-right whitespace-nowrap">₱{Number(item.unit_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                                    <td className="px-4 py-3 text-right font-bold text-indigo-700 whitespace-nowrap">₱{Number(item.net_payable || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                                     {isEditMode && (
                                                                         <td className="px-4 py-2 text-center"><button onClick={() => handleRemoveItem(item.id)} className="text-red-600 hover:text-red-800 font-bold text-xs bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded transition">Drop</button></td>
                                                                     )}
@@ -817,9 +875,10 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                                                 <thead className="bg-gray-100">
                                                     <tr>
                                                         <th className="px-4 py-2 font-semibold w-1/4">Product Name</th>
-                                                        <th className="px-4 py-2 font-semibold w-1/4">Description</th>
-                                                        <th className="px-4 py-2 font-semibold text-center w-24">Requested Quantity</th>
                                                         <th className="px-4 py-2 font-semibold w-1/4">Supplier Name</th>
+                                                        <th className="px-4 py-2 font-semibold w-1/5">Description</th>
+                                                        <th className="px-4 py-2 font-semibold text-center w-24">Quantity</th>
+                                                        <th className="px-4 py-2 font-semibold text-center w-20">Unit</th>
                                                         <th className="px-4 py-2 font-semibold text-right w-24">Estimated Cost</th>
                                                         <th className="px-4 py-2 font-semibold text-right w-24">Total Cost</th>
                                                     </tr>
@@ -828,9 +887,10 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                                                     {(selectedPO.purchase_request?.items || selectedPO.items)?.map((prItem, idx) => (
                                                         <tr key={prItem.id || idx}>
                                                             <td className="px-4 py-2 font-medium text-gray-900 truncate" title={prItem.product?.name}>{prItem.product?.name || prItem.product_name || `Product ID: ${prItem.product_id || 'N/A'}`}</td>
-                                                            <td className="px-4 py-2 text-gray-500 max-w-xs break-words">{prItem.specifications || '-'}</td>
-                                                            <td className="px-4 py-2 text-center font-bold">{parseFloat(prItem.qty_requested || prItem.qty)} {prItem.unit}</td>
                                                             <td className="px-4 py-2 text-gray-500 truncate">{prItem.supplier?.name || "-"}</td>
+                                                            <td className="px-4 py-2 text-gray-500 max-w-xs break-words">{prItem.specifications || '-'}</td>
+                                                            <td className="px-4 py-2 text-center font-bold">{parseFloat(prItem.qty_requested || prItem.qty)}</td>
+                                                            <td className="px-4 py-2 text-center text-gray-500">{prItem.unit || '-'}</td>
                                                             <td className="px-4 py-2 text-right text-gray-500">{formatCurrency(prItem.est_unit_cost || 0)}</td>
                                                             <td className="px-4 py-2 text-right font-bold text-indigo-700">{formatCurrency(prItem.total_cost || ((prItem.qty_requested || prItem.qty) * (prItem.est_unit_cost || 0)))}</td>
                                                         </tr>

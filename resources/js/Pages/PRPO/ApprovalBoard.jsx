@@ -191,9 +191,11 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
     const [searchQuery, setSearchQuery] = useState("");
     const [filterBranch, setFilterBranch] = useState("");
     const [filterPriority, setFilterPriority] = useState("");
+    const [filterStatus, setFilterStatus] = useState("");
 
     const uniqueBranches = useMemo(() => [...new Set(requestList.map((req) => req.branch).filter(Boolean))].sort(), [requestList]);
     const uniquePriorities = useMemo(() => [...new Set(requestList.map((req) => req.priority).filter(Boolean))].sort(), [requestList]);
+    const uniqueStatuses = useMemo(() => [...new Set(requestList.map((req) => req.status).filter(Boolean))].sort(), [requestList]);
 
     const filteredRequests = useMemo(() => {
         const filtered = requestList.filter((req) => {
@@ -203,7 +205,8 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
             const matchesSearch = !searchLower || prId.includes(searchLower) || preparedBy.includes(searchLower);
             const matchesBranch = !filterBranch || req.branch === filterBranch;
             const matchesPriority = !filterPriority || req.priority === filterPriority;
-            return matchesSearch && matchesBranch && matchesPriority;
+            const matchesStatus = !filterStatus || req.status === filterStatus;
+            return matchesSearch && matchesBranch && matchesPriority && matchesStatus;
         });
 
         return filtered.sort((a, b) => {
@@ -223,7 +226,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
             }
             return 0;
         });
-    }, [requestList, searchQuery, filterBranch, filterPriority, sortConfig]);
+    }, [requestList, searchQuery, filterBranch, filterPriority, filterStatus, sortConfig]);
 
 
     const [currentPage, setCurrentPage] = useState(1);
@@ -231,7 +234,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, filterBranch, filterPriority, currentView]);
+    }, [searchQuery, filterBranch, filterPriority, filterStatus, currentView]);
 
     const paginatedRequests = useMemo(() => {
         const start = (currentPage - 1) * itemsPerPage;
@@ -443,7 +446,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
     return (
         <SidebarLayout activeModule="PR/PO Module" sidebarLinks={sidebarLinks}>
             <Head title={headerContent.title} />
-            <div className="mx-auto max-w-7xl py-6 relative">
+            <div className="mx-auto max-w-[95%] py-6 relative">
                 <div className="mb-6 flex items-center justify-between">
                     <div>
                         <h2 className="text-2xl font-bold text-gray-900">{headerContent.title}</h2>
@@ -462,7 +465,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                 </div>
 
                 <div className="mb-6 bg-white p-5 rounded-xl shadow-sm border border-gray-200 mt-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="relative">
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Search Request</label>
                             <div className="relative">
@@ -486,10 +489,36 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                 {uniquePriorities.map((priority, idx) => (<option key={idx} value={priority}>{priority}</option>))}
                             </select>
                         </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Status</label>
+                            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-colors">
+                                <option value="">All Statuses</option>
+                                {uniqueStatuses.map((status, idx) => {
+                                    let raw = status;
+                                    if (raw === 'pending_approval') raw = 'pending_evp_final';
+                                    if (raw === 'drafted') raw = 'po_generated';
+
+                                    const statusMap = {
+                                        pending_inv_tl: "Pending Approval: Inventory Team Leader",
+                                        pending_ops_manager: "PR Generation & Approval: Operations Manager",
+                                        pr_generated: "Purchase Request Generated",
+                                        pending_procurement: "PR Review & Endorsement: Procurement Assistant",
+                                        pending_procurement_tl: "Purchase Order Generation: Procurement TL",
+                                        po_generated: "Purchase Order Generated",
+                                        pending_evp_final: "Pending EVP Final Approval",
+                                        approved: "Purchase Order Approved",
+                                        rejected: "REJECTED",
+                                        cancelled: "CANCELLED",
+                                    };
+
+                                    return <option key={idx} value={status}>{statusMap[raw] || raw.replace(/_/g, ' ').toUpperCase()}</option>;
+                                })}
+                            </select>
+                        </div>
                     </div>
-                    {(searchQuery || filterBranch || filterPriority) && (
+                    {(searchQuery || filterBranch || filterPriority || filterStatus) && (
                         <div className="mt-4 flex justify-end border-t border-gray-100 pt-4">
-                            <button onClick={() => { setSearchQuery(""); setFilterBranch(""); setFilterPriority(""); }} className="text-sm text-gray-500 hover:text-gray-800 font-semibold bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-md transition-colors">Clear Filters</button>
+                            <button onClick={() => { setSearchQuery(""); setFilterBranch(""); setFilterPriority(""); setFilterStatus(""); }} className="text-sm text-gray-500 hover:text-gray-800 font-semibold bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-md transition-colors">Clear Filters</button>
                         </div>
                     )}
                 </div>
@@ -498,24 +527,24 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                     <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-6 py-3 font-semibold text-gray-900 cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handleSort('id')}>
+                                <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handleSort('id')}>
                                     <div className="flex items-center justify-center gap-1">
                                         Purchase Request ID
                                         <SortIcon active={sortConfig.key === 'id'} direction={sortConfig.direction} />
                                     </div>
                                 </th>
-                                <th className="px-6 py-3 text-center font-semibold text-gray-900">Prepared By</th>
-                                <th className="px-6 py-3 text-center font-semibold text-gray-900">Branch & Department</th>
-                                <th className="px-6 py-3 text-center font-semibold text-gray-900">Priority</th>
-                                <th className="px-6 py-3 font-semibold text-gray-900 cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handleSort('date')}>
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Prepared By</th>
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Branch & Department</th>
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Priority</th>
+                                <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handleSort('date')}>
                                     <div className="flex items-center justify-center gap-1">
                                         Date Needed
                                         <SortIcon active={sortConfig.key === 'date'} direction={sortConfig.direction} />
                                     </div>
                                 </th>
-                                <th className="px-6 py-3 text-center font-semibold text-gray-900">Items Count</th>
-                                <th className="px-6 py-3 text-center font-semibold text-gray-900">Status</th>
-                                <th className="px-6 py-3 text-center font-semibold text-gray-900">Action</th>
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Items Count</th>
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Status</th>
+                                <th className="px-6 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 bg-white">
@@ -554,19 +583,23 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                             <div className="flex flex-wrap items-center gap-2 mt-3 sm:mt-0">
                                 <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Prev</button>
 
-                                <div className="hidden sm:flex items-center gap-1">
-                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
-                                        if (totalPages <= 7 || page === 1 || page === totalPages || Math.abs(currentPage - page) <= 1) {
-                                            return (
-                                                <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 text-sm font-semibold rounded-md border ${currentPage === page ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 transition-colors'}`}>
-                                                    {page}
-                                                </button>
-                                            );
+                                <div className="flex flex-wrap items-center gap-1">
+                                    {(totalPages <= 5
+                                        ? Array.from({ length: totalPages }, (_, i) => i + 1)
+                                        : currentPage <= 3
+                                            ? [1, 2, 3, '...', totalPages]
+                                            : currentPage >= totalPages - 2
+                                                ? [1, '...', totalPages - 2, totalPages - 1, totalPages]
+                                                : [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages]
+                                    ).map((page, index) => {
+                                        if (page === '...') {
+                                            return <span key={`ellipsis-${index}`} className="px-2 text-gray-400">...</span>;
                                         }
-                                        if (page === currentPage - 2 || page === currentPage + 2) {
-                                            return <span key={page} className="px-2 text-gray-400">...</span>;
-                                        }
-                                        return null;
+                                        return (
+                                            <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 text-sm font-semibold rounded-md border ${currentPage === page ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 transition-colors'}`}>
+                                                {page}
+                                            </button>
+                                        );
                                     })}
                                 </div>
 
@@ -605,8 +638,8 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                 </div>
 
                 {isModalOpen && selectedPR && (
-                    <div onClick={closeModal} className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto overflow-x-hidden bg-gray-900 bg-opacity-50 p-4 sm:p-0">
-                        <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-5xl rounded-xl bg-white shadow-2xl transition-all flex flex-col max-h-[90vh]">
+                    <div onClick={closeModal} className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overflow-x-hidden bg-gray-900 bg-opacity-60 backdrop-blur-sm p-4 sm:p-6">
+                        <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-6xl rounded-2xl bg-white shadow-2xl transition-all flex flex-col max-h-[90vh]">
                             <div className="flex items-center justify-between border-b px-6 py-2 shrink-0">
                                 <div>
                                     <h3 className="text-lg font-bold text-gray-900">{selectedPR.pr_number}</h3>
@@ -680,9 +713,10 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                         <thead className="bg-gray-100">
                                             <tr>
                                                 <th className="px-4 py-2 font-semibold w-1/4">Product Name</th>
-                                                <th className="px-4 py-2 font-semibold w-1/3">Description</th>
-                                                <th className="px-4 py-2 font-semibold text-center w-20">Requested Quantity</th>
-                                                <th className="px-4 py-2 font-semibold w-32">Supplier Name</th>
+                                                <th className="px-4 py-2 font-semibold w-1/4">Supplier Name</th>
+                                                <th className="px-4 py-2 font-semibold w-1/5">Description</th>
+                                                <th className="px-4 py-2 font-semibold text-center w-20">Quantity</th>
+                                                <th className="px-4 py-2 font-semibold text-center w-20">Unit</th>
                                                 <th className="px-4 py-2 font-semibold text-right w-24">Estimated Cost</th>
                                                 <th className="px-4 py-2 font-semibold text-right w-24">Total Cost</th>
                                             </tr>
@@ -691,9 +725,10 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                             {selectedPR.items.map((item, idx) => (
                                                 <tr key={item.id || idx}>
                                                     <td className="px-4 py-3 font-medium text-gray-900 truncate" title={item.product?.name}>{item.product?.name}</td>
-                                                    <td className="px-4 py-3 text-gray-500 max-w-xs break-words">{item.specifications || "-"}</td>
-                                                    <td className="px-4 py-3 text-center font-bold">{item.qty_requested} {item.unit}</td>
                                                     <td className="px-4 py-3 text-gray-500 truncate">{item.supplier?.name || "-"}</td>
+                                                    <td className="px-4 py-3 text-gray-500 max-w-xs break-words">{item.specifications || "-"}</td>
+                                                    <td className="px-4 py-3 text-center font-bold">{parseFloat(item.qty_requested)}</td>
+                                                    <td className="px-4 py-3 text-center text-gray-500">{item.unit || "-"}</td>
                                                     <td className="px-4 py-3 text-right">₱{Number(item.est_unit_cost).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                                     <td className="px-4 py-3 text-right font-bold text-indigo-700">₱{Number(item.total_cost).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                                 </tr>
@@ -724,12 +759,11 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
     {canApprove(selectedPR) && (canUserBypassViewMode(auth, "purchase_requests") || currentView === "for_approval") && (
         <>
             {selectedPR.status === "pending_ops_manager" && (
-                <button onClick={() => openActionModal(selectedPR.id, selectedPR.branch === "Greenhills" ? "return_to_creator" : "return_to_inv_tl")} className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-400 transition-colors">
-                    {/* Return/Arrow Left Icon */}
+                <button onClick={() => openActionModal(selectedPR.id, !selectedPR.reviewed_by_id ? "return_to_creator" : "return_to_inv_tl")} className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-400 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 shrink-0">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
                     </svg>
-                    {selectedPR.branch === "Greenhills" ? "Return to Inv Assistant" : "Return to Inv TL"}
+                    {!selectedPR.reviewed_by_id ? "Return to Inv Assistant" : "Return to Inv TL"}
                 </button>
             )}
             <button onClick={() => handleAction(selectedPR.id, "reject")} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 transition-colors">

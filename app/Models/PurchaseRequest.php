@@ -27,6 +27,11 @@ class PurchaseRequest extends Model
     'is_evp_override',
     'reviewed_by_id',
     'approved_by_id',
+    'prepared_by_name',
+    'prepared_by_role',
+    'reviewed_by_name',
+    'reviewed_by_role',
+    'approved_by_role',
 ];
 
 protected $casts = [

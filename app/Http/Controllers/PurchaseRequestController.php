@@ -86,10 +86,24 @@ class PurchaseRequestController extends Controller
         ]);
 
         $userRoleId = $user->role_id;
-        $isGreenhills = strtolower(trim($validated['branch'])) === 'greenhills';
+        $branchName = trim($validated['branch']);
         $isInventoryAssist = str_contains(strtolower(trim($user->role->name ?? '')), 'inventory assist');
 
-        if (($isGreenhills && $isInventoryAssist) || $userRoleId === 15) {
+
+        $targetBranches = ['makati', 'greenhills', 'alabang'];
+        $isTargetBranch = in_array(strtolower($branchName), $targetBranches);
+
+        $hasInvTL = false;
+        if ($isTargetBranch) {
+            $hasInvTL = User::whereHas('role', function ($q) {
+                $q->where('name', 'LIKE', '%Inventory TL%')
+                    ->orWhere('name', 'LIKE', '%Inventory Team Lead%');
+            })->whereHas('branches', function ($q) use ($branchName) {
+                $q->where('name', $branchName);
+            })->exists();
+        }
+
+        if (($isTargetBranch && !$hasInvTL && $isInventoryAssist) || $userRoleId === 15) {
             $initialStatus = 'pending_ops_manager';
         } else {
             $initialStatus = 'pending_inv_tl';
@@ -98,6 +112,8 @@ class PurchaseRequestController extends Controller
         DB::transaction(function () use ($validated, $initialStatus) {
             $pr = PurchaseRequest::create([
                 'user_id' => Auth::id(),
+                'prepared_by_name' => Auth::user()->name,
+                'prepared_by_role' => Auth::user()->role->name ?? 'Employee',
                 'branch' => $validated['branch'],
                 'department' => $validated['department'],
                 'date_prepared' => $validated['date_prepared'],
@@ -331,7 +347,21 @@ public function update(Request $request, $id)
                 $purchaseRequest->rejection_reason = $validated['rejection_reason'];
                 $message = 'Purchase request returned to Inventory TL for corrections.';
             } elseif ($action === 'return_to_creator') {
-                $purchaseRequest->status = strtolower($purchaseRequest->branch) === 'greenhills' ? 'pending_ops_manager' : 'pending_inv_tl';
+                $branchName = trim($purchaseRequest->branch);
+                $targetBranches = ['makati', 'greenhills', 'alabang'];
+                $isTargetBranch = in_array(strtolower($branchName), $targetBranches);
+
+                $hasInvTL = false;
+                if ($isTargetBranch) {
+                    $hasInvTL = User::whereHas('role', function ($q) {
+                        $q->where('name', 'LIKE', '%Inventory TL%')
+                            ->orWhere('name', 'LIKE', '%Inventory Team Lead%');
+                    })->whereHas('branches', function ($q) use ($branchName) {
+                        $q->where('name', $branchName);
+                    })->exists();
+                }
+
+                $purchaseRequest->status = ($isTargetBranch && !$hasInvTL) ? 'pending_ops_manager' : 'pending_inv_tl';
                 $purchaseRequest->rejection_reason = $validated['rejection_reason'];
                 $message = 'Purchase request returned for corrections.';
             }
@@ -354,6 +384,8 @@ public function update(Request $request, $id)
 
                 $purchaseRequest->status = 'pending_ops_manager';
                 $purchaseRequest->reviewed_by_id = $user->id;
+                $purchaseRequest->reviewed_by_name = $user->name;
+                $purchaseRequest->reviewed_by_role = $user->role->name ?? 'Inventory TL';
                 $purchaseRequest->rejection_reason = null;
                 $purchaseRequest->save();
 
@@ -371,8 +403,9 @@ public function update(Request $request, $id)
 
             $purchaseRequest->status = 'pr_generated';
             $purchaseRequest->is_evp_override = true;
-            $purchaseRequest->approved_by_name = $user->name;
             $purchaseRequest->approved_by_id = $user->id;
+            $purchaseRequest->approved_by_name = $user->name;
+            $purchaseRequest->approved_by_role = $user->role->name ?? 'Executive Vice President';
             $purchaseRequest->rejection_reason = null;
             $purchaseRequest->save();
 
@@ -386,6 +419,8 @@ public function update(Request $request, $id)
 
             $purchaseRequest->status = 'pr_generated';
             $purchaseRequest->approved_by_id = $user->id;
+            $purchaseRequest->approved_by_name = $user->name;
+            $purchaseRequest->approved_by_role = $user->role->name ?? 'Operations Manager';
             $purchaseRequest->rejection_reason = null;
             $purchaseRequest->save();
 
@@ -459,10 +494,21 @@ public function update(Request $request, $id)
             'items.supplier'
         ]);
 
-        $purchaseRequest->load(['user.role', 'cc_user', 'items.product', 'items.supplier']);
+        $branchOM = null;
+        if ($purchaseRequest->is_evp_override) {
+            $omUser = User::whereHas('role', function ($q) {
+                $q->where('name', 'LIKE', '%Operations Manager%')
+                  ->orWhere('name', 'LIKE', '%Ops Manager%');
+            })->whereHas('branches', function ($q) use ($purchaseRequest) {
+                $q->where('name', $purchaseRequest->branch);
+            })->first();
+
+            $branchOM = $omUser ? $omUser->name : 'Operations Manager';
+        }
 
         return Inertia::render('PRPO/PrintablePR', [
-            'pr' => $purchaseRequest
+            'pr' => $purchaseRequest,
+            'branchOM' => $branchOM
         ]);
     }
 
@@ -472,8 +518,12 @@ public function update(Request $request, $id)
         $message = '';
 
         if ($pr->status === 'pending_inv_tl') {
-            $approvers = User::whereHas('role', function ($q) { $q->where('name', 'Inventory TL'); })
-                ->whereHas('branches', function ($q) use ($pr) { $q->where('name', $pr->branch); })->get();
+            $approvers = User::whereHas('role', function ($q) {
+                $q->where('name', 'LIKE', '%Inventory TL%')
+                    ->orWhere('name', 'LIKE', '%Inventory Team Lead%');
+            })->whereHas('branches', function ($q) use ($pr) {
+                $q->where('name', $pr->branch);
+            })->get();
             $usersToNotify = $usersToNotify->merge($approvers);
             $message = "PR from {$pr->department} ({$pr->branch}) is now pending Inventory Team Lead approval.";
 

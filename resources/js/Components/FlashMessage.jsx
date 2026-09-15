@@ -11,6 +11,7 @@ export default function FlashMessage() {
 
     const timerRef = useRef(null);
     const progressTimerRef = useRef(null);
+    const toastRef = useRef(null);
 
     const getFirstErrorMessage = (errorObject) => {
         const firstValue = Object.values(errorObject)[0];
@@ -69,14 +70,27 @@ export default function FlashMessage() {
         };
     }, [flash, errors]);
 
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (visible && toastRef.current && !toastRef.current.contains(event.target)) {
+                setVisible(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [visible]);
+
     const isSuccess = toast.type === 'success';
 
     return (
-        /* Outer Wrapper: Bottom Center alignment */
+
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center pointer-events-none">
 
-            {/* Inner Wrapper: Slide Up/Down Animation */}
             <div
+                ref={toastRef}
                 aria-live="assertive"
                 className={`transform transition-all duration-500 ease-in-out pointer-events-auto ${
                     visible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'

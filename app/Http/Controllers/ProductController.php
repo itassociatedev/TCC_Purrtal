@@ -26,12 +26,12 @@ class ProductController extends Controller
 
         // 1. Fetch products with their linked suppliers
         $products = Product::with('supplier')->latest()->get();
-        
+
         // 2. Fetch all suppliers for the filter dropdown and manage modal
         $suppliers = Supplier::orderBy('name')->get();
 
         // 3. Render the React component and pass the data as props
-        // Note: Make sure the path matches where you saved ProductsIndex.jsx 
+        // Note: Make sure the path matches where you saved ProductsIndex.jsx
         // (e.g., 'PRPO/ProductsIndex')
         return Inertia::render('PRPO/ProductsIndex', [
             'products' => $products,
@@ -57,6 +57,8 @@ class ProductController extends Controller
             'unit' => 'nullable|string|max:50',
             'price' => 'required|numeric|min:0',
         ]);
+
+        $validated['name'] = ucwords(strtolower(trim($validated['name'])));
 
         Product::create($validated);
 
@@ -142,11 +144,11 @@ public function update(Request $request, Product $product)
         // Provide a downloadable CSV template for product imports
         return response()->streamDownload(function () {
             $file = fopen('php://output', 'w');
-            
+
             // Template headers and example row
             fputcsv($file, ['Supplier Name', 'Product Name', 'Unit', 'Details', 'Price']);
             fputcsv($file, ['Example Supplier Inc.', 'Paracetamol 500mg', 'BOX', 'Box of 100 tablets', '150.50']);
-            
+
             fclose($file);
         }, 'product_import_template.csv');
     }
@@ -156,7 +158,7 @@ public function update(Request $request, Product $product)
         // Export products to an Excel file, optionally filtered by supplier/search
         $supplierId = $request->input('supplier_id');
         $search = $request->input('search');
-        
+
         $fileName = 'products_export_' . date('Y-m-d_H-i-s') . '.xlsx';
 
         return Excel::download(new ProductsExport($supplierId, $search), $fileName);

@@ -204,8 +204,8 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
             });
         }
     };
-    
-    const { data: supData, setData: setSupData, post: postSup, put: putSup, processing: supProcessing, errors: supErrors, reset: resetSup, clearErrors: clearSupErrors } = useForm({ 
+
+    const { data: supData, setData: setSupData, post: postSup, put: putSup, processing: supProcessing, errors: supErrors, reset: resetSup, clearErrors: clearSupErrors } = useForm({
         name: '',
         contact_person: '',
         contact_number: '',
@@ -266,11 +266,11 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
 
     const confirmToggleSupplierStatus = (sup) => {
         const isDisabling = sup.status !== 'Disabled';
-        
+
         setConfirmDialog({
             isOpen: true,
             title: isDisabling ? 'Disable Supplier' : 'Enable Supplier',
-            message: isDisabling 
+            message: isDisabling
                 ? `Are you sure you want to disable ${sup.name}? \n\n⚠️ ALL products handled by this supplier will also be disabled and hidden from new Purchase Requests.`
                 : `Are you sure you want to re-enable ${sup.name}? \n\nAll their associated products will become active again.`,
             confirmText: isDisabling ? 'Disable Supplier' : 'Enable Supplier',
@@ -298,11 +298,11 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
     const confirmToggleProductStatus = (product) => {
         setActiveDropdown(null);
         const isDisabling = product.status !== 'Disabled';
-        
+
         setConfirmDialog({
             isOpen: true,
             title: isDisabling ? 'Disable Product' : 'Enable Product',
-            message: isDisabling 
+            message: isDisabling
                 ? `Are you sure you want to disable ${product.name}? \n\nIt will no longer be available for new Purchase Requests.`
                 : `Are you sure you want to re-enable ${product.name}?`,
             confirmText: isDisabling ? 'Disable Product' : 'Enable Product',
@@ -434,7 +434,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                             {isReadOnly ? 'View and search the product catalog.' : 'Manage your suppliers and product catalog.'}
                         </p>
                     </div>
-                    
+
                     {/* 🟢 HIDE ALL EDITING ACTIONS IF READ-ONLY */}
                     {canViewProducts && (
                         <div className="flex flex-wrap gap-3">
@@ -597,7 +597,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                                     </th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Price</th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                                    
+
                                     {/* 🟢 HIDE ACTIONS COLUMN IF READ-ONLY */}
                                     {!isReadOnly && (
                                         <th scope="col" className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider w-20">Actions</th>
@@ -610,7 +610,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                                 ) : (
                                     filteredProducts.map((product) => (
                                         <tr key={product.id} className={`hover:bg-gray-50 ${selectedProducts.includes(product.id) ? 'bg-indigo-50/30' : ''}`}>
-                                            
+
                                             {/* 🟢 HIDE CHECKBOX CELL IF NO DELETE PERMISSION */}
                                             {canDeleteProducts && (
                                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -619,20 +619,22 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                                             )}
 
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{product.supplier?.name || 'Unknown'}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">{product.name}</td>
+                                            <td className="px-4 py-3 font-medium text-gray-900 capitalize">
+                                                {product.name}
+                                            </td>
                                             <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={product.details}>{product.details}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{product.unit || <span className="text-gray-400 italic">N/A</span>}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">₱{parseFloat(product.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${
-                                                    product.status === 'Disabled' 
-                                                        ? 'bg-gray-100 text-gray-600 ring-gray-500/20' 
+                                                    product.status === 'Disabled'
+                                                        ? 'bg-gray-100 text-gray-600 ring-gray-500/20'
                                                         : 'bg-green-50 text-green-700 ring-green-600/20'
                                                 }`}>
                                                     {product.status === 'Disabled' ? 'Disabled' : 'Active'}
                                                 </span>
                                             </td>
-                                            
+
                                             {/* 🟢 HIDE ACTIONS CELL IF READ-ONLY */}
                                             {canEditProducts && (
                                                 <td className="px-6 py-4 whitespace-nowrap text-center relative">
@@ -647,8 +649,8 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                                                     {!isBatchSelection && activeDropdown === product.id && (
                                                         <div onClick={(e) => e.stopPropagation()} className="absolute right-8 top-10 z-50 w-32 overflow-hidden rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5">
                                                             <button className="block w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-gray-100 font-medium" onClick={() => { setActiveDropdown(null); openProductModal(product); }}>Edit</button>
-                                                            <button 
-                                                                className="block w-full px-4 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors" 
+                                                            <button
+                                                                className="block w-full px-4 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
                                                                 onClick={(e) => {
                                                                     e.preventDefault(); e.stopPropagation(); confirmToggleProductStatus(product);
                                                                 }}
@@ -678,16 +680,16 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                         <h2 className="text-lg font-bold text-gray-900">Manage Suppliers</h2>
                         <div className="flex items-center gap-2">
                             {/* 🟢 NEW EXPORT BUTTON ADDED HERE */}
-                            <a 
-                                href={route('prpo.suppliers.export')} 
+                            <a
+                                href={route('prpo.suppliers.export')}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-green-700 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 transition-colors shadow-sm"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
                                 Export Excel
                             </a>
 
-                            <a 
-                                href={route('prpo.suppliers.template')} 
+                            <a
+                                href={route('prpo.suppliers.template')}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md hover:bg-indigo-100 transition-colors"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
@@ -717,16 +719,16 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
 
                             <div>
                                 <InputLabel htmlFor="contact_number" value="Contact Number" />
-                                <TextInput 
-                                    id="contact_number" 
-                                    className="mt-1 block w-full" 
-                                    value={supData.contact_number} 
+                                <TextInput
+                                    id="contact_number"
+                                    className="mt-1 block w-full"
+                                    value={supData.contact_number}
                                     onChange={(e) => {
                                         const numericValue = e.target.value.replace(/\D/g, '');
                                         setSupData('contact_number', numericValue);
-                                    }} 
-                                    placeholder="e.g. 09171234567" 
-                                    maxLength="15" 
+                                    }}
+                                    placeholder="e.g. 09171234567"
+                                    maxLength="15"
                                 />
                                 <InputError message={supErrors.contact_number} className="mt-2" />
                             </div>
@@ -739,18 +741,18 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
 
                             <div>
                                 <InputLabel htmlFor="tin" value="TIN" />
-                                <TextInput 
-                                    id="tin" 
-                                    className="mt-1 block w-full" 
-                                    value={supData.tin} 
+                                <TextInput
+                                    id="tin"
+                                    className="mt-1 block w-full"
+                                    value={supData.tin}
                                     onChange={(e) => {
                                         let val = e.target.value.replace(/\D/g, '');
                                         val = val.substring(0, 12);
                                         const formattedTIN = val.match(/.{1,3}/g)?.join('-') || '';
                                         setSupData('tin', formattedTIN);
-                                    }} 
-                                    placeholder="e.g. 123-456-789-000" 
-                                    maxLength="15" 
+                                    }}
+                                    placeholder="e.g. 123-456-789-000"
+                                    maxLength="15"
                                 />
                                 <InputError message={supErrors.tin} className="mt-2" />
                             </div>
@@ -767,7 +769,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                     </form>
 
                     <h3 className="text-sm font-semibold text-gray-700 mb-2">Existing Suppliers</h3>
-                    
+
                     {/* 🟢 NEW CHECKBOX & ACTION BAR ADDED HERE */}
                     <div className="flex items-center justify-between gap-4 mb-4 bg-white p-3 rounded shadow-sm border border-gray-200">
                         <div className="flex items-center gap-4">
@@ -814,7 +816,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                         <ul className="divide-y divide-gray-200">
                             {filteredSuppliers.map((sup) => (
                                 <li key={sup.id} className={`flex items-center justify-between p-3 transition-colors ${sup.status === 'Disabled' ? 'bg-gray-100/50' : 'hover:bg-gray-50'}`}>
-                                    
+
                                     <div className="flex items-center gap-3">
                                         {/* 🟢 INDIVIDUAL CHECKBOX FOR SUPPLIER */}
                                         <input
@@ -829,7 +831,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                                                 }
                                             }}
                                         />
-                                        
+
                                         <div className="flex flex-col">
                                             <span className={`text-sm font-semibold ${sup.status === 'Disabled' ? 'text-gray-400' : 'text-gray-800'}`}>
                                                 {sup.name}
@@ -843,9 +845,9 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                                     </div>
 
                                     <div className="flex gap-3 items-center">
-                                        <button 
+                                        <button
                                             type="button"
-                                            onClick={() => confirmToggleSupplierStatus(sup)} 
+                                            onClick={() => confirmToggleSupplierStatus(sup)}
                                             className={`text-xs font-bold ${sup.status === 'Disabled' ? 'text-green-600 hover:text-green-800' : 'text-gray-500 hover:text-gray-800'}`}
                                         >
                                             {sup.status === 'Disabled' ? 'Enable' : 'Disable'}

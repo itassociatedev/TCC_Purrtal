@@ -16,19 +16,19 @@ class ProductsImport implements ToModel, WithHeadingRow
 
         // Skip rows where the supplier doesn't exist in the database
         if (!$supplier) {
-            return null; 
+            return null;
         }
 
         // 2. Create or Update the product
         return Product::updateOrCreate(
             [
-                'name' => trim($row['product_name']),
+                'name' => ucwords(strtolower(trim($row['product_name'] ?? $row['name']))),
                 'supplier_id' => $supplier->id,
             ],
             [
                 // 🟢 ADD THIS LINE: Reads the unit column, trims spaces, and forces UPPERCASE
                 'unit' => isset($row['unit']) ? strtoupper(trim($row['unit'])) : null,
-                
+
                 'details' => isset($row['details']) ? trim($row['details']) : null,
                 'price' => isset($row['price']) ? (float) $row['price'] : 0,
             ]

@@ -23,8 +23,20 @@ export default function TrackingStepper({ currentStatus, type = 'PR', branch, pr
 
     let workflow = type === "PR" ? prWorkflow : poWorkflow;
 
-    if (type === "PR" && branch === "Greenhills") {
-        workflow = workflow.filter((step) => step.key !== "pending_inv_tl");
+
+    let skippedInvTL = false;
+
+    if (type === "PR") {
+        const targetBranches = ["makati", "greenhills", "alabang"];
+        const isTargetBranch = branch && targetBranches.includes(branch.trim().toLowerCase());
+
+        const isCurrentlyAtInvTL = currentStatus === "pending_inv_tl";
+        const hasInvTLSignature = pr && pr.reviewed_by_id;
+
+        if (isTargetBranch && !isCurrentlyAtInvTL && !hasInvTLSignature) {
+            workflow = workflow.filter((step) => step.key !== "pending_inv_tl");
+            skippedInvTL = true;
+        }
     }
 
     const isRejected = ['rejected', 'cancelled'].includes(currentStatus);
@@ -44,8 +56,6 @@ export default function TrackingStepper({ currentStatus, type = 'PR', branch, pr
 
     if (currentStatus === 'approved') {
         currentIndex = 99;
-    } else if (type === 'PR' && branch === 'Greenhills' && currentStatus === 'pending_inv_tl') {
-        currentIndex = 0;
     }
 
     return (
@@ -129,6 +139,17 @@ export default function TrackingStepper({ currentStatus, type = 'PR', branch, pr
                     );
                 })}
             </div>
+
+            {skippedInvTL && (
+                <div className="mt-5 flex justify-center animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 text-xs font-semibold shadow-sm">
+                        <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Inventory TL Review skipped: No active Inventory Team Leader currently assigned to {branch || 'this branch'}.
+                    </span>
+                </div>
+            )}
         </div>
     );
 }

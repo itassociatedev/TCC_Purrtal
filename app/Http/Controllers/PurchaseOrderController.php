@@ -325,7 +325,7 @@ class PurchaseOrderController extends Controller
 
     public function print(PurchaseOrder $purchaseOrder)
     {
-        $purchaseOrder->load([
+        $allPOs = PurchaseOrder::with([
             'supplier',
             'preparedBy.role',
             'purchaseRequest.user.role',
@@ -333,10 +333,10 @@ class PurchaseOrderController extends Controller
             'purchaseRequest.approvedBy.role',
             'purchaseRequest.cc_user',
             'items' => fn($query) => $query->where('status', 'active')
-        ]);
+        ])->where('purchase_request_id', $purchaseOrder->purchase_request_id)->get();
 
         return Inertia::render('PRPO/PrintablePO', [
-            'po' => $purchaseOrder
+            'pos' => $allPOs
         ]);
     }
 }

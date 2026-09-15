@@ -1,7 +1,7 @@
 import TrackingStepper from '@/Components/TrackingStepper';
 import { getPRPOLinks } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
-import { Head } from '@inertiajs/react';
+import { Head, usePage, Link } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 
 const TrackerLine = ({ pr }) => {
@@ -101,6 +101,15 @@ const TrackerLine = ({ pr }) => {
 
 export default function StatusIndex({ auth, requests, employees = [] }) {
     const sidebarLinks = getPRPOLinks(auth);
+    const { url } = usePage();
+
+
+    const highlightId = useMemo(() => {
+        if (!url) return null;
+        const queryString = url.includes('?') ? url.split('?')[1] : '';
+        const params = new URLSearchParams(queryString);
+        return params.get('highlight');
+    }, [url]);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [filterBranch, setFilterBranch] = useState('');
@@ -157,6 +166,15 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
         setTimeout(() => { setSelectedDoc(null); setShowRejection(false); }, 200);
     };
 
+    useEffect(() => {
+        if (highlightId && requests?.data) {
+            const target = requests.data.find(pr => String(pr.id) === String(highlightId));
+            if (target) {
+                openModal(target, 'PR');
+            }
+        }
+    }, [highlightId, requests]);
+
     const uniqueBranches = useMemo(() => [...new Set(requests.data.map(pr => pr.branch).filter(Boolean))].sort(), [requests.data]);
     const uniquePriorities = useMemo(() => [...new Set(requests.data.map(pr => pr.priority).filter(Boolean))].sort(), [requests.data]);
 
@@ -206,7 +224,17 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
 
             return matchesSearch && matchesBranch && matchesPriority && matchesType && matchesDate;
         });
-    }, [requests.data, searchQuery, filterBranch, filterPriority, filterType, filterDate, auth.user.id]);
+
+        if (highlightId) {
+            const hIndex = filtered.findIndex(pr => String(pr.id) === String(highlightId));
+            if (hIndex > -1) {
+                const [hItem] = filtered.splice(hIndex, 1);
+                filtered.unshift(hItem);
+            }
+        }
+
+        return filtered;
+    }, [requests.data, searchQuery, filterBranch, filterPriority, filterType, filterDate, auth.user.id, highlightId]);
 
     // 🟢 Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -277,12 +305,26 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
                     )}
                 </div>
 
+                {highlightId && (
+                    <div className="mb-4 flex items-center justify-between bg-indigo-50 px-4 py-3 rounded-lg border border-indigo-200 shadow-sm animate-in fade-in slide-in-from-top-2">
+                        <span className="text-sm text-indigo-800 font-bold flex items-center gap-2">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                            Viewing Specific Notification Record
+                        </span>
+                        <Link href={route('prpo.status.index')} className="text-xs font-bold text-indigo-700 hover:text-indigo-900 hover:bg-indigo-100 px-3 py-1.5 bg-white rounded shadow-sm border border-indigo-200 transition-colors">
+                            Clear Highlight
+                        </Link>
+                    </div>
+                )}
+
                 <div className="space-y-4">
                     {paginatedRequests.length === 0 ? (
                         <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300"><p className="text-gray-500">No requests found matching your filters.</p></div>
                     ) : (
-                        paginatedRequests.map(pr => (
-                            <div key={pr.id} className="bg-white shadow-sm ring-1 ring-gray-900/5 rounded-xl p-6 transition-all hover:shadow-md">
+                        paginatedRequests.map(pr => {
+                            const isDimmed = highlightId && String(pr.id) !== String(highlightId);
+                            return (
+                                <div key={pr.id} className={`bg-white shadow-sm ring-1 ring-gray-900/5 rounded-xl p-6 transition-all hover:shadow-md ${isDimmed ? 'opacity-40 grayscale-[30%]' : 'opacity-100'}`}>
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-100 pb-4 mb-4 gap-4">
                                     <div>
                                         <div className="flex items-center gap-2">
@@ -311,7 +353,8 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
                                 </div>
                                 <TrackerLine pr={pr} />
                             </div>
-                        ))
+                            );
+                        })
                     )}
 
                     {totalPages > 1 && (
@@ -320,19 +363,23 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
                             <div className="flex flex-wrap items-center gap-2 mt-3 sm:mt-0">
                                 <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Prev</button>
 
-                                <div className="hidden sm:flex items-center gap-1">
-                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
-                                        if (totalPages <= 7 || page === 1 || page === totalPages || Math.abs(currentPage - page) <= 1) {
-                                            return (
-                                                <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 text-sm font-semibold rounded-md border ${currentPage === page ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 transition-colors'}`}>
-                                                    {page}
-                                                </button>
-                                            );
+                                <div className="flex flex-wrap items-center gap-1">
+                                    {(totalPages <= 5
+                                        ? Array.from({ length: totalPages }, (_, i) => i + 1)
+                                        : currentPage <= 3
+                                            ? [1, 2, 3, '...', totalPages]
+                                            : currentPage >= totalPages - 2
+                                                ? [1, '...', totalPages - 2, totalPages - 1, totalPages]
+                                                : [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages]
+                                    ).map((page, index) => {
+                                        if (page === '...') {
+                                            return <span key={`ellipsis-${index}`} className="px-2 text-gray-400">...</span>;
                                         }
-                                        if (page === currentPage - 2 || page === currentPage + 2) {
-                                            return <span key={page} className="px-2 text-gray-400">...</span>;
-                                        }
-                                        return null;
+                                        return (
+                                            <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 text-sm font-semibold rounded-md border ${currentPage === page ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 transition-colors'}`}>
+                                                {page}
+                                            </button>
+                                        );
                                     })}
                                 </div>
 

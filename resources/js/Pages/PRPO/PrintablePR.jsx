@@ -1,8 +1,13 @@
 import ApplicationLogo from '@/Components/ApplicationLogo';
 import { Head } from '@inertiajs/react';
 
-export default function PrintablePR({ pr }) {
-    const isGreenhills = pr.branch?.toLowerCase().includes('greenhills');
+export default function PrintablePR({ pr, branchOM }) {
+    const targetBranches = ["makati", "greenhills", "alabang"];
+    const isTargetBranch = pr.branch && targetBranches.includes(pr.branch.trim().toLowerCase());
+    const isCurrentlyAtInvTL = pr.status === "pending_inv_tl";
+    const hasInvTLSignature = pr.reviewed_by_name || pr.reviewed_by_id;
+
+    const skippedInvTL = isTargetBranch && !isCurrentlyAtInvTL && !hasInvTLSignature;
 
     const formatCurrency = (amount) => {
         return `₱${parseFloat(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -70,8 +75,8 @@ export default function PrintablePR({ pr }) {
                         </div>
                         <div className="w-[30%] border-l border-gray-300 pl-3">
                             <span className="text-[9px] font-bold text-gray-500 uppercase block mb-0.5">Prepared By:</span>
-                            <span className="text-[11px] font-bold text-gray-900 uppercase">{pr.user?.name}</span><br />
-                            <span className="text-[10px] text-gray-600">{pr.department} - {pr.branch}</span>
+                            <span className="text-[11px] font-bold text-gray-900 uppercase">{pr.prepared_by_name || pr.user?.name}</span><br />
+                            <span className="text-[10px] text-gray-600">For: {pr.department} - {pr.branch}</span>
 
                             {pr.cc_user && (
                                 <div className="mt-1 pt-1 border-t border-gray-200 mr-4 flex items-start gap-1">
@@ -87,7 +92,7 @@ export default function PrintablePR({ pr }) {
                         </div>
                         <div className="w-[20%] text-right flex flex-col justify-center">
                             <h2 className="text-[18px] font-bold text-indigo-600 leading-none m-0 whitespace-nowrap">PURCHASE REQUEST</h2>
-                            <div className="font-bold text-[12px] mt-1">PR ID: {pr.pr_number}</div>
+                            <div className="font-bold text-[12px] mt-1">{pr.pr_number}</div>
                             <div className="text-[10px] font-semibold text-gray-600 mt-1">
                                 Prepared: <span className="font-normal">{formatDate(pr.date_prepared)}</span><br />
                                 Needed: <span className="font-normal text-red-600">{formatDate(pr.date_needed)}</span>
@@ -104,20 +109,26 @@ export default function PrintablePR({ pr }) {
                         <table className="w-full text-[10px] text-left mb-2 border-collapse">
                             <thead className="bg-gray-100 border-y border-gray-300">
                                 <tr>
-                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-center w-[10%]">Quantity</th>
-                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-center w-[10%]">Unit</th>
-                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-center w-[35%]">Product Name</th>
-                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-right w-[15%]">Unit Price</th>
-                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-right w-[15%]">Old Price</th>
-                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-right w-[15%]">Total Price</th>
+                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-center w-[8%]">Quantity</th>
+                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-center w-[8%]">Unit</th>
+                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-center w-[22%]">Product Name</th>
+                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-center w-[23%] whitespace-nowrap">Supplier Name</th>
+                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-right w-[13%]">Unit Price</th>
+                                    {/* 🟢 Renamed to Old Unit Price */}
+                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-right w-[13%]">Old Unit Price</th>
+                                    <th className="py-[3px] px-2 font-bold text-gray-800 text-right w-[13%]">Total Price</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {pr.items.map((item, index) => {
-                                    const currentPrice = item.product ? Number(item.product.price || 0) : Number(item.est_unit_cost || 0);
-                                    const oldPrice = Number(item.est_unit_cost || 0);
+                                    const currentPrice = Number(item.est_unit_cost || 0);
+
+                                    const oldPrice = item.product ? Number(item.product.price || 0) : currentPrice;
+
                                     const qty = Number(item.qty_requested || 0);
                                     const totalPrice = qty * currentPrice;
+
+                                    const isPriceChanged = currentPrice !== oldPrice;
 
                                     return (
                                         <tr key={item.id} className="border-b border-gray-200 break-inside-avoid">
@@ -126,46 +137,70 @@ export default function PrintablePR({ pr }) {
                                             <td className="py-[2px] px-2 text-center">
                                                 <strong className="text-gray-900 block">{item.product?.name || item.product_name || `Product ID: ${item.product_id}`}</strong>
                                                 {item.specifications && <span className="text-[10px] text-gray-500 block mt-0.5">{item.specifications}</span>}
-                                                {item.supplier?.name && <span className="text-[9px] text-indigo-600 block mt-0.5">Supplier Name: {item.supplier.name}</span>}
                                             </td>
-                                            <td className="py-[2px] px-2 text-right font-bold text-blue-600">{formatCurrency(currentPrice)}</td>
-                                            <td className="py-[2px] px-2 text-right text-gray-500">{formatCurrency(oldPrice)}</td>
-                                            <td className="py-[2px] px-2 text-right font-bold text-gray-900">{formatCurrency(totalPrice)}</td>
+                                            <td className="py-[2px] px-2 text-center font-semibold text-black whitespace-nowrap">
+                                                {item.supplier?.name || '-'}
+                                            </td>
+                                            <td className={`py-[2px] px-2 text-right font-bold ${isPriceChanged ? 'text-[magenta]' : 'text-black'}`}>
+                                                {formatCurrency(currentPrice)}
+                                            </td>
+                                            <td className="py-[2px] px-2 text-right text-black">
+                                                {formatCurrency(oldPrice)}
+                                            </td>
+                                            <td className="py-[2px] px-2 text-right font-bold text-blue-600">
+                                                {formatCurrency(totalPrice)}
+                                            </td>
                                         </tr>
                                     );
                                 })}
                                 <tr className="border-t-2 border-gray-800 break-inside-avoid">
-                                    <td colSpan="5" className="py-2 px-2 text-right font-bold uppercase text-gray-700 text-[11px]">Estimated Grand Total:</td>
-                                    <td className="py-2 px-2 text-right font-black text-[13px] text-gray-900 bg-gray-50">
-                                        {formatCurrency(pr.items.reduce((sum, item) => sum + (Number(item.qty_requested || 0) * (item.product ? Number(item.product.price || 0) : Number(item.est_unit_cost || 0))), 0))}
+                                    <td colSpan="6" className="py-2 px-2 text-right font-bold uppercase text-gray-700 text-[11px]">Estimated Grand Total:</td>
+                                    <td className="py-2 px-2 text-right font-black text-[13px] text-blue-600 bg-gray-50">
+                                        {formatCurrency(pr.items.reduce((sum, item) => sum + (Number(item.qty_requested || 0) * Number(item.est_unit_cost || 0)), 0))}
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
-                <div className={`mt-auto pt-6 pb-2 break-inside-avoid w-full flex ${isGreenhills ? 'justify-center gap-24' : 'justify-between gap-12'}`}>
-                    <div className={isGreenhills ? 'w-[40%]' : 'w-[30%]'}>
+                <div className={`mt-auto pt-6 pb-2 break-inside-avoid w-full flex ${skippedInvTL ? 'justify-center gap-24' : 'justify-between gap-12'}`}>
+                    <div className={skippedInvTL ? 'w-[40%]' : 'w-[30%]'}>
                         <div className="border-b border-gray-900 h-8 mb-1"></div>
                         <div className="text-[10px] text-gray-500 text-center leading-tight">Requested By</div>
-                        <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-tight">{pr.user?.name}</div>
-                        <div className="text-[9px] font-semibold text-gray-600 text-center mt-0.5">{pr.user?.role?.name || 'Employee'}</div>
+                        <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-tight">{pr.prepared_by_name || pr.user?.name}</div>
+                        <div className="text-[9px] font-semibold text-gray-600 text-center mt-0.5">{pr.prepared_by_role || pr.user?.role?.name || 'Employee'}</div>
                     </div>
 
-                    {!isGreenhills && (
+                    {!skippedInvTL && (
                         <div className="w-[30%]">
                             <div className="border-b border-gray-900 h-8 mb-1"></div>
                             <div className="text-[10px] text-gray-500 text-center leading-tight">Reviewed By</div>
-                            <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-tight">{pr.reviewed_by?.name || 'PENDING'}</div>
-                            <div className="text-[9px] font-semibold text-gray-600 text-center mt-0.5">{pr.reviewed_by?.role?.name || ''}</div>
+                            <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-tight">{pr.reviewed_by_name || pr.reviewed_by?.name || 'PENDING'}</div>
+                            <div className="text-[9px] font-semibold text-gray-600 text-center mt-0.5">{pr.reviewed_by_role || pr.reviewed_by?.role?.name || ''}</div>
                         </div>
                     )}
 
-                    <div className={isGreenhills ? 'w-[40%]' : 'w-[30%]'}>
+                    <div className={skippedInvTL ? 'w-[40%]' : 'w-[30%]'}>
                         <div className="border-b border-gray-900 h-8 mb-1"></div>
                         <div className="text-[10px] text-gray-500 text-center leading-tight">Approved By</div>
-                        <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-tight">{pr.approved_by?.name || 'PENDING'}</div>
-                        <div className="text-[9px] font-semibold text-gray-600 text-center mt-0.5">{pr.approved_by?.role?.name || ''}</div>
+                        <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-tight">
+                            {pr.approved_by_name || pr.approved_by?.name || 'PENDING'}
+                        </div>
+                        <div className="text-[9px] font-semibold text-gray-600 text-center mt-0.5">
+                            {pr.approved_by_role || pr.approved_by?.role?.name || ''}
+                        </div>
+
+                        {pr.is_evp_override && (
+                            <div className="mt-2 text-center">
+                                <div className="text-[7px] italic text-gray-500 leading-tight">on Behalf of:</div>
+                                <div className="text-[8.5px] font-bold text-gray-800 uppercase leading-tight mt-0.5">
+                                    {branchOM || 'Operations Manager'}
+                                </div>
+                                <div className="text-[7px] font-medium text-gray-600 leading-tight mt-0.5">
+                                    Operations Manager ({pr.branch})
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
