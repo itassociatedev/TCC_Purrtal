@@ -294,8 +294,6 @@ class PurchaseOrderController extends Controller
                         if (strlen($branchInitials) < 2) $branchInitials = substr($branchName, 0, 3);
                     }
                 }
-
-                // 🟢 EXACT BRANCH GAP-FINDER: Only look at PO numbers belonging to THIS specific branch (e.g., ZMB)
                 $takenPoNumbers = \App\Models\PurchaseOrder::where('po_number', 'LIKE', 'PO-' . $branchInitials . '-%')
                     ->pluck('po_number')
                     ->filter(fn($num) => $num !== 'TEMP' && $num !== null)
@@ -304,11 +302,8 @@ class PurchaseOrderController extends Controller
                         return (int) end($parts);
                     })
                     ->toArray();
-
                 foreach ($groupedBySupplier as $supplierId => $supplierItems) {
                     if (!$supplierId) continue;
-
-                    // Find the lowest available gap for this branch's sequence
                     sort($takenPoNumbers);
                     $nextPoNumber = 1;
                     foreach ($takenPoNumbers as $num) {
@@ -318,7 +313,7 @@ class PurchaseOrderController extends Controller
                             break;
                         }
                     }
-                    $takenPoNumbers[] = $nextPoNumber; // Reserve it for subsequent supplier loops
+                    $takenPoNumbers[] = $nextPoNumber;
 
                     $po = PurchaseOrder::create([
                         'purchase_request_id' => $lockedPR->id,
