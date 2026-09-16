@@ -514,13 +514,21 @@ public function update(Request $request, $id)
                         \App\Models\PurchaseOrderItem::whereIn('purchase_order_id', $poIds)->delete();
                         \App\Models\PurchaseOrder::whereIn('id', $poIds)->delete();
                     }
-
-                    // 3. Safely delete child PR items
                     \App\Models\PurchaseRequestItem::whereIn('purchase_request_id', $request->ids)->delete();
-
-                    // 4. Wipe the PRs themselves
                     \App\Models\PurchaseRequest::whereIn('id', $request->ids)->delete();
                 });
+
+                \Illuminate\Support\Facades\DB::table('system_logs')->insert([
+                    'user_id' => $user->id,
+                    'module' => 'PR/PO Module',
+                    'action' => 'Delete',
+                    'description' => 'Deleted ' . count($request->ids) . ' Purchase Request(s)',
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->header('User-Agent'),
+                    'status' => 'SUCCESS',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
 
                 return back()->with('success', count($request->ids) . ' Purchase Request(s) and all linked data moved to trash.');
             } catch (\Exception $e) {

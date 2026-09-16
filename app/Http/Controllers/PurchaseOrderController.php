@@ -112,6 +112,18 @@ class PurchaseOrderController extends Controller
                     \App\Models\PurchaseOrder::whereIn('id', $request->ids)->delete();
                 });
 
+                \Illuminate\Support\Facades\DB::table('system_logs')->insert([
+                    'user_id' => $user->id,
+                    'module' => 'PR/PO Module',
+                    'action' => 'Delete',
+                    'description' => 'Deleted ' . count($request->ids) . ' Purchase Order(s)',
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->header('User-Agent'),
+                    'status' => 'SUCCESS',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
                 return back()->with('success', count($request->ids) . ' Purchase Order(s) moved to trash.');
             } catch (\Exception $e) {
                 return back()->with('error', 'WIPE FAILED! Database Error: ' . $e->getMessage());

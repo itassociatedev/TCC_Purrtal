@@ -27,20 +27,19 @@ class DeletionRequestNotification extends Notification
 
     public function toArray($notifiable)
     {
-        // Build the URL that passes the IDs to the frontend
+
         $url = $this->module === 'PR'
             ? route('prpo.approval-board', ['view' => 'deletion_request', 'pending_delete' => implode(',', $this->ids)])
             : route('prpo.purchase-orders.index', ['view' => 'deletion_request', 'pending_delete' => implode(',', $this->ids)]);
 
-        // Dynamically set the title and icon based on the module
         $title = $this->module === 'PR'
             ? '🗑️ PR Deletion Request'
             : '🗑️ PO Deletion Request';
 
         return [
-            'message' => $title,                  // Maps to the bold title with the icon
-            'user_email' => $this->message,       // Maps to the gray descriptive subtext
-            'action_url' => $url,                 // Ensures the notification is clickable
+            'message' => $title,
+            'user_email' => $this->message,
+            'action_url' => $url,
             'type' => 'deletion_request',
             'module' => $this->module
         ];
