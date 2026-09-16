@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PurchaseRequest extends Model
 {
     use HasFactory;
+    use SoftDeletes;
 
     protected $fillable = [
     'user_id',
@@ -43,12 +45,34 @@ protected $casts = [
 
     public function getPrNumberAttribute()
     {
-        $branch = strtoupper(trim($this->branch));
-        $branchInitials = 'UNK';
+        $branchName = strtoupper(trim($this->branch));
 
-        if (str_contains($branch, 'MAKATI')) $branchInitials = 'MKT';
-        elseif (str_contains($branch, 'GREENHILLS')) $branchInitials = 'GH';
-        elseif (str_contains($branch, 'ALABANG')) $branchInitials = 'ALB';
+        // Known branches override
+        $knownBranches = [
+            'MAKATI' => 'MKT',
+            'GREENHILLS' => 'GH',
+            'ALABANG' => 'ALB'
+        ];
+
+        if (isset($knownBranches[$branchName])) {
+            $branchInitials = $knownBranches[$branchName];
+        } else {
+            $words = array_filter(explode(' ', $branchName));
+            if (count($words) > 1) {
+                $branchInitials = '';
+                foreach (array_slice($words, 0, 3) as $w) {
+                    $branchInitials .= $w[0];
+                }
+            } else {
+                $firstLetter = $branchName[0] ?? 'U';
+                $consonants = preg_replace('/[AEIOU\W]/', '', substr($branchName, 1));
+                $branchInitials = substr($firstLetter . $consonants, 0, 3);
+
+                if (strlen($branchInitials) < 2) {
+                    $branchInitials = substr($branchName, 0, 3);
+                }
+            }
+        }
 
         return 'PR-' . $branchInitials . '-' . str_pad($this->id, 5, '0', STR_PAD_LEFT);
     }

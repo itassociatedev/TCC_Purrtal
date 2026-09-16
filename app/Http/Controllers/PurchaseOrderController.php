@@ -15,6 +15,7 @@ use Inertia\Inertia;
 use App\Notifications\POStatusUpdate;
 use App\Notifications\PRStatusUpdate;
 use App\Notifications\PRPOCcStatusUpdate;
+use App\Notifications\DeletionRequestNotification;
 
 class PurchaseOrderController extends Controller
 {
@@ -57,8 +58,15 @@ class PurchaseOrderController extends Controller
             $query->whereHas('purchaseRequest', function ($q) {
                 $q->where('user_id', Auth::id());
             });
+        }
+        elseif ($view === 'deletion_request') {
+            if ($request->has('pending_delete')) {
+                $ids = explode(',', $request->query('pending_delete'));
+                $query->whereIn('id', $ids);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
         } else {
-
             $query->whereRaw('1 = 0');
         }
 
@@ -83,6 +91,39 @@ class PurchaseOrderController extends Controller
             'pendingPRs' => $pendingPRs,
             'employees' => $employees
         ]);
+    }
+
+    public function batchDestroy(Request $request)
+    {
+        $user = Auth::user();
+        $userRole = strtolower(trim($user->role->name ?? ''));
+
+        $isAdminOrEVP = str_contains($userRole, 'admin') || str_contains($userRole, 'evp') || str_contains($userRole, 'president') || $user->role_id === 9;
+
+        $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'exists:purchase_orders,id',
+        ]);
+
+        if ($isAdminOrEVP) {
+            try {
+                \Illuminate\Support\Facades\DB::transaction(function () use ($request) {
+                    \App\Models\PurchaseOrderItem::whereIn('purchase_order_id', $request->ids)->delete();
+                    \App\Models\PurchaseOrder::whereIn('id', $request->ids)->delete();
+                });
+
+                return back()->with('success', count($request->ids) . ' Purchase Order(s) moved to trash.');
+            } catch (\Exception $e) {
+                return back()->with('error', 'WIPE FAILED! Database Error: ' . $e->getMessage());
+            }
+        } else {
+            $admins = \App\Models\User::whereHas('role', function($q) { $q->where('name', 'admin'); })->get();
+            if ($admins->isNotEmpty()) {
+                $message = $user->name . " has requested the deletion of " . count($request->ids) . " Purchase Order(s).";
+                \Illuminate\Support\Facades\Notification::send($admins, new \App\Notifications\DeletionRequestNotification($message, 'PO', $request->ids));
+            }
+            return back()->with('success', 'Deletion request for ' . count($request->ids) . ' Purchase Order(s) sent to Admin successfully.');
+        }
     }
 
 
@@ -227,41 +268,73 @@ class PurchaseOrderController extends Controller
         try {
             DB::transaction(function () use ($purchaseRequest) {
                 $lockedPR = PurchaseRequest::where('id', $purchaseRequest->id)->lockForUpdate()->first();
-
                 if (!$lockedPR || $lockedPR->status !== 'pending_procurement_tl') {
                     throw new \Exception('This Purchase Request is no longer in the correct status for PO generation.');
                 }
-
                 if (PurchaseOrder::where('purchase_request_id', $lockedPR->id)->exists()) {
                     throw new \Exception('Purchase Orders have already been generated for this request.');
                 }
-
                 $items = $lockedPR->items()->with('product')->get();
                 $groupedBySupplier = $items->groupBy('supplier_id');
+
+                $branchName = strtoupper(trim($lockedPR->branch));
+                $knownBranches = ['MAKATI' => 'MKT', 'GREENHILLS' => 'GH', 'ALABANG' => 'ALB'];
+
+                if (isset($knownBranches[$branchName])) {
+                    $branchInitials = $knownBranches[$branchName];
+                } else {
+                    $words = array_filter(explode(' ', $branchName));
+                    if (count($words) > 1) {
+                        $branchInitials = '';
+                        foreach (array_slice($words, 0, 3) as $w) $branchInitials .= $w[0];
+                    } else {
+                        $firstLetter = $branchName[0] ?? 'U';
+                        $consonants = preg_replace('/[AEIOU\W]/', '', substr($branchName, 1));
+                        $branchInitials = substr($firstLetter . $consonants, 0, 3);
+                        if (strlen($branchInitials) < 2) $branchInitials = substr($branchName, 0, 3);
+                    }
+                }
+
+                // 🟢 EXACT BRANCH GAP-FINDER: Only look at PO numbers belonging to THIS specific branch (e.g., ZMB)
+                $takenPoNumbers = \App\Models\PurchaseOrder::where('po_number', 'LIKE', 'PO-' . $branchInitials . '-%')
+                    ->pluck('po_number')
+                    ->filter(fn($num) => $num !== 'TEMP' && $num !== null)
+                    ->map(function ($poNumber) {
+                        $parts = explode('-', $poNumber);
+                        return (int) end($parts);
+                    })
+                    ->toArray();
 
                 foreach ($groupedBySupplier as $supplierId => $supplierItems) {
                     if (!$supplierId) continue;
 
-
-                    $branch = strtoupper(trim($lockedPR->branch));
-                    $branchInitials = 'UNK';
-                    if (str_contains($branch, 'MAKATI')) $branchInitials = 'MKT';
-                    elseif (str_contains($branch, 'GREENHILLS')) $branchInitials = 'GH';
-                    elseif (str_contains($branch, 'ALABANG')) $branchInitials = 'ALB';
-
-                    $poNumber = 'PO-' . $branchInitials . '-' . str_pad($lockedPR->id, 5, '0', STR_PAD_LEFT);
+                    // Find the lowest available gap for this branch's sequence
+                    sort($takenPoNumbers);
+                    $nextPoNumber = 1;
+                    foreach ($takenPoNumbers as $num) {
+                        if ($num === $nextPoNumber) {
+                            $nextPoNumber++;
+                        } elseif ($num > $nextPoNumber) {
+                            break;
+                        }
+                    }
+                    $takenPoNumbers[] = $nextPoNumber; // Reserve it for subsequent supplier loops
 
                     $po = PurchaseOrder::create([
                         'purchase_request_id' => $lockedPR->id,
                         'supplier_id' => $supplierId,
                         'prepared_by_id' => Auth::id(),
-                        'po_number' => $poNumber,
+                        'po_number' => 'TEMP',
                         'po_date' => now()->toDateString(),
                         'delivery_date' => $lockedPR->date_needed,
                         'purpose' => $lockedPR->purpose_of_request,
                         'department' => $lockedPR->department,
                         'no_of_quotations' => 0,
                         'status' => 'po_generated'
+                    ]);
+
+                    $po->update([
+                        'po_number' => 'PO-' . $branchInitials . '-' . str_pad($nextPoNumber, 5, '0', STR_PAD_LEFT)
                     ]);
 
                     $grossAmount = 0;

@@ -74,7 +74,6 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                 valA = a.po_number || a.purchase_request?.pr_number || '';
                 valB = b.po_number || b.purchase_request?.pr_number || '';
 
-                // Extract only the trailing numbers
                 const numA = parseInt(valA.replace(/\D/g, ''), 10) || a.id || 0;
                 const numB = parseInt(valB.replace(/\D/g, ''), 10) || b.id || 0;
 
@@ -112,7 +111,6 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                 valA = a.pr_number || '';
                 valB = b.pr_number || '';
 
-                // Extract only the trailing numbers
                 const numA = parseInt(valA.replace(/\D/g, ''), 10) || a.id || 0;
                 const numB = parseInt(valB.replace(/\D/g, ''), 10) || b.id || 0;
 
@@ -133,18 +131,71 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
 
 
     const [prPage, setPrPage] = useState(1);
-    const [poPage, setPoPage] = useState(1);
-    const itemsPerPage = 10;
+const [poPage, setPoPage] = useState(1);
+const [prItemsPerPage, setPrItemsPerPage] = useState(10);
+const [poItemsPerPage, setPoItemsPerPage] = useState(10);
+const [isPrCustomRows, setIsPrCustomRows] = useState(false);
+const [isPoCustomRows, setIsPoCustomRows] = useState(false);
+const [selectedPRIds, setSelectedPRIds] = useState([]);
+const [selectedPOIds, setSelectedPOIds] = useState([]);
+
+useEffect(() => {
+    setPrPage(1);
+    setPoPage(1);
+    setSelectedPRIds([]);
+    setSelectedPOIds([]);
+}, [searchQuery, filterBranch, filterPriority, currentView, poItemsPerPage, prItemsPerPage]);
 
     useEffect(() => {
-        setPrPage(1);
-        setPoPage(1);
-    }, [searchQuery, filterBranch, filterPriority, currentView]);
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const pendingDelete = params.get('pending_delete');
+
+            if (pendingDelete) {
+                const idsToSelect = pendingDelete.split(',').map(id => Number(id));
+
+                setTimeout(() => {
+                    setSelectedPOIds(idsToSelect);
+
+                    const isAdminOrEVP = userrole === 'admin' || userrole.includes('evp') || userrole.includes('president') || auth.user.role_id === 9;
+
+                    setConfirmDialog({
+                        isOpen: true,
+                        title: isAdminOrEVP ? "Delete Purchase Order(s)" : "Request PO Deletion",
+                        message: isAdminOrEVP
+                            ? `Are you sure you want to permanently delete ${idsToSelect.length} selected PO(s)? This action cannot be undone.`
+                            : `Are you sure you want to send a deletion request to the Admin for ${idsToSelect.length} selected PO(s)?`,
+                        confirmText: isAdminOrEVP ? "Delete Now" : "Send Request",
+                        confirmColor: "bg-red-600 hover:bg-red-500",
+                        onConfirm: () => {
+                            router.post(route("prpo.purchase-orders.batch-destroy"), { ids: idsToSelect }, {
+                                preserveScroll: true,
+                                preserveState: false,
+                                onSuccess: () => {
+                                    setSelectedPOIds([]);
+                                    setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                                },
+                                onError: (errors) => {
+                                    console.error("INERTIA ERROR:", errors);
+                                    alert("Frontend Payload Error! Check console.");
+                                    setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                                }
+                            });
+                        }
+                    });
+                }, 100);
+
+                const newUrl = new URL(window.location);
+                newUrl.searchParams.delete('pending_delete');
+                window.history.replaceState({}, '', newUrl);
+            }
+        }
+    }, [userrole, auth.user.role_id]);
 
     const paginatedPRs = useMemo(() => {
-        const start = (prPage - 1) * itemsPerPage;
-        return filteredPendingPRs.slice(start, start + itemsPerPage);
-    }, [filteredPendingPRs, prPage]);
+        const start = (prPage - 1) * prItemsPerPage;
+        return filteredPendingPRs.slice(start, start + prItemsPerPage);
+    }, [filteredPendingPRs, prPage, prItemsPerPage]);
 
     const groupedPOs = useMemo(() => {
         const groups = {};
@@ -173,12 +224,112 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
     }, [filteredPOs]);
 
     const paginatedPOs = useMemo(() => {
-        const start = (poPage - 1) * itemsPerPage;
-        return groupedPOs.slice(start, start + itemsPerPage);
-    }, [groupedPOs, poPage]);
+        const start = (poPage - 1) * poItemsPerPage;
+        return groupedPOs.slice(start, start + poItemsPerPage);
+    }, [groupedPOs, poPage, poItemsPerPage]);
 
-    const prTotalPages = Math.ceil(filteredPendingPRs.length / itemsPerPage);
-    const poTotalPages = Math.ceil(groupedPOs.length / itemsPerPage);
+    const prTotalPages = Math.ceil(filteredPendingPRs.length / prItemsPerPage);
+    const poTotalPages = Math.ceil(groupedPOs.length / poItemsPerPage);
+
+const paginatedPrIds = useMemo(() => paginatedPRs.map(pr => pr.id), [paginatedPRs]);
+const isAllPrPageSelected = paginatedPrIds.length > 0 && paginatedPrIds.every(id => selectedPRIds.includes(id));
+
+const handleTogglePrSelectAll = () => {
+    if (isAllPrPageSelected) {
+        setSelectedPRIds(prev => prev.filter(id => !paginatedPrIds.includes(id)));
+    } else {
+        setSelectedPRIds(prev => [...new Set([...prev, ...paginatedPrIds])]);
+    }
+};
+
+const handleTogglePrRow = (id, e) => {
+    e.stopPropagation();
+    setSelectedPRIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+};
+
+const handleDeleteSelectedPRs = () => {
+    if (selectedPRIds.length === 0) return;
+    const isAdminOrEVP = userrole === 'admin' || userrole.includes('evp') || userrole.includes('president');
+
+    const title = isAdminOrEVP ? "Delete Purchase Request(s)" : "Request PR Deletion";
+    const message = isAdminOrEVP
+        ? `Are you sure you want to move ${selectedPRIds.length} selected PR(s) to the trash?`
+        : `Are you sure you want to send a deletion request to the Admin for ${selectedPRIds.length} selected PR(s)?`;
+
+    setConfirmDialog({
+        isOpen: true,
+        title: title,
+        message: message,
+        confirmText: isAdminOrEVP ? "Delete Now" : "Send Request",
+        confirmColor: "bg-red-600 hover:bg-red-500",
+        onConfirm: () => {
+            router.post(route("prpo.purchase-requests.batch-destroy"), { ids: selectedPRIds }, {
+                preserveScroll: true,
+                preserveState: false,
+                onSuccess: () => {
+                    setSelectedPRIds([]);
+                    closeConfirmModal();
+                },
+            onError: (errors) => {
+                        console.error("INERTIA ERROR:", errors);
+                        alert("Frontend Payload Error! Check console. " + JSON.stringify(errors));
+                        closeConfirmModal();
+                    }
+            });
+        }
+    });
+};
+
+    const paginatedPoIds = useMemo(() => paginatedPOs.map(po => po.id), [paginatedPOs]);
+    const isAllPoPageSelected = paginatedPoIds.length > 0 && paginatedPoIds.every(id => selectedPOIds.includes(id));
+
+    const handleTogglePoSelectAll = () => {
+        if (isAllPoPageSelected) {
+            setSelectedPOIds(prev => prev.filter(id => !paginatedPoIds.includes(id)));
+        } else {
+            setSelectedPOIds(prev => [...new Set([...prev, ...paginatedPoIds])]);
+        }
+    };
+
+    const handleTogglePoRow = (id, e) => {
+        e.stopPropagation();
+        setSelectedPOIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+    };
+
+    const handleDeleteSelectedPOs = () => {
+        if (selectedPOIds.length === 0) return;
+        const isAdminOrEVP = userrole === 'admin' || userrole.includes('evp') || userrole.includes('president');
+
+        const title = isAdminOrEVP ? "Delete Purchase Order(s)" : "Request PO Deletion";
+        const message = isAdminOrEVP
+            ? `Are you sure you want to permanently delete ${selectedPOIds.length} selected PO(s)? This action cannot be undone.`
+            : `Are you sure you want to send a deletion request to the Admin for ${selectedPOIds.length} selected PO(s)?`;
+
+        setConfirmDialog({
+            isOpen: true,
+            title: title,
+            message: message,
+            confirmText: isAdminOrEVP ? "Delete Now" : "Send Request",
+            confirmColor: "bg-red-600 hover:bg-red-500",
+            onConfirm: () => {
+                // 🟢 MATCHES PRODUCT MASTERLIST: Clean POST request to batch-destroy
+                router.post(route("prpo.purchase-orders.batch-destroy"), { ids: selectedPOIds }, {
+                    preserveScroll: true,
+                    preserveState: false,
+                    onSuccess: () => {
+                        setSelectedPOIds([]);
+                        closeConfirmModal();
+                    },
+                    // ADD THIS: Traps silent Inertia errors
+                    onError: (errors) => {
+                        console.error("INERTIA ERROR:", errors);
+                        alert("Frontend Payload Error! Check console. " + JSON.stringify(errors));
+                        closeConfirmModal();
+                    }
+                });
+            }
+        });
+    };
 
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', confirmText: '', confirmColor: '', onConfirm: () => {} });
     const closeConfirmModal = () => setConfirmDialog({ ...confirmDialog, isOpen: false });
@@ -194,6 +345,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
             onConfirm: () => {
                 router.post(route("prpo.purchase-requests.generate-pos", id), {}, {
                     preserveScroll: true,
+                    preserveState: false,
                     onSuccess: () => { closeConfirmModal(); closeModal(); },
                 });
             },
@@ -210,6 +362,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalView, setModalView] = useState('PO');
     const [isEditMode, setIsEditMode] = useState(false);
+    const [showCCs, setShowCCs] = useState(false);
 
     const [newFiles, setNewFiles] = useState([]);
     const [removedItemIds, setRemovedItemIds] = useState([]);
@@ -251,6 +404,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
         setSelectedItemIds([]);
         setDiscountType('amount');
         setIsEditMode(false);
+        setShowCCs(false);
         clearErrors();
 
         if (viewType === 'PO') {
@@ -273,7 +427,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
         router.post(route('prpo.purchase-orders.update', selectedPO.id), {
             ...data, discount_total: liveTotals.actualDiscount, status: newStatus, _method: 'put', new_attachments: newFiles, removed_item_ids: removedItemIds
         }, {
-            preserveScroll: true, forceFormData: true, onSuccess: (page) => {
+            preserveScroll: true, forceFormData: true, preserveState: false, onSuccess: (page) => {
                 if (newStatus === selectedPO.status) {
                     const updatedPOs = page.props.purchaseOrders?.data || [];
                     const freshPO = updatedPOs.find(p => p.id === selectedPO.id);
@@ -294,7 +448,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
         router.post(route('prpo.purchase-orders.update', selectedPO.id), {
             ...data, discount_total: liveTotals.actualDiscount, status: 'cancelled', remarks: rejectReason, _method: 'put', new_attachments: newFiles, removed_item_ids: removedItemIds
         }, {
-            preserveScroll: true, forceFormData: true, onSuccess: () => { setIsRejectModalOpen(false); setRejectReason(''); closeModal(); }
+            preserveScroll: true, forceFormData: true, preserveState: false, onSuccess: () => { setIsRejectModalOpen(false); setRejectReason(''); closeModal(); }
         });
     };
 
@@ -389,8 +543,14 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
             <div className="mx-auto max-w-[95%] py-6 relative px-4 sm:px-6 lg:px-8">
                 <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between">
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-900">Purchase Orders</h2>
-                        <p className="mt-1 text-sm text-gray-500">Manage generated POs, apply negotiated discounts, and finalize for delivery.</p>
+                        <h2 className="text-2xl font-bold text-gray-900">
+                            {currentView === 'deletion_request' ? 'Pending Deletion Requests' : 'Purchase Orders'}
+                        </h2>
+                        <p className="mt-1 text-sm text-gray-500">
+                            {currentView === 'deletion_request'
+                                ? 'Review and process the specific items requested for deletion.'
+                                : 'Manage generated POs, apply negotiated discounts, and finalize for delivery.'}
+                        </p>
                     </div>
                 </div>
 
@@ -448,12 +608,82 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                     )}
                 </div>
 
-                {currentView === 'action_needed' && pendingPRs && pendingPRs.length > 0 && (
-                    <div className="mb-8 bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl overflow-x-auto border border-indigo-100">
+                {currentView === 'action_needed' && (
+                <>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <label className="text-xs font-semibold text-gray-600">Show Rows:</label>
+                        <div className="flex items-center gap-2">
+                            <select
+                                value={isPrCustomRows ? "custom" : prItemsPerPage}
+                                onChange={(e) => {
+                                    if (e.target.value === "custom") {
+                                        setIsPrCustomRows(true);
+                                    } else {
+                                        setIsPrCustomRows(false);
+                                        setPrItemsPerPage(Number(e.target.value));
+                                    }
+                                }}
+                                className="rounded-md border-gray-300 py-1.5 pl-3 pr-8 text-xs font-semibold text-gray-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 cursor-pointer"
+                            >
+                                <option value={10}>10 rows</option>
+                                <option value={25}>25 rows</option>
+                                <option value={50}>50 rows</option>
+                                <option value={100}>100 rows</option>
+                                <option value="custom">Custom...</option>
+                            </select>
 
-                        <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
-                            <thead className="bg-gray-100">
-                                <tr>
+                            {isPrCustomRows && (
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={prItemsPerPage}
+                                    onChange={(e) => setPrItemsPerPage(Math.max(1, Number(e.target.value) || 1))}
+                                    className="w-20 rounded-md border-gray-300 py-1.5 text-xs text-center shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-all"
+                                    placeholder="Qty"
+                                />
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-2 text-xs font-semibold text-indigo-700 cursor-pointer select-none bg-indigo-50 px-3 py-1.5 rounded-md border border-indigo-200 shadow-sm hover:bg-indigo-100 transition-colors">
+                            <input
+                                type="checkbox"
+                                checked={isAllPrPageSelected}
+                                onChange={handleTogglePrSelectAll}
+                                className="rounded border-indigo-300 text-indigo-600 shadow-sm focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                            />
+                            Select All (Page)
+                        </label>
+
+                        {selectedPRIds.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={handleDeleteSelectedPRs}
+                                className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-red-500 transition-colors"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                </svg>
+                                Delete ({selectedPRIds.length})
+                            </button>
+                        )}
+                    </div>
+                </div>
+                <div className="mb-8 bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl overflow-x-auto border border-indigo-100">
+
+                    <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
+                        <thead className="bg-gray-100">
+                            <tr>
+                                <th className="px-4 py-3 text-center w-12 border-r border-gray-200">
+                                    <input
+                                        type="checkbox"
+                                        checked={isAllPrPageSelected}
+                                        onChange={handleTogglePrSelectAll}
+                                        className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                                    />
+                                </th>
                                     <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handlePrSort('id')}>
                                         <div className="flex items-center justify-center gap-1">
                                             Purchase Request ID
@@ -480,7 +710,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                             </thead>
                             <tbody className="divide-y divide-gray-200 bg-white">
                                 {paginatedPRs.length === 0 ? (
-                                    <tr><td colSpan="7" className="px-6 py-8 text-center text-gray-500">No requests found matching your filters.</td></tr>
+                                    <tr><td colSpan="7" className="px-6 py-8 text-center text-gray-500">No requests found for purchase order generation</td></tr>
                                 ) : (
                                     paginatedPRs.map((pr) => {
 
@@ -491,8 +721,16 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                                         const supplierText = suppliers.length > 1 ? 'Multiple Suppliers' : (suppliers[0] || 'Unknown Supplier');
 
                                         return (
-                                            <tr key={pr.id} onClick={() => openModal({ purchase_request: pr, status: 'pending_procurement_tl' }, 'PR')} className="hover:bg-gray-50 transition cursor-pointer">
-                                                <td className="px-6 py-2 text-center font-bold text-indigo-600 whitespace-nowrap">{pr.pr_number || `PR-${pr.id}`}</td>
+                                            <tr key={pr.id} onClick={() => openModal({ purchase_request: pr, status: 'pending_procurement_tl' }, 'PR')} className={`transition-all duration-300 cursor-pointer ${selectedPRIds.includes(pr.id) ? 'bg-indigo-50 ring-2 ring-indigo-400 relative z-10 shadow-md' : (selectedPRIds.length > 0 ? 'opacity-30 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-gray-50' : 'hover:bg-gray-50')}`}>
+                                            <td className="px-4 py-2 text-center border-r border-gray-100" onClick={(e) => e.stopPropagation()}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedPRIds.includes(pr.id)}
+                                                    onChange={(e) => handleTogglePrRow(pr.id, e)}
+                                                    className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                                                />
+                                            </td>
+                                            <td className="px-6 py-2 text-center font-bold text-indigo-600 whitespace-nowrap">{pr.pr_number || `PR-${pr.id}`}</td>
                                                 <td className="px-6 py-2 text-center font-medium text-gray-900">{supplierText}</td>
                                                 <td className="px-6 py-2 whitespace-nowrap text-center">{pr.date_needed ? new Date(pr.date_needed).toLocaleDateString('en-US', {year: 'numeric',month: 'long',day: 'numeric'}) : "N/A"}</td>
                                                 <td className="px-6 py-2 text-center text-gray-500 whitespace-nowrap">{formatCurrency(estTotal)}</td>
@@ -514,7 +752,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
 
                         {prTotalPages > 1 && (
                             <div className="flex flex-col sm:flex-row justify-between items-center border-t border-gray-200 bg-gray-50 px-6 py-4">
-                                <span className="text-sm text-gray-600">Showing <span className="font-bold text-gray-900">{((prPage - 1) * itemsPerPage) + 1}</span> to <span className="font-bold text-gray-900">{Math.min(prPage * itemsPerPage, filteredPendingPRs.length)}</span> of <span className="font-bold text-gray-900">{filteredPendingPRs.length}</span> entries</span>
+                                <span className="text-sm text-gray-600">Showing <span className="font-bold text-gray-900">{((prPage - 1) * prItemsPerPage) + 1}</span> to <span className="font-bold text-gray-900">{Math.min(prPage * prItemsPerPage, filteredPendingPRs.length)}</span> of <span className="font-bold text-gray-900">{filteredPendingPRs.length}</span> entries</span>
                                 <div className="flex flex-wrap items-center gap-2 mt-3 sm:mt-0">
                                     <button onClick={() => setPrPage(p => Math.max(1, p - 1))} disabled={prPage === 1} className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Prev</button>
 
@@ -571,13 +809,86 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                             </div>
                         )}
                     </div>
+                    </>
                 )}
 
                 {currentView !== 'action_needed' && (
+                <>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <label className="text-xs font-semibold text-gray-600">Show Rows:</label>
+                        <div className="flex items-center gap-2">
+                            <select
+                                value={isPoCustomRows ? "custom" : poItemsPerPage}
+                                onChange={(e) => {
+                                    if (e.target.value === "custom") {
+                                        setIsPoCustomRows(true);
+                                    } else {
+                                        setIsPoCustomRows(false);
+                                        setPoItemsPerPage(Number(e.target.value));
+                                    }
+                                }}
+                                className="rounded-md border-gray-300 py-1.5 pl-3 pr-8 text-xs font-semibold text-gray-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 cursor-pointer"
+                            >
+                                <option value={10}>10 rows</option>
+                                <option value={25}>25 rows</option>
+                                <option value={50}>50 rows</option>
+                                <option value={100}>100 rows</option>
+                                <option value="custom">Custom...</option>
+                            </select>
+
+                            {/* Appears only when "Custom..." is selected */}
+                            {isPoCustomRows && (
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={poItemsPerPage}
+                                    onChange={(e) => setPoItemsPerPage(Math.max(1, Number(e.target.value) || 1))}
+                                    className="w-20 rounded-md border-gray-300 py-1.5 text-xs text-center shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-all"
+                                    placeholder="Qty"
+                                />
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-2 text-xs font-semibold text-indigo-700 cursor-pointer select-none bg-indigo-50 px-3 py-1.5 rounded-md border border-indigo-200 shadow-sm hover:bg-indigo-100 transition-colors">
+                            <input
+                                type="checkbox"
+                                checked={isAllPoPageSelected}
+                                onChange={handleTogglePoSelectAll}
+                                className="rounded border-indigo-300 text-indigo-600 shadow-sm focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                            />
+                            Select All (Page)
+                        </label>
+
+                        {selectedPOIds.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={handleDeleteSelectedPOs}
+                                className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-red-500 transition-colors"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                </svg>
+                                Delete ({selectedPOIds.length})
+                            </button>
+                        )}
+                    </div>
+                </div>
+
                 <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
                         <thead className="bg-gray-50">
                             <tr>
+                                <th className="px-4 py-3 text-center w-12 border-r border-gray-200">
+                                    <input
+                                        type="checkbox"
+                                        checked={isAllPoPageSelected}
+                                        onChange={handleTogglePoSelectAll}
+                                        className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                                    />
+                                </th>
                                 <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handlePoSort('id')}>
                                     <div className="flex items-center justify-center gap-1">
                                         Purchase Order ID
@@ -604,10 +915,18 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                         </thead>
                         <tbody className="divide-y divide-gray-200 bg-white">
                             {paginatedPOs.length === 0 ? (
-                                <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-500">{searchQuery || filterBranch || filterPriority ? 'No Purchase Orders match your filters.' : 'No Purchase Orders found.'}</td></tr>
+                                <tr><td colSpan="7" className="px-6 py-8 text-center text-gray-500">{searchQuery || filterBranch || filterPriority ? 'No Purchase Orders match your filters.' : 'No Purchase Orders found.'}</td></tr>
                             ) : (
                                 paginatedPOs.map((po, index) => (
-                                    <tr key={po.id || index} onClick={() => openModal(po)} className="hover:bg-gray-50 transition cursor-pointer">
+                                    <tr key={po.id || index} onClick={() => openModal(po)} className={`transition-all duration-300 cursor-pointer ${selectedPOIds.includes(po.id) ? 'bg-indigo-50 ring-2 ring-indigo-400 relative z-10 shadow-md' : (selectedPOIds.length > 0 ? 'opacity-30 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-gray-50' : 'hover:bg-gray-50')}`}>
+                                        <td className="px-4 py-2 text-center border-r border-gray-100" onClick={(e) => e.stopPropagation()}>
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedPOIds.includes(po.id)}
+                                                onChange={(e) => handleTogglePoRow(po.id, e)}
+                                                className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                                            />
+                                        </td>
                                         <td className="px-6 py-2 text-center font-bold text-indigo-600 whitespace-nowrap">{po.po_number || po.purchase_request?.pr_number}</td>
                                         <td className="px-2 py-2 text-center font-medium text-gray-900 w-56 whitespace-normal break-words">
                                             {po.supplier_names?.length > 1 ? (
@@ -637,7 +956,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
 
                     {poTotalPages > 1 && (
                         <div className="flex flex-col sm:flex-row justify-between items-center border-t border-gray-200 bg-gray-50 px-6 py-2 rounded-b-xl">
-                            <span className="text-sm text-gray-600">Showing <span className="font-bold text-gray-900">{((poPage - 1) * itemsPerPage) + 1}</span> to <span className="font-bold text-gray-900">{Math.min(poPage * itemsPerPage, filteredPOs.length)}</span> of <span className="font-bold text-gray-900">{filteredPOs.length}</span> entries</span>
+                            <span className="text-sm text-gray-600">Showing <span className="font-bold text-gray-900">{((poPage - 1) * poItemsPerPage) + 1}</span> to <span className="font-bold text-gray-900">{Math.min(poPage * poItemsPerPage, filteredPOs.length)}</span> of <span className="font-bold text-gray-900">{filteredPOs.length}</span> entries</span>
                             <div className="flex flex-wrap items-center gap-2 mt-3 sm:mt-0">
                                 <button onClick={() => setPoPage(p => Math.max(1, p - 1))} disabled={poPage === 1} className="px-3 py-1.5 text-sm font-semibold rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm">Prev</button>
 
@@ -694,6 +1013,7 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                         </div>
                     )}
                 </div>
+                </>
                 )}
 
                 {isModalOpen && selectedPO && (
@@ -701,14 +1021,20 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                         <div onClick={(e) => e.stopPropagation()} className="relative w-full max-w-[95%] rounded-2xl bg-white shadow-2xl transition-all flex flex-col max-h-[90vh]">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b px-4 sm:px-6 py-2 shrink-0 bg-gray-50 rounded-t-2xl relative">
                                 <div className="pr-8 mb-3 sm:mb-0">
-                                    <h3 className="text-xl font-bold text-gray-900 flex flex-wrap items-center gap-2 sm:gap-3">
-                                        {modalView === 'PO' ? selectedPO.po_number : `${selectedPO.purchase_request?.pr_number || selectedPO.pr_number}`}
-                                        {formatStatus(modalView === 'PO' ? selectedPO.status : (selectedPO.purchase_request?.status || selectedPO.status))}
-                                    </h3>
-                                    <p className="text-sm text-gray-500 mt-1">
-                                        {modalView === 'PO' ? <>Supplier: <span className="font-semibold text-gray-700">{selectedPO.supplier?.name}</span></> : <>Prepared by {selectedPO.purchase_request?.user?.name || selectedPO.user?.name} on {selectedPO.purchase_request?.date_prepared || selectedPO.date_prepared}</>}
-                                    </p>
-                                </div>
+                                <h3 className="text-xl font-bold text-gray-900 flex flex-wrap items-center gap-2 sm:gap-3">
+                                    {modalView === 'PO' ? selectedPO.po_number : `${selectedPO.purchase_request?.pr_number || selectedPO.pr_number}`}
+                                    {formatStatus(modalView === 'PO' ? selectedPO.status : (selectedPO.purchase_request?.status || selectedPO.status))}
+                                </h3>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    {modalView === 'PO' ? (
+                                        <>
+                                            Purchase Order dated {selectedPO.created_at ? new Date(selectedPO.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : (selectedPO.po_date ? new Date(selectedPO.po_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A')}
+                                        </>
+                                    ) : (
+                                        <>Prepared by {selectedPO.purchase_request?.user?.name || selectedPO.user?.name} on {selectedPO.purchase_request?.date_prepared ? new Date(selectedPO.purchase_request.date_prepared).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}</>
+                                    )}
+                                </p>
+                            </div>
                                 <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                                     {selectedPO.purchase_request && selectedPO.po_number && (
                                         <button onClick={() => setModalView(modalView === 'PO' ? 'PR' : 'PO')} className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-md border border-indigo-100 transition-colors w-full sm:w-auto text-center">
@@ -782,41 +1108,33 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                                                 )}
 
                                                 <div className="overflow-x-auto rounded-lg border border-gray-200 w-full">
-                                                    <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
-                                                        <thead className="bg-gray-100">
-                                                            <tr>
-                                                                {isEditMode && (
-                                                                    <th className="px-4 py-2 w-10 text-center"><input type="checkbox" className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer" checked={selectedItemIds.length === activeItems.length && activeItems.length > 0} onChange={handleSelectAll} /></th>
-                                                                )}
-                                                                <th className="px-4 py-2 font-semibold w-1/4">Product Name</th>
-                                                                <th className="px-4 py-2 font-semibold w-1/4">Supplier Name</th>
-                                                                <th className="px-4 py-2 font-semibold w-1/5">Description</th>
-                                                                <th className="px-4 py-2 font-semibold text-center w-20">Quantity</th>
-                                                                <th className="px-4 py-2 font-semibold text-center w-20">Unit</th>
-                                                                <th className="px-4 py-2 font-semibold text-right w-24">Unit Price</th>
-                                                                <th className="px-4 py-2 font-semibold text-right w-24">Total Cost</th>
-                                                                {isEditMode && <th className="px-4 py-2 font-semibold text-center w-16">Action</th>}
-                                                            </tr>
-                                                        </thead>
+                                                    <table className="min-w-full divide-y divide-gray-200 text-sm text-left table-auto">
+                                                <thead className="bg-gray-100">
+                                                    <tr>
+                                                        <th className="px-4 py-3 font-semibold whitespace-nowrap">Product Name</th>
+                                                        <th className="px-4 py-3 font-semibold whitespace-nowrap">Supplier Name</th>
+                                                        <th className="px-4 py-3 font-semibold whitespace-nowrap">Description</th>
+                                                        <th className="px-4 py-3 font-semibold text-center whitespace-nowrap">Quantity</th>
+                                                        <th className="px-4 py-3 font-semibold text-center whitespace-nowrap">Unit</th>
+                                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap min-w-[100px]">Unit Price</th>
+                                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap min-w-[120px]">Total Cost</th>
+                                                    </tr>
+                                                </thead>
                                                         <tbody className="divide-y divide-gray-200 bg-white">
-                                                            {activeItems.map((item) => (
-                                                                <tr key={item.id} className={selectedItemIds.includes(item.id) ? 'bg-indigo-50/50' : ''}>
-                                                                    {isEditMode && (
-                                                                        <td className="px-4 py-2 text-center"><input type="checkbox" className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer" checked={selectedItemIds.includes(item.id)} onChange={() => handleSelectItem(item.id)} /></td>
-                                                                    )}
-                                                                    <td className="px-4 py-3 font-medium text-gray-900 truncate" title={item.description}>{item.description}</td>
-                                                                    <td className="px-4 py-3 text-gray-500 truncate" title={selectedPO.supplier?.name || '-'}>{selectedPO.supplier?.name || '-'}</td>
-                                                                    <td className="px-4 py-2"><input type="text" value={item.notes || ''} onChange={(e) => handleItemNoteChange(item.id, e.target.value)} disabled={!isEditMode} placeholder="e.g. 15+1 Freebie" className="block w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-transparent disabled:border-transparent disabled:p-0 disabled:text-gray-600 font-medium" /></td>
-                                                                    <td className="px-4 py-3 text-center font-bold text-gray-900">{parseFloat(item.qty || 0)}</td>
-                                                                    <td className="px-4 py-3 text-center text-gray-500">{item.unit || '-'}</td>
-                                                                    <td className="px-4 py-3 text-right whitespace-nowrap">₱{Number(item.unit_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                                    <td className="px-4 py-3 text-right font-bold text-indigo-700 whitespace-nowrap">₱{Number(item.net_payable || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                                    {isEditMode && (
-                                                                        <td className="px-4 py-2 text-center"><button onClick={() => handleRemoveItem(item.id)} className="text-red-600 hover:text-red-800 font-bold text-xs bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded transition">Drop</button></td>
-                                                                    )}
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
+                                                    {activeItems.map((item) => (
+                                                        <tr key={item.id} className={selectedItemIds.includes(item.id) ? 'bg-indigo-50/50' : ''}>
+                                                            <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap truncate" title={item.description}>{item.description}</td>
+                                                            <td className="px-4 py-3 text-gray-500 whitespace-nowrap truncate" title={selectedPO.supplier?.name || '-'}>{selectedPO.supplier?.name || '-'}</td>
+                                                            <td className="px-4 py-2 min-w-[200px]">
+                                                                <input type="text" value={item.notes || ''} onChange={(e) => handleItemNoteChange(item.id, e.target.value)} disabled={!isEditMode} placeholder="e.g. 15+1 Freebie" className="block w-full rounded-md border-gray-300 text-xs shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-transparent disabled:border-transparent disabled:p-0 disabled:text-gray-600 font-medium" />
+                                                            </td>
+                                                            <td className="px-4 py-3 text-center font-bold text-gray-900">{parseFloat(item.qty || 0)}</td>
+                                                            <td className="px-4 py-3 text-center text-gray-500">{item.unit || '-'}</td>
+                                                            <td className="px-4 py-3 text-right text-gray-900 whitespace-nowrap">₱{Number(item.unit_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                            <td className="px-4 py-3 text-right font-bold text-indigo-700 whitespace-nowrap">₱{Number(item.net_payable || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
                                                     </table>
                                                 </div>
                                             </div>
@@ -824,11 +1142,32 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                                             <div className="w-full lg:w-80 shrink-0 bg-gray-50 rounded-lg p-5 border border-gray-200 h-fit mt-6 lg:mt-0">
                                                 <h4 className="font-bold text-gray-900 mb-4 border-b pb-2">Amount Summary</h4>
                                                 <div className="space-y-3 text-sm">
-                                                    <div className="flex justify-between text-gray-600"><span>Gross Amount:</span><span className="font-medium text-gray-900">{formatCurrency(selectedPO.gross_amount || 0)}</span></div>
-                                                    {selectedPO.discount_total > 0 && (<div className="flex justify-between text-gray-600"><span>Less: Discount</span><span className="font-medium text-indigo-500">-{formatCurrency(selectedPO.discount_total)}</span></div>)}
-                                                    <div className="flex justify-between text-gray-600 font-medium pt-2 border-t border-gray-200"><span>Net of Discount:</span><span>{formatCurrency(selectedPO.net_of_discount || selectedPO.gross_amount || 0)}</span></div>
-                                                    <div className="flex justify-between items-center text-gray-600"><div className="flex items-center gap-1"><span>VAT Rate</span><input type="number" disabled={!isEditMode} className="w-16 rounded border-gray-300 shadow-sm py-0.5 px-1 text-xs text-center disabled:bg-gray-100" value={data.vat_rate} onChange={e => setData('vat_rate', e.target.value)} /><span>%</span></div><span>{formatCurrency(selectedPO.vat_total || 0)}</span></div>
-                                                    <div className="flex justify-between items-center text-indigo-900 font-black text-lg pt-4 border-t border-gray-300 mt-4"><span>GRAND TOTAL</span><span>{formatCurrency(selectedPO.grand_total || 0)}</span></div>
+                                                    <div className="flex justify-between text-gray-600">
+                                                        <span>Gross Amount:</span>
+                                                        <span className="font-medium text-gray-900">{formatCurrency(isEditMode ? liveTotals.gross : selectedPO.gross_amount || 0)}</span>
+                                                    </div>
+                                                    {(isEditMode ? liveTotals.actualDiscount : selectedPO.discount_total) > 0 && (
+                                                        <div className="flex justify-between text-gray-600">
+                                                            <span>Less: Discount:</span>
+                                                            <span className="font-medium text-indigo-500">-{formatCurrency(isEditMode ? liveTotals.actualDiscount : selectedPO.discount_total)}</span>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex justify-between text-gray-600 font-medium pt-2 border-t border-gray-200">
+                                                        <span>Net of Discount:</span>
+                                                        <span>{formatCurrency(isEditMode ? liveTotals.net : selectedPO.net_of_discount || selectedPO.gross_amount || 0)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-[red]">
+                                                        <div className="flex items-center gap-1">
+                                                            <span>VAT Rate</span>
+                                                            <input type="number" disabled={!isEditMode} className="w-16 rounded border-gray-300 shadow-sm py-0.5 px-1 text-xs text-center disabled:bg-gray-100 text-gray-900" value={data.vat_rate} onChange={e => setData('vat_rate', e.target.value)} />
+                                                            <span>%</span>
+                                                        </div>
+                                                        <span>{formatCurrency(isEditMode ? liveTotals.vat : selectedPO.vat_total || 0)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-blue-800 font-black text-lg pt-4 border-t border-gray-300 mt-4">
+                                                        <span>GRAND TOTAL</span>
+                                                        <span>{formatCurrency(isEditMode ? liveTotals.grand : selectedPO.grand_total || 0)}</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -837,7 +1176,6 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
                                     <div className="animate-in fade-in duration-300">
                                         <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4 rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm">
                                             <div>
-                                                <span className="block font-semibold text-gray-900">Carbon Copy (CC)</span>
                                                 {(() => {
                                                     const ccData = selectedPO.purchase_request?.cc_users || selectedPO.cc_users;
                                                     let ccArray = [];
@@ -851,7 +1189,30 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
 
                                                     if (!Array.isArray(ccArray)) ccArray = [];
                                                     const names = ccArray.map(id => employees?.find(e => String(e.id) === String(id))?.name).filter(Boolean);
-                                                    return names.length > 0 ? names.join(', ') : "N/A";
+
+                                                    return (
+                                                        <>
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className="block font-semibold text-gray-900">Carbon Copy (CC)</span>
+                                                                {names.length > 1 && (
+                                                                    <button onClick={() => setShowCCs(!showCCs)} className="inline-flex items-center text-xs font-bold text-indigo-800 bg-indigo-100 border border-indigo-300 px-2.5 py-0.5 rounded-md shadow-sm hover:bg-indigo-200 transition-colors cursor-pointer">
+                                                                        {showCCs ? 'Hide List' : `Show All (${names.length})`}
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-gray-600 font-bold text-sm leading-relaxed">
+                                                                {names.length === 0 ? (
+                                                                    "N/A"
+                                                                ) : names.length === 1 || showCCs ? (
+                                                                    names.join(', ')
+                                                                ) : (
+                                                                    <span className="inline-flex text-gray-500 font-semibold text-xs bg-gray-100 border border-gray-200 px-2 py-1 rounded-md">
+                                                                        {names.length} Employees Hidden
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </>
+                                                    );
                                                 })()}
                                             </div>
                                             <div><span className="block font-semibold text-gray-900">Branch</span> {selectedPO.purchase_request?.branch || selectedPO.branch}</div>
@@ -871,28 +1232,28 @@ export default function PurchaseOrdersIndex({ auth, purchaseOrders, currentView,
 
                                         <h4 className="mb-2 font-bold text-gray-900 border-b pb-1">Requested Items</h4>
                                         <div className="overflow-x-auto rounded-lg border border-gray-200 mb-6 w-full">
-                                            <table className="min-w-full divide-y divide-gray-200 text-sm text-left table-fixed">
+                                            <table className="w-full divide-y divide-gray-200 text-sm text-left table-auto">
                                                 <thead className="bg-gray-100">
                                                     <tr>
-                                                        <th className="px-4 py-2 font-semibold w-1/4">Product Name</th>
-                                                        <th className="px-4 py-2 font-semibold w-1/4">Supplier Name</th>
-                                                        <th className="px-4 py-2 font-semibold w-1/5">Description</th>
-                                                        <th className="px-4 py-2 font-semibold text-center w-24">Quantity</th>
-                                                        <th className="px-4 py-2 font-semibold text-center w-20">Unit</th>
-                                                        <th className="px-4 py-2 font-semibold text-right w-24">Estimated Cost</th>
-                                                        <th className="px-4 py-2 font-semibold text-right w-24">Total Cost</th>
+                                                        <th className="px-4 py-3 font-semibold whitespace-nowrap">Product Name</th>
+                                                        <th className="px-4 py-3 font-semibold whitespace-nowrap">Supplier Name</th>
+                                                        <th className="px-4 py-3 font-semibold whitespace-nowrap">Description</th>
+                                                        <th className="px-4 py-3 font-semibold text-center whitespace-nowrap">Quantity</th>
+                                                        <th className="px-4 py-3 font-semibold text-center whitespace-nowrap">Unit</th>
+                                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">Estimated Price</th>
+                                                        <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">Total Price</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-200 bg-white">
                                                     {(selectedPO.purchase_request?.items || selectedPO.items)?.map((prItem, idx) => (
                                                         <tr key={prItem.id || idx}>
-                                                            <td className="px-4 py-2 font-medium text-gray-900 truncate" title={prItem.product?.name}>{prItem.product?.name || prItem.product_name || `Product ID: ${prItem.product_id || 'N/A'}`}</td>
-                                                            <td className="px-4 py-2 text-gray-500 truncate">{prItem.supplier?.name || "-"}</td>
-                                                            <td className="px-4 py-2 text-gray-500 max-w-xs break-words">{prItem.specifications || '-'}</td>
-                                                            <td className="px-4 py-2 text-center font-bold">{parseFloat(prItem.qty_requested || prItem.qty)}</td>
-                                                            <td className="px-4 py-2 text-center text-gray-500">{prItem.unit || '-'}</td>
-                                                            <td className="px-4 py-2 text-right text-gray-500">{formatCurrency(prItem.est_unit_cost || 0)}</td>
-                                                            <td className="px-4 py-2 text-right font-bold text-indigo-700">{formatCurrency(prItem.total_cost || ((prItem.qty_requested || prItem.qty) * (prItem.est_unit_cost || 0)))}</td>
+                                                            <td className="px-4 py-3 font-medium text-gray-900" title={prItem.product?.name}>{prItem.product?.name || prItem.product_name || `Product ID: ${prItem.product_id || 'N/A'}`}</td>
+                                                            <td className="px-4 py-3 text-gray-500">{prItem.supplier?.name || "-"}</td>
+                                                            <td className="px-4 py-3 text-gray-500">{prItem.specifications || '-'}</td>
+                                                            <td className="px-4 py-3 text-center font-bold whitespace-nowrap">{parseFloat(prItem.qty_requested || prItem.qty)}</td>
+                                                            <td className="px-4 py-3 text-center text-gray-500 whitespace-nowrap">{prItem.unit || '-'}</td>
+                                                            <td className="px-4 py-3 text-right whitespace-nowrap">₱{Number(prItem.est_unit_cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                            <td className="px-4 py-3 text-right font-bold text-indigo-700 whitespace-nowrap">₱{Number(prItem.total_cost || ((prItem.qty_requested || prItem.qty) * (prItem.est_unit_cost || 0))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>

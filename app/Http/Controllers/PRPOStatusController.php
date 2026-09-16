@@ -26,7 +26,9 @@ class PRPOStatusController extends Controller
             'cc_user:id,name',
             'purchaseOrders.supplier',
             'purchaseOrders.items',
-            'items.product'
+            'items.product',
+            'items.supplier',
+            'items.product.supplier',
         ]);
 
         if (!$isGlobalViewer) {

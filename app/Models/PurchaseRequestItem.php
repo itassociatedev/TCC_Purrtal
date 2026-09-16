@@ -4,14 +4,16 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PurchaseRequestItem extends Model
 {
     use HasFactory;
+    use SoftDeletes;
 
     protected $fillable = [
-        'purchase_request_id', 'product_id', 'supplier_id', 'specifications', 
-        'unit', 'qty_requested', 'qty_on_hand', 'reorder_level', 
+        'purchase_request_id', 'product_id', 'supplier_id', 'specifications',
+        'unit', 'qty_requested', 'qty_on_hand', 'reorder_level',
         'est_unit_cost', 'total_cost'
     ];
 

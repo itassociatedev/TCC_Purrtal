@@ -34,6 +34,23 @@ const SearchableDropdown = ({ options, value, onChange, placeholder }) => {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [selectedOption]);
 
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const pendingDelete = params.get('pending_delete');
+
+            if (pendingDelete) {
+                const idsToSelect = pendingDelete.split(',').map(id => Number(id));
+                setSelectedPRIds(idsToSelect);
+                setIsDeleteModalOpen(true);
+
+                const newUrl = new URL(window.location);
+                newUrl.searchParams.delete('pending_delete');
+                window.history.replaceState({}, '', newUrl);
+            }
+        }
+    }, []);
+
     const filteredOptions = options.filter((opt) =>
         opt.name.toLowerCase().includes(searchTerm.toLowerCase()),
     );
@@ -230,24 +247,123 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
 
 
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
+    const [itemsPerPage, setItemsPerPage] = useState(10);
+    const [isCustomRows, setIsCustomRows] = useState(false);
+    const [selectedPRIds, setSelectedPRIds] = useState([]);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, filterBranch, filterPriority, filterStatus, currentView]);
+        setSelectedPRIds([]);
+    }, [searchQuery, filterBranch, filterPriority, filterStatus, currentView, itemsPerPage]);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const pendingDelete = params.get('pending_delete');
+
+            if (pendingDelete) {
+                const idsToSelect = pendingDelete.split(',').map(id => Number(id));
+
+                setTimeout(() => {
+                    setSelectedPRIds(idsToSelect);
+
+                    const isAdminOrEVP = userRole === 'admin' || userRole.includes('evp') || userRole.includes('president') || auth.user.role_id === 9;
+
+                    setConfirmDialog({
+                        isOpen: true,
+                        title: isAdminOrEVP ? "Delete Purchase Request(s)" : "Request PR Deletion",
+                        message: isAdminOrEVP
+                            ? `Are you sure you want to permanently delete ${idsToSelect.length} selected request(s)? This action cannot be undone.`
+                            : `Are you sure you want to send a deletion request to the Admin for ${idsToSelect.length} selected request(s)?`,
+                        confirmText: isAdminOrEVP ? "Delete Now" : "Send Request",
+                        confirmColor: "bg-red-600 hover:bg-red-500",
+                        onConfirm: () => {
+                            router.post(route("prpo.purchase-requests.batch-destroy"), { ids: idsToSelect }, {
+                                preserveScroll: true,
+                                preserveState: false,
+                                onSuccess: () => {
+                                    setSelectedPRIds([]);
+                                    setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                                },
+                                onError: (errors) => {
+                                    console.error("INERTIA ERROR:", errors);
+                                    alert("Frontend Payload Error! Check console.");
+                                    setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                                }
+                            });
+                        }
+                    });
+                }, 100);
+
+                const newUrl = new URL(window.location);
+                newUrl.searchParams.delete('pending_delete');
+                window.history.replaceState({}, '', newUrl);
+            }
+        }
+    }, [userRole, auth.user.role_id]);
 
     const paginatedRequests = useMemo(() => {
         const start = (currentPage - 1) * itemsPerPage;
         return filteredRequests.slice(start, start + itemsPerPage);
-    }, [filteredRequests, currentPage]);
+    }, [filteredRequests, currentPage, itemsPerPage]);
 
     const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
+
+    const paginatedIds = useMemo(() => paginatedRequests.map(r => r.id), [paginatedRequests]);
+    const isAllPageSelected = paginatedIds.length > 0 && paginatedIds.every(id => selectedPRIds.includes(id));
+
+    const handleToggleSelectAll = () => {
+        if (isAllPageSelected) {
+            setSelectedPRIds(prev => prev.filter(id => !paginatedIds.includes(id)));
+        } else {
+            setSelectedPRIds(prev => [...new Set([...prev, ...paginatedIds])]);
+        }
+    };
+
+    const handleToggleRow = (id, e) => {
+        e.stopPropagation();
+        setSelectedPRIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+    };
+
+    const handleDeleteSelected = () => {
+        if (selectedPRIds.length === 0) return;
+        const isAdminOrEVP = userRole === 'admin' || userRole.includes('evp') || userRole.includes('president');
+
+        const title = isAdminOrEVP ? "Delete Purchase Request(s)" : "Request PR Deletion";
+        const message = isAdminOrEVP
+            ? `Are you sure you want to permanently delete ${selectedPRIds.length} selected request(s)? This action cannot be undone.`
+            : `Are you sure you want to send a deletion request to the Admin for ${selectedPRIds.length} selected request(s)?`;
+
+        setConfirmDialog({
+            isOpen: true,
+            title: title,
+            message: message,
+            confirmText: isAdminOrEVP ? "Delete Now" : "Send Request",
+            confirmColor: "bg-red-600 hover:bg-red-500",
+            onConfirm: () => {
+                router.post(route("prpo.purchase-requests.batch-destroy"), { ids: selectedPRIds }, {
+                    preserveScroll: true,
+                    preserveState: false,
+                    onSuccess: () => {
+                        setSelectedPRIds([]);
+                        closeConfirmModal();
+                    },
+                    onError: (errors) => {
+                        console.error("INERTIA ERROR:", errors);
+                        alert("Frontend Payload Error! Check console. " + JSON.stringify(errors));
+                        closeConfirmModal();
+                    }
+                });
+            }
+        });
+    };
 
     const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: "", message: "", confirmText: "", confirmColor: "", onConfirm: () => {} });
     const closeConfirmModal = () => setConfirmDialog({ ...confirmDialog, isOpen: false });
     const [selectedPR, setSelectedPR] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [showCCs, setShowCCs] = useState(false);
 
     const { data: editData, setData: setEditData, put: submitEditPR, processing: isEditing, errors: editErrors } = useForm({
         branch: "", department: "", date_prepared: "", request_type: "", priority: "", date_needed: "", budget_status: "", budget_ref: "", purpose_of_request: "", impact_if_not_procured: "", cc_users: [], items: []
@@ -260,6 +376,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
     const submitActionModal = () => {
         router.patch(route("prpo.purchase-requests.update-status", actionModal.prId), { action: actionModal.actionType, rejection_reason: actionModal.reason }, {
             preserveScroll: true,
+            preserveState: false,
             onSuccess: () => { closeActionModal(); closeModal(); },
         });
     };
@@ -323,6 +440,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
             const pdfWindow = window.open('', '_blank'); // Open immediately to bypass popup blocker
             router.patch(route("prpo.purchase-requests.update-status", id), { action: actionType }, {
                 preserveScroll: true,
+                preserveState: false,
                 onSuccess: () => {
                     closeModal();
                     if (pdfWindow) pdfWindow.location.href = route("prpo.purchase-requests.print", id);
@@ -370,6 +488,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
             onConfirm: () => {
                 router.patch(route("prpo.purchase-requests.update-status", id), { action: actionType }, {
                     preserveScroll: true,
+                    preserveState: false,
                     onSuccess: () => { closeConfirmModal(); closeModal(); },
                 });
             },
@@ -386,13 +505,14 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
             onConfirm: () => {
                 router.post(route("prpo.purchase-requests.generate-pos", id), {}, {
                     preserveScroll: true,
+                    preserveState: false,
                     onSuccess: () => { closeConfirmModal(); closeModal(); },
                 });
             },
         });
     };
 
-    const openModal = (pr) => { setSelectedPR(pr); setIsModalOpen(true); };
+    const openModal = (pr) => { setSelectedPR(pr); setShowCCs(false); setIsModalOpen(true); };
     const closeModal = () => { setIsModalOpen(false); setTimeout(() => setSelectedPR(null), 200); };
     const availableBranches = isUnrestricted ? branches : branches.filter((b) => userBranches.includes(b.name));
     const branchEmployees = employees.filter((emp) => { if (!editData.branch) return false; return emp.branches?.some((b) => b.name === editData.branch); });
@@ -428,7 +548,22 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
 
     const handleSaveEdit = (e) => {
         e.preventDefault();
-        submitEditPR(route("prpo.purchase-requests.update", selectedPR.id), { preserveScroll: true, onSuccess: () => { setIsEditModalOpen(false); setSelectedPR(null); } });
+        submitEditPR(route("prpo.purchase-requests.update", selectedPR.id), {
+            preserveScroll: true,
+            preserveState: false,
+            onSuccess: (page) => {
+                const requestList = Array.isArray(page.props.requests?.data) ? page.props.requests.data : Array.isArray(page.props.requests) ? page.props.requests : [];
+                const freshPR = requestList.find(r => r.id === selectedPR.id);
+
+                setIsEditModalOpen(false);
+
+                if (freshPR) {
+                    setTimeout(() => openModal(freshPR), 200);
+                } else {
+                    setSelectedPR(null);
+                }
+            }
+        });
     };
 
     const getHeaderContent = () => {
@@ -438,6 +573,8 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
             case "for_generation": return { title: "Purchase Orders To Generate", desc: "Generate purchase orders for endorsed purchase requests." };
             case "po_generated": return { title: "PO Generated", desc: "View purchase requests that have already been converted into purchase orders." };
             case "history": return { title: "Purchase Request History", desc: "View completed and historical purchase requests." };
+            // 🟢 FIX: Set clean titles for the special view
+            case "deletion_request": return { title: "Pending Deletion Requests", desc: "Review and process the specific items requested for deletion." };
             default: return { title: "My Purchase Requests", desc: "Track the status of PRs you have submitted." };
         }
     };
@@ -461,7 +598,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                     )}
 
 
-                    <Link href={route("prpo.approval-board", { view: "history" })} className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${currentView === "history" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"}`}>Purchase Request History</Link>
+                    <Link href={route("prpo.approval-board", { view: "history" })} className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${currentView === "history" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"}`}>All Purchase Requests</Link>
                 </div>
 
                 <div className="mb-6 bg-white p-5 rounded-xl shadow-sm border border-gray-200 mt-4">
@@ -523,10 +660,80 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                     )}
                 </div>
 
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <label className="text-xs font-semibold text-gray-600">Show Rows:</label>
+                        <div className="flex items-center gap-2">
+                            <select
+                                value={isCustomRows ? "custom" : itemsPerPage}
+                                onChange={(e) => {
+                                    if (e.target.value === "custom") {
+                                        setIsCustomRows(true);
+                                    } else {
+                                        setIsCustomRows(false);
+                                        setItemsPerPage(Number(e.target.value));
+                                    }
+                                }}
+                                className="rounded-md border-gray-300 py-1.5 pl-3 pr-8 text-xs font-semibold text-gray-700 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 cursor-pointer"
+                            >
+                                <option value={10}>10 rows</option>
+                                <option value={25}>25 rows</option>
+                                <option value={50}>50 rows</option>
+                                <option value={100}>100 rows</option>
+                                <option value="custom">Custom...</option>
+                            </select>
+
+                            {isCustomRows && (
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={itemsPerPage}
+                                    onChange={(e) => setItemsPerPage(Math.max(1, Number(e.target.value) || 1))}
+                                    className="w-20 rounded-md border-gray-300 py-1.5 text-xs text-center shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-all"
+                                    placeholder="Qty"
+                                />
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-2 text-xs font-semibold text-indigo-700 cursor-pointer select-none bg-indigo-50 px-3 py-1.5 rounded-md border border-indigo-200 shadow-sm hover:bg-indigo-100 transition-colors">
+                            <input
+                                type="checkbox"
+                                checked={isAllPageSelected}
+                                onChange={handleToggleSelectAll}
+                                className="rounded border-indigo-300 text-indigo-600 shadow-sm focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                            />
+                            Select All (Page)
+                        </label>
+
+                        {selectedPRIds.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={handleDeleteSelected}
+                                className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-red-500 transition-colors"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                </svg>
+                                Delete ({selectedPRIds.length})
+                            </button>
+                        )}
+                    </div>
+                </div>
+
                 <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl overflow-hidden">
                     <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
                         <thead className="bg-gray-50">
                             <tr>
+                                <th className="px-4 py-3 text-center w-12 border-r border-gray-200">
+                                    <input
+                                        type="checkbox"
+                                        checked={isAllPageSelected}
+                                        onChange={handleToggleSelectAll}
+                                        className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                                    />
+                                </th>
                                 <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handleSort('id')}>
                                     <div className="flex items-center justify-center gap-1">
                                         Purchase Request ID
@@ -549,10 +756,18 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                         </thead>
                         <tbody className="divide-y divide-gray-200 bg-white">
                             {paginatedRequests.length === 0 ? (
-                                <tr><td colSpan="8" className="px-6 py-8 text-center text-gray-500">No requests found for this view.</td></tr>
+                                <tr><td colSpan="9" className="px-6 py-8 text-center text-gray-500">No requests found for this view.</td></tr>
                             ) : (
                                 paginatedRequests.map((pr) => (
-                                    <tr key={pr.id} onClick={() => openModal(pr)} className="hover:bg-gray-50 transition cursor-pointer">
+                                    <tr key={pr.id} onClick={() => openModal(pr)} className={`transition-all duration-300 cursor-pointer ${selectedPRIds.includes(pr.id) ? 'bg-indigo-50 ring-2 ring-indigo-400 relative z-10 shadow-md' : (selectedPRIds.length > 0 ? 'opacity-30 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-gray-50' : 'hover:bg-gray-50')}`}>
+                                        <td className="px-4 py-2 text-center border-r border-gray-100" onClick={(e) => e.stopPropagation()}>
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedPRIds.includes(pr.id)}
+                                                onChange={(e) => handleToggleRow(pr.id, e)}
+                                                className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                                            />
+                                        </td>
                                         <td className="px-6 py-2 text-center font-medium text-indigo-600 hover:text-indigo-900">{pr.pr_number || `PR-${pr.id}`}</td>
                                         <td className="px-6 py-2 text-center">{pr.user?.name || "Unknown"}</td>
                                         <td className="px-6 py-2 text-center">{pr.branch} <br /><span className="text-xs text-center text-gray-500">{pr.department}</span></td>
@@ -658,7 +873,6 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                             <div className="overflow-y-auto px-6 py-2 flex-grow">
                                 <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4 rounded-lg bg-gray-50 p-4 text-sm border border-gray-100">
                                     <div>
-                                        <span className="block font-semibold text-gray-900">Carbon Copy (CC)</span>
                                         {(() => {
                                             let ccArray = [];
                                             try {
@@ -672,7 +886,30 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
 
                                             if (!Array.isArray(ccArray)) ccArray = [];
                                             const names = ccArray.map(id => employees?.find(e => String(e.id) === String(id))?.name).filter(Boolean);
-                                            return names.length > 0 ? names.join(', ') : "N/A";
+
+                                            return (
+                                                <>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="block font-semibold text-gray-900">Carbon Copy (CC)</span>
+                                                        {names.length > 1 && (
+                                                            <button onClick={() => setShowCCs(!showCCs)} className="inline-flex items-center text-xs font-bold text-indigo-800 bg-indigo-100 border border-indigo-300 px-2.5 py-0.5 rounded-md shadow-sm hover:bg-indigo-200 transition-colors cursor-pointer">
+                                                                {showCCs ? 'Hide List' : `Show All (${names.length})`}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-gray-600 font-bold text-sm leading-relaxed">
+                                                        {names.length === 0 ? (
+                                                            "N/A"
+                                                        ) : names.length === 1 || showCCs ? (
+                                                            names.join(', ')
+                                                        ) : (
+                                                            <span className="inline-flex text-gray-500 font-semibold text-xs bg-gray-100 border border-gray-200 px-2 py-1 rounded-md">
+                                                                {names.length} Employees Hidden
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </>
+                                            );
                                         })()}
                                     </div>
                                     <div><span className="block font-semibold text-gray-900">Branch</span> {selectedPR.branch}</div>
@@ -709,28 +946,28 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
 
                                 <h4 className="mb-2 font-bold text-gray-900 border-b pb-1">Requested Items</h4>
                                 <div className="overflow-x-auto rounded-lg border mb-6">
-                                    <table className="min-w-full divide-y divide-gray-200 text-sm text-left table-fixed">
+                                    <table className="w-full divide-y divide-gray-200 text-sm text-left table-auto">
                                         <thead className="bg-gray-100">
                                             <tr>
-                                                <th className="px-4 py-2 font-semibold w-1/4">Product Name</th>
-                                                <th className="px-4 py-2 font-semibold w-1/4">Supplier Name</th>
-                                                <th className="px-4 py-2 font-semibold w-1/5">Description</th>
-                                                <th className="px-4 py-2 font-semibold text-center w-20">Quantity</th>
-                                                <th className="px-4 py-2 font-semibold text-center w-20">Unit</th>
-                                                <th className="px-4 py-2 font-semibold text-right w-24">Estimated Cost</th>
-                                                <th className="px-4 py-2 font-semibold text-right w-24">Total Cost</th>
+                                                <th className="px-4 py-3 font-semibold whitespace-nowrap">Product Name</th>
+                                                <th className="px-4 py-3 font-semibold whitespace-nowrap">Supplier Name</th>
+                                                <th className="px-4 py-3 font-semibold whitespace-nowrap">Description</th>
+                                                <th className="px-4 py-3 font-semibold text-center whitespace-nowrap">Quantity</th>
+                                                <th className="px-4 py-3 font-semibold text-center whitespace-nowrap">Unit</th>
+                                                <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">Estimated Price</th>
+                                                <th className="px-4 py-3 font-semibold text-right whitespace-nowrap">Total Price</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-200 bg-white">
                                             {selectedPR.items.map((item, idx) => (
                                                 <tr key={item.id || idx}>
-                                                    <td className="px-4 py-3 font-medium text-gray-900 truncate" title={item.product?.name}>{item.product?.name}</td>
-                                                    <td className="px-4 py-3 text-gray-500 truncate">{item.supplier?.name || "-"}</td>
-                                                    <td className="px-4 py-3 text-gray-500 max-w-xs break-words">{item.specifications || "-"}</td>
-                                                    <td className="px-4 py-3 text-center font-bold">{parseFloat(item.qty_requested)}</td>
-                                                    <td className="px-4 py-3 text-center text-gray-500">{item.unit || "-"}</td>
-                                                    <td className="px-4 py-3 text-right">₱{Number(item.est_unit_cost).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                                    <td className="px-4 py-3 text-right font-bold text-indigo-700">₱{Number(item.total_cost).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-3 font-medium text-gray-900" title={item.product?.name}>{item.product?.name}</td>
+                                                    <td className="px-4 py-3 text-gray-500">{item.supplier?.name || "-"}</td>
+                                                    <td className="px-4 py-3 text-gray-500">{item.specifications || "-"}</td>
+                                                    <td className="px-4 py-3 text-center font-bold whitespace-nowrap">{parseFloat(item.qty_requested)}</td>
+                                                    <td className="px-4 py-3 text-center text-gray-500 whitespace-nowrap">{item.unit || "-"}</td>
+                                                    <td className="px-4 py-3 text-right whitespace-nowrap">₱{Number(item.est_unit_cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-3 text-right font-bold text-indigo-700 whitespace-nowrap">₱{Number(item.total_cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -753,6 +990,14 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
             </svg>
             Edit Request
+        </button>
+    )}
+    {selectedPR.status === "pending_procurement_tl" && isProcurementTL && (
+        <button onClick={() => handleGeneratePO(selectedPR.id)} className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-teal-500 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 shrink-0">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Generate PO
         </button>
     )}
 

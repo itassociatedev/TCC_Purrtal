@@ -1,7 +1,6 @@
 import ApplicationLogo from '@/Components/ApplicationLogo';
 import { Head } from '@inertiajs/react';
 
-// 🟢 Note the prop is now 'pos' (array) instead of 'po'
 export default function PrintablePO({ pos = [] }) {
 
     const formatCurrency = (amount) => {
@@ -86,13 +85,12 @@ export default function PrintablePO({ pos = [] }) {
                         <div className="max-w-5xl mx-auto bg-white p-8 shadow-xl print:shadow-none print:p-0 border border-gray-300 print:border-none w-full flex flex-col justify-between min-h-[92vh] text-[10px] leading-[1.15] text-[#333]">
                             <div>
                             <div className="flex border-b-2 border-gray-900 pb-2 mb-3">
-                                <div className="w-[25%] flex items-start gap-2 pr-2 pt-0.5">
-                                    <div className="w-12 h-12 flex-shrink-0">
+                                <div className="w-[25%] flex items-center gap-0 pr-2 pt-0.5">
+                                    <div className="w-16 h-16 flex-shrink-0">
                                         <ApplicationLogo className="w-full h-full text-indigo-900" />
                                     </div>
                                     <div>
-                                        <h1 className="text-[17px] font-bold text-gray-900 leading-tight m-0">The Cat Clinic</h1>
-                                        <div className="text-[10px] text-gray-600 mt-0.5">Makati City, Metro Manila</div>
+                                        <h1 className="text-[25px] font-bold text-gray-900 leading-tight m-0">The Cat Clinic</h1>
                                     </div>
                                 </div>
                                 <div className="w-[28%] border-l border-gray-300 pl-3">
@@ -113,14 +111,10 @@ export default function PrintablePO({ pos = [] }) {
                                     <div className="text-[10px] font-semibold text-gray-600 mt-1">
                                         Date: <span className="font-normal">{formatDate(po.po_date)}</span>
                                     </div>
+                                    <div className="text-[10px] text-gray-600 mt-0.5">Makati City, Metro Manila</div>
                                 </div>
                             </div>
-                            {po.purpose && (
-                                <div className="mb-2 p-2 bg-gray-50 border border-gray-200 rounded-sm">
-                                    <span className="text-[9px] font-bold text-gray-500 uppercase block mb-0.5">Purpose / Remarks</span>
-                                    <p className="text-[10px] text-gray-800 italic m-0">{po.purpose}</p>
-                                </div>
-                            )}
+
                             <div>
                                 <table className="w-full text-[10px] text-left mb-2 border-collapse">
                                     <thead className="bg-gray-100 border-y border-gray-300">
@@ -156,7 +150,7 @@ export default function PrintablePO({ pos = [] }) {
                                                             <span className="text-[9px] text-gray-500 block mt-0.5">Note: {item.notes}</span>
                                                         )}
                                                     </td>
-                                                    <td className={`py-[2px] px-2 text-right font-bold ${isPriceChanged ? 'text-[magenta]' : 'text-black'}`}>
+                                                    <td className={`py-[2px] px-2 text-right font-bold ${isPriceChanged ? 'text-[red]' : 'text-black'}`}>
                                                         {formatCurrency(currentPrice)}
                                                     </td>
                                                     <td className="py-[2px] px-2 text-right text-black">
@@ -195,51 +189,51 @@ export default function PrintablePO({ pos = [] }) {
                                         <span className="text-gray-700">Net of Discount:</span>
                                         <span>{formatCurrency(liveNetOfDiscount)}</span>
                                     </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-600">VAT (12%):</span>
+                                    <div className="flex justify-between text-[red]">
+                                        <span>VAT (12%):</span>
                                         <span>{formatCurrency(liveVatTotal)}</span>
                                     </div>
-                                    <div className="flex justify-between border-t-2 border-gray-800 pt-1 font-black text-[12px] text-gray-900">
-                                        <span>GRAND TOTAL:</span>
-                                        <span>{formatCurrency(liveGrandTotal)}</span>
+                                    <div className="flex justify-between border-t-2 border-gray-800 pt-1 font-black text-[12px]">
+                                        <span className="text-gray-900">GRAND TOTAL:</span>
+                                        <span className="text-blue-600">{formatCurrency(liveGrandTotal)}</span>
                                     </div>
                                 </div>
                             </div>
-                            <div className="mt-auto pt-4 pb-2 break-inside-avoid w-full flex justify-between gap-12">
-                                <div className="w-[30%]">
-                                    <div className="border-b border-gray-900 h-8 mb-1"></div>
-                                    <div className="text-[10px] text-gray-500 text-center leading-tight">Prepared By</div>
-                                    <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-tight">{po.purchase_request?.prepared_by_name || po.purchase_request?.user?.name || 'Procurement'}</div>
-                                    <div className="text-[9px] font-semibold text-gray-600 text-center mt-0.5">{po.purchase_request?.prepared_by_role || po.purchase_request?.user?.role?.name || 'Procurement Assistant'}</div>
-                                </div>
+                    <div className="mt-auto pt-4 pb-2 break-inside-avoid w-full flex justify-between gap-12">
+                        <div className="w-[30%]">
+                            <div className="border-b border-gray-900 h-10 mb-3"></div>
+                            <div className="text-[10px] text-gray-500 text-center leading-tight mb-1">Prepared By</div>
+                            <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-none">{po.preparedBy?.name || po.prepared_by?.name || 'PENDING'}</div>
+                            <div className="text-[9px] font-semibold text-gray-600 text-center leading-none mt-[2px]">{po.preparedBy?.role?.name || po.prepared_by?.role?.name || 'Procurement'}</div>
+                        </div>
 
-                                <div className="w-[30%]">
-                                    <div className="border-b border-gray-900 h-8 mb-1"></div>
-                                    <div className="text-[10px] text-gray-500 text-center leading-tight">Reviewed By</div>
-                                    <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-tight">{po.purchase_request?.reviewed_by_name || po.purchase_request?.reviewed_by?.name || 'PENDING'}</div>
-                                    <div className="text-[9px] font-semibold text-gray-600 text-center mt-0.5">{po.purchase_request?.reviewed_by_role || po.purchase_request?.reviewed_by?.role?.name || ''}</div>
-                                </div>
+                        <div className="w-[30%]">
+                            <div className="border-b border-gray-900 h-10 mb-3"></div>
+                            <div className="text-[10px] text-gray-500 text-center leading-tight mb-1">Reviewed By</div>
+                            <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-none">{po.purchase_request?.reviewed_by_name || po.purchase_request?.reviewed_by?.name || 'PENDING'}</div>
+                            <div className="text-[9px] font-semibold text-gray-600 text-center leading-none mt-[2px]">{po.purchase_request?.reviewed_by_role || po.purchase_request?.reviewed_by?.role?.name || ''}</div>
+                        </div>
 
-                                <div className="w-[30%]">
-                                    <div className="border-b border-gray-900 h-8 mb-1"></div>
-                                    <div className="text-[10px] text-gray-500 text-center leading-tight">Approved By</div>
-                                    {po.status === 'approved' && (po.purchase_request?.approved_by_name || po.purchase_request?.approved_by) ? (
-                                        <>
-                                            <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-tight">
-                                                {po.purchase_request?.approved_by_name || po.purchase_request?.approved_by?.name || 'PENDING'}
-                                            </div>
-                                            <div className="text-[9px] font-semibold text-gray-600 text-center mt-0.5">
-                                                {po.purchase_request?.approved_by_role || po.purchase_request?.approved_by?.role?.name || 'Executive Vice President'}
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-tight">PENDING</div>
-                                            <div className="text-[9px] font-semibold text-gray-600 text-center mt-0.5"></div>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
+                        <div className="w-[30%]">
+                            <div className="border-b border-gray-900 h-10 mb-3"></div>
+                            <div className="text-[10px] text-gray-500 text-center leading-tight mb-1">Approved By</div>
+                            {po.status === 'approved' && (po.purchase_request?.approved_by_name || po.purchase_request?.approved_by) ? (
+                                <>
+                                    <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-none">
+                                        {po.purchase_request?.approved_by_name || po.purchase_request?.approved_by?.name || 'PENDING'}
+                                    </div>
+                                    <div className="text-[9px] font-semibold text-gray-600 text-center leading-none mt-[2px]">
+                                        {po.purchase_request?.approved_by_role || po.purchase_request?.approved_by?.role?.name || 'Executive Vice President'}
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="text-[11px] font-bold text-gray-900 uppercase text-center leading-none">PENDING</div>
+                                    <div className="text-[9px] font-semibold text-gray-600 text-center leading-none mt-[2px]"></div>
+                                </>
+                            )}
+                        </div>
+                    </div>
                         </div>
                     </div>
                     {}

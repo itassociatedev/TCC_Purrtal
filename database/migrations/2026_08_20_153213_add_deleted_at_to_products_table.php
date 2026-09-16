@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::table('products', function (Blueprint $table) {
             // Adds a nullable 'deleted_at' timestamp column
-            $table->softDeletes(); 
+            $table->softDeletes();
         });
     }
 
@@ -18,7 +18,7 @@ return new class extends Migration
     {
         Schema::table('products', function (Blueprint $table) {
             // Safely rolls back the column if needed
-            $table->dropSoftDeletes(); 
+            $table->dropSoftDeletes();
         });
     }
 };

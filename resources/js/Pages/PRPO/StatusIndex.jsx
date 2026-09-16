@@ -111,6 +111,15 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
         return params.get('highlight');
     }, [url]);
 
+    const [hideHighlight, setHideHighlight] = useState(false);
+
+    const [isHighlightCleared, setIsHighlightCleared] = useState(false);
+
+    useEffect(() => {
+        setHideHighlight(false);
+        setIsHighlightCleared(false);
+    }, [highlightId]);
+
     const [searchQuery, setSearchQuery] = useState('');
     const [filterBranch, setFilterBranch] = useState('');
     const [filterPriority, setFilterPriority] = useState('');
@@ -124,6 +133,14 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
 
 
     const formatCurrency = (amount) => `₱${parseFloat(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const formatDate = (dateString) => {
+        if (!dateString) return 'TBD';
+        try {
+            return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        } catch (e) {
+            return dateString;
+        }
+    };
 
     const formatStatus = (rawStatus) => {
 
@@ -309,11 +326,40 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
                     <div className="mb-4 flex items-center justify-between bg-indigo-50 px-4 py-3 rounded-lg border border-indigo-200 shadow-sm animate-in fade-in slide-in-from-top-2">
                         <span className="text-sm text-indigo-800 font-bold flex items-center gap-2">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-                            Viewing Specific Notification Record
+                            {isHighlightCleared ? 'Notification Record Linked (Highlight Cleared)' : 'Viewing Specific Notification Record'}
                         </span>
-                        <Link href={route('prpo.status.index')} className="text-xs font-bold text-indigo-700 hover:text-indigo-900 hover:bg-indigo-100 px-3 py-1.5 bg-white rounded shadow-sm border border-indigo-200 transition-colors">
-                            Clear Highlight
-                        </Link>
+                        <div className="flex items-center gap-2">
+                            {isHighlightCleared ? (
+                                <button
+                                    onClick={() => setIsHighlightCleared(false)}
+                                    className="text-xs font-bold text-indigo-700 hover:text-indigo-900 hover:bg-indigo-100 px-3 py-1.5 bg-white rounded shadow-sm border border-indigo-200 transition-colors"
+                                >
+                                    Show Highlight
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => setHideHighlight(!hideHighlight)}
+                                    className="text-xs font-bold text-indigo-700 hover:text-indigo-900 hover:bg-indigo-100 px-3 py-1.5 bg-white rounded shadow-sm border border-indigo-200 transition-colors"
+                                >
+                                    {hideHighlight ? 'Show Highlight' : 'Hide Highlight'}
+                                </button>
+                            )}
+                            {!isHighlightCleared ? (
+                                <button
+                                    onClick={() => setIsHighlightCleared(true)}
+                                    className="text-xs font-bold text-indigo-700 hover:text-indigo-900 hover:bg-indigo-100 px-3 py-1.5 bg-white rounded shadow-sm border border-indigo-200 transition-colors"
+                                >
+                                    Clear Highlight
+                                </button>
+                            ) : (
+                                <Link
+                                    href={route('prpo.status.index')}
+                                    className="text-xs font-bold text-red-700 hover:text-red-900 hover:bg-red-100 px-3 py-1.5 bg-white rounded shadow-sm border border-red-200 transition-colors"
+                                >
+                                    Remove Notification
+                                </Link>
+                            )}
+                        </div>
                     </div>
                 )}
 
@@ -322,7 +368,7 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
                         <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300"><p className="text-gray-500">No requests found matching your filters.</p></div>
                     ) : (
                         paginatedRequests.map(pr => {
-                            const isDimmed = highlightId && String(pr.id) !== String(highlightId);
+                            const isDimmed = !isHighlightCleared && !hideHighlight && highlightId && String(pr.id) !== String(highlightId);
                             return (
                                 <div key={pr.id} className={`bg-white shadow-sm ring-1 ring-gray-900/5 rounded-xl p-6 transition-all hover:shadow-md ${isDimmed ? 'opacity-40 grayscale-[30%]' : 'opacity-100'}`}>
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-100 pb-4 mb-4 gap-4">
@@ -340,9 +386,9 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
                                             <p className="text-sm font-bold text-gray-900">{pr.date_needed || 'TBD'}</p>
                                         </div>
                                         <div className="flex gap-2 mt-1">
-                                            <button onClick={() => openModal(pr, 'PR')} className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-md border border-indigo-200 transition">View Original PR</button>
+                                            <button onClick={() => openModal(pr, 'PR')} className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-md border border-indigo-200 transition">View Purchase Request Details</button>
                                             {pr.purchase_orders && pr.purchase_orders.length > 0 && (
-                                                <button onClick={() => openModal(pr.purchase_orders[0], 'PO')} className="text-xs font-semibold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-md border border-teal-200 transition">View PO Details</button>
+                                                <button onClick={() => openModal(pr.purchase_orders[0], 'PO')} className="text-xs font-semibold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-md border border-teal-200 transition">View Purchase Order Details</button>
                                             )}
                                         </div>
                                     </div>
@@ -424,7 +470,11 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
                         <div className="flex items-center justify-between border-b px-6 py-2 shrink-0 bg-gray-50 rounded-t-2xl">
                             <div>
                                 <h3 className="text-lg font-bold text-gray-900 flex items-center gap-3">{modalView === 'PR' ? selectedDoc.pr_number : selectedDoc.po_number}</h3>
-                                <p className="text-sm text-gray-500 mt-1">{modalView === 'PR' ? `Prepared by ${selectedDoc.user?.name} on ${selectedDoc.date_prepared}` : `Purchase Order dated ${selectedDoc.po_date}`}</p>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    {modalView === 'PR'
+                                        ? `Prepared by ${selectedDoc.user?.name} on ${formatDate(selectedDoc.date_prepared)}`
+                                        : `Purchase Order dated ${formatDate(selectedDoc.po_date || selectedDoc.created_at)}`}
+                                </p>
                             </div>
                             <div className="flex items-center gap-3">
                                 {modalView === 'PR' && ['pr_generated', 'pending_procurement', 'pending_procurement_tl', 'po_generated', 'pending_evp_final', 'approved'].includes(selectedDoc.status) && (
@@ -503,6 +553,7 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
                                             <thead className="bg-gray-100">
                                                 <tr>
                                                     <th className="px-4 py-2 font-semibold">Product Name</th>
+                                                    <th className="px-4 py-2 font-semibold">Supplier Name</th>
                                                     <th className="px-4 py-2 font-semibold">Descriptions</th>
                                                     <th className="px-4 py-2 font-semibold text-center">Requested Quantity</th>
                                                 </tr>
@@ -510,7 +561,10 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
                                             <tbody className="divide-y divide-gray-200 bg-white">
                                                 {selectedDoc.items?.map((item, idx) => (
                                                     <tr key={idx}>
-                                                        <td className="px-4 py-3 font-medium text-gray-900">{item.product?.name || `ID: ${item.product_id}`}</td>
+                                                        <td className="px-4 py-3 font-medium text-gray-900">{item.product?.name || item.product_name || `ID: ${item.product_id}`}</td>
+                                                        <td className="px-4 py-3 text-gray-500">
+                                                            {item.supplier?.name || item.product?.supplier?.name || item.supplier_name || '-'}
+                                                        </td>
                                                         <td className="px-4 py-3 text-gray-500">{item.specifications || '-'}</td>
                                                         <td className="px-4 py-3 text-center font-bold">{item.qty_requested} {item.unit}</td>
                                                     </tr>
@@ -524,7 +578,7 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
                                 <>
                                     <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4 rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm">
                                         <div><span className="block font-semibold text-gray-900">Supplier</span> {selectedDoc.supplier?.name || 'Unknown'}</div>
-                                        <div><span className="block font-semibold text-gray-900">Delivery Date</span> {selectedDoc.delivery_date || 'TBD'}</div>
+                                        <div><span className="block font-semibold text-gray-900">Delivery Date</span> {formatDate(selectedDoc.delivery_date)}</div>
                                         <div><span className="block font-semibold text-gray-900">Payment Terms</span> {selectedDoc.payment_terms || '-'}</div>
                                         <div><span className="block font-semibold text-gray-900">Status</span> {formatStatus(selectedDoc.status)}</div>
                                         <div className="col-span-2 sm:col-span-4"><span className="block font-semibold text-gray-900">Ship To</span> {selectedDoc.ship_to || '-'}</div>
@@ -576,15 +630,15 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
                                             </div>
                                         </div>
                                         <div className="w-full lg:w-80 shrink-0 bg-gray-50 rounded-lg p-5 border border-gray-200 h-fit mt-6 lg:mt-0">
-                                            <h4 className="font-bold text-gray-900 mb-4 border-b pb-2">Amount Summary</h4>
-                                            <div className="space-y-3 text-sm">
-                                                <div className="flex justify-between text-gray-600"><span>Gross Amount:</span><span className="font-medium text-gray-900">{formatCurrency(selectedDoc.gross_amount || 0)}</span></div>
-                                                {selectedDoc.discount_total > 0 && (<div className="flex justify-between text-gray-600"><span>Less: Discount</span><span className="font-medium text-indigo-500">-{formatCurrency(selectedDoc.discount_total)}</span></div>)}
-                                                <div className="flex justify-between text-gray-600 font-medium pt-2 border-t border-gray-200"><span>Net of Discount:</span><span>{formatCurrency(selectedDoc.net_of_discount || selectedDoc.gross_amount || 0)}</span></div>
-                                                <div className="flex justify-between items-center text-gray-600"><span>VAT Total:</span><span>{formatCurrency(selectedDoc.vat_total || 0)}</span></div>
-                                                <div className="flex justify-between items-center text-indigo-900 font-black text-lg pt-4 border-t border-gray-300"><span>GRAND TOTAL</span><span>{formatCurrency(selectedDoc.grand_total || 0)}</span></div>
+                                                <h4 className="font-bold text-gray-900 mb-4 border-b pb-2">Amount Summary</h4>
+                                                <div className="space-y-3 text-sm">
+                                                    <div className="flex justify-between text-gray-600"><span>Gross Amount:</span><span className="font-medium text-gray-900">{formatCurrency(selectedDoc.gross_amount || 0)}</span></div>
+                                                    {selectedDoc.discount_total > 0 && (<div className="flex justify-between text-gray-600"><span>Less: Discount</span><span className="font-medium text-indigo-500">-{formatCurrency(selectedDoc.discount_total)}</span></div>)}
+                                                    <div className="flex justify-between text-gray-600 font-medium pt-2 border-t border-gray-200"><span>Net of Discount:</span><span>{formatCurrency(selectedDoc.net_of_discount || selectedDoc.gross_amount || 0)}</span></div>
+                                                    <div className="flex justify-between items-center text-red-600"><span>VAT Total:</span><span>{formatCurrency(selectedDoc.vat_total || 0)}</span></div>
+                                                    <div className="flex justify-between items-center text-indigo-900 font-black text-lg pt-4 border-t border-gray-300"><span>GRAND TOTAL</span><span>{formatCurrency(selectedDoc.grand_total || 0)}</span></div>
+                                                </div>
                                             </div>
-                                        </div>
                                     </div>
                                 </>
                             )}
