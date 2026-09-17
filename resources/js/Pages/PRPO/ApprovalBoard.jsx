@@ -436,7 +436,8 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
         }
 
 
-        if (actionType === 'review_pr') {
+        // 🟢 DIRECT ACTION: Instantly open PDF and update status (Bypasses confirmation modal)
+        if (['review_pr', 'generate_pr', 'generate_pr_as_om_fallback'].includes(actionType)) {
             const pdfWindow = window.open('', '_blank'); // Open immediately to bypass popup blocker
             router.patch(route("prpo.purchase-requests.update-status", id), { action: actionType }, {
                 preserveScroll: true,
