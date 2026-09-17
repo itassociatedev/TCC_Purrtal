@@ -21,13 +21,13 @@ jobs:
             
             # 1. Force the site back online immediately (ignore if it fails)
             php artisan up || true
-            
-            # 2. Destroy the old, conflicting deploy script
-            rm -f deploy.sh
-            
-            # 3. Pull the new bulletproof script we made earlier
-            git pull origin main
-            
+
+            # 2. Fetch the absolute latest data from GitHub
+            git fetch origin main
+
+            # 3. Force the server to perfectly match GitHub (This restores deploy.sh!)
+            git reset --hard origin/main
+
             # 4. Make it executable and run it!
             chmod +x deploy.sh
             ./deploy.sh

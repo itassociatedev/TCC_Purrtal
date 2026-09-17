@@ -40,6 +40,7 @@ export default function Index({ auth, dutymeals = [], employees = [], department
     const [editMealData, setEditMealData] = useState({ main: '', alt: '' });
 
     const [poolMealChoices, setPoolMealChoices] = useState({});
+    const [poolNotes, setPoolNotes] = useState({}); // 🟢 ADDED: State to hold the special request notes
 
     // Derive the selected roster directly from the fresh props
     const selectedRoster = dutymeals.find(m => String(m.id) === String(selectedRosterId));
@@ -143,13 +144,15 @@ export default function Index({ auth, dutymeals = [], employees = [], department
 
         router.post(route('admin.duty-meals.add-participant', selectedRoster.id), {
             user_id: employeeId,
-            choice: choice || 'main' 
+            choice: choice || 'main',
+            custom_request: poolNotes[employeeId] || '' // 🟢 ADDED: Send note payload
         }, {
             preserveScroll: true,
             preserveState: true, 
             onSuccess: () => {
                 setPoolSearch(''); 
                 setPoolMealChoices(prev => ({ ...prev, [employeeId]: 'main' }));
+                setPoolNotes(prev => ({ ...prev, [employeeId]: '' })); // 🟢 ADDED: Clear note after saving
             },
         });
     };
@@ -746,19 +749,30 @@ export default function Index({ auth, dutymeals = [], employees = [], department
                                             </p>
                                         </div>
                                         
-                                        <div className="flex items-center gap-3 w-full sm:w-auto">
+                                        {/* 🟢 NEW: Modified the layout to fit the text input next to the select dropdown */}
+                                        <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
                                             <select
                                                 value={poolMealChoices[emp.id] || 'main'}
                                                 onChange={(e) => setPoolMealChoices({ ...poolMealChoices, [emp.id]: e.target.value })}
-                                                className="text-xs border-gray-300 rounded shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1.5 pl-2 pr-6 flex-1 sm:flex-none"
+                                                className="text-xs border-gray-300 rounded shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1.5 pl-2 pr-6 w-[100px] shrink-0"
                                             >
                                                 <option value="main">Main Meal</option>
                                                 <option value="alt">Alt Meal</option>
                                                 <option value="special">Special</option>
                                             </select>
+                                            
+                                            {/* 🟢 ADDED: Custom Request Input */}
+                                            <input 
+                                                type="text"
+                                                placeholder="Notes (e.g. No rice)"
+                                                value={poolNotes[emp.id] || ''}
+                                                onChange={(e) => setPoolNotes({ ...poolNotes, [emp.id]: e.target.value })}
+                                                className="text-xs border-gray-300 rounded shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1.5 px-2 w-full sm:w-[130px]"
+                                            />
+
                                             <SecondaryButton 
                                                 onClick={() => handleEmergencyAdd(emp.id, poolMealChoices[emp.id] || 'main')}
-                                                className="text-xs px-4 py-1.5 justify-center sm:justify-start whitespace-nowrap"
+                                                className="text-xs px-3 py-1.5 justify-center sm:justify-start whitespace-nowrap shrink-0"
                                             >
                                                 + Add
                                             </SecondaryButton>
