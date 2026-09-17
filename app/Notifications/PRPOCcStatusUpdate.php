@@ -37,7 +37,7 @@ class PRPOCcStatusUpdate extends Notification
             : $this->document->purchase_request_id;
 
         return [
-            'message' => "CC Update: " . $docNumber,
+            'message' => "📑 CC Update: " . $docNumber,
             'user_email' => $this->statusMessage,
             'action_url' => route('prpo.status.index') . '?highlight=' . $prId
         ];
