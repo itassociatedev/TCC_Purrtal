@@ -453,19 +453,16 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                                         📄 Download Template
                                     </a>
 
-                                    <div className="relative">
+                                    <label className={`inline-flex items-center px-4 py-2 bg-green-50 border border-green-200 rounded-md font-semibold text-xs text-green-700 uppercase tracking-widest shadow-sm hover:bg-green-100 transition ease-in-out duration-150 ${importProcessing ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}>
+                                        {importProcessing ? 'Importing...' : '📁 Batch Import'}
                                         <input
                                             type="file"
-                                            id="excel-upload"
                                             className="hidden"
                                             accept=".csv, .xlsx, .xls, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
                                             onChange={handleFileUpload}
+                                            disabled={importProcessing}
                                         />
-
-                                        <SecondaryButton onClick={() => document.getElementById('excel-upload').click()} disabled={importProcessing} className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100">
-                                            {importProcessing ? 'Importing...' : '📁 Batch Import'}
-                                        </SecondaryButton>
-                                    </div>
+                                    </label>
 
                                     <PrimaryButton onClick={() => openProductModal(null)}>+ Add Product</PrimaryButton>
                                 </>
