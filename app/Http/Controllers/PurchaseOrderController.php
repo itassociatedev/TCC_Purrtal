@@ -289,6 +289,15 @@ class PurchaseOrderController extends Controller
                 $items = $lockedPR->items()->with('product')->get();
                 $groupedBySupplier = $items->groupBy('supplier_id');
 
+                $takenPoNumbers = \App\Models\PurchaseOrder::lockForUpdate()
+                    ->pluck('po_number')
+                    ->filter(fn($num) => $num !== 'TEMP' && $num !== null)
+                    ->map(function ($poNumber) {
+                        $parts = explode('-', $poNumber);
+                        return (int) end($parts);
+                    })
+                    ->toArray();
+
                 $branchName = strtoupper(trim($lockedPR->branch));
                 $knownBranches = ['MAKATI' => 'MKT', 'GREENHILLS' => 'GH', 'ALABANG' => 'ALB'];
 
@@ -306,15 +315,6 @@ class PurchaseOrderController extends Controller
                         if (strlen($branchInitials) < 2) $branchInitials = substr($branchName, 0, 3);
                     }
                 }
-                $takenPoNumbers = \App\Models\PurchaseOrder::where('po_number', 'LIKE', 'PO-' . $branchInitials . '-%')
-                    ->lockForUpdate()
-                    ->pluck('po_number')
-                    ->filter(fn($num) => $num !== 'TEMP' && $num !== null)
-                    ->map(function ($poNumber) {
-                        $parts = explode('-', $poNumber);
-                        return (int) end($parts);
-                    })
-                    ->toArray();
                 foreach ($groupedBySupplier as $supplierId => $supplierItems) {
                     if (!$supplierId) continue;
                     sort($takenPoNumbers);

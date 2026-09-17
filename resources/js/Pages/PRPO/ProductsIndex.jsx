@@ -86,6 +86,8 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                 return product.supplier?.name || '';
             case 'name':
                 return product.name || '';
+            case 'smallest_unit':
+                return product.smallest_unit || '';
             case 'unit':
                 return product.unit || '';
             default:
@@ -413,7 +415,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                 forceFormData: true,
                 preserveScroll: true,
                 onSuccess: () => {
-                    e.target.value = null; // Reset the input after successful upload
+                    e.target.value = null;
                 }
             });
         }
@@ -423,7 +425,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
         <SidebarLayout activeModule="PR/PO Module" sidebarLinks={PRPOLinks}>
             <Head title="Products & Suppliers" />
 
-            <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 flex flex-col h-[calc(100vh-140px)] overflow-hidden">
+            <div className="max-w-[95%] mx-auto p-4 sm:p-6 lg:p-8 flex flex-col h-[calc(100vh-140px)] overflow-hidden">
                 <div className="flex-none">
 
                 {/* HEADER & TOP CONTROLS */}
@@ -456,7 +458,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                                             type="file"
                                             id="excel-upload"
                                             className="hidden"
-                                            accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                                            accept=".csv, .xlsx, .xls, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
                                             onChange={handleFileUpload}
                                         />
 
@@ -588,6 +590,13 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                                             {renderHeaderSortButton('name')}
                                         </div>
                                     </th>
+                                    {/* 🟢 NEW: Smallest Unit Column Header */}
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                        <div className="flex items-center text-nowrap">
+                                            <span>Smallest Unit</span>
+                                            {renderHeaderSortButton('smallest_unit')}
+                                        </div>
+                                    </th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Details</th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                                         <div className="flex items-center">
@@ -606,7 +615,8 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {filteredProducts.length === 0 ? (
-                                    <tr><td colSpan={canEditProducts ? (canDeleteProducts ? "8" : "7") : "6"} className="px-6 py-12 text-center text-gray-500 font-medium">No products found.</td></tr>
+                                    // 🟢 Incremented colSpan by +1 to account for the new Smallest Unit column
+                                    <tr><td colSpan={canEditProducts ? (canDeleteProducts ? "9" : "8") : "7"} className="px-6 py-12 text-center text-gray-500 font-medium">No products found.</td></tr>
                                 ) : (
                                     filteredProducts.map((product) => (
                                         <tr key={product.id} className={`hover:bg-gray-50 ${selectedProducts.includes(product.id) ? 'bg-indigo-50/30' : ''}`}>
@@ -621,6 +631,10 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{product.supplier?.name || 'Unknown'}</td>
                                             <td className="px-4 py-3 font-medium text-gray-900 capitalize">
                                                 {product.name}
+                                            </td>
+                                            {/* 🟢 NEW: Smallest Unit Data Cell */}
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                                                {product.smallest_unit || <span className="text-gray-400 italic">N/A</span>}
                                             </td>
                                             <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={product.details}>{product.details}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{product.unit || <span className="text-gray-400 italic">N/A</span>}</td>
@@ -697,8 +711,8 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                             </a>
                             <label className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 rounded-md hover:bg-indigo-500 cursor-pointer shadow-sm transition-colors">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
-                                Import CSV
-                                <input type="file" className="hidden" accept=".csv" onChange={handleImport} />
+                                Import File
+                                <input type="file" className="hidden" accept=".csv, .xlsx, .xls" onChange={handleImport} />
                             </label>
                         </div>
                     </div>

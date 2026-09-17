@@ -47,6 +47,7 @@ class ProductsExport implements FromQuery, WithHeadings, WithMapping, ShouldAuto
         return [
             'Supplier Name',
             'Product Name',
+            'Smallest Unit',
             'Details',
             'Unit',
             'Price',
@@ -60,6 +61,7 @@ class ProductsExport implements FromQuery, WithHeadings, WithMapping, ShouldAuto
         return [
             $product->supplier->name ?? 'Unknown',
             $product->name,
+            $product->smallest_unit,
             $product->details,
             $product->unit,
             $product->price,

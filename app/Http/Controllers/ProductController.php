@@ -127,30 +127,23 @@ public function update(Request $request, Product $product)
     {
         // Import products from uploaded spreadsheet (XLSX/CSV)
         $request->validate([
-            'import_file' => 'required|mimes:xlsx,csv,xls|max:10240', // Max 10MB
+            // 🟢 Allowed txt to prevent strict CSV MIME checks from blocking uploads
+            'import_file' => 'required|mimes:xlsx,xls,csv,txt|max:10240',
         ]);
 
         try {
             Excel::import(new ProductsImport, $request->file('import_file'));
             return back()->with('success', 'Products imported successfully!');
         } catch (\Exception $e) {
-            // 🟢 FIXED: Changed to with('error', ...) to trigger your custom red toast
-            return back()->with('error', 'Error importing file. Please check your template format.');
+            // 🟢 NOW DISPLAYS THE EXACT SYSTEM ERROR MESSAGE!
+            return back()->with('error', 'Import Failed: ' . $e->getMessage());
         }
     }
 
     public function downloadTemplate()
     {
-        // Provide a downloadable CSV template for product imports
-        return response()->streamDownload(function () {
-            $file = fopen('php://output', 'w');
-
-            // Template headers and example row
-            fputcsv($file, ['Supplier Name', 'Product Name', 'Unit', 'Details', 'Price']);
-            fputcsv($file, ['Example Supplier Inc.', 'Paracetamol 500mg', 'BOX', 'Box of 100 tablets', '150.50']);
-
-            fclose($file);
-        }, 'product_import_template.csv');
+        // 🟢 Generate the cleanly styled Excel template containing the 'Smallest Unit' column
+        return Excel::download(new ProductTemplateExport, 'product_import_template.xlsx');
     }
 
     public function export(Request $request)

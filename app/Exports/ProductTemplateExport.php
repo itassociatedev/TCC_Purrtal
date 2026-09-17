@@ -14,15 +14,15 @@ class ProductTemplateExport implements FromArray, WithHeadings, WithStyles, With
 {
     public function headings(): array
     {
-        // Your exact mapped headers
-        return ['Supplier Name', 'Product Name', 'Unit', 'Details', 'Price'];
+        // 🟢 Added 'Smallest Unit' between Product Name and Details
+        return ['Supplier Name', 'Product Name', 'Smallest Unit', 'Details', 'Unit', 'Price'];
     }
 
     public function array(): array
     {
-        // The example data row for the users to follow
+        // 🟢 Added an example 'Smallest Unit' (e.g., '1 Tablet') to the example row
         return [
-            ['Example Supplier Inc.', 'Paracetamol 500mg', 'Box', 'Box of 100 tablets', '150.00']
+            ['Example Supplier Inc.', 'Paracetamol 500mg', '1 Tablet', 'Box of 100 tablets', 'Box', '150.00']
         ];
     }
 
@@ -50,16 +50,15 @@ class ProductTemplateExport implements FromArray, WithHeadings, WithStyles, With
             AfterSheet::class => function(AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
 
-                // 1. Auto-size all columns so the text isn't cut off
-                foreach (range('A', 'E') as $columnID) {
+                // 🟢 Expanded range to 'F' to cover the new 6th column
+                foreach (range('A', 'F') as $columnID) {
                     $sheet->getColumnDimension($columnID)->setAutoSize(true);
                 }
 
-                // 2. Wrap the data in an interactive Excel Data Table with filters
+                // 🟢 Expanded the interactive Excel Table range to 'F2'
                 $table = new \PhpOffice\PhpSpreadsheet\Worksheet\Table();
-                $table->setRange('A1:E2');
+                $table->setRange('A1:F2');
                 $table->setName('ProductsTemplateTable');
-                $table->setShowFilter(true);
                 $sheet->addTable($table);
             },
         ];
