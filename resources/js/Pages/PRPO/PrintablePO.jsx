@@ -7,6 +7,7 @@ export default function PrintablePO({ pos = [] }) {
         return `₱${parseFloat(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
 
+    // 🟢 RESTORED: The missing date formatter
     const formatDate = (dateString) => {
         if (!dateString) return 'TBD';
         const date = new Date(dateString);
@@ -16,6 +17,17 @@ export default function PrintablePO({ pos = [] }) {
             month: 'long',
             day: '2-digit'
         });
+    };
+
+    // 🟢 To be replace for a future proof sequence of detecting address of the clinic branches
+    const getBranchAddress = (branchName) => {
+        if (!branchName) return 'Makati City, Metro Manila';
+
+        const bName = branchName.toUpperCase();
+        if (bName.includes('GREENHILLS')) return 'Greenhills, San Juan City, Metro Manila';
+        if (bName.includes('ALABANG')) return 'Alabang, Muntinlupa City, Metro Manila';
+
+        return 'Makati City, Metro Manila'; // Default fallback
     };
 
     return (
@@ -106,13 +118,16 @@ export default function PrintablePO({ pos = [] }) {
                                     <span className="text-[10px] font-bold text-gray-900 block mt-0.5">Terms: <span className="font-normal">{po.payment_terms || '30 Days'}</span></span>
                                 </div>
                                 <div className="w-[20%] text-right flex flex-col justify-right">
-                                    <h2 className="text-[21px] font-bold text-indigo-600 leading-none m-0">PURCHASE ORDER</h2>
-                                    <div className="font-bold text-[12px] mt-1">{po.po_number}</div>
-                                    <div className="text-[10px] font-semibold text-gray-600 mt-1">
-                                        Date: <span className="font-normal">{formatDate(po.po_date)}</span>
-                                    </div>
-                                    <div className="text-[10px] text-gray-600 mt-0.5">Makati City, Metro Manila</div>
+                                <h2 className="text-[21px] font-bold text-indigo-600 leading-none m-0">PURCHASE ORDER</h2>
+                                <div className="font-bold text-[12px] mt-1">{po.po_number}</div>
+                                <div className="text-[10px] font-semibold text-gray-600 mt-1">
+                                    Date: <span className="font-normal">{formatDate(po.po_date)}</span>
                                 </div>
+                                {/* 🟢 Injects the correct address based on the PR's origin branch */}
+                                <div className="text-[10px] text-gray-600 mt-0.5">
+                                    {getBranchAddress(po.purchase_request?.branch || po.branch)}
+                                </div>
+                            </div>
                             </div>
 
                             <div>
