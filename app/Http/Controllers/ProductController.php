@@ -10,6 +10,7 @@ use Inertia\Inertia;
 use App\Imports\ProductsImport;
 use App\Exports\ProductsExport;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\ProductTemplateExport;
 
 // Product controller: product CRUD, import/export, status toggling
 class ProductController extends Controller
@@ -25,12 +26,12 @@ class ProductController extends Controller
 
         // 1. Fetch products with their linked suppliers
         $products = Product::with('supplier')->latest()->get();
-        
+
         // 2. Fetch all suppliers for the filter dropdown and manage modal
         $suppliers = Supplier::orderBy('name')->get();
 
         // 3. Render the React component and pass the data as props
-        // Note: Make sure the path matches where you saved ProductsIndex.jsx 
+        // Note: Make sure the path matches where you saved ProductsIndex.jsx
         // (e.g., 'PRPO/ProductsIndex')
         return Inertia::render('PRPO/ProductsIndex', [
             'products' => $products,
@@ -56,6 +57,8 @@ class ProductController extends Controller
             'unit' => 'nullable|string|max:50',
             'price' => 'required|numeric|min:0',
         ]);
+
+        $validated['name'] = ucwords(strtolower(trim($validated['name'])));
 
         Product::create($validated);
 
@@ -124,30 +127,23 @@ public function update(Request $request, Product $product)
     {
         // Import products from uploaded spreadsheet (XLSX/CSV)
         $request->validate([
-            'import_file' => 'required|mimes:xlsx,csv,xls|max:10240', // Max 10MB
+            // 🟢 Allowed txt to prevent strict CSV MIME checks from blocking uploads
+            'import_file' => 'required|mimes:xlsx,xls,csv,txt|max:10240',
         ]);
 
         try {
             Excel::import(new ProductsImport, $request->file('import_file'));
             return back()->with('success', 'Products imported successfully!');
         } catch (\Exception $e) {
-            // 🟢 FIXED: Changed to with('error', ...) to trigger your custom red toast
-            return back()->with('error', 'Error importing file. Please check your template format.');
+            // 🟢 NOW DISPLAYS THE EXACT SYSTEM ERROR MESSAGE!
+            return back()->with('error', 'Import Failed: ' . $e->getMessage());
         }
     }
 
     public function downloadTemplate()
     {
-        // Provide a downloadable CSV template for product imports
-        return response()->streamDownload(function () {
-            $file = fopen('php://output', 'w');
-            
-            // Template headers and example row
-            fputcsv($file, ['supplier_name', 'product_name', 'unit', 'details', 'price']);
-            fputcsv($file, ['Example Supplier Inc.', 'Paracetamol 500mg', 'BOX', 'Box of 100 tablets', '150.50']);
-            
-            fclose($file);
-        }, 'product_import_template.csv');
+        // 🟢 Generate the cleanly styled Excel template containing the 'Smallest Unit' column
+        return Excel::download(new ProductTemplateExport, 'product_import_template.xlsx');
     }
 
     public function export(Request $request)
@@ -155,7 +151,7 @@ public function update(Request $request, Product $product)
         // Export products to an Excel file, optionally filtered by supplier/search
         $supplierId = $request->input('supplier_id');
         $search = $request->input('search');
-        
+
         $fileName = 'products_export_' . date('Y-m-d_H-i-s') . '.xlsx';
 
         return Excel::download(new ProductsExport($supplierId, $search), $fileName);

@@ -30,7 +30,7 @@ class POStatusUpdate extends Notification
 
         // 🟢 Safely check the receiving user's role
         $userRole = strtolower(trim($notifiable->role->name ?? ''));
-        $allowedRoles = ['procurement assist', 'procurement tl', 'director of corporate services and operations', 'admin', 'operations manager', 'inventory assist', 'inventory tl'];
+        $allowedRoles = ['procurement assist', 'procurement tl','president', 'director of corporate services and operations', 'admin', 'operations manager', 'inventory assist', 'inventory tl'];
 
         // 🟢 Dynamically set the URL
         $actionUrl = in_array($userRole, $allowedRoles) 

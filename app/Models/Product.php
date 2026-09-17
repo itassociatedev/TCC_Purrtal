@@ -4,23 +4,31 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
 {
     use HasFactory;
+    use SoftDeletes;
 
     protected $fillable = [
         'supplier_id',
         'name',
+        'smallest_unit',
         'details',
         'unit',
         'price',
-        'status', 
+        'status',
     ];
 
     // A Product belongs to one Supplier
     public function supplier()
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    public function setNameAttribute($value)
+    {
+        $this->attributes['name'] = ucwords(strtolower(trim($value)));
     }
 }
