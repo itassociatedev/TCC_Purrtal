@@ -105,42 +105,8 @@ class PurchaseRequestController extends Controller
         }
 
         DB::transaction(function () use ($validated, $initialStatus) {
-            $takenPrNumbers = \App\Models\PurchaseRequest::pluck('pr_number')
-                ->filter(fn($num) => $num !== 'TEMP' && $num !== null)
-                ->map(function ($prNumber) {
-                    $parts = explode('-', $prNumber);
-                    return (int) end($parts);
-                })
-                ->toArray();
-
-            sort($takenPrNumbers);
-            $nextPrNumber = 1;
-            foreach ($takenPrNumbers as $num) {
-                if ($num === $nextPrNumber) {
-                    $nextPrNumber++;
-                } elseif ($num > $nextPrNumber) {
-                    break;
-                }
-            }
-
-            $pr = PurchaseRequest::create([
-                'user_id' => Auth::id(),
-                'branch' => $validated['branch'],
-                'department' => $validated['department'],
-                'date_prepared' => $validated['date_prepared'],
-                'request_type' => $validated['request_type'],
-                'priority' => $validated['priority'],
-                'date_needed' => $validated['date_needed'],
-                'budget_status' => $validated['budget_status'],
-                'budget_ref' => $validated['budget_ref'],
-                'purpose_of_request' => $validated['purpose_of_request'],
-                'impact_if_not_procured' => $validated['impact_if_not_procured'],
-                'status' => $initialStatus,
-                'cc_users' => $validated['cc_users'] ?? null,
-                'pr_number' => 'TEMP',
-            ]);
-
-            $branchName = strtoupper(trim($pr->branch));
+            // 1. Calculate branch initials first to isolate the PR sequence
+            $branchName = strtoupper(trim($validated['branch']));
             $knownBranches = ['MAKATI' => 'MKT', 'GREENHILLS' => 'GH', 'ALABANG' => 'ALB'];
 
             if (isset($knownBranches[$branchName])) {
@@ -158,6 +124,46 @@ class PurchaseRequestController extends Controller
                 }
             }
 
+            // 2. Fetch locked gap numbers uniquely belonging to this branch
+            $takenPrNumbers = \App\Models\PurchaseRequest::where('pr_number', 'LIKE', 'PR-' . $branchInitials . '-%')
+                ->lockForUpdate()
+                ->pluck('pr_number')
+                ->filter(fn($num) => $num !== 'TEMP' && $num !== null)
+                ->map(function ($prNumber) {
+                    $parts = explode('-', $prNumber);
+                    return (int) end($parts);
+                })
+                ->toArray();
+
+            sort($takenPrNumbers);
+            $nextPrNumber = 1;
+            foreach ($takenPrNumbers as $num) {
+                if ($num === $nextPrNumber) {
+                    $nextPrNumber++;
+                } elseif ($num > $nextPrNumber) {
+                    break;
+                }
+            }
+
+            // 3. Create the database record with a placeholder
+            $pr = PurchaseRequest::create([
+                'user_id' => Auth::id(),
+                'branch' => $validated['branch'],
+                'department' => $validated['department'],
+                'date_prepared' => $validated['date_prepared'],
+                'request_type' => $validated['request_type'],
+                'priority' => $validated['priority'],
+                'date_needed' => $validated['date_needed'],
+                'budget_status' => $validated['budget_status'],
+                'budget_ref' => $validated['budget_ref'],
+                'purpose_of_request' => $validated['purpose_of_request'],
+                'impact_if_not_procured' => $validated['impact_if_not_procured'],
+                'status' => $initialStatus,
+                'cc_users' => $validated['cc_users'] ?? null,
+                'pr_number' => 'TEMP',
+            ]);
+
+            // 4. Update the PR with the sequential branch-specific ID
             $pr->update([
                 'pr_number' => 'PR-' . $branchInitials . '-' . str_pad($nextPrNumber, 5, '0', STR_PAD_LEFT)
             ]);

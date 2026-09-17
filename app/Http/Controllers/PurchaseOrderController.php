@@ -124,9 +124,9 @@ class PurchaseOrderController extends Controller
                     'updated_at' => now(),
                 ]);
 
-                return back()->with('success', count($request->ids) . ' Purchase Order(s) moved to trash.');
+                return back()->with('success', count($request->ids) . ' Purchase Order(s) has been deleted.');
             } catch (\Exception $e) {
-                return back()->with('error', 'WIPE FAILED! Database Error: ' . $e->getMessage());
+                return back()->with('error', 'DELETION FAILED!: ' . $e->getMessage());
             }
         } else {
             $admins = \App\Models\User::whereHas('role', function($q) { $q->where('name', 'admin'); })->get();
@@ -307,6 +307,7 @@ class PurchaseOrderController extends Controller
                     }
                 }
                 $takenPoNumbers = \App\Models\PurchaseOrder::where('po_number', 'LIKE', 'PO-' . $branchInitials . '-%')
+                    ->lockForUpdate()
                     ->pluck('po_number')
                     ->filter(fn($num) => $num !== 'TEMP' && $num !== null)
                     ->map(function ($poNumber) {
