@@ -1,10 +1,10 @@
 import Pagination from '@/Components/Pagination';
-import { getAdminLinks } from "@/Config/navigation";
+import { getAdminLinks, getDutyMealLinks } from "@/Config/navigation";
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 
-export default function SystemLogsIndex({ auth, logs, filters }) {
+export default function SystemLogsIndex({ auth, logs, filters, dutyLogs=false, canDeleteLogs=false }) {
     const [search, setSearch] = useState(filters.search || '');
     const [moduleFilter, setModuleFilter] = useState(filters.module || '');
     const [actionFilter, setActionFilter] = useState(filters.action || '');
@@ -83,7 +83,7 @@ export default function SystemLogsIndex({ auth, logs, filters }) {
         e.preventDefault();
 
         router.get(
-            route('admin.logs.index'),
+            route(dutyLogs?'admin.duty-meals.logs.index':'admin.logs.index'),
             {
                 search,
                 module: moduleFilter,
@@ -116,7 +116,7 @@ export default function SystemLogsIndex({ auth, logs, filters }) {
             end_date: mmddyyyyToISO(endDate),
         }).toString();
         
-        window.location.href = route('admin.logs.export') + '?' + params;
+        window.location.href = route(dutyLogs?'admin.duty-meals.logs.export':'admin.logs.export') + '?' + params;
     };
 
     const getStatusBadge = (status) => {
@@ -135,9 +135,9 @@ export default function SystemLogsIndex({ auth, logs, filters }) {
 
     return (
         <SidebarLayout
-            activeModule="Admin"
-            sidebarLinks={getAdminLinks(auth)}
-            header={<h2 className="text-xl font-semibold leading-tight text-gray-800">System Logs & Security</h2>}
+            activeModule={dutyLogs?"Duty Meal":"Admin"}
+            sidebarLinks={dutyLogs?getDutyMealLinks(auth):getAdminLinks(auth)}
+            header={<h2 className="text-xl font-semibold leading-tight text-gray-800">{dutyLogs?'Duty Meal Logs':'System Logs & Security'}</h2>}
         >
             <Head title="System Logs" />
 
@@ -162,7 +162,7 @@ export default function SystemLogsIndex({ auth, logs, filters }) {
                             value={moduleFilter}
                             onChange={(e) => setModuleFilter(e.target.value)}
                         >
-                            <option value="">All Modules</option>
+                            {dutyLogs ? <><option value="">All Duty Meal logs</option>{['Duty Meal Setup','Duty Meal Overview','Duty Meal Archive'].map(name=><option key={name} value={name}>{name}</option>)}</> : <><option value="">All Modules</option>
                             <option value="Authentication">Authentication</option>
                             <option value="Employee Management">Employee Management</option>
                             <option value="Organizational Chart">Organizational Chart</option>
@@ -175,7 +175,7 @@ export default function SystemLogsIndex({ auth, logs, filters }) {
                             <option value="PR/PO Module">PR/PO Module</option>
                             <option value="Duty Meal Module">Duty Meal Module</option>
                             <option value="Profile">Profile</option>
-                        </select>
+                        </>}</select>
 
                         {/* ACTIONS */}
                         <select
@@ -284,7 +284,7 @@ export default function SystemLogsIndex({ auth, logs, filters }) {
                                 <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider text-xs">Module & Action</th>
                                 <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider text-xs">Description</th>
                                 <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider text-xs">Security</th>
-                                <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider text-xs">Status</th>
+                                <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider text-xs">Status</th>{canDeleteLogs&&<th className="px-6 py-3 text-left text-xs">Actions</th>}
                             </tr>
                         </thead>
 
@@ -307,13 +307,13 @@ export default function SystemLogsIndex({ auth, logs, filters }) {
                                     <td className="px-6 py-4 text-gray-500 font-mono text-xs whitespace-nowrap">
                                         <span className="bg-gray-100 px-2 py-1 rounded">IP: {log.ip_address}</span>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(log.status)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(log.status)}</td>{canDeleteLogs&&<td className="px-6 py-4"><button type="button" className="font-semibold text-red-700" onClick={()=>{if(window.confirm('Delete this log entry permanently?'))router.delete(route(dutyLogs?'admin.duty-meals.logs.destroy':'admin.logs.destroy',log.id),{preserveScroll:true});}}>Delete</button></td>}
                                 </tr>
                             ))}
                             
                             {logs.data.length === 0 && (
                                 <tr>
-                                    <td colSpan="6" className="px-6 py-8 text-center text-gray-500 bg-gray-50">
+                                    <td colSpan={canDeleteLogs?7:6} className="px-6 py-8 text-center text-gray-500 bg-gray-50">
                                         <div className="flex flex-col items-center justify-center">
                                             <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                                             No logs found matching your criteria.

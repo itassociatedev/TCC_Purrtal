@@ -3,7 +3,7 @@ import Dropdown from '@/Components/Dropdown';
 import FlashMessage from '@/Components/FlashMessage';
 import { Link, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
-import { useEffect, useState } from 'react';
+import { cloneElement, useEffect, useState } from 'react';
 import { hasHRModuleAccess, moduleHasAccess, hasPermission, canViewModuleCard, getFirstAttendanceRoute } from '@/Config/navigation';
 
 export default function SidebarLayout({
@@ -12,6 +12,7 @@ export default function SidebarLayout({
     sidebarLinks = [],
     activeModule = 'Dashboard',
     headerClassName = '',
+    notificationSlot = null,
 }) {
     const { auth } = usePage().props;
 
@@ -86,7 +87,7 @@ export default function SidebarLayout({
     const [isLoadingMore, setIsLoadingMore] = useState(false);
 
     // 🟢 Calculate hasMore dynamically
-    const totalNotificationsCount = auth.totalNotificationsCount || 0;
+    const [totalNotificationsCount, setTotalNotificationsCount] = useState(auth.totalNotificationsCount || 0);
     const hasMore = totalNotificationsCount > localNotifications.length;
 
     const loadMoreNotifications = async (e) => {
@@ -119,7 +120,8 @@ export default function SidebarLayout({
             setLocalNotifications(auth.notifications || []);
         }
         setLocalUnreadCount(auth.unreadNotificationsCount || 0);
-    }, [auth.notifications, auth.unreadNotificationsCount]);
+        setTotalNotificationsCount(auth.totalNotificationsCount || 0);
+    }, [auth.notifications, auth.unreadNotificationsCount, auth.totalNotificationsCount]);
 
     // 🟢 Mark as read without deleting from the list
     const markAsRead = (notificationId, url) => {
@@ -171,7 +173,10 @@ export default function SidebarLayout({
     const routeToDutyMeal = getFirstDutyMealRoute();
 
     const currentModuleLabel =
-        activeModule === 'Admin'
+        // Use the shared module selector label when a Task Module screen is active.
+        activeModule === 'Tasks'
+            ? 'Task Module'
+            : activeModule === 'Admin'
             ? 'Admin Module'
             : activeModule === 'Attendance'
               ? 'Attendance Module'
@@ -440,6 +445,12 @@ export default function SidebarLayout({
         return iconSvg[link.label] || <div className="h-4 w-4 rounded bg-gray-200" />;
     };
 
+    const clearPortalNotifications = async () => {
+        await axios.post(route('notifications.clear'));
+        setLocalNotifications([]);
+        setLocalUnreadCount(0);
+        setTotalNotificationsCount(0);
+    };
     const markAllAsRead = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -663,7 +674,16 @@ export default function SidebarLayout({
                         
                         {/* 🔽 Wrapped Notifications Dropdown 🔽 */}
                         <div className="mobile-notification-fix">
-                            <Dropdown>
+                            {notificationSlot ? cloneElement(notificationSlot, {
+                                portalNotifications: localNotifications,
+                                portalUnreadCount: localUnreadCount,
+                                onPortalRead: markAsRead,
+                                onPortalReadAll: markAllAsRead,
+                                onPortalClear: clearPortalNotifications,
+                                onPortalLoadMore: loadMoreNotifications,
+                                portalHasMore: hasMore,
+                                portalLoading: isLoadingMore,
+                            }) : <Dropdown>
                                 <Dropdown.Trigger>
                                     <button
                                         type="button"
@@ -735,7 +755,7 @@ export default function SidebarLayout({
                                         </>
                                     )}
                                 </Dropdown.Content>
-                            </Dropdown>
+                            </Dropdown>}
                         </div>
 
                         {/* Module Selection Dropdown */}
@@ -758,6 +778,8 @@ export default function SidebarLayout({
                             </Dropdown.Trigger>
 
                             <Dropdown.Content>
+                                    {/* Open the Task Module prototype through the existing portal module selector. */}
+                                    <Dropdown.Link href={route('tasks.index')}>Task Module · UI Preview</Dropdown.Link>
                                     {hasAnyAdminPermission() && (
                                         <Dropdown.Link href={getFirstAdminRoute()}>
                                             Admin Module

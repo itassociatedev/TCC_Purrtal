@@ -11,7 +11,10 @@ class SystemLogController extends Controller
 {
     public function index(Request $request)
     {
+        $duty = $request->routeIs('admin.duty-meals.logs.*');
+        if ($duty) abort_unless($request->user()->canEditModule('duty_meal_setup_roster'), 403);
         $query = SystemLog::with('user')->latest();
+        if ($duty) $query->where('module', 'like', 'Duty Meal%');
 
         $this->applyFilters($query, $request);
 
@@ -19,13 +22,18 @@ class SystemLogController extends Controller
 
         return Inertia::render('Admin/SystemLogs/Index', [
             'logs' => $logs,
+            'dutyLogs' => $duty,
+            'canDeleteLogs' => $request->user()->canDeleteModule($duty ? 'duty_meal_setup_roster' : 'system_logs'),
             'filters' => $request->only(['search', 'module', 'action', 'status', 'start_date', 'end_date']),
         ]);
     }
 
     public function export(Request $request)
     {
+        $duty = $request->routeIs('admin.duty-meals.logs.*');
+        if ($duty) abort_unless($request->user()->canEditModule('duty_meal_setup_roster'), 403);
         $query = SystemLog::with('user')->latest();
+        if ($duty) $query->where('module', 'like', 'Duty Meal%');
 
         // Apply the exact same filters as the index method
         $this->applyFilters($query, $request);
@@ -75,6 +83,8 @@ class SystemLogController extends Controller
      */
     private function applyFilters($query, Request $request)
     {
+        $request->validate(['start_date' => 'nullable|date_format:Y-m-d', 'end_date' => 'nullable|date_format:Y-m-d']);
+        if ($request->filled('start_date') && $request->filled('end_date')) $request->validate(['end_date' => 'after_or_equal:start_date']);
         // 1. Search Filter
         if ($request->filled('search')) {
             $query->where(function($q) use ($request) {
@@ -117,5 +127,16 @@ class SystemLogController extends Controller
         if ($request->filled('end_date')) {
             $query->whereDate('created_at', '<=', $request->end_date);
         }
+    }
+
+    public function destroy(Request $request, SystemLog $log)
+    {
+        if ($request->routeIs('admin.duty-meals.logs.*')) {
+            abort_unless($request->user()->canDeleteModule('duty_meal_setup_roster') && str_starts_with($log->module, 'Duty Meal'), 403);
+        } else {
+            abort_unless($request->user()->canDeleteModule('system_logs'), 403);
+        }
+        $log->delete();
+        return back()->with('success', 'Log entry deleted.');
     }
 }

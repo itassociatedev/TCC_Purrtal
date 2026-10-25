@@ -1106,6 +1106,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
             }
         >
             <Head title="Employee Management" />
+            {canManageEmployees && <details className="mx-6 mt-4 rounded-lg border border-gray-200 bg-white p-3 text-sm"><summary className="cursor-pointer font-semibold text-gray-700">Employee import format</summary><p className="mt-2">Excel or CSV columns: Name, Email, Department, Position, Branch. Use existing department, position and branch names exactly. One employee per row. Existing employee emails must not be duplicated.</p><a className="mt-2 inline-block text-indigo-700" href={route('admin.employees.template')}>Download official template</a></details>}
 
             <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 flex flex-col md:h-[calc(100vh-240px)] md:overflow-hidden">
 

@@ -46,6 +46,26 @@ Route::post('/forgot-password-notify', [AuthenticatedSessionController::class, '
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
+    // Serve the Task Module UI with account identities matched to the confirmed staff roster.
+    Route::get('/task-module', function (Request $request) {
+        // Setup access follows the authenticated account, never the selectable UI preview role.
+        $isTaskAdmin = strtolower(trim($request->user()->role?->name ?? '')) === 'admin';
+        abort_if($request->query('view') === 'Workspace Setup' && !$isTaskAdmin, 403);
+        return Inertia::render('Tasks/Index', [
+            'taskAdmin' => $isTaskAdmin,
+            // Serialize directory fields only; never send account credentials or device data.
+            'taskDirectory' => [
+                'users' => \App\Models\User::with(['department:id,name', 'position:id,name', 'branch:id,name', 'branches:id,name'])
+                    ->orderBy('name')->get()->map(fn ($user) => [
+                        'id' => $user->id, 'name' => $user->name,
+                        'department' => $user->department?->name, 'position' => $user->position?->name,
+                        'branch' => $user->branch?->name, 'branches' => $user->branches->pluck('name')->values(),
+                        'status' => $user->status,
+                    ]),
+            ],
+        ]);
+    })->name('tasks.index');
+
     // --- HR MODULE (User Requests) ---
     Route::get('/hr-module', [HrRequestController::class, 'index'])->name('hr.index');
     Route::post('/hr-module/request', [HrRequestController::class, 'store'])->name('hr.store');
@@ -195,6 +215,7 @@ Route::middleware('auth')->group(function () {
     })->middleware('auth')->name('notifications.read');
 
     Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
+    Route::post('/notifications/clear', [NotificationController::class, 'clear'])->name('notifications.clear');
 });
 
 Route::get('/notifications/load-more', [NotificationController::class, 'loadMore'])->name('notifications.load-more');
@@ -203,6 +224,7 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
 
     Route::get('/logs', [SystemLogController::class, 'index'])->name('.logs.index');
     Route::get('/logs/export', [SystemLogController::class, 'export'])->name('.logs.export');
+    Route::delete('/logs/{log}', [SystemLogController::class, 'destroy'])->name('.logs.destroy');
     
     Route::get('/dashboard', function(){
         $totalActiveEmployees = \App\Models\User::whereIn('status', ['Active', 'Password reset'])->count();
@@ -323,6 +345,9 @@ Route::middleware(['guest'])->group(function () {
 });
 
 Route::middleware(['auth', CheckDutyMealAccess::class])->group(function () {
+    Route::get('/duty-meals/logs', [SystemLogController::class, 'index'])->name('admin.duty-meals.logs.index');
+    Route::get('/duty-meals/logs/export', [SystemLogController::class, 'export'])->name('admin.duty-meals.logs.export');
+    Route::delete('/duty-meals/logs/{log}', [SystemLogController::class, 'destroy'])->name('admin.duty-meals.logs.destroy');
     Route::get('/duty-meals/overview', [DutyMealController::class, 'index'])->name('admin.duty-meals.index');
     Route::get('/duty-meals/set-up', [DutyMealController::class, 'create'])->name('admin.duty-meals.create');
     Route::post('/admin/duty-meals', [DutyMealController::class, 'store'])->name('admin.duty-meals.store');

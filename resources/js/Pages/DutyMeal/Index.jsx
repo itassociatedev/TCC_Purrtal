@@ -250,7 +250,7 @@ export default function Index({ auth, dutymeals = [], employees = [], department
                 <h2 className="text-xl font-semibold leading-tight text-gray-800">
                     Duty Meal Panel
                 </h2>}>
-            <Head title="Duty Meal Dashboard" />
+            <Head title="Duty Meal Dashboard" />{canEditDutyMeals && <div className="mb-4"><a className="inline-block rounded border border-gray-300 bg-white px-4 py-2 text-sm" href={route('admin.duty-meals.create')}>Import roster / view format</a></div>}
 
             {/* --- OVERVIEW DASHBOARD --- */}
             <div className="mb-6">

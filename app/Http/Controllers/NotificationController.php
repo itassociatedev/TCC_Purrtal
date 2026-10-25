@@ -7,6 +7,14 @@ use Inertia\Inertia;
 
 class NotificationController extends Controller
 {
+    /** Clear only the signed-in user's portal notification history. */
+    public function clear(Request $request)
+    {
+        $request->user()->notifications()->delete();
+
+        return response()->json(['success' => true]);
+    }
+
     /**
      * Display a paginated list of all notifications.
      */

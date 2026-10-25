@@ -1,0 +1,15 @@
+import { useState } from 'react';
+import { formatNarrative, validateNarrative } from './dailyTasks.mjs';
+
+// One narrative belongs to one daily task; revisions update that instance rather than tomorrow's report.
+export default function NarrativeReport({ canEdit = false, task, branches, onDraft, onSubmit, onNotice }) {
+    const editable = canEdit && ['Not Started', 'In Progress', 'Revision Needed'].includes(task.status);
+    const [report, setReport] = useState(() => ({ summary: '', accomplishments: '', issues: '', nextSteps: '', helpNeeded: '', ...task.narrative, date: task.scheduledDate || task.due, branch: !editable || branches.includes(task.narrative?.branch) ? task.narrative?.branch || task.branch : task.branch, department: editable ? task.department : task.narrative?.department || task.department }));
+    const [error, setError] = useState('');
+    const field = (key, value) => { setError(''); setReport(previous => ({ ...previous, [key]: value })); };
+    return <section className="tm-rounds"><h3 className="tm-narrative-heading">Daily Narrative Report</h3><form onSubmit={event => { event.preventDefault(); if (!editable) return; const message = validateNarrative(report, branches, task.scheduledDate || task.due); if (message) { setError(message); return; } onSubmit(report); }}>
+        <div className="tm-form-grid"><label>Report date<input value={report.date} readOnly/></label><label>Work branch<select value={report.branch} disabled={!editable} onChange={event => field('branch', event.target.value)}>{[...new Set([...branches, ...(!editable ? [report.branch] : [])])].map(branch => <option key={branch}>{branch}</option>)}</select></label><label>Department<input value={report.department} readOnly/></label></div>
+        {[['summary', 'Summary of the day', true], ['accomplishments', 'Accomplishments', false], ['issues', 'Issues / challenges', false], ['nextSteps', 'Follow-up / next steps', false], ['helpNeeded', 'Help needed', false]].map(([key, label, required]) => <label key={key}>{label}{required ? ' (required)' : ' (optional)'}<textarea rows={key === 'summary' ? 5 : 3} value={report[key]} disabled={!editable} onChange={event => field(key, event.target.value)} placeholder="Lorem ipsum…"/></label>)}
+        {error && <p className="tm-rounds-error" role="alert">{error}</p>}{editable && <div className="tm-modal-actions"><button type="button" className="tm-secondary" onClick={() => { onDraft(report); setError(''); }}>Save draft</button><button type="submit" className="tm-primary">Submit narrative for review</button></div>}
+    </form><details className="tm-rounds-report" open={!editable}><summary>{editable ? 'Preview daily summary' : 'Submitted narrative'}</summary><pre>{formatNarrative(report)}</pre><button type="button" className="tm-secondary" onClick={async () => { try { await navigator.clipboard.writeText(formatNarrative(report)); onNotice('Narrative report copied.'); } catch { onNotice('Select the report text to copy it.'); } }}>Copy report</button></details></section>;
+}

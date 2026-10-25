@@ -576,6 +576,7 @@ export const getDutyMealLinks = (auth) => {
         });
     }
 
+    if (canEditModule(auth, 'duty_meal_setup_roster')) links.push({label:'Duty Meal Logs',href:route('admin.duty-meals.logs.index'),active:route().current('admin.duty-meals.logs.*')});
     return links;
 };
 

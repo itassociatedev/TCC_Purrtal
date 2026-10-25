@@ -187,7 +187,7 @@ class DutyMealController extends Controller
                       });
                 });
             })
-            ->select('id', 'name', 'department_id', 'position_id','branch_id')->orderBy('name')->get()
+            ->select('id', 'name', 'email', 'department_id', 'position_id','branch_id')->orderBy('name')->get()
             ->map(function ($emp) {
                 $emp->assigned_branch_ids = $emp->branches->pluck('id')->toArray();
                 unset($emp->branches); 

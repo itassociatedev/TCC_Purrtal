@@ -1,3 +1,7 @@
+import {prepareRosterImport} from './rosterCsv.mjs';
+import CsvImportControl from '@/Components/CsvImportControl';
+import {downloadCsv} from '@/Utils/csv.mjs';
+import {canEditModule} from '@/Config/navigation';
 import InputError from '@/Components/InputError';
 import InputLabel from '@/Components/InputLabel';
 import Modal from '@/Components/Modal';
@@ -52,7 +56,7 @@ const mapShiftType = (attendanceShift) => {
 export default function CreateDutyMeal({ auth, employees = [], branches = [], departments = [], positions = [] }) {
     const dutyMealsLinks = getDutyMealLinks(auth);
     const { system } = usePage().props;
-    const canEditDutyMeals = auth?.user?.acl_permissions?.duty_meal_setup_roster === 'full' || auth?.user?.acl_permissions?.duty_meal_setup_roster === 'edit';
+    const canEditDutyMeals = canEditModule(auth, 'duty_meal_setup_roster');
     
     // --- SMART DEFAULT BRANCH LOGIC ---
     const defaultBranch = branches.length > 0 
@@ -76,6 +80,7 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
         schedule: [] // Holds 7 days
     });
 
+    const importRosterRows=rows=>{const draft=prepareRosterImport(rows,{canEditDutyMeals,branches,employees,minDate,generateWeekSchedule,getShiftDetails});setViewMode('manual');setData(draft);setActiveTab(0);};
     const [activeTab, setActiveTab] = useState(0); 
     const [departmentFilter, setDepartmentFilter] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
@@ -408,6 +413,7 @@ export default function CreateDutyMeal({ auth, employees = [], branches = [], de
                 </div>
             }>
             <Head title="Setup Weekly Roster" />
+            {canEditDutyMeals && <div className="mx-6 my-4 flex flex-wrap items-start gap-3"><CsvImportControl columns={['date','branch','employee_email','shift_type','main_meal','alt_meal']} sample={[minDate,branches[0]?.name||'Makati','employee@example.com','day','Chicken','Fish']} onImport={importRosterRows} description="Import one branch and up to seven days into a draft. Review it and use Publish to save. Leave employee_email blank for a meals-only row."/><button type="button" className="rounded border border-gray-300 bg-white px-4 py-2 text-sm" onClick={()=>downloadCsv('duty-meal-draft.csv',['date','branch','employee_email','shift_type','main_meal','alt_meal'],data.schedule.flatMap(day=>day.participants?.length?day.participants.map(person=>[day.date,branches.find(branch=>Number(branch.id)===Number(data.branch_id))?.name,employees.find(employee=>employee.id===person.id)?.email||person.email,person.shift_type,day.main_meal,day.alt_meal]):[[day.date,branches.find(branch=>Number(branch.id)===Number(data.branch_id))?.name,'','',day.main_meal,day.alt_meal]]))}>Export draft CSV</button></div>}
 
             {/* 🟢 INJECTED CSS FOR MODAL ANIMATIONS */}
             <style>{`

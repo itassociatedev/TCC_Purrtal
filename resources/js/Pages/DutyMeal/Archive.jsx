@@ -1,7 +1,7 @@
 import ConfirmModal from '@/Components/ConfirmModal';
 import DangerButton from '@/Components/DangerButton';
 import Modal from '@/Components/Modal';
-import { getDutyMealLinks } from '@/Config/navigation';
+import { getDutyMealLinks, canEditModule } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { formatAppDate } from '@/Utils/date';
 import { Head, router, usePage } from '@inertiajs/react';
@@ -92,7 +92,7 @@ export default function Archive({ auth, archivedMealsByWeek, availableDates, cur
 
     return (
         <SidebarLayout activeModule="Duty Meals" sidebarLinks={dutyMealsLinks} header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Archive Panel</h2>}>
-            <Head title="Duty Meal Archive" />
+            <Head title="Duty Meal Archive" /><div className="mb-4 flex flex-wrap gap-3"><a className="rounded border border-gray-300 bg-white px-4 py-2 text-sm" href={route('admin.duty-meals.export',{ids:allArchivedMeals.map(meal=>meal.id).join(',')})}>Export archive</a>{canEditModule(auth,'duty_meal_setup_roster') && <a className="rounded border border-gray-300 bg-white px-4 py-2 text-sm" href={route('admin.duty-meals.create')}>Import roster in Setup</a>}</div>
 
             {/* HEADER & FILTERS */}
             <div className="mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
