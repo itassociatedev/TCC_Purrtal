@@ -1837,21 +1837,12 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             </div>
 
                             <div className="mt-4">
-<<<<<<< HEAD
                                 <InputLabel htmlFor="edit_role_id" value="System Role" className="font-bold" />
-                                <select 
-                                    id="edit_role_id" 
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-bold" 
-                                    value={editUserData.role_id || ''} 
-                                    onChange={(e) => setEditData('role_id', e.target.value)} 
-=======
-                                <InputLabel htmlFor="edit_role_id" value="System Role" />
                                 <select
                                     id="edit_role_id"
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm capitalize"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-bold"
                                     value={editUserData.role_id || ''}
                                     onChange={(e) => setEditData('role_id', e.target.value)}
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                     required
                                 >
                                     <option value="" disabled className="normal-case">Select Role</option>
@@ -1861,27 +1852,15 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             </div>
 
                             <div className="mt-4">
-<<<<<<< HEAD
                                 <InputLabel htmlFor="edit_device_limit" value="Device Login Limit" className="font-bold" />
-                                <TextInput 
-                                    id="edit_device_limit" 
-                                    type="number" 
-                                    min="1" 
-                                    className={`mt-1 block w-full font-bold ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`} 
-                                    value={editUserData.device_limit} 
-                                    onChange={(e) => setEditData('device_limit', e.target.value)} 
-                                    required 
-=======
-                                <InputLabel htmlFor="edit_device_limit" value="Device Login Limit" />
                                 <TextInput
                                     id="edit_device_limit"
                                     type="number"
                                     min="1"
-                                    className={`mt-1 block w-full ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`}
+                                    className={`mt-1 block w-full font-bold ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`}
                                     value={editUserData.device_limit}
                                     onChange={(e) => setEditData('device_limit', e.target.value)}
                                     required
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                     disabled={!isCurrentUserAdmin}
                                 />
                                 {!isCurrentUserAdmin && (
@@ -1902,23 +1881,13 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             </div>
 
                             <div className="mt-4">
-<<<<<<< HEAD
                                 <InputLabel htmlFor="edit_position" value="Position" className="font-bold" />
-                                <select 
-                                    id="edit_position" 
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-bold" 
-                                    value={editUserData.position_id} 
-                                    onChange={(e) => setEditData('position_id', e.target.value)} 
-                                    required 
-=======
-                                <InputLabel htmlFor="edit_position" value="Position" />
                                 <select
                                     id="edit_position"
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-bold"
                                     value={editUserData.position_id}
                                     onChange={(e) => setEditData('position_id', e.target.value)}
                                     required
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                     disabled={!editUserData.department_id}
                                 >
                                     <option value="" disabled>Select Position</option>
@@ -1961,11 +1930,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             <TextInput id="dept_name" className="mt-1 block w-full font-bold" value={deptData.name} onChange={(e) => setDeptData('name', e.target.value)} required placeholder="e.g. Grooming, Surgery" />
                             <InputError message={deptErrors.name} className="mt-2" />
                         </div>
-<<<<<<< HEAD
-                        <PrimaryButton disabled={deptProcessing} className="!py-2.5">Add</PrimaryButton>
-=======
-                        <PrimaryButton disabled={deptProcessing || !canManageEmployees} title={!canManageEmployees ? 'Edit permission required' : ''}>Add</PrimaryButton>
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
+                        <PrimaryButton disabled={deptProcessing || !canManageEmployees} className="!py-2.5" title={!canManageEmployees ? 'Edit permission required' : ''}>Add</PrimaryButton>
                     </form>
 
                     <h3 className="text-[11px] font-black uppercase tracking-wider text-gray-500 mb-2">Existing Departments</h3>
@@ -2001,11 +1966,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             <TextInput id="role_name" className="mt-1 block w-full font-bold" value={roleData.name} onChange={(e) => setRoleData('name', e.target.value)} required placeholder="e.g. Admin, Staff" />
                             <InputError message={roleErrors.name} className="mt-2" />
                         </div>
-<<<<<<< HEAD
-                        <PrimaryButton disabled={roleProcessing} className="!py-2.5">Add</PrimaryButton>
-=======
-                        <PrimaryButton disabled={roleProcessing || !canManageEmployees} title={!canManageEmployees ? 'Edit permission required' : ''}>Add</PrimaryButton>
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
+                        <PrimaryButton disabled={roleProcessing || !canManageEmployees} className="!py-2.5" title={!canManageEmployees ? 'Edit permission required' : ''}>Add</PrimaryButton>
                     </form>
 
                     <h3 className="text-[11px] font-black uppercase tracking-wider text-gray-500 mb-2">Existing System Roles</h3>
