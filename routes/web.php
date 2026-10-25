@@ -52,16 +52,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/hr-module', [HrRequestController::class, 'index'])->name('hr.index');
     Route::post('/hr-module/request', [HrRequestController::class, 'store'])->name('hr.store');
 
-<<<<<<< HEAD
     Route::get('/my-assets', [\App\Http\Controllers\Staff\MyAssetController::class, 'index'])->name('staff.assets.index');
     
     // --- HR MODULE (Admin Management) --- 
-=======
-    // --- HR MODULE (Admin Management) ---
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
     Route::get('/hr-module/admin', [HrRequestController::class, 'adminIndex'])->name('hr.admin.index');
     Route::patch('/hr-module/admin/{hrRequest}/status', [HrRequestController::class, 'updateStatus'])->name('hr.admin.update-status');
-
     // --- NEW: HR MODULE (Accounting Approvals) ---
     Route::get('/hr-module/accounting-approvals', [HrRequestController::class, 'accountingApprovals'])->name('hr.accounting.index');
     Route::patch('/hr-module/accounting-approvals/{hrRequest}/status', [HrRequestController::class, 'updateAccountingStatus'])->name('hr.accounting.update');
@@ -335,8 +330,6 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
     Route::delete('/assets/{asset}', [\App\Http\Controllers\Admin\AssetController::class, 'destroy'])->name('.assets.destroy');
 });
 
-<<<<<<< HEAD
-=======
 // ACCESS CONTROL MODULE (Admin only)
 Route::middleware(['auth', 'admin_acl:access_control'])->prefix('admin')->name('admin')->group(function(){
     Route::get('/access-control', [AccessControlController::class, 'index'])->name('.access-control.index');
@@ -354,7 +347,6 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/comments/{comment}', [\App\Http\Controllers\CommentController::class, 'destroy'])
         ->name('comments.destroy');
 });
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
 
 Route::middleware(['guest'])->group(function () {
     Route::get('/setup-account', [SetupAccountController::class, 'showSetupForm'])->name('setup.account');
