@@ -1,5 +1,5 @@
 <?php
-// Purchase request controller: manage PR lifecycle
+
 
 namespace App\Http\Controllers;
 
@@ -16,15 +16,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Notification;
 use App\Notifications\PendingApprovalNotification;
 use App\Notifications\PRPOCcStatusUpdate;
+use App\Notifications\DeletionRequestNotification;
 
 class PurchaseRequestController extends Controller
 {
-    // =====================================================================
-    // 1. CREATE REQUEST (Frontend Form)
-    // =====================================================================
     public function create()
     {
-        /** @var \App\Models\User $user */
         $user = Auth::user();
         $userBranches = $user->branches()->pluck('name')->toArray();
 
@@ -33,10 +30,9 @@ class PurchaseRequestController extends Controller
         $branches = Branch::select('id', 'name')->get();
         $departments = Department::select('id', 'name')->get();
         $employees = User::with('branches:id,name')
-                         ->where('id', '!=', Auth::id())
-                         ->select('id', 'name')
-                         ->orderBy('name')
-                         ->get();
+                        ->select('id', 'name')
+                        ->orderBy('name')
+                        ->get();
 
         return Inertia::render('PRPO/CreatePR', [
             'suppliers' => $suppliers,
@@ -48,16 +44,19 @@ class PurchaseRequestController extends Controller
         ]);
     }
 
-    // =====================================================================
-    // 2. STORE REQUEST (Save to Database)
-    // =====================================================================
-   public function store(Request $request)
+    public function store(Request $request)
     {
-        // 🔐 ACL CHECK: Verify user can CREATE purchase_requests
-        // Permission Hierarchy: Full = Create/Edit/Delete, Edit = Create/Approve/Reject
         $user = Auth::user();
         if (!$user->canCreateModule('purchase_requests')) {
             abort(403, 'You do not have permission to create purchase requests.');
+        }
+
+        $ccData = $request->input('cc_users');
+        if (empty($ccData) && $request->has('cc_user_id')) {
+            $legacyCc = $request->input('cc_user_id');
+            $request->merge([
+                'cc_users' => is_array($legacyCc) ? $legacyCc : (!empty($legacyCc) ? [$legacyCc] : [])
+            ]);
         }
 
         $validated = $request->validate([
@@ -65,14 +64,14 @@ class PurchaseRequestController extends Controller
             'department' => 'required|string|max:255',
             'date_prepared' => 'required|date',
             'request_type' => 'nullable|string|max:255',
-            'priority' => 'nullable|string|max:255',
-            'date_needed' => 'nullable|date|after_or_equal:today', 
+            'priority' => 'required|string|max:255',
+            'date_needed' => 'required|date|after_or_equal:today',
             'budget_status' => 'nullable|string|max:255',
             'budget_ref' => 'nullable|string|max:255',
             'purpose_of_request' => 'nullable|string',
             'impact_if_not_procured' => 'nullable|string',
-            'cc_user_id' => 'nullable|exists:users,id',
-
+            'cc_users' => 'nullable|array',
+            'cc_users.*' => 'exists:users,id',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.supplier_id' => 'nullable|exists:suppliers,id',
@@ -87,24 +86,68 @@ class PurchaseRequestController extends Controller
             'date_needed.after_or_equal' => 'The date needed cannot be a past date.',
         ]);
 
-        // 2. 🟢 DYNAMIC WORKFLOW ROUTING
-        $userRole = strtolower(Auth::user()->role->name ?? '');
-        $initialStatus = 'pending_inv_tl'; 
+        $userRoleId = $user->role_id;
+        $branchName = trim($validated['branch']);
+        $isInventoryAssist = str_contains(strtolower(trim($user->role->name ?? '')), 'inventory assist');
 
-        // 🟢 Check if the user is an Inventory Assistant AND the branch is Greenhills
-        $isGreenhillsAssistant = str_contains($userRole, 'inventory assist') && $validated['branch'] === 'Greenhills';
 
-        if (str_contains($userRole, 'tl') || $isGreenhillsAssistant) {
-            $initialStatus = 'pending_ops_manager'; 
-        } 
-        elseif (str_contains($userRole, 'director') || str_contains($userRole, 'admin') || str_contains($userRole, 'operations') || str_contains($userRole, 'procurement'))  {
-            $initialStatus = 'approved'; 
+        $hasInvTL = User::whereHas('role', function ($q) {
+            $q->where('name', 'LIKE', '%Inventory TL%')
+                ->orWhere('name', 'LIKE', '%Inventory Team Lead%');
+        })->whereHas('branches', function ($q) use ($branchName) {
+            $q->where('name', $branchName);
+        })->exists();
+
+        if ((!$hasInvTL && $isInventoryAssist) || $userRoleId === 15) {
+            $initialStatus = 'pending_ops_manager';
+        } else {
+            $initialStatus = 'pending_inv_tl';
         }
-        
+
         DB::transaction(function () use ($validated, $initialStatus) {
-            
+            // 1. Calculate branch initials first to isolate the PR sequence
+            $branchName = strtoupper(trim($validated['branch']));
+            $knownBranches = ['MAKATI' => 'MKT', 'GREENHILLS' => 'GH', 'ALABANG' => 'ALB'];
+
+            if (isset($knownBranches[$branchName])) {
+                $branchInitials = $knownBranches[$branchName];
+            } else {
+                $words = array_filter(explode(' ', $branchName));
+                if (count($words) > 1) {
+                    $branchInitials = '';
+                    foreach (array_slice($words, 0, 3) as $w) $branchInitials .= $w[0];
+                } else {
+                    $firstLetter = $branchName[0] ?? 'U';
+                    $consonants = preg_replace('/[AEIOU\W]/', '', substr($branchName, 1));
+                    $branchInitials = substr($firstLetter . $consonants, 0, 3);
+                    if (strlen($branchInitials) < 2) $branchInitials = substr($branchName, 0, 3);
+                }
+            }
+
+            // 2. Fetch locked gap numbers uniquely belonging to this branch
+            $takenPrNumbers = \App\Models\PurchaseRequest::where('pr_number', 'LIKE', 'PR-' . $branchInitials . '-%')
+                ->lockForUpdate()
+                ->pluck('pr_number')
+                ->filter(fn($num) => $num !== 'TEMP' && $num !== null)
+                ->map(function ($prNumber) {
+                    $parts = explode('-', $prNumber);
+                    return (int) end($parts);
+                })
+                ->toArray();
+
+            sort($takenPrNumbers);
+            $nextPrNumber = 1;
+            foreach ($takenPrNumbers as $num) {
+                if ($num === $nextPrNumber) {
+                    $nextPrNumber++;
+                } elseif ($num > $nextPrNumber) {
+                    break;
+                }
+            }
+
+            // 3. Create the database record with a placeholder
             $pr = PurchaseRequest::create([
-                'user_id' => Auth::id(), 
+                'user_id' => Auth::id(),
                 'branch' => $validated['branch'],
                 'department' => $validated['department'],
                 'date_prepared' => $validated['date_prepared'],
@@ -116,7 +159,13 @@ class PurchaseRequestController extends Controller
                 'purpose_of_request' => $validated['purpose_of_request'],
                 'impact_if_not_procured' => $validated['impact_if_not_procured'],
                 'status' => $initialStatus,
-                'cc_user_id' => $validated['cc_user_id'] ?? null,
+                'cc_users' => $validated['cc_users'] ?? null,
+                'pr_number' => 'TEMP',
+            ]);
+
+            // 4. Update the PR with the sequential branch-specific ID
+            $pr->update([
+                'pr_number' => 'PR-' . $branchInitials . '-' . str_pad($nextPrNumber, 5, '0', STR_PAD_LEFT)
             ]);
 
             foreach ($validated['items'] as $item) {
@@ -125,267 +174,57 @@ class PurchaseRequestController extends Controller
 
             $this->notifyNextApprovers($pr);
 
-           // 🟢 1. Initialize a collection for all CC recipients
             $ccRecipients = collect();
+            $ccUserIds = $validated['cc_users'] ?? [];
 
-            // Add the manual CC user if one was selected
-            if ($pr->cc_user_id) {
-                $manualCc = User::find($pr->cc_user_id);
-                if ($manualCc) {
-                    $ccRecipients->push($manualCc);
-                }
+            if (!empty($ccUserIds)) {
+                $manualCcs = User::whereIn('id', $ccUserIds)->get();
+                $ccRecipients = $ccRecipients->merge($manualCcs);
             }
 
-            // 🟢 2. Automatically fetch all Auditors
             $auditors = User::whereHas('role', function ($query) {
                 $query->whereIn('name', ['Auditor TL', 'Audit Assistant']);
             })->get();
 
-            // 🟢 3. Merge them together and remove duplicates 
             $allCcUsers = $ccRecipients->merge($auditors)->unique('id');
 
-            // 🟢 4. Send the notification to everyone in the list
             foreach ($allCcUsers as $recipient) {
-                $reason = $recipient->id == $pr->cc_user_id 
+                $reason = in_array($recipient->id, $ccUserIds)
                     ? "You were CC'd on a new Purchase Request by " . Auth::user()->name
                     : "A new Purchase Request was submitted for Audit review by " . Auth::user()->name;
 
                 $recipient->notify(new PRPOCcStatusUpdate($pr, 'PR', $reason));
             }
-            
         });
 
         return redirect()->route('prpo.approval-board', ['view' => 'my_requests'])
-                         ->with('success', 'Purchase Request submitted successfully!');
+                        ->with('success', 'Purchase Request submitted successfully!');
     }
 
-    // =====================================================================
-    // 3. APPROVAL BOARD (View Requests based on Role)
-    // =====================================================================
-  public function approvalBoard(Request $request)
+public function update(Request $request, $id)
     {
-        /** @var \App\Models\User $user */
-        $user = Auth::user();
-        $userRole = strtolower($user->role->name ?? '');
-        $userBranches = $user->branches()->pluck('name')->toArray(); 
-        
-        $isAssistant = str_contains($userRole, 'assist');
-        $defaultView = $isAssistant ? 'my_requests' : 'action_needed';
-        $view = $request->query('view', $defaultView);
 
-        $query = PurchaseRequest::with(['user', 'cc_user', 'items.product', 'items.supplier'])->latest();
-        $isAdmin = str_contains($userRole, 'admin');
+        $purchaseRequest = PurchaseRequest::findOrFail($id);
 
-        if ($view === 'action_needed') {
-            if ($isAdmin) {
-                $query->whereIn('status', ['pending_inv_tl', 'pending_ops_manager', 'approved']);
-            } 
-            elseif (str_contains($userRole, 'inventory tl')) {
-                $query->where('status', 'pending_inv_tl');
-                if (!empty($userBranches)) {
-                    $query->whereIn('branch', $userBranches); 
-                }
-            } 
-            elseif (str_contains($userRole, 'operations') || str_contains($userRole, 'ops manager')) {
-                $query->where('status', 'pending_ops_manager');
-                if (!empty($userBranches)) {
-                    $query->whereIn('branch', $userBranches); 
-                }
-            } 
-            elseif (str_contains($userRole, 'director') || str_contains($userRole, 'procurement')) {
-                $query->where('status', 'approved');
-            } 
-            else {
-                $query->whereRaw('1 = 0'); 
-            }
-        } 
-        elseif ($view === 'my_requests') {
-            $query->where('user_id', $user->id);
-        } 
-        else {
-            if (!$isAdmin && !empty($userBranches)) {
-                $query->whereIn('branch', $userBranches);
-            }
-        }
-
-        $requests = $query->paginate(15)->withQueryString();
-
-        // 🟢 Fetch lookup data so the Edit Modal can add new items/departments
-        $suppliers = Supplier::select('id', 'name')->get();
-        $products = Product::select('id', 'name', 'supplier_id', 'details', 'unit', 'price')->get();
-        $branches = Branch::select('id', 'name')->get();
-        $departments = Department::select('id', 'name')->get();
-        $employees =   User::with('branches:id,name')->where('id', '!=', Auth::id())->select('id', 'name')->orderBy('name')->get();
-
-        return Inertia::render('PRPO/ApprovalBoard', [
-            'requests' => $requests,
-            'currentView' => $view,
-            'userBranches' => $userBranches, 
-            'isAssistant' => $isAssistant, 
-            'canSeeAll' => $isAdmin || str_contains($userRole, 'director'),
-            
-            // 🟢 Pass data to React
-            'suppliers' => $suppliers,
-            'products' => $products,
-            'branches' => $branches,
-            'departments' => $departments,
-            'employees' => $employees,
-        ]);
-    }
-
-    // =====================================================================
-    // 4. UPDATE STATUS (Approve / Reject Logic)
-    // =====================================================================
-    public function updateStatus(Request $request, PurchaseRequest $purchaseRequest)
-    {
-        // 🔐 ACL CHECK: Verify user can APPROVE/REJECT purchase_requests
-        // Permission Hierarchy: Full + Edit can approve/reject
-        $user = Auth::user();
-        $action = $request->input('action');
-        
-        // Determine which permission is needed based on action
-        if (in_array($action, ['approve'], true)) {
-            if (!$user->canApproveModule('purchase_requests')) {
-                abort(403, 'You do not have permission to approve purchase requests.');
-            }
-        } elseif (in_array($action, ['reject', 'return_to_inv_tl', 'return_to_creator'], true)) {
-            if (!$user->canRejectModule('purchase_requests')) {
-                abort(403, 'You do not have permission to reject purchase requests.');
-            }
-        } elseif ($action === 'cancel') {
-            // Cancel typically requires full permission
-            if (!$user->canDeleteModule('purchase_requests')) {
-                abort(403, 'You do not have permission to cancel purchase requests.');
-            }
-        }
-
-        // �🟢 UPDATED: Allow 'return_to_creator' as a valid action
-        $validated = $request->validate([
-            'action' => 'required|in:approve,reject,cancel,return_to_inv_tl,return_to_creator',
-            'rejection_reason' => 'required_if:action,reject|required_if:action,return_to_inv_tl|required_if:action,return_to_creator|nullable|string'
-        ]);
-
-        $isGreenhills = $purchaseRequest->branch === 'Greenhills';
-
-        // 🟢 1. Handle Return to Inv TL (Standard Branch)
-        if ($validated['action'] === 'return_to_inv_tl') {
-            $purchaseRequest->status = 'pending_inv_tl';
-            $purchaseRequest->rejection_reason = $validated['rejection_reason']; 
-            
-            $message = "Purchase request returned to Inventory TL for corrections.";
-            
-            $purchaseRequest->save();
-            
-            // --- RETURN NOTIFICATION LOGIC ---
-            $notifyList = collect();
-
-            // Fetch Inventory TLs for this specific branch
-            $invTeam = User::whereHas('role', function ($q) {
-                $q->where('name', 'like', '%Inventory TL%');
-            })->whereHas('branches', function ($q) use ($purchaseRequest) {
-                $q->where('name', $purchaseRequest->branch);
-            })->get();
-
-            $notifyList = $notifyList->merge($invTeam);
-
-            // Send the alert
-            if ($notifyList->isNotEmpty()) {
-                $alertMessage = "PR from {$purchaseRequest->department} ({$purchaseRequest->branch}) was returned to Inventory TL for corrections.";
-                \Illuminate\Support\Facades\Notification::send($notifyList, new PendingApprovalNotification($purchaseRequest, $alertMessage));
-            }
-
-            return back()->with('success', $message);
-        }
-
-        // 🟢 1.5 Handle Return to Creator (Greenhills Assistant)
-        if ($validated['action'] === 'return_to_creator') {
-             // In your system, an assistant needs it to be in "pending_inv_tl" status to edit it again
-            $purchaseRequest->status = 'pending_inv_tl';
-            $purchaseRequest->rejection_reason = $validated['rejection_reason']; 
-            $message = "Purchase request returned to the Greenhills Inventory Assistant for corrections.";
-            
-            $purchaseRequest->save();
-
-            // Send Notification directly to Assistants
-            $notifyList = collect();
-            $assistants = User::whereHas('role', function ($q) {
-                $q->where('name', 'like', '%Inventory Assist%');
-            })->whereHas('branches', function ($q) use ($purchaseRequest) {
-                $q->where('name', $purchaseRequest->branch);
-            })->get();
-
-            $notifyList = $notifyList->merge($assistants);
-            
-            if ($notifyList->isNotEmpty()) {
-                $alertMessage = "Your PR from {$purchaseRequest->department} ({$purchaseRequest->branch}) was returned by the Ops Manager for corrections.";
-                \Illuminate\Support\Facades\Notification::send($notifyList->unique('id'), new PendingApprovalNotification($purchaseRequest, $alertMessage));
-            }
-
-            return back()->with('success', $message);
-        }
-
-
-        // 🟢 2. Handle Approve
-        if ($validated['action'] === 'approve') {
-            if ($purchaseRequest->status === 'pending_inv_tl') {
-                $purchaseRequest->status = 'pending_ops_manager';
-                $purchaseRequest->rejection_reason = null; // Clear any old return notes
-            } elseif ($purchaseRequest->status === 'pending_ops_manager') {
-                $purchaseRequest->status = 'approved'; 
-            }
-            $message = 'Purchase request moved to the next approval stage.';
-        
-        // 🟢 3. Handle Cancel
-        } elseif ($validated['action'] === 'cancel') {
-            $purchaseRequest->status = 'cancelled';
-            $message = 'Purchase request has been cancelled.';
-            
-        // 🟢 4. Handle Complete Rejection 
-        } else {
-            // Standard Rejection
-            $purchaseRequest->status = 'rejected';
-            $purchaseRequest->rejection_reason = $validated['rejection_reason'];
-            $message = 'Purchase request has been rejected.';
-        }
-
-        $purchaseRequest->save();
-
-        // 🟢 5. Trigger standard workflow notifications for Approve/Reject/Cancel
-        $this->notifyNextApprovers($purchaseRequest);
-
-        $ccUser = $purchaseRequest->cc_user;
-        if ($ccUser) {
-            $ccUser->notify(new PRPOCcStatusUpdate($purchaseRequest, 'PR', "A Purchase Request you are copied on was " . $request->action));
-        }
-
-        return back()->with('success', $message);
-    }
-
-    public function update(Request $request, $id)
-    {
-        // 🔐 ACL CHECK: Verify user can EDIT purchase_requests (not just approve)
-        // Permission Hierarchy: Full only can edit existing requests
         $user = Auth::user();
         if (!$user->canEditModule('purchase_requests')) {
-            abort(403, 'You do not have permission to update purchase requests.');
+            abort(403, 'You do not have permission to edit purchase requests.');
         }
-
-        $pr = PurchaseRequest::findOrFail($id);
 
         $validated = $request->validate([
             'branch' => 'required|string|max:255',
             'department' => 'required|string|max:255',
             'request_type' => 'nullable|string|max:255',
             'priority' => 'nullable|string|max:255',
-            'date_needed' => 'nullable|date',
+            'date_needed' => 'nullable|date|after_or_equal:today',
             'budget_status' => 'nullable|string|max:255',
             'budget_ref' => 'nullable|string|max:255',
             'purpose_of_request' => 'nullable|string',
             'impact_if_not_procured' => 'nullable|string',
-            'cc_user_id' => 'nullable|exists:users,id',
-
+            'cc_users' => 'nullable|array',
+            'cc_users.*' => 'exists:users,id',
             'items' => 'required|array|min:1',
-            'items.*.id' => 'nullable|exists:purchase_request_items,id',
+            'items.*.id' => 'nullable',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.supplier_id' => 'nullable|exists:suppliers,id',
             'items.*.specifications' => 'nullable|string|max:255',
@@ -397,108 +236,417 @@ class PurchaseRequestController extends Controller
             'items.*.total_cost' => 'nullable|numeric|min:0',
         ]);
 
-        $userRole = strtolower(Auth::user()->role->name ?? '');
-        $isGreenhillsAssistant = str_contains($userRole, 'inventory assist') && $validated['branch'] === 'Greenhills';
-        $statusAutoForwarded = false;
+        DB::transaction(function () use ($validated, $purchaseRequest) {
+            $purchaseRequest->update([
+                'branch' => $validated['branch'],
+                'department' => $validated['department'],
+                'request_type' => $validated['request_type'],
+                'priority' => $validated['priority'],
+                'date_needed' => $validated['date_needed'],
+                'budget_status' => $validated['budget_status'],
+                'budget_ref' => $validated['budget_ref'],
+                'purpose_of_request' => $validated['purpose_of_request'],
+                'impact_if_not_procured' => $validated['impact_if_not_procured'],
+                'cc_users' => $validated['cc_users'] ?? [],
+            ]);
 
-        $updateData = [
-            'branch' => $validated['branch'],
-            'department' => $validated['department'],
-            'request_type' => $validated['request_type'],
-            'priority' => $validated['priority'],
-            'date_needed' => $validated['date_needed'],
-            'budget_status' => $validated['budget_status'],
-            'budget_ref' => $validated['budget_ref'],
-            'purpose_of_request' => $validated['purpose_of_request'],
-            'impact_if_not_procured' => $validated['impact_if_not_procured'],
-            'cc_user_id' => $validated['cc_user_id'] ?? null,
-        ];
+            $incomingItemIds = collect($validated['items'])->pluck('id')->filter()->toArray();
+            $purchaseRequest->items()->whereNotIn('id', $incomingItemIds)->delete();
 
-        // 🟢 UN-STUCK LOGIC FOR GREENHILLS ASSISTANTS
-        // If a Greenhills Assistant edits a returned PR, auto-bump it back to the OM
-        if ($isGreenhillsAssistant && $pr->status === 'pending_inv_tl') {
-            $updateData['status'] = 'pending_ops_manager';
-            $updateData['rejection_reason'] = null;
-            $statusAutoForwarded = true;
+            foreach ($validated['items'] as $itemData) {
+                $product = Product::find($itemData['product_id']);
+                $itemData['product_name'] = $product ? $product->name : 'Unknown Product';
+
+                if (!empty($itemData['id'])) {
+                    $purchaseRequest->items()->where('id', $itemData['id'])->update([
+                        'product_id' => $itemData['product_id'],
+                        'product_name' => $itemData['product_name'],
+                        'supplier_id' => $itemData['supplier_id'] ?? null,
+                        'specifications' => $itemData['specifications'] ?? null,
+                        'unit' => $itemData['unit'] ?? null,
+                        'qty_requested' => $itemData['qty_requested'],
+                        'qty_on_hand' => $itemData['qty_on_hand'] ?? 0,
+                        'reorder_level' => $itemData['reorder_level'] ?? 0,
+                        'est_unit_cost' => $itemData['est_unit_cost'],
+                        'total_cost' => $itemData['total_cost'],
+                    ]);
+                } else {
+                    $purchaseRequest->items()->create($itemData);
+                }
+            }
+        });
+
+        return back()->with('success', 'Purchase Request updated successfully.');
+    }
+
+    public function approvalBoard(Request $request)
+    {
+        $user = Auth::user();
+        $userRole = strtolower(trim($user->role->name ?? ''));
+        $userBranches = $user->branches()->pluck('name')->toArray();
+
+        $isAssistant = str_contains($userRole, 'assist');
+        $isAdmin = str_contains($userRole, 'admin');
+        $isEVP = str_contains($userRole, 'evp') || str_contains($userRole, 'president') || $user->role_id === 9;
+
+        $defaultView = $isAssistant ? 'my_requests' : 'for_approval';
+        $view = $request->query('view', $defaultView);
+
+        $query = PurchaseRequest::with(['user', 'cc_user', 'items.product', 'items.supplier', 'purchaseOrders'])->latest();
+
+        if ($view === 'my_requests') {
+            $query->where('user_id', $user->id);
         }
+        elseif ($view === 'for_approval') {
+            $query->where(function ($q) use ($userRole, $isEVP, $isAdmin) {
+                if ($isAdmin || $isEVP) {
+                    $q->whereIn('status', ['pending_inv_tl', 'pending_ops_manager', 'pr_generated', 'pending_procurement']);
+                } else {
+                    if (str_contains($userRole, 'inventory tl')) {
+                        $q->orWhere('status', 'pending_inv_tl');
+                    }
+                    if (str_contains($userRole, 'operations') || str_contains($userRole, 'ops manager') || $isEVP) {
+                        $q->orWhere('status', 'pending_ops_manager');
+                    }
+                    if (str_contains($userRole, 'procurement assist') || $isEVP) {
+                        $q->orWhereIn('status', ['pr_generated', 'pending_procurement']);
+                    }
+                }
+            });
 
-        // 1. Update the PR header fields
-        $pr->update($updateData);
-
-        // 2. Sync items: Delete items that the user removed in the frontend
-        $existingItemIds = collect($validated['items'])->pluck('id')->filter()->all();
-        $pr->items()->whereNotIn('id', $existingItemIds)->delete();
-
-        // 3. Update existing items or Create new ones
-        foreach ($validated['items'] as $itemData) {
-            if (isset($itemData['id'])) {
-                $pr->items()->where('id', $itemData['id'])->update($itemData);
-            } else {
-                $pr->items()->create($itemData);
+            if (!$isAdmin && !$isEVP && !empty($userBranches)) {
+                $query->whereIn('branch', $userBranches);
             }
         }
+        elseif ($view === 'for_generation') {
+            $query->whereRaw('1 = 0');
+        }
+        elseif ($view === 'po_generated') {
+            if ($isAdmin || str_contains($userRole, 'procurement') || $isEVP) {
+                $query->where('status', 'po_generated');
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+        elseif ($view === 'history') {
+            $query->whereIn('status', [
+                'pr_generated',
+                'pending_procurement',
+                'pending_procurement_tl',
+                'rejected',
+                'cancelled'
+            ]);
 
-        // 🟢 Re-trigger the OM notification if the PR was auto-forwarded
-        if ($statusAutoForwarded) {
-            $this->notifyNextApprovers($pr);
+            if (!$isAdmin && !$isEVP && !empty($userBranches)) {
+                $query->whereIn('branch', $userBranches);
+            }
+        }
+        elseif ($view === 'deletion_request') {
+            if ($request->has('pending_delete')) {
+                $ids = explode(',', $request->query('pending_delete'));
+                $query->whereIn('id', $ids);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        }
+        else {
+            $query->whereRaw('1 = 0');
         }
 
-        return redirect()->back()->with('success', 'Purchase Request updated successfully.');
+        $requests = $query->get();
+
+        $suppliers = Supplier::select('id', 'name')->get();
+        $products = Product::select('id', 'name', 'supplier_id', 'details', 'unit', 'price')->get();
+        $branches = Branch::select('id', 'name')->get();
+        $departments = Department::select('id', 'name')->get();
+        $employees = User::with('branches:id,name')->select('id', 'name')->orderBy('name')->get();
+
+        return Inertia::render('PRPO/ApprovalBoard', [
+            'requests' => $requests,
+            'currentView' => $view,
+            'userBranches' => $userBranches,
+            'isAssistant' => $isAssistant,
+            'canSeeAll' => $isAdmin || str_contains($userRole, 'director'),
+            'suppliers' => $suppliers,
+            'products' => $products,
+            'branches' => $branches,
+            'departments' => $departments,
+            'employees' => $employees,
+        ]);
+    }
+
+    public function updateStatus(Request $request, PurchaseRequest $purchaseRequest)
+    {
+        $user = Auth::user();
+        $action = $request->input('action');
+        $userRole = strtolower(trim($user->role->name ?? ''));
+        $isExecutive = str_contains($userRole, 'evp') || str_contains($userRole, 'president') || $userRole === 'admin';
+
+        $validated = $request->validate([
+            'action' => 'required|in:approve,generate_pr,generate_pr_as_om_fallback,review_pr,endorse,reject,cancel,return_to_inv_tl,return_to_creator',
+            'rejection_reason' => 'required_if:action,reject|required_if:action,return_to_inv_tl|required_if:action,return_to_creator|nullable|string',
+        ]);
+
+
+        if (in_array($action, ['reject', 'return_to_inv_tl', 'return_to_creator', 'cancel'])) {
+            if ($action === 'reject') {
+                $purchaseRequest->status = 'rejected';
+                $purchaseRequest->rejection_reason = $validated['rejection_reason'];
+                $message = 'Purchase request has been rejected.';
+            } elseif ($action === 'cancel') {
+                $purchaseRequest->status = 'cancelled';
+                $message = 'Purchase request has been cancelled.';
+            } elseif ($action === 'return_to_inv_tl') {
+                $purchaseRequest->status = 'pending_inv_tl';
+                $purchaseRequest->rejection_reason = $validated['rejection_reason'];
+                $message = 'Purchase request returned to Inventory TL for corrections.';
+            } elseif ($action === 'return_to_creator') {
+                $branchName = trim($purchaseRequest->branch);
+
+                $hasInvTL = User::whereHas('role', function ($q) {
+                    $q->where('name', 'LIKE', '%Inventory TL%')
+                        ->orWhere('name', 'LIKE', '%Inventory Team Lead%');
+                })->whereHas('branches', function ($q) use ($branchName) {
+                    $q->where('name', $branchName);
+                })->exists();
+
+                $purchaseRequest->status = !$hasInvTL ? 'pending_ops_manager' : 'pending_inv_tl';
+                $purchaseRequest->rejection_reason = $validated['rejection_reason'];
+                $message = 'Purchase request returned for corrections.';
+            }
+
+            $purchaseRequest->save();
+            $this->notifyNextApprovers($purchaseRequest);
+            return back()->with('success', $message);
+        }
+
+
+        if ($action === 'approve') {
+            if ($purchaseRequest->status === 'pending_inv_tl') {
+                $userRole = strtolower(trim($user->role->name ?? ''));
+                $isInventoryTL = str_contains($userRole, 'inventory tl');
+                $isGreenhills = strtolower(trim($purchaseRequest->branch ?? '')) === 'greenhills';
+
+                if (!$isInventoryTL && !($isExecutive && $isGreenhills) && $user->role_id !== 1) {
+                    abort(403, 'Only the Inventory Team Leader can approve this request.');
+                }
+
+                $purchaseRequest->status = 'pending_ops_manager';
+                $purchaseRequest->reviewed_by_id = $user->id;
+                $purchaseRequest->reviewed_by_name = $user->name;
+                $purchaseRequest->reviewed_by_role = $user->role->name ?? 'Inventory TL';
+                $purchaseRequest->rejection_reason = null;
+                $purchaseRequest->save();
+
+                $this->notifyNextApprovers($purchaseRequest);
+
+                return back()->with('success', 'Purchase request approved by Inventory Team Lead and forwarded to the Operations Manager.');
+            }
+
+            abort(403, 'You do not have permission to approve the request at its current stage.');
+        }
+
+        if ($action === 'generate_pr_as_om_fallback') {
+            if (!$isExecutive) abort(403, 'Only the EVP can approve on behalf of the Operations Manager.');
+            if ($purchaseRequest->status !== 'pending_ops_manager') abort(403, 'Invalid status.');
+
+            $purchaseRequest->status = 'pr_generated';
+            $purchaseRequest->is_evp_override = true;
+            $purchaseRequest->approved_by_id = $user->id;
+            $purchaseRequest->approved_by_name = $user->name;
+            $purchaseRequest->approved_by_role = $user->role->name ?? 'Executive Vice President';
+            $purchaseRequest->rejection_reason = null;
+            $purchaseRequest->save();
+
+            $this->notifyNextApprovers($purchaseRequest);
+            return back()->with('success', 'Purchase Request generated on behalf of the unavailable Operations Manager.');
+        }
+
+        if ($action === 'generate_pr') {
+            if (!str_contains($userRole, 'operations') && !str_contains($userRole, 'ops manager') && !$isExecutive) abort(403, 'Unauthorized.');
+            if ($purchaseRequest->status !== 'pending_ops_manager') abort(403, 'Invalid status.');
+
+            $purchaseRequest->status = 'pr_generated';
+            $purchaseRequest->approved_by_id = $user->id;
+            $purchaseRequest->approved_by_name = $user->name;
+            $purchaseRequest->approved_by_role = $user->role->name ?? 'Operations Manager';
+            $purchaseRequest->rejection_reason = null;
+            $purchaseRequest->save();
+
+            $this->notifyNextApprovers($purchaseRequest);
+            return back()->with('success', 'Purchase Request document generated successfully. Forwarded to Procurement Assistant.');
+        }
+
+        if ($action === 'review_pr') {
+            if (!str_contains($userRole, 'procurement assist') && !$isExecutive) abort(403, 'Unauthorized.');
+            if ($purchaseRequest->status !== 'pr_generated') abort(403, 'Invalid status.');
+
+            $purchaseRequest->status = 'pending_procurement';
+            $purchaseRequest->save();
+            return back()->with('success', 'Initial review of Purchase Request started.');
+        }
+
+        if ($action === 'endorse') {
+            if (!str_contains($userRole, 'procurement assist') && !$isExecutive) abort(403, 'Unauthorized.');
+            if (!in_array($purchaseRequest->status, ['pr_generated', 'pending_procurement'])) abort(403, 'Invalid status.');
+
+            $purchaseRequest->status = 'pending_procurement_tl';
+            $purchaseRequest->save();
+            $this->notifyNextApprovers($purchaseRequest);
+            return back()->with('success', 'Purchase Request endorsed to Procurement Team Leader.');
+        }
+
+        return back()->with('error', 'Invalid action or status.');
+    }
+
+    public function batchDestroy(Request $request)
+    {
+        $user = Auth::user();
+        $userRole = strtolower(trim($user->role->name ?? ''));
+
+        $isAdminOrEVP = str_contains($userRole, 'admin') || str_contains($userRole, 'evp') || str_contains($userRole, 'president') || $user->role_id === 9;
+
+        $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'exists:purchase_requests,id',
+        ]);
+
+        if ($isAdminOrEVP) {
+            try {
+                \Illuminate\Support\Facades\DB::transaction(function () use ($request) {
+                    $poIds = \App\Models\PurchaseOrder::whereIn('purchase_request_id', $request->ids)->pluck('id')->toArray();
+
+                    if (!empty($poIds)) {
+                        \App\Models\PurchaseOrderItem::whereIn('purchase_order_id', $poIds)->delete();
+                        \App\Models\PurchaseOrder::whereIn('id', $poIds)->delete();
+                    }
+                    \App\Models\PurchaseRequestItem::whereIn('purchase_request_id', $request->ids)->delete();
+                    \App\Models\PurchaseRequest::whereIn('id', $request->ids)->delete();
+                });
+
+                \Illuminate\Support\Facades\DB::table('system_logs')->insert([
+                    'user_id' => $user->id,
+                    'module' => 'PR/PO Module',
+                    'action' => 'Delete',
+                    'description' => 'Deleted ' . count($request->ids) . ' Purchase Request(s)',
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->header('User-Agent'),
+                    'status' => 'SUCCESS',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                return back()->with('success', count($request->ids) . ' Purchase Request(s) and all linked data moved to trash.');
+            } catch (\Exception $e) {
+                return back()->with('error', 'WIPE FAILED! Database Error: ' . $e->getMessage());
+            }
+        } else {
+            $admins = \App\Models\User::whereHas('role', function($q) { $q->where('name', 'admin'); })->get();
+            if ($admins->isNotEmpty()) {
+                $message = $user->name . " has requested the deletion of " . count($request->ids) . " Purchase Request(s).";
+                \Illuminate\Support\Facades\Notification::send($admins, new \App\Notifications\DeletionRequestNotification($message, 'PR', $request->ids));
+            }
+            return back()->with('success', 'Deletion request for ' . count($request->ids) . ' Purchase Request(s) sent to Admin successfully.');
+        }
+    }
+
+    public function index(Request $request)
+    {
+        $user = Auth::user();
+        $userRole = strtolower(trim($user->role->name ?? ''));
+        $view = $request->query('view', 'active_prs');
+
+        $query = PurchaseRequest::with(['user', 'items.product', 'purchaseOrders']);
+
+        if ($view === 'active_prs') {
+            $query->where('user_id', $user->id)
+                ->whereNotIn('status', ['po_generated', 'cancelled', 'rejected']);
+        } elseif ($view === 'for_approval') {
+            if (str_contains($userRole, 'inventory tl')) {
+                $query->where('status', 'pending_inv_tl');
+            } elseif (str_contains($userRole, 'operations') || str_contains($userRole, 'evp') || $userRole === 'admin') {
+                $query->where('status', 'pending_ops_manager');
+            }
+        } elseif ($view === 'for_generation') {
+            $query->where('status', 'pending_procurement_tl');
+        } elseif ($view === 'approved_prs') {
+            $query->whereIn('status', ['po_generated']);
+        }
+
+        $requests = $query->latest()->get();
+        $employees = User::select('id', 'name')->orderBy('name')->get();
+
+        return Inertia::render('PRPO/ApprovalBoard', [
+            'requests' => $requests,
+            'currentView' => $view,
+            'employees' => $employees,
+        ]);
     }
 
     public function print(PurchaseRequest $purchaseRequest)
     {
-        $purchaseRequest->load(['user','cc_user', 'items.product', 'items.supplier']);
+        $purchaseRequest->load([
+            'user.role',
+            'reviewedBy.role',
+            'approvedBy.role',
+            'cc_user',
+            'items.product',
+            'items.supplier'
+        ]);
+
+        $branchOM = null;
+        if ($purchaseRequest->is_evp_override) {
+            $omUser = User::whereHas('role', function ($q) {
+                $q->where('name', 'LIKE', '%Operations Manager%')
+                  ->orWhere('name', 'LIKE', '%Ops Manager%');
+            })->whereHas('branches', function ($q) use ($purchaseRequest) {
+                $q->where('name', $purchaseRequest->branch);
+            })->first();
+
+            $branchOM = $omUser ? $omUser->name : 'Operations Manager';
+        }
 
         return Inertia::render('PRPO/PrintablePR', [
-            'pr' => $purchaseRequest
+            'pr' => $purchaseRequest,
+            'branchOM' => $branchOM
         ]);
     }
 
     private function notifyNextApprovers(PurchaseRequest $pr)
     {
-        // 🟢 1. Always start the list with the original requester!
-        $usersToNotify = collect([$pr->user]); 
+        $usersToNotify = collect([$pr->user]);
         $message = '';
 
         if ($pr->status === 'pending_inv_tl') {
-            // Find Inventory TLs
             $approvers = User::whereHas('role', function ($q) {
-                $q->where('name', 'like', '%Inventory TL%');
+                $q->where('name', 'LIKE', '%Inventory TL%')
+                    ->orWhere('name', 'LIKE', '%Inventory Team Lead%');
             })->whereHas('branches', function ($q) use ($pr) {
                 $q->where('name', $pr->branch);
             })->get();
-            
-            // Add approvers to our list
             $usersToNotify = $usersToNotify->merge($approvers);
-            // Adjusted message to make sense for both parties
-            $message = "PR from {$pr->department} ({$pr->branch}) is now pending Inventory TL approval.";
+            $message = "PR from {$pr->department} ({$pr->branch}) is now pending Inventory Team Lead approval.";
 
         } elseif ($pr->status === 'pending_ops_manager') {
-            // Find Ops Managers
-            $approvers = User::whereHas('role', function ($q) {
-                $q->where('name', 'like', '%Ops Manager%')->orWhere('name', 'like', '%Operations%');
-            })->whereHas('branches', function ($q) use ($pr) {
-                $q->where('name', $pr->branch);
-            })->get();
-
+            $approvers = User::whereHas('role', function ($q) { $q->where('name', 'Operations Manager'); })
+                ->whereHas('branches', function ($q) use ($pr) { $q->where('name', $pr->branch); })->get();
             $usersToNotify = $usersToNotify->merge($approvers);
             $message = "PR from {$pr->department} ({$pr->branch}) is now pending Operations Manager approval.";
 
-        } elseif ($pr->status === 'approved') {
-            // Find Procurement
-            $procurementTeam = User::whereHas('role', function ($q) {
-                $q->where('name', 'like', '%Procurement%');
-            })->get();
+        } elseif ($pr->status === 'pr_generated') {
+            $procurementAssistants = User::whereHas('role', function($q) { $q->where('name', 'like', '%procurement assist%'); })->get();
+            $usersToNotify = $usersToNotify->merge($procurementAssistants);
+            $message = "Purchase Request from {$pr->department} ({$pr->branch}) has been generated and awaits your initial review.";
 
+        } elseif ($pr->status === 'pending_procurement_tl') {
+            $procurementTeam = User::whereHas('role', function($q) { $q->where('name', 'like', '%procurement tl%'); })->get();
             $usersToNotify = $usersToNotify->merge($procurementTeam);
-            $message = "PR from {$pr->department} ({$pr->branch}) is approved. The PO is ready for generation.";
-            
+            $message = "PR from {$pr->department} ({$pr->branch}) has been endorsed and is ready for Purchase Order generation.";
+
         } elseif ($pr->status === 'rejected') {
-             $message = "PR from {$pr->department} ({$pr->branch}) was rejected.";
-             
+            $message = "PR from {$pr->department} ({$pr->branch}) was rejected.";
         } elseif ($pr->status === 'cancelled') {
-             $message = "PR from {$pr->department} ({$pr->branch}) was cancelled.";
+            $message = "PR from {$pr->department} ({$pr->branch}) was cancelled.";
         }
 
         if (!empty($pr->cc_users)) {
@@ -506,11 +654,9 @@ class PurchaseRequestController extends Controller
             $usersToNotify = $usersToNotify->merge($ccUsers);
         }
 
-        // 🟢 2. Filter out duplicates (Just in case an Inventory TL made their own request!)
         $usersToNotify = $usersToNotify->unique('id');
 
-        // Send the notification to everyone on the final list
-        if ($usersToNotify->isNotEmpty()) {
+        if ($usersToNotify->isNotEmpty() && $message !== '') {
             Notification::send($usersToNotify, new PendingApprovalNotification($pr, $message));
         }
     }
