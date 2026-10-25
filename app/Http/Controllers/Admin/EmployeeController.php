@@ -1,4 +1,5 @@
 <?php
+// Employee management for admin interfaces (CRUD, roles)
 
 namespace App\Http\Controllers\Admin;
 
@@ -55,6 +56,11 @@ class EmployeeController extends Controller
 
     public function storeUser(Request $request)
     {
+        $user = Auth::user();
+        if (!$user?->canEditModule('employees')) {
+            abort(403, 'You do not have permission to add employees.');
+        }
+
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
@@ -96,6 +102,11 @@ class EmployeeController extends Controller
 
     public function storePosition(Request $request)
     {
+        $user = Auth::user();
+        if (!$user?->canEditModule('employees')) {
+            abort(403, 'You do not have permission to add positions.');
+        }
+
         try {
             $request->validate([
                 'department_id' => 'required|exists:departments,id',
@@ -115,6 +126,11 @@ class EmployeeController extends Controller
 
     public function storeBranch(Request $request)
     {
+        $user = Auth::user();
+        if (!$user?->canEditModule('employees')) {
+            abort(403, 'You do not have permission to add branches.');
+        }
+
         try {
             $request->validate([
                 'name' => 'required|string|max:255',
@@ -132,6 +148,11 @@ class EmployeeController extends Controller
 
     public function storeDepartment(Request $request)
     {
+        $user = Auth::user();
+        if (!$user?->canEditModule('employees')) {
+            abort(403, 'You do not have permission to add departments.');
+        }
+
         try {
             $request->validate([
                 'name' => 'required|string|max:255|unique:departments,name',
@@ -149,6 +170,11 @@ class EmployeeController extends Controller
 
     public function storeRole(Request $request)
     {
+        $user = Auth::user();
+        if (!$user?->canEditModule('employees')) {
+            abort(403, 'You do not have permission to add roles.');
+        }
+
         try {
             $request->validate([
                 'name' => 'required|string|max:255|unique:roles,name',
@@ -170,6 +196,11 @@ class EmployeeController extends Controller
 
     public function destroyRole(Role $role)
     {
+        $user = Auth::user();
+        if (!$user?->canDeleteModule('employees')) {
+            abort(403, 'You do not have permission to delete roles.');
+        }
+
         try {
             if (strtolower($role->name) === 'admin' || strtolower($role->name) === 'super admin') {
                 return back()->with('error', 'Cannot delete core system roles.');
@@ -188,6 +219,11 @@ class EmployeeController extends Controller
 
     public function destroyDepartment(Department $department)
     {
+        $user = Auth::user();
+        if (!$user?->canDeleteModule('employees')) {
+            abort(403, 'You do not have permission to delete departments.');
+        }
+
         try {
             if (DB::table('users')->where('department_id', $department->id)->exists()) {
                 return back()->with('error', 'Cannot delete this Department because it has employees assigned to it.');
@@ -206,6 +242,11 @@ class EmployeeController extends Controller
 
     public function destroyPosition(Position $position)
     {
+        $user = Auth::user();
+        if (!$user?->canDeleteModule('employees')) {
+            abort(403, 'You do not have permission to delete positions.');
+        }
+
         try {
             if (DB::table('users')->where('position_id', $position->id)->exists()) {
                 return back()->with('error', 'Cannot delete this Position because it is assigned to existing or archived employees.');
@@ -220,6 +261,11 @@ class EmployeeController extends Controller
 
     public function destroyBranch(Branch $branch)
     {
+        $user = Auth::user();
+        if (!$user?->canDeleteModule('employees')) {
+            abort(403, 'You do not have permission to delete branches.');
+        }
+
         try {
             if (DB::table('branch_user')->where('branch_id', $branch->id)->exists()) {
                 return back()->with('error', 'Cannot delete this Branch because it is assigned to existing employees.');
@@ -238,6 +284,11 @@ class EmployeeController extends Controller
 
     public function updateUser(Request $request, User $user)
     {
+        $authUser = Auth::user();
+        if (!$authUser?->canEditModule('employees')) {
+            abort(403, 'You do not have permission to edit employees.');
+        }
+
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
@@ -291,6 +342,11 @@ class EmployeeController extends Controller
 
     public function destroy(User $user)
     {
+        $authUser = Auth::user();
+        if (!$authUser?->canDeleteModule('employees')) {
+            abort(403, 'You do not have permission to delete employees.');
+        }
+
         Log::info("Delete route hit for user ID: {$user->id}");
 
         try {

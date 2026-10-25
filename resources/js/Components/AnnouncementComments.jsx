@@ -1,11 +1,15 @@
+// Announcement comments UI component (post/delete comments)
 import React from 'react';
 import { useForm, usePage, router } from '@inertiajs/react';
+import { canEditModule } from '@/Config/navigation';
 import PrimaryButton from './PrimaryButton';
 import TextInput from './TextInput';
 import InputError from './InputError';
 
 export default function AnnouncementComments({ announcement }) {
     const { auth, announcements } = usePage().props;
+    // Allow any authenticated, non-banned user to post comments on announcements
+    const canPostComments = !!auth?.user && !auth.user.is_comment_banned;
 
     const announcementList = Array.isArray(announcements?.data) 
         ? announcements.data 
@@ -44,14 +48,21 @@ export default function AnnouncementComments({ announcement }) {
                 ) : (
                     comments.map((comment) => (
                         <div key={comment.id} className="flex flex-col items-start relative group w-full">
-                            <div className="flex items-center gap-2 max-w-full w-full">
+                            <div className="flex items-start gap-2 max-w-full w-full">
                                 
                                 {/* 🔥 FIXED: The Comment Bubble */}
+                                <div className="h-10 w-10 shrink-0 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-900">
+                                    {comment.user?.image_path ? (
+                                        <img src={`/storage/${comment.user.image_path}`} alt={comment.user?.name || 'User'} className="h-full w-full object-cover" />
+                                    ) : (
+                                        <span>{(comment.user?.name || 'U').charAt(0)}</span>
+                                    )}
+                                </div>
+
                                 <div className="bg-gray-100 px-4 py-2.5 rounded-2xl max-w-[85%] flex flex-col min-w-0">
                                     <span className="font-bold text-sm text-gray-900 leading-tight">
                                         {comment.user?.name || 'Unknown User'}
                                     </span>
-                                    {/* break-words and whitespace-pre-wrap force text to wrap safely inside the bubble */}
                                     <span className="text-gray-800 text-sm mt-0.5 break-words whitespace-pre-wrap">
                                         {comment.content}
                                     </span>
@@ -78,10 +89,14 @@ export default function AnnouncementComments({ announcement }) {
                 <div className="p-3 bg-red-100 text-red-700 rounded-md text-sm border font-bold text-center">
                     You have been restricted from commenting due to inappropriate language.
                 </div>
-            ) : (
+            ) : canPostComments ? (
                 <form onSubmit={submit} className="flex gap-2 items-start mt-2">
-                    <div className="h-10 w-10 shrink-0 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold uppercase">
-                        {auth.user.name.charAt(0)}
+                    <div className="h-10 w-10 shrink-0 rounded-full overflow-hidden bg-indigo-600 flex items-center justify-center text-white font-bold uppercase">
+                        {auth.user.image_path ? (
+                            <img src={`/storage/${auth.user.image_path}`} alt={auth.user.name} className="h-full w-full object-cover" />
+                        ) : (
+                            <span className="inline-block w-full text-center">{auth.user.name.charAt(0)}</span>
+                        )}
                     </div>
                     
                     <div className="flex-1">
@@ -102,6 +117,10 @@ export default function AnnouncementComments({ announcement }) {
                         Post
                     </PrimaryButton>
                 </form>
+            ) : (
+                <div className="p-3 bg-gray-100 text-gray-700 rounded-md text-sm border text-center italic">
+                    You need edit permission to post comments on announcements.
+                </div>
             )}
         </div>
     );

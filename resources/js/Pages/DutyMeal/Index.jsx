@@ -3,7 +3,7 @@ import Modal from '@/Components/Modal';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
 import TextInput from '@/Components/TextInput';
-import { getDutyMealLinks } from '@/Config/navigation';
+import { getDutyMealLinks, canEditModule } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { formatAppDate } from '@/Utils/date';
 import { Head, router, usePage } from '@inertiajs/react';
@@ -12,6 +12,7 @@ import { Fragment, useMemo, useState } from 'react';
 export default function Index({ auth, dutymeals = [], employees = [], departments = [], positions = [], branches = [] }) {
     
     const dutyMealsLinks = getDutyMealLinks(auth);
+    const canEditDutyMeals = canEditModule(auth, 'duty_meal_setup_roster');
     const { system } = usePage().props;
 
     const [isPoolModalOpen, setIsPoolModalOpen] = useState(false);
@@ -39,6 +40,7 @@ export default function Index({ auth, dutymeals = [], employees = [], department
     const [editMealData, setEditMealData] = useState({ main: '', alt: '' });
 
     const [poolMealChoices, setPoolMealChoices] = useState({});
+    const [poolNotes, setPoolNotes] = useState({}); // 🟢 ADDED: State to hold the special request notes
 
     // Derive the selected roster directly from the fresh props
     const selectedRoster = dutymeals.find(m => String(m.id) === String(selectedRosterId));
@@ -71,12 +73,13 @@ export default function Index({ auth, dutymeals = [], employees = [], department
 
     // --- ACTION HANDLERS ---
     const startEditingMeals = () => {
+        if (!canEditDutyMeals || selectedRoster?.is_locked) return;
         setEditMealData({ main: selectedRoster.main_meal, alt: selectedRoster.alt_meal || '' });
         setIsEditingMeals(true);
     };
 
     const saveMeals = () => {
-        if (!selectedRoster) return;
+        if (!selectedRoster || !canEditDutyMeals) return;
         router.patch(route('admin.duty-meals.update-meals', selectedRoster.id), {
             main_meal: editMealData.main,
             alt_meal: editMealData.alt
@@ -87,18 +90,21 @@ export default function Index({ auth, dutymeals = [], employees = [], department
     };
 
     const handleChoiceUpdate = (participantId, newChoice) => {
+        if (!canEditDutyMeals) return;
         router.patch(route('admin.participants.update-choice', participantId), {
             choice: newChoice
         }, { preserveScroll: true });
     };
 
     const handleShiftUpdate = (participantId, newShiftType) => {
+        if (!canEditDutyMeals) return;
         router.patch(route('admin.participants.update-shift', participantId), { 
             shift_type: newShiftType 
         }, { preserveScroll: true });
     };
 
    const handleRemove = (employeeName, participantId) => {
+        if (!canEditDutyMeals) return;
         setConfirmDialog({
             isOpen: true,
             title: 'Remove Staff from Roster',
@@ -138,13 +144,15 @@ export default function Index({ auth, dutymeals = [], employees = [], department
 
         router.post(route('admin.duty-meals.add-participant', selectedRoster.id), {
             user_id: employeeId,
-            choice: choice || 'main' 
+            choice: choice || 'main',
+            custom_request: poolNotes[employeeId] || '' // 🟢 ADDED: Send note payload
         }, {
             preserveScroll: true,
             preserveState: true, 
             onSuccess: () => {
                 setPoolSearch(''); 
                 setPoolMealChoices(prev => ({ ...prev, [employeeId]: 'main' }));
+                setPoolNotes(prev => ({ ...prev, [employeeId]: '' })); // 🟢 ADDED: Clear note after saving
             },
         });
     };
@@ -548,8 +556,8 @@ export default function Index({ auth, dutymeals = [], employees = [], department
                                                 
                                                 {/* INLINE EDIT: Shift Badge */}
                                                 <td 
-                                                    className={`px-3 sm:px-5 py-2.5 sm:py-3 whitespace-nowrap ${!selectedRoster.is_locked ? 'cursor-pointer hover:bg-gray-100' : ''}`}
-                                                    onClick={() => !selectedRoster.is_locked && setEditingShiftId(p.id)}
+                                                    className={`px-3 sm:px-5 py-2.5 sm:py-3 whitespace-nowrap ${canEditDutyMeals && !selectedRoster.is_locked ? 'cursor-pointer hover:bg-gray-100' : ''}`}
+                                                    onClick={() => canEditDutyMeals && !selectedRoster.is_locked && setEditingShiftId(p.id)}
                                                 >
                                                     {editingShiftId === p.id ? (
                                                         <div className="relative inline-block">
@@ -591,8 +599,8 @@ export default function Index({ auth, dutymeals = [], employees = [], department
 
                                                 {/* INLINE EDIT: Choice Badge */}
                                                 <td 
-                                                    className={`px-3 sm:px-5 py-2.5 sm:py-3 whitespace-nowrap ${!selectedRoster.is_locked ? 'cursor-pointer hover:bg-gray-100' : ''}`}
-                                                    onClick={() => !selectedRoster.is_locked && setEditingChoiceId(p.id)}
+                                                    className={`px-3 sm:px-5 py-2.5 sm:py-3 whitespace-nowrap ${canEditDutyMeals && !selectedRoster.is_locked ? 'cursor-pointer hover:bg-gray-100' : ''}`}
+                                                    onClick={() => canEditDutyMeals && !selectedRoster.is_locked && setEditingChoiceId(p.id)}
                                                 >
                                                     {editingChoiceId === p.id ? (
                                                         <div className="relative inline-block">
@@ -643,21 +651,25 @@ export default function Index({ auth, dutymeals = [], employees = [], department
                                                     )}
                                                 </td>
 
-                                                {/* 🟢 FIXED: Removed condition so button is ALWAYS visible */}
                                                 <td className="px-3 sm:px-5 py-2.5 sm:py-3 whitespace-nowrap text-right text-sm font-medium">
-                                                    <button 
-                                                        type="button" 
-                                                        onClick={(e) => {
-                                                             e.preventDefault();
-                                                             e.stopPropagation();
-                                                            handleRemove(p.user?.name, p.id)}}
-                                                        className="rounded-full p-1 sm:p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none"
-                                                        title="Remove from Roster"
-                                                    >
-                                                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                        </svg>
-                                                    </button>
+                                                    {canEditDutyMeals ? (
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                handleRemove(p.user?.name, p.id);
+                                                            }}
+                                                            className="rounded-full p-1 sm:p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none"
+                                                            title="Remove from Roster"
+                                                        >
+                                                            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                            </svg>
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">Read-only</span>
+                                                    )}
                                                 </td>
                                             </tr>
                                         )})}
@@ -666,7 +678,7 @@ export default function Index({ auth, dutymeals = [], employees = [], department
                             </div>
                         </div>
 
-                        {!selectedRoster.is_locked && (
+                        {!selectedRoster.is_locked && canEditDutyMeals && (
                             <div className="bg-white border-t border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex justify-end rounded-b-lg">
                                 <PrimaryButton className="w-full sm:w-auto text-center justify-center" onClick={() => setIsPoolModalOpen(true)}>
                                     + Add Staff from Pool
@@ -737,19 +749,30 @@ export default function Index({ auth, dutymeals = [], employees = [], department
                                             </p>
                                         </div>
                                         
-                                        <div className="flex items-center gap-3 w-full sm:w-auto">
+                                        {/* 🟢 NEW: Modified the layout to fit the text input next to the select dropdown */}
+                                        <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
                                             <select
                                                 value={poolMealChoices[emp.id] || 'main'}
                                                 onChange={(e) => setPoolMealChoices({ ...poolMealChoices, [emp.id]: e.target.value })}
-                                                className="text-xs border-gray-300 rounded shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1.5 pl-2 pr-6 flex-1 sm:flex-none"
+                                                className="text-xs border-gray-300 rounded shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1.5 pl-2 pr-6 w-[100px] shrink-0"
                                             >
                                                 <option value="main">Main Meal</option>
                                                 <option value="alt">Alt Meal</option>
                                                 <option value="special">Special</option>
                                             </select>
+                                            
+                                            {/* 🟢 ADDED: Custom Request Input */}
+                                            <input 
+                                                type="text"
+                                                placeholder="Notes (e.g. No rice)"
+                                                value={poolNotes[emp.id] || ''}
+                                                onChange={(e) => setPoolNotes({ ...poolNotes, [emp.id]: e.target.value })}
+                                                className="text-xs border-gray-300 rounded shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1.5 px-2 w-full sm:w-[130px]"
+                                            />
+
                                             <SecondaryButton 
                                                 onClick={() => handleEmergencyAdd(emp.id, poolMealChoices[emp.id] || 'main')}
-                                                className="text-xs px-4 py-1.5 justify-center sm:justify-start whitespace-nowrap"
+                                                className="text-xs px-3 py-1.5 justify-center sm:justify-start whitespace-nowrap shrink-0"
                                             >
                                                 + Add
                                             </SecondaryButton>

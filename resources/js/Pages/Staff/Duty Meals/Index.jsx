@@ -1,11 +1,11 @@
 import ConfirmModal from '@/Components/ConfirmModal';
-import { getStaffDutyMealLinks } from '@/Config/navigation';
+import { getDutyMealLinks } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { formatAppDate } from '@/Utils/date';
-import { Head, router, usePage } from '@inertiajs/react';
-import { useEffect, useMemo, useState } from 'react';
+import { Head, router, usePage, useForm } from '@inertiajs/react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 
-const MealCard = ({ meal, selection, onSelectionChange }) => {
+const MealCard = ({ meal, selection, onSelectionChange, userBranches, isMultiBranchUser }) => {
     const { system } = usePage().props;
     
     // BUG FIX: Added a fallback `|| ''` to prevent crashes when branch_name is null in the database
@@ -15,6 +15,16 @@ const MealCard = ({ meal, selection, onSelectionChange }) => {
     const currentChoice = isStrictlyLocked ? meal.choice : (selection?.choice || '');
     const currentSite = isStrictlyLocked ? (meal.site || '') : (selection?.site || '');
     const currentNote = isStrictlyLocked ? (meal.custom_request || '') : (selection?.custom_request || '');
+
+    // 🟢 NEW: Calculate strictly if the local duty date has passed yet
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    // Parse strictly to avoid timezone shift
+    const [y, m, d] = String(meal.duty_date).split(' ')[0].split('-');
+    const mealDateObj = new Date(y, m - 1, d);
+    const hasDatePassed = mealDateObj < today;
+
+    const dropdownRef = useRef(null);
 
     // Auto-clear comment when 'main' or 'alt' is selected so hidden data doesn't submit
     useEffect(() => {
@@ -74,7 +84,7 @@ const MealCard = ({ meal, selection, onSelectionChange }) => {
                             </span>
                         ) : (
                             <span className="inline-flex items-center px-2.5 py-1 bg-amber-50 text-amber-600 text-[10px] font-bold rounded-full uppercase tracking-wide border border-amber-100 animate-pulse">
-                                <div className="w-1.5 h-1.5 bg-amber-500 rounded-full mr-1.5"></div>
+                                <div className="w-1.5 h-1.5 bg-amber-50 rounded-full mr-1.5"></div>
                                 Action Needed
                             </span>
                         )}
@@ -230,7 +240,19 @@ const MealCard = ({ meal, selection, onSelectionChange }) => {
 };
 
 export default function Index({ auth, myDutyMeals = [] }) {
-    const DutyMealLinks = getStaffDutyMealLinks();
+    const DutyMealLinks = getDutyMealLinks(auth);
+
+    // 🟢 NEW: Identify multi-branch capabilities dynamically
+    const userBranches = useMemo(() => {
+        const branches = auth.user.branches || [];
+        if (auth.user.branch_id && !branches.some(b => b.id === auth.user.branch_id)) {
+            // Usually need the actual branch object here, but mapping is safe if frontend handles it
+            branches.push({ id: auth.user.branch_id, name: auth.user.branch?.name || 'Primary Branch' });
+        }
+        return branches;
+    }, [auth.user]);
+
+    const isMultiBranchUser = userBranches.length > 1;
 
     // 1. FILTER STATES
     const [statusFilter, setStatusFilter] = useState('Pending');
@@ -560,6 +582,8 @@ export default function Index({ auth, myDutyMeals = [] }) {
                                                 meal={meal} 
                                                 selection={selections[meal.participant_id]}
                                                 onSelectionChange={handleSelectionChange}
+                                                userBranches={userBranches} 
+                                                isMultiBranchUser={isMultiBranchUser}
                                             />
                                         ))}
                                     </div>

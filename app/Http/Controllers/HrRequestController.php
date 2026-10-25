@@ -1,4 +1,5 @@
 <?php
+// Handles HR request submissions, approvals, and related workflows
 
 namespace App\Http\Controllers;
 
@@ -22,6 +23,13 @@ class HrRequestController extends Controller
 
     public function store(Request $request)
     {
+        // 🔐 ACL CHECK: Verify user can CREATE/SUBMIT documents
+        // Permission Hierarchy: Full = Create/Edit/Delete, Edit = Create/Approve/Reject
+        $user = Auth::user();
+        if (!$user->canCreateModule('documents')) {
+            abort(403, 'You do not have permission to submit document requests.');
+        }
+
         $request->validate([
             'type' => 'required|in:2316,COE',
             'name' => 'required_if:type,COE|nullable|string|max:255',
@@ -60,38 +68,19 @@ class HrRequestController extends Controller
     // 🟢 GATEKEEPER 1: For VIEWING the page (HR Assistants, HRBP, Admin)
     private function checkHrAccess()
     {
-        $roleName = strtolower(Auth::user()?->role?->name ?? '');
-        $positionName = strtolower(Auth::user()?->position?->name ?? '');
+        $user = Auth::user();
 
-        // Expanded allowed roles to catch variations of HR Assistant
-        $allowedRoles = [
-            'admin', 
-            'hr', 
-            'hrbp', 
-            'HR Assistant',
-            'HR Assist', 
-            'human resources assistant', 
-            'human resources'
-        ];
-
-        // Check if the role is in the list, OR if the position contains 'human resources'
-        $hasRole = in_array($roleName, $allowedRoles);
-        $hasPosition = str_contains($positionName, 'human resources') || str_contains($positionName, 'hr assistant');
-
-        if (!$hasRole && !$hasPosition) {
-            abort(403, 'UNAUTHORIZED ACCESS. ONLY HR PERSONNEL CAN VIEW THIS PAGE.');
+        if (!$user || (!$user->canViewModule('documents') && !$user->canApproveModule('form_2316_approvals') && !$user->canViewModule('hr_overview'))) {
+            abort(403, 'UNAUTHORIZED ACCESS. ONLY HR PERSONNEL WITH DOCUMENT REQUEST ACCESS CAN VIEW THIS PAGE.');
         }
     }
 
     // 🟢 GATEKEEPER 2: For ACTIONS (Only HRBP & Admin)
     private function checkHrbpAccess()
     {
-        $roleName = strtolower(Auth::user()?->role?->name ?? '');
+        $user = Auth::user();
 
-        // Only Admin and HRBP can approve
-        $allowedRoles = ['admin', 'hrbp'];
-
-        if (!in_array($roleName, $allowedRoles)) {
+        if (!$user || !$user->canApproveModule('form_2316_approvals')) {
             abort(403, 'UNAUTHORIZED ACCESS. ONLY HRBP CAN APPROVE OR ENDORSE REQUESTS.');
         }
     }
@@ -110,8 +99,15 @@ class HrRequestController extends Controller
 
    public function updateStatus(Request $request, HrRequest $hrRequest)
     {
-        // 🟢 HR Assistants will hit a brick wall here and get a 403 error!
+        // � HR Assistants will hit a brick wall here and get a 403 error!
         $this->checkHrbpAccess();
+
+        // 🔐 UPDATED: Verify ACL permissions for form_2316_approvals - Must be able to APPROVE
+        // Permission Hierarchy: Full + Edit can approve
+        $user = Auth::user();
+        if (!$user->canApproveModule('form_2316_approvals')) {
+            abort(403, 'You do not have permission to approve document requests.');
+        }
 
         // 🟢 Validation updated to strictly expect "approve"
         $request->validate([
@@ -144,15 +140,9 @@ class HrRequestController extends Controller
 
     private function checkAccountingAccess()
     {
-        $roleName = strtolower(Auth::user()?->role?->name ?? '');
+        $user = Auth::user();
 
-        $allowedRoles = [
-            'admin', 
-            'director of corporate services and operations', 
-            'general accounting'
-        ];
-
-        if (!in_array($roleName, $allowedRoles)) {
+        if (!$user || !$user->canViewModule('form_2316_approvals')) {
             abort(403, 'UNAUTHORIZED ACCESS. ONLY ACCOUNTING OR AUTHORIZED PERSONNEL CAN VIEW THIS.');
         }
     }
@@ -175,7 +165,15 @@ class HrRequestController extends Controller
 
     public function updateAccountingStatus(Request $request, $id)
     {
+        // 🔐 Verify user has Accounting access
         $this->checkAccountingAccess();
+
+        // 🔐 UPDATED: Verify ACL permissions for form_2316_approvals - Must be able to APPROVE
+        // Permission Hierarchy: Full + Edit can approve
+        $user = Auth::user();
+        if (!$user->canApproveModule('form_2316_approvals')) {
+            abort(403, 'You do not have permission to approve 2316 forms.');
+        }
 
         // 🟢 Validation strictly expects "Released"
         $request->validate([

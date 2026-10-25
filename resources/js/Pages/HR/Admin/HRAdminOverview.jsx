@@ -4,14 +4,27 @@ import SidebarLayout from '@/Layouts/SidebarLayout';
 import { formatAppDate } from '@/Utils/date';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
+import { canViewModule, canApproveModule } from '@/Config/navigation';
 
 export default function HRAdminOverview({ auth, requests }) {
     const hrLinks = getHRAdminLinks(auth);
     const { system } = usePage().props;
 
-    const currentRole = auth.user?.role?.name || 'Guest';
-    const roleName = currentRole.toLowerCase();
-    const canAct = ['admin', 'hrbp'].includes(roleName);
+    if (!canViewModule(auth, 'documents') && !canApproveModule(auth, 'form_2316_approvals') && !canViewModule(auth, 'hr_overview')) {
+        return (
+            <SidebarLayout activeModule="HR ADMIN" sidebarLinks={hrLinks}>
+                <Head title="Access Denied" />
+                <div className="py-12 max-w-4xl mx-auto sm:px-6 lg:px-8">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+                        <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+                        <p className="text-gray-600">You do not have permission to view this section.</p>
+                    </div>
+                </div>
+            </SidebarLayout>
+        );
+    }
+
+    const canAct = canApproveModule(auth, 'form_2316_approvals');
 
     const requestList = requests || [];
     const ITEMS_PER_PAGE = 10;
@@ -83,7 +96,7 @@ export default function HRAdminOverview({ auth, requests }) {
 
     // --- ACTION HANDLER ---
     const handleAction = (id, actionType) => {
-        if (actionType === 'approve') {
+        if (actionType === 'approve' && canAct) {
             setApprovingId(id);
             setIsApproveModalOpen(true);
             return;
@@ -92,6 +105,12 @@ export default function HRAdminOverview({ auth, requests }) {
 
     // --- SUBMIT APPROVAL ---
     const submitApprove = () => {
+        if (!canAct || approvingId === null) {
+            setIsApproveModalOpen(false);
+            setApprovingId(null);
+            return;
+        }
+
         router.patch(route('hr.admin.update-status', approvingId), {
             action: 'approve'
         }, {
@@ -393,6 +412,7 @@ export default function HRAdminOverview({ auth, requests }) {
                                                                     <button
                                                                         onClick={() => handleAction(req.id, 'approve')}
                                                                         className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-500 transition-colors shadow-sm"
+                                                                        title="Approve this request"
                                                                     >
                                                                         Approve
                                                                     </button>
@@ -516,7 +536,7 @@ export default function HRAdminOverview({ auth, requests }) {
             </Modal>
 
             {/* --- APPROVE CONFIRMATION MODAL --- */}
-            <Modal show={isApproveModalOpen} onClose={() => setIsApproveModalOpen(false)} maxWidth="sm">
+            <Modal show={isApproveModalOpen && canAct} onClose={() => setIsApproveModalOpen(false)} maxWidth="sm">
                 <div className="p-6">
                     <div className="flex items-center justify-between border-b pb-4 mb-5">
                         <h2 className="text-xl font-bold text-gray-900">Confirm Approval</h2>
@@ -542,7 +562,8 @@ export default function HRAdminOverview({ auth, requests }) {
                         <button
                             type="button"
                             onClick={submitApprove}
-                            className="rounded-md bg-indigo-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-indigo-500 transition-colors"
+                            disabled={!canAct}
+                            className={`rounded-md px-5 py-2 text-sm font-bold text-white shadow-sm transition-colors ${canAct ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-slate-300 text-slate-500 cursor-not-allowed'}`}
                         >
                             Confirm Approve
                         </button>

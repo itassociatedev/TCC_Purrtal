@@ -3,6 +3,8 @@ import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { moduleHasAccess } from '@/Config/navigation';
+
 import ConfirmModal from '@/Components/ConfirmModal';
 
 export default function ApprovalRequest({ auth, requests = [], userRole = '', branches = [] }) {
@@ -24,6 +26,22 @@ export default function ApprovalRequest({ auth, requests = [], userRole = '', br
                             roleLower === 'marketing manager';
 
     const hrLinks = getHRLinks(auth.user.role?.name || 'Employee', auth);
+
+    if (!moduleHasAccess(auth, 'hr')) {
+        return (
+            <SidebarLayout user={auth.user} activeModule="HR MENU" sidebarLinks={hrLinks}>
+                <Head title="Access Denied" />
+                <div className="py-12 max-w-4xl mx-auto sm:px-6 lg:px-8">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+                        <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+                        <p className="text-gray-600">You do not have permission to view this section.</p>
+                    </div>
+                </div>
+            </SidebarLayout>
+        );
+    }
+
+    
 
     const [activeTab, setActiveTab] = useState((isRequesterOnly && !isAdmin) ? 'in-progress' : 'action-required');
     

@@ -1,9 +1,11 @@
 <?php
+// CRUD controller for company content pages and assets
 
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use App\Models\CompanyContent;
@@ -24,6 +26,11 @@ class CompanyContentController extends Controller
 
     public function store(Request $request)
     {
+        $user = Auth::user();
+        if (!$user?->canEditModule('company_content')) {
+            abort(403, 'You do not have permission to add company content.');
+        }
+
         $request->validate([
             'type' => 'required|string|max:50',
             'title' => 'nullable|string|max:255',
@@ -58,6 +65,11 @@ class CompanyContentController extends Controller
     
     public function update(Request $request, CompanyContent $companyContent)
     {
+        $user = Auth::user();
+        if (!$user?->canEditModule('company_content')) {
+            abort(403, 'You do not have permission to edit company content.');
+        }
+
         $request->validate([
             'type' => 'required|string|max:50',
             'title' => 'nullable|string|max:255',
@@ -95,6 +107,11 @@ class CompanyContentController extends Controller
     
     public function destroy(CompanyContent $companyContent)
     {
+        $user = Auth::user();
+        if (!$user?->canDeleteModule('company_content')) {
+            abort(403, 'You do not have permission to delete company content.');
+        }
+
         try {
             // Delete the image file from the server
             if ($companyContent->image_path) {
@@ -112,6 +129,11 @@ class CompanyContentController extends Controller
 
     public function storeType(Request $request)
     {
+        $user = Auth::user();
+        if (!$user?->canEditModule('company_content')) {
+            abort(403, 'You do not have permission to manage company content types.');
+        }
+
         $request->validate([
             'name' => 'required|string|max:50|unique:content_types,name',
         ]);
@@ -124,6 +146,11 @@ class CompanyContentController extends Controller
     // ---> NEW METHOD FOR UPDATING A TYPE <---
     public function updateType(Request $request, ContentType $type)
     {
+        $user = Auth::user();
+        if (!$user?->canEditModule('company_content')) {
+            abort(403, 'You do not have permission to manage company content types.');
+        }
+
         $request->validate([
             // This ensures we can keep the same name if we don't change it, 
             // but blocks us from duplicating another existing type's name
@@ -144,6 +171,11 @@ class CompanyContentController extends Controller
     // ---> NEW METHOD FOR DELETING A TYPE <---
     public function destroyType(ContentType $type)
     {
+        $user = Auth::user();
+        if (!$user?->canDeleteModule('company_content')) {
+            abort(403, 'You do not have permission to delete company content types.');
+        }
+
         try {
             $type->delete();
             return back()->with('success', 'Content type deleted successfully.');

@@ -5,7 +5,7 @@ import Modal from '@/Components/Modal';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
 import TextInput from '@/Components/TextInput';
-import { getPRPOLinks } from '@/Config/navigation';
+import { getPRPOLinks, canCreateModule, canDeleteModule, canEditModule, canViewModule } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, router, useForm } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
@@ -13,11 +13,14 @@ import { useEffect, useMemo, useState } from 'react';
 export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
 
     const PRPOLinks = getPRPOLinks(auth);
-    //
-    // 🟢 DEFINE READ-ONLY STATE
-    const userRole = auth.user.role?.name?.toLowerCase().trim() || '';
-    const isInventory = userRole.includes('inventory');
-    const isReadOnly = isInventory && userRole !== 'admin'; // Admin overrides read-only
+    const canViewProducts = canViewModule(auth, 'products');
+    const canCreateProducts = canCreateModule(auth, 'products');
+    const canEditProducts = canEditModule(auth, 'products');
+    const canDeleteProducts = canDeleteModule(auth, 'products');
+    const canViewSuppliers = canViewModule(auth, 'suppliers');
+    const canEditSuppliers = canEditModule(auth, 'suppliers');
+    const canDeleteSuppliers = canDeleteModule(auth, 'suppliers');
+    const isReadOnly = canViewProducts && !canEditProducts;
 
     const { data: importData, setData: setImportData, post: postImport, processing: importProcessing, errors: importErrors, reset: resetImport } = useForm({
         import_file: null,
@@ -83,6 +86,8 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                 return product.supplier?.name || '';
             case 'name':
                 return product.name || '';
+            case 'smallest_unit':
+                return product.smallest_unit || '';
             case 'unit':
                 return product.unit || '';
             default:
@@ -192,8 +197,17 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
     const [isSupplierModalOpen, setSupplierModalOpen] = useState(false);
     const [editingSupplier, setEditingSupplier] = useState(null);
     const [supplierSearchQuery, setSupplierSearchQuery] = useState(''); // 🟢 NEW STATE FOR SEARCH
+    const [selectedSupplierIds, setSelectedSupplierIds] = useState([]);
 
-    const { data: supData, setData: setSupData, post: postSup, put: putSup, processing: supProcessing, errors: supErrors, reset: resetSup, clearErrors: clearSupErrors } = useForm({ 
+    const handleBulkSupplierDelete = () => {
+        if (confirm(`Are you sure you want to delete ${selectedSupplierIds.length} suppliers?`)) {
+            router.post(route('prpo.suppliers.batch-destroy'), { ids: selectedSupplierIds }, {
+                onSuccess: () => setSelectedSupplierIds([]) // clear selection on success
+            });
+        }
+    };
+
+    const { data: supData, setData: setSupData, post: postSup, put: putSup, processing: supProcessing, errors: supErrors, reset: resetSup, clearErrors: clearSupErrors } = useForm({
         name: '',
         contact_person: '',
         contact_number: '',
@@ -207,6 +221,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
         setSupplierSearchQuery(''); // Reset search query on close
         clearSupErrors();
         resetSup();
+        setSelectedSupplierIds([]); // Reset checkboxes on close
     };
 
     const submitSupplier = (e) => {
@@ -253,11 +268,11 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
 
     const confirmToggleSupplierStatus = (sup) => {
         const isDisabling = sup.status !== 'Disabled';
-        
+
         setConfirmDialog({
             isOpen: true,
             title: isDisabling ? 'Disable Supplier' : 'Enable Supplier',
-            message: isDisabling 
+            message: isDisabling
                 ? `Are you sure you want to disable ${sup.name}? \n\n⚠️ ALL products handled by this supplier will also be disabled and hidden from new Purchase Requests.`
                 : `Are you sure you want to re-enable ${sup.name}? \n\nAll their associated products will become active again.`,
             confirmText: isDisabling ? 'Disable Supplier' : 'Enable Supplier',
@@ -285,11 +300,11 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
     const confirmToggleProductStatus = (product) => {
         setActiveDropdown(null);
         const isDisabling = product.status !== 'Disabled';
-        
+
         setConfirmDialog({
             isOpen: true,
             title: isDisabling ? 'Disable Product' : 'Enable Product',
-            message: isDisabling 
+            message: isDisabling
                 ? `Are you sure you want to disable ${product.name}? \n\nIt will no longer be available for new Purchase Requests.`
                 : `Are you sure you want to re-enable ${product.name}?`,
             confirmText: isDisabling ? 'Disable Product' : 'Enable Product',
@@ -400,7 +415,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                 forceFormData: true,
                 preserveScroll: true,
                 onSuccess: () => {
-                    e.target.value = null; // Reset the input after successful upload
+                    e.target.value = null;
                 }
             });
         }
@@ -410,7 +425,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
         <SidebarLayout activeModule="PR/PO Module" sidebarLinks={PRPOLinks}>
             <Head title="Products & Suppliers" />
 
-            <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 flex flex-col h-[calc(100vh-140px)] overflow-hidden">
+            <div className="max-w-[95%] mx-auto p-4 sm:p-6 lg:p-8 flex flex-col h-[calc(100vh-140px)] overflow-hidden">
                 <div className="flex-none">
 
                 {/* HEADER & TOP CONTROLS */}
@@ -421,44 +436,54 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                             {isReadOnly ? 'View and search the product catalog.' : 'Manage your suppliers and product catalog.'}
                         </p>
                     </div>
-                    
+
                     {/* 🟢 HIDE ALL EDITING ACTIONS IF READ-ONLY */}
-                    {!isReadOnly && (
+                    {canViewProducts && (
                         <div className="flex flex-wrap gap-3">
-                            <SecondaryButton onClick={() => setSupplierModalOpen(true)}>Manage Suppliers</SecondaryButton>
+                            {canEditSuppliers && (
+                                <SecondaryButton onClick={() => setSupplierModalOpen(true)}>Manage Suppliers</SecondaryButton>
+                            )}
 
-                            <a
-                                href={route('prpo.products.import-template')}
-                                className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 transition ease-in-out duration-150"
-                            >
-                                📄 Download Template
-                            </a>
+                            {canCreateProducts && (
+                                <>
+                                    <a
+                                        href={route('prpo.products.import-template')}
+                                        className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 transition ease-in-out duration-150"
+                                    >
+                                        📄 Download Template
+                                    </a>
 
-                            <div className="relative">
-                                <input
-                                    type="file"
-                                    id="excel-upload"
-                                    className="hidden"
-                                    accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
-                                    onChange={handleFileUpload}
-                                />
+                                    <label className={`inline-flex items-center px-4 py-2 bg-green-50 border border-green-200 rounded-md font-semibold text-xs text-green-700 uppercase tracking-widest shadow-sm hover:bg-green-100 transition ease-in-out duration-150 ${importProcessing ? 'opacity-50 cursor-wait' : 'cursor-pointer'}`}>
+                                        {importProcessing ? 'Importing...' : '📁 Batch Import'}
+                                        <input
+                                            type="file"
+                                            className="hidden"
+                                            accept=".csv, .xlsx, .xls, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                                            onChange={handleFileUpload}
+                                            disabled={importProcessing}
+                                        />
+                                    </label>
 
-                                <SecondaryButton onClick={() => document.getElementById('excel-upload').click()} disabled={importProcessing} className="bg-green-50 text-green-700 border-green-200 hover:bg-green-100">
-                                    {importProcessing ? 'Importing...' : '📁 Batch Import'}
-                                </SecondaryButton>
-                            </div>
+                                    <PrimaryButton onClick={() => openProductModal(null)} className="gap-1.5">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                        </svg>
+                                        Add Product
+                                    </PrimaryButton>
+                                </>
+                            )}
 
-                            <a
-                                href={route('prpo.products.export', {
-                                    supplier_id: filterSupplier,
-                                    search: filterProductSearch
-                                })}
-                                className="inline-flex items-center px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-md font-bold text-xs text-indigo-700 uppercase tracking-widest shadow-sm hover:bg-indigo-100 transition ease-in-out duration-150"
-                            >
-                                📥 Export Current View
-                            </a>
-
-                            <PrimaryButton onClick={() => openProductModal(null)}>+ Add Product</PrimaryButton>
+                            {canViewProducts && (
+                                <a
+                                    href={route('prpo.products.export', {
+                                        supplier_id: filterSupplier,
+                                        search: filterProductSearch
+                                    })}
+                                    className="inline-flex items-center px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-md font-bold text-xs text-indigo-700 uppercase tracking-widest shadow-sm hover:bg-indigo-100 transition ease-in-out duration-150"
+                                >
+                                    📥 Export Current View
+                                </a>
+                            )}
 
                             {importErrors.import_file && (
                                 <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded w-full">
@@ -533,7 +558,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                         </div>
                     </div>
                     <div className="w-full sm:w-auto flex justify-end min-h-[38px]">
-                        {!isReadOnly && isBatchSelection && (
+                        {canDeleteProducts && isBatchSelection && (
                             <button onClick={confirmBatchDelete} className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-md shadow-sm transition-colors">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                 Delete Selected ({selectedProducts.length})
@@ -550,7 +575,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                             <thead className="bg-gray-50 sticky top-0 z-10 border-b border-gray-200 shadow-sm">
                                 <tr>
                                     {/* 🟢 HIDE CHECKBOX COLUMN IF READ-ONLY */}
-                                    {!isReadOnly && (
+                                    {canDeleteProducts && (
                                         <th scope="col" className="px-6 py-3 text-left w-12">
                                             <input type="checkbox" className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer" checked={isAllSelected} onChange={handleSelectAll} disabled={filteredProducts.length === 0} />
                                         </th>
@@ -567,6 +592,13 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                                             {renderHeaderSortButton('name')}
                                         </div>
                                     </th>
+                                    {/* 🟢 NEW: Smallest Unit Column Header */}
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                        <div className="flex items-center text-nowrap">
+                                            <span>Smallest Unit</span>
+                                            {renderHeaderSortButton('smallest_unit')}
+                                        </div>
+                                    </th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Details</th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
                                         <div className="flex items-center">
@@ -576,7 +608,7 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                                     </th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Price</th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                                    
+
                                     {/* 🟢 HIDE ACTIONS COLUMN IF READ-ONLY */}
                                     {!isReadOnly && (
                                         <th scope="col" className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider w-20">Actions</th>
@@ -585,35 +617,42 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {filteredProducts.length === 0 ? (
-                                    <tr><td colSpan={isReadOnly ? "6" : "8"} className="px-6 py-12 text-center text-gray-500 font-medium">No products found.</td></tr>
+                                    // 🟢 Incremented colSpan by +1 to account for the new Smallest Unit column
+                                    <tr><td colSpan={canEditProducts ? (canDeleteProducts ? "9" : "8") : "7"} className="px-6 py-12 text-center text-gray-500 font-medium">No products found.</td></tr>
                                 ) : (
                                     filteredProducts.map((product) => (
                                         <tr key={product.id} className={`hover:bg-gray-50 ${selectedProducts.includes(product.id) ? 'bg-indigo-50/30' : ''}`}>
-                                            
-                                            {/* 🟢 HIDE CHECKBOX CELL IF READ-ONLY */}
-                                            {!isReadOnly && (
+
+                                            {/* 🟢 HIDE CHECKBOX CELL IF NO DELETE PERMISSION */}
+                                            {canDeleteProducts && (
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <input type="checkbox" className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer" checked={selectedProducts.includes(product.id)} onChange={() => handleSelectOne(product.id)} />
                                                 </td>
                                             )}
 
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{product.supplier?.name || 'Unknown'}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">{product.name}</td>
+                                            <td className="px-4 py-3 font-medium text-gray-900 capitalize">
+                                                {product.name}
+                                            </td>
+                                            {/* 🟢 NEW: Smallest Unit Data Cell */}
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                                                {product.smallest_unit || <span className="text-gray-400 italic">N/A</span>}
+                                            </td>
                                             <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={product.details}>{product.details}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{product.unit || <span className="text-gray-400 italic">N/A</span>}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">₱{parseFloat(product.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${
-                                                    product.status === 'Disabled' 
-                                                        ? 'bg-gray-100 text-gray-600 ring-gray-500/20' 
+                                                    product.status === 'Disabled'
+                                                        ? 'bg-gray-100 text-gray-600 ring-gray-500/20'
                                                         : 'bg-green-50 text-green-700 ring-green-600/20'
                                                 }`}>
                                                     {product.status === 'Disabled' ? 'Disabled' : 'Active'}
                                                 </span>
                                             </td>
-                                            
+
                                             {/* 🟢 HIDE ACTIONS CELL IF READ-ONLY */}
-                                            {!isReadOnly && (
+                                            {canEditProducts && (
                                                 <td className="px-6 py-4 whitespace-nowrap text-center relative">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); setActiveDropdown(activeDropdown === product.id ? null : product.id); }}
@@ -626,15 +665,17 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                                                     {!isBatchSelection && activeDropdown === product.id && (
                                                         <div onClick={(e) => e.stopPropagation()} className="absolute right-8 top-10 z-50 w-32 overflow-hidden rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5">
                                                             <button className="block w-full px-4 py-2 text-left text-sm text-blue-600 hover:bg-gray-100 font-medium" onClick={() => { setActiveDropdown(null); openProductModal(product); }}>Edit</button>
-                                                            <button 
-                                                                className="block w-full px-4 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors" 
+                                                            <button
+                                                                className="block w-full px-4 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
                                                                 onClick={(e) => {
                                                                     e.preventDefault(); e.stopPropagation(); confirmToggleProductStatus(product);
                                                                 }}
                                                             >
                                                                 {product.status === 'Disabled' ? 'Enable' : 'Disable'}
                                                             </button>
-                                                            <button className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-100 font-medium" onClick={() => confirmDeleteProduct(product)}>Delete</button>
+                                                            {canDeleteProducts && (
+                                                                <button className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-gray-100 font-medium" onClick={() => confirmDeleteProduct(product)}>Delete</button>
+                                                            )}
                                                         </div>
                                                     )}
                                                 </td>
@@ -655,16 +696,16 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                         <h2 className="text-lg font-bold text-gray-900">Manage Suppliers</h2>
                         <div className="flex items-center gap-2">
                             {/* 🟢 NEW EXPORT BUTTON ADDED HERE */}
-                            <a 
-                                href={route('prpo.suppliers.export')} 
+                            <a
+                                href={route('prpo.suppliers.export')}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-green-700 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 transition-colors shadow-sm"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
                                 Export Excel
                             </a>
 
-                            <a 
-                                href={route('prpo.suppliers.template')} 
+                            <a
+                                href={route('prpo.suppliers.template')}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md hover:bg-indigo-100 transition-colors"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
@@ -672,8 +713,8 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                             </a>
                             <label className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 rounded-md hover:bg-indigo-500 cursor-pointer shadow-sm transition-colors">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
-                                Import CSV
-                                <input type="file" className="hidden" accept=".csv" onChange={handleImport} />
+                                Import File
+                                <input type="file" className="hidden" accept=".csv, .xlsx, .xls" onChange={handleImport} />
                             </label>
                         </div>
                     </div>
@@ -694,16 +735,16 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
 
                             <div>
                                 <InputLabel htmlFor="contact_number" value="Contact Number" />
-                                <TextInput 
-                                    id="contact_number" 
-                                    className="mt-1 block w-full" 
-                                    value={supData.contact_number} 
+                                <TextInput
+                                    id="contact_number"
+                                    className="mt-1 block w-full"
+                                    value={supData.contact_number}
                                     onChange={(e) => {
                                         const numericValue = e.target.value.replace(/\D/g, '');
                                         setSupData('contact_number', numericValue);
-                                    }} 
-                                    placeholder="e.g. 09171234567" 
-                                    maxLength="15" 
+                                    }}
+                                    placeholder="e.g. 09171234567"
+                                    maxLength="15"
                                 />
                                 <InputError message={supErrors.contact_number} className="mt-2" />
                             </div>
@@ -716,18 +757,18 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
 
                             <div>
                                 <InputLabel htmlFor="tin" value="TIN" />
-                                <TextInput 
-                                    id="tin" 
-                                    className="mt-1 block w-full" 
-                                    value={supData.tin} 
+                                <TextInput
+                                    id="tin"
+                                    className="mt-1 block w-full"
+                                    value={supData.tin}
                                     onChange={(e) => {
                                         let val = e.target.value.replace(/\D/g, '');
                                         val = val.substring(0, 12);
                                         const formattedTIN = val.match(/.{1,3}/g)?.join('-') || '';
                                         setSupData('tin', formattedTIN);
-                                    }} 
-                                    placeholder="e.g. 123-456-789-000" 
-                                    maxLength="15" 
+                                    }}
+                                    placeholder="e.g. 123-456-789-000"
+                                    maxLength="15"
                                 />
                                 <InputError message={supErrors.tin} className="mt-2" />
                             </div>
@@ -744,39 +785,85 @@ export default function ProductsIndex({ auth, products = [], suppliers = [] }) {
                     </form>
 
                     <h3 className="text-sm font-semibold text-gray-700 mb-2">Existing Suppliers</h3>
-                    
-                    {/* 🟢 NEW SEARCH INPUT ADDED HERE */}
-                    <div className="mb-3">
-                        <TextInput
-                            type="text"
-                            placeholder="Search suppliers by name, contact, or TIN..."
-                            value={supplierSearchQuery}
-                            onChange={(e) => setSupplierSearchQuery(e.target.value)}
-                            className="block w-full text-sm border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
-                        />
+
+                    {/* 🟢 NEW CHECKBOX & ACTION BAR ADDED HERE */}
+                    <div className="flex items-center justify-between gap-4 mb-4 bg-white p-3 rounded shadow-sm border border-gray-200">
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    id="selectAllSuppliers"
+                                    className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer"
+                                    checked={filteredSuppliers.length > 0 && selectedSupplierIds.length === filteredSuppliers.length}
+                                    onChange={(e) => {
+                                        if (e.target.checked) {
+                                            setSelectedSupplierIds(filteredSuppliers.map(s => s.id));
+                                        } else {
+                                            setSelectedSupplierIds([]);
+                                        }
+                                    }}
+                                />
+                                <label htmlFor="selectAllSuppliers" className="text-sm font-medium text-gray-700 cursor-pointer">Select All</label>
+                            </div>
+
+                            {selectedSupplierIds.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={handleBulkSupplierDelete}
+                                    className="bg-red-600 text-white px-3 py-1.5 text-xs rounded shadow-sm hover:bg-red-700 transition font-semibold"
+                                >
+                                    Delete Selected ({selectedSupplierIds.length})
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="w-1/2 min-w-[200px]">
+                            <TextInput
+                                type="text"
+                                placeholder="Search suppliers by name, contact, or TIN..."
+                                value={supplierSearchQuery}
+                                onChange={(e) => setSupplierSearchQuery(e.target.value)}
+                                className="block w-full text-sm border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                            />
+                        </div>
                     </div>
 
                     <div className="max-h-60 overflow-y-auto rounded-md border border-gray-200">
                         <ul className="divide-y divide-gray-200">
-                            {/* 🟢 UPDATED TO RENDER filteredSuppliers INSTEAD OF suppliers */}
                             {filteredSuppliers.map((sup) => (
                                 <li key={sup.id} className={`flex items-center justify-between p-3 transition-colors ${sup.status === 'Disabled' ? 'bg-gray-100/50' : 'hover:bg-gray-50'}`}>
-                                    
-                                    <div className="flex flex-col">
-                                        <span className={`text-sm font-semibold ${sup.status === 'Disabled' ? 'text-gray-400' : 'text-gray-800'}`}>
-                                            {sup.name}
-                                            {sup.status === 'Disabled' && (
-                                                <span className="ml-2 text-[10px] uppercase font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded">
-                                                    Disabled
-                                                </span>
-                                            )}
-                                        </span>
+
+                                    <div className="flex items-center gap-3">
+                                        {/* 🟢 INDIVIDUAL CHECKBOX FOR SUPPLIER */}
+                                        <input
+                                            type="checkbox"
+                                            className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer"
+                                            checked={selectedSupplierIds.includes(sup.id)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setSelectedSupplierIds([...selectedSupplierIds, sup.id]);
+                                                } else {
+                                                    setSelectedSupplierIds(selectedSupplierIds.filter(id => id !== sup.id));
+                                                }
+                                            }}
+                                        />
+
+                                        <div className="flex flex-col">
+                                            <span className={`text-sm font-semibold ${sup.status === 'Disabled' ? 'text-gray-400' : 'text-gray-800'}`}>
+                                                {sup.name}
+                                                {sup.status === 'Disabled' && (
+                                                    <span className="ml-2 text-[10px] uppercase font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded">
+                                                        Disabled
+                                                    </span>
+                                                )}
+                                            </span>
+                                        </div>
                                     </div>
 
                                     <div className="flex gap-3 items-center">
-                                        <button 
+                                        <button
                                             type="button"
-                                            onClick={() => confirmToggleSupplierStatus(sup)} 
+                                            onClick={() => confirmToggleSupplierStatus(sup)}
                                             className={`text-xs font-bold ${sup.status === 'Disabled' ? 'text-green-600 hover:text-green-800' : 'text-gray-500 hover:text-gray-800'}`}
                                         >
                                             {sup.status === 'Disabled' ? 'Enable' : 'Disable'}

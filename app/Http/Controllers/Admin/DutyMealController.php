@@ -1,4 +1,5 @@
 <?php
+// Duty meal scheduling, participants and approval handling
 
 namespace App\Http\Controllers\Admin;
 
@@ -9,7 +10,7 @@ use App\Models\Branch;
 use App\Models\User;
 use App\Models\Department;
 use App\Models\Position;
-use App\Models\SystemLog; // Added for tracking
+use App\Models\SystemLog; // 🟢 INJECTED FOR LOGGING
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -22,20 +23,34 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class DutyMealController extends Controller
 {
+    // ... [index and create functions remain exactly the same, omitting them here for space, keep your original ones!] ...
     
     public function index()
     {
+        $user = Auth::user();
+
+        // 🔐 INTELLIGENT PERMISSION-BASED REDIRECT
+        // If user has overview access, show overview
+        // Otherwise redirect to the first section they have access to
+        if (!$user->canViewModule('duty_meal')) {
+            // User doesn't have overview access - redirect to first available section
+            if ($user->canViewModule('duty_meal_setup_roster')) {
+                return redirect()->route('admin.duty-meals.create');
+            } elseif ($user->canViewModule('duty_meal_archive')) {
+                return redirect()->route('admin.duty-meals.archive');
+            } else {
+                // No access to any duty meal section
+                return redirect()->route('dashboard')
+                    ->with('error', 'You do not have permission to access the Duty Meal module.');
+            }
+        }
+
         $today = now()->startOfDay();
         
         // 🟢 NEW LOGIC: Lock the whole group if the FIRST day is within 3 days
         $lockDateThreshold = now()->addDays(3)->startOfDay();
 
-        // 1. Get all unlocked meals
-        $unlockedMeals = DutyMeal::where('is_locked', false)
-            ->orderBy('branch_id')
-            ->orderBy('duty_date')
-            ->get();
-
+        $unlockedMeals = DutyMeal::where('is_locked', false)->orderBy('branch_id')->orderBy('duty_date')->get();
         $mealsToLock = [];
 
         // Group the meals by branch to find continuous "blocks" or "weeks"
@@ -50,10 +65,7 @@ class DutyMealController extends Controller
 
             foreach ($meals as $meal) {
                 $mealDate = Carbon::parse($meal->duty_date)->startOfDay();
-
-                if ($currentBlockStart === null) {
-                    $currentBlockStart = $mealDate;
-                }
+                if ($currentBlockStart === null) $currentBlockStart = $mealDate;
 
                 // If this meal is more than 7 days from the start of the block, it's a NEW block
                 if ($mealDate->diffInDays($currentBlockStart) > 7) {
@@ -80,41 +92,46 @@ class DutyMealController extends Controller
             DutyMeal::whereIn('id', $mealsToLock)->update(['is_locked' => true]);
         }
 
-        // 2. For any meal that is now locked (or was already locked), 
-        // force pending participants ('none') to the default 'main' meal.
-        $lockedMealIds = DutyMeal::where('is_locked', true)
-            ->whereDate('duty_date', '>=', $today) 
-            ->pluck('id');
-            
-        if ($lockedMealIds->isNotEmpty()) {
-            DutyMealParticipant::whereIn('duty_meal_id', $lockedMealIds)
-                ->where('choice', 'none')
-                ->update(['choice' => 'main']);
-        }
-
-        // 3. Catch-all for past meals
+        $lockedMealIds = DutyMeal::where('is_locked', true)->whereDate('duty_date', '>=', $today)->pluck('id');
         $pastMealIds = DutyMeal::whereDate('duty_date', '<', $today)->pluck('id');
-        if ($pastMealIds->isNotEmpty()) {
-            DutyMealParticipant::whereIn('duty_meal_id', $pastMealIds)
-                ->where('choice', 'none')
-                ->update(['choice' => 'main']);
-        }
+        
+        $allMealsToProcess = $lockedMealIds->merge($pastMealIds)->unique();
 
-        $user = Auth::user();
+        if ($allMealsToProcess->isNotEmpty()) {
+            // 🟢 Eager load user.branches so we can check if they are multi-branch
+            $pendingParticipants = DutyMealParticipant::with(['dutyMeal.branch', 'user.branches'])
+                ->whereIn('duty_meal_id', $allMealsToProcess)
+                ->where('choice', 'none')
+                ->get();
+
+            foreach ($pendingParticipants as $p) {
+                $isMakati = str_contains(strtolower($p->dutyMeal->branch->name ?? ''), 'makati');
+                $site = null;
+                
+                if ($isMakati && $p->user) {
+                    // Combine their primary branch_id with any assigned pivot branches to get their total branch count
+                    $assignedBranchIds = $p->user->branches->pluck('id')->push($p->user->branch_id)->filter()->unique();
+                    $isMultiBranch = $assignedBranchIds->count() > 1;
+                    
+                    // If multi-branch, default to Back Office; else Clinic
+                    $site = $isMultiBranch ? 'Back Office' : 'Clinic';
+                }
+                
+                $p->update([
+                    'choice' => 'main',
+                    'site' => $site
+                ]);
+            }
+        }
         
         $allowedBranchIds = $user->branches->pluck('id')->push($user->branch_id)->filter()->unique();
 
-        $dutymeals = DutyMeal::with([
-            'branch', 
-            'participants.user:id,name' 
-        ])
+        $dutymeals = DutyMeal::with(['branch', 'participants.user:id,name'])
         ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
             $query->whereIn('branch_id', $allowedBranchIds);
         })
         ->whereDate('duty_date', '>=', now()->startOfMonth())
-        ->withCount('participants')
-        ->latest('duty_date')
-        ->get();
+        ->withCount('participants')->latest('duty_date')->get();
 
         $employees = User::with(['department:id,name', 'position:id,name'])
             ->select('id', 'name', 'department_id', 'position_id', 'branch_id')
@@ -125,9 +142,7 @@ class DutyMealController extends Controller
                           $pivotQuery->whereIn('branch_id', $allowedBranchIds);
                       });
                 });
-            })
-            ->orderBy('name')
-            ->get();
+            })->orderBy('name')->get();
 
         $departments = Department::select('id', 'name')->orderBy('name')->get();
         $positions = Position::select('id', 'name', 'department_id')->orderBy('name')->get();
@@ -135,9 +150,7 @@ class DutyMealController extends Controller
         $branches = Branch::select('id', 'name')
             ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
                 $query->whereIn('id', $allowedBranchIds);
-            })
-            ->orderBy('name')
-            ->get();
+            })->orderBy('name')->get();
 
         return Inertia::render('DutyMeal/Index', [
             'dutymeals' => $dutymeals,
@@ -152,11 +165,9 @@ class DutyMealController extends Controller
     {
         $user = Auth::user();
         $userRole = strtolower(trim($user->role->name ?? ''));
-        
 
-        // 🟢 HARD BLOCK FOR AUDITORS
         if (str_contains($userRole, 'audit')) {
-            abort(403, 'Auditors are not permitted to set up duty meal rosters.');
+            return redirect()->route('dashboard')->with('error', 'Auditors are not permitted to set up duty meal rosters.');
         }
 
         $allowedBranchIds = $user->branches->pluck('id')->push($user->branch_id)->filter()->unique();
@@ -164,12 +175,10 @@ class DutyMealController extends Controller
         $branches = Branch::select('id', 'name')
             ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
                 $query->whereIn('id', $allowedBranchIds);
-            })
-            ->orderBy('name')
-            ->get();
+            })->orderBy('name')->get();
 
-       
-        $employees = User::with(['branches', 'department:id,name'])
+        // 🟢 NEW: Added 'schedules' and 'scheduleOverrides' to the relationships!
+        $employees = User::with(['branches', 'department:id,name', 'schedules', 'scheduleOverrides'])
             ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
                 $query->where(function ($q) use ($allowedBranchIds) {
                     $q->whereIn('branch_id', $allowedBranchIds)
@@ -178,12 +187,32 @@ class DutyMealController extends Controller
                       });
                 });
             })
-            ->select('id', 'name', 'department_id', 'position_id','branch_id')
-            ->orderBy('name')
-            ->get()
+            ->select('id', 'name', 'department_id', 'position_id','branch_id')->orderBy('name')->get()
             ->map(function ($emp) {
                 $emp->assigned_branch_ids = $emp->branches->pluck('id')->toArray();
                 unset($emp->branches); 
+                
+                // 🟢 NEW: Map out the schedules strictly for the React frontend
+                $emp->mapped_schedules = $emp->schedules->map(function ($sch) {
+                    return [
+                        'start_date' => $sch->start_date,
+                        'end_date' => $sch->end_date,
+                        'shift_type' => $sch->shift_type,
+                        'off_days' => $sch->off_days ?? [],
+                        'pattern' => $sch->pattern, // 🟢 BUG FIX: Send the new 7-day pattern to the frontend!
+                    ];
+                })->toArray();
+                
+                $emp->mapped_overrides = $emp->scheduleOverrides->keyBy(function($item) {
+                    return \Carbon\Carbon::parse($item->date)->format('Y-m-d');
+                })->map(function ($override) {
+                    return [
+                        'is_off_day' => (bool) $override->is_off_day,
+                        'is_leave' => (bool) $override->is_leave, // 🟢 BUG FIX: Send leave status to block duty meals
+                        'shift_type' => $override->shift_type,
+                    ];
+                })->toArray();
+
                 return $emp;
             });
 
@@ -206,7 +235,7 @@ class DutyMealController extends Controller
 
         // 🟢 HARD BLOCK FOR AUDITORS
         if (str_contains($userRole, 'audit')) {
-            abort(403, 'Auditors are not permitted to create duty meal rosters.');
+            return redirect()->route('dashboard')->with('error', 'Auditors are not permitted to create duty meal rosters.');
         }
 
         $validated = $request->validate([
@@ -221,47 +250,72 @@ class DutyMealController extends Controller
             'schedule.*.participants.*.shift_type'=> 'required_with:schedule.*.participants|string|in:day,graveyard,straight',
         ]);
 
+        // 🟢 SMART CHECK: Detect if a fully published real roster already exists for any of these dates
+        foreach ($validated['schedule'] as $day) {
+            if (empty($day['main_meal']) && empty($day['participants'])) continue; 
+
+            $existingMeal = DutyMeal::where('branch_id', $validated['branch_id'])
+                ->whereDate('duty_date', $day['date'])
+                ->first();
+
+            // If a meal exists AND its main_meal is NOT 'TBD', it's a real published roster!
+            if ($existingMeal && $existingMeal->main_meal !== 'TBD') {
+                return back()->with('error', 'A roster already exists for one of these dates! Please edit the existing roster instead.');
+            }
+        }
+
         try {
             $createdDutyMeals = collect();
             $allParticipantData = [];
             $userIdsToNotify = [];
+            $totalShifts = 0;
 
-            DB::transaction(function () use ($validated, &$createdDutyMeals, &$allParticipantData, &$userIdsToNotify) {
+            DB::transaction(function () use ($validated, &$createdDutyMeals, &$allParticipantData, &$userIdsToNotify, &$totalShifts) {
                 foreach ($validated['schedule'] as $day) {
-                    
-                    if (empty($day['main_meal']) && empty($day['participants'])) {
-                        continue; 
-                    }
+                    if (empty($day['main_meal']) && empty($day['participants'])) continue; 
 
-                    $dutyMeal = DutyMeal::create([
-                        'branch_id' => $validated['branch_id'],
-                        'duty_date' => $day['date'],
-                        'main_meal' => $day['main_meal'] ?? 'TBD', 
-                        'alt_meal' => $day['alt_meal'] ?? null,
-                        'is_locked' => false,
-                    ]);
+                    // Since we already blocked real published rosters above, 
+                    // updateOrCreate here will safely update any 'TBD' transfer stubs or create new ones.
+                    $dutyMeal = DutyMeal::updateOrCreate(
+                        [
+                            'branch_id' => $validated['branch_id'],
+                            'duty_date' => $day['date'],
+                        ],
+                        [
+                            'main_meal' => $day['main_meal'] ?? 'TBD', 
+                            'alt_meal' => $day['alt_meal'] ?? '', // Prevent null constraint
+                            'is_locked' => false,
+                        ]
+                    );
 
                     $createdDutyMeals->push($dutyMeal);
 
+                    // Map existing users so we don't accidentally insert duplicates
+                    $existingUserIds = \App\Models\DutyMealParticipant::where('duty_meal_id', $dutyMeal->id)
+                        ->pluck('user_id')
+                        ->toArray();
+
                     if (!empty($day['participants'])) {
                         foreach ($day['participants'] as $staff) {
-                            $allParticipantData[] = [
-                                'duty_meal_id' => $dutyMeal->id,
-                                'user_id' => $staff['id'],
-                                'choice' => 'none',
-                                'shift_type' => $staff['shift_type'],
-                                'created_at' => now(),
-                                'updated_at' => now(),
-                            ];
-                            
-                            $userIdsToNotify[] = $staff['id'];
+                            // Only queue them if they aren't already transferred into this roster
+                            if (!in_array($staff['id'], $existingUserIds)) {
+                                $allParticipantData[] = [
+                                    'duty_meal_id' => $dutyMeal->id,
+                                    'user_id' => $staff['id'],
+                                    'choice' => 'none',
+                                    'shift_type' => $staff['shift_type'],
+                                    'created_at' => now(),
+                                    'updated_at' => now(),
+                                ];
+                                
+                                $userIdsToNotify[] = $staff['id'];
+                                $totalShifts++;
+                            }
                         }
                     }
                 }
 
-                if (!empty($allParticipantData)) {
-                    DutyMealParticipant::insert($allParticipantData);
-                }
+                if (!empty($allParticipantData)) DutyMealParticipant::insert($allParticipantData);
             });
 
             if (!empty($userIdsToNotify) && $createdDutyMeals->isNotEmpty()) {
@@ -275,84 +329,126 @@ class DutyMealController extends Controller
                 }
             }
 
+            // 🟢 SYSTEM LOGGING
+            try {
+                SystemLog::create([
+                    'user_id' => Auth::id(),
+                    'action' => 'Create',
+                    'module' => 'Duty Meal Setup',
+                    'description' => "Published a 7-Day Duty Meal Roster for Branch ID: {$validated['branch_id']} starting on {$validated['week_start']} ({$totalShifts} new shifts added).",
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent()
+                ]);
+            } catch (\Exception $e) {}
+
             return redirect()->route('admin.duty-meals.index')->with('success', '7-Day duty roster published successfully!');
 
         } catch (\Illuminate\Database\QueryException $e) {
-            if ($e->errorInfo[1] == 1062) {
-                return back()->with('error', 'A roster already exists for one of these dates! Please edit the existing roster instead.');
-            }
+            if ($e->errorInfo[1] == 1062) return back()->with('error', 'A duplicate entry was detected! Please refresh and try again.');
             return back()->withErrors(['error' => 'Database error: ' . $e->getMessage()]);
         }
     }
 
    public function updateParticipantChoice(Request $request, $id)
     {
-        $request->validate([
-            'choice' => 'required|in:main,alt'
-        ]);
-
-        $participant = DutyMealParticipant::findOrFail($id);
-
+        $request->validate(['choice' => 'required|in:main,alt']);
+        $participant = DutyMealParticipant::with('user')->findOrFail($id);
         $participant->update(['choice' => $request->choice]);
         
+        // 🟢 SYSTEM LOGGING
+        try {
+            SystemLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'Update',
+                'module' => 'Duty Meal Overview',
+                'description' => "Forced meal choice to '{$request->choice}' for employee '{$participant->user->name}'.",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+        } catch (\Exception $e) {}
+
         return back()->with('success', "Meal choice successfully set to {$request->choice}.");
     }
 
-    public function removeParticipant($id)
+    public function removeParticipant(Request $request, $id)
     {
-        $participant = DutyMealParticipant::findOrFail($id);
-
-        // 🟢 REMOVED: The logic that blocked deletion if $meal->is_locked is true.
-        // Admins/Custodians can now delete employees from a locked meal (e.g., if they are absent).
-        
+        $participant = DutyMealParticipant::with('user')->findOrFail($id);
+        $name = $participant->user->name ?? 'Unknown';
         $participant->delete();
+
+        // 🟢 SYSTEM LOGGING
+        try {
+            SystemLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'Delete',
+                'module' => 'Duty Meal Overview',
+                'description' => "Removed employee '{$name}' from a duty meal roster.",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+        } catch (\Exception $e) {}
 
         return back()->with('success', 'Staff member removed from roster.');
     }
 
     public function addParticipant(Request $request, $id)
     {
+        // 🟢 NEW: Added validation payload rules for custom request notes
         $request->validate([
             'user_id' => 'required|exists:users,id',
+            'choice' => 'nullable|in:main,alt,special,none',
+            'custom_request' => 'nullable|string|max:255'
         ]);
-
         $meal = DutyMeal::findOrFail($id);
 
-        if ($meal->is_locked) {
-            return back()->with('error', 'This roster is locked and can no longer be edited.');
-        }
-
-        if ($meal->participants()->where('user_id', $request->user_id)->exists()) {
-            return back()->with('error', 'Staff member is already on this roster.');
-        }
+        if ($meal->is_locked) return back()->with('error', 'This roster is locked and can no longer be edited.');
+        if ($meal->participants()->where('user_id', $request->user_id)->exists()) return back()->with('error', 'Staff member is already on this roster.');
 
         $meal->participants()->create([
             'user_id' => $request->user_id,
-            'choice' => 'none', 
+            'choice' => $request->choice ?? 'main', // 🟢 Saves exact choice selected
             'shift_type' => 'day', 
-            'custom_request' => null,
+            'custom_request' => $request->custom_request, // 🟢 Saves the special note!
         ]);
+
+        // 🟢 SYSTEM LOGGING
+        try {
+            $emp = User::find($request->user_id);
+            SystemLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'Create',
+                'module' => 'Duty Meal Overview',
+                'description' => "Added employee '{$emp->name}' to roster for {$meal->duty_date}.",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+        } catch (\Exception $e) {}
 
         return back()->with('success', 'Staff member successfully added to the roster!');
     }
 
     public function updateParticipantShift(Request $request, $id)
     {
-        $request->validate([
-            'shift_type' => 'required|string|in:day,graveyard,straight'
-        ]);
-
-        $participant = DutyMealParticipant::findOrFail($id);
+        $request->validate(['shift_type' => 'required|string|in:day,graveyard,straight']);
+        $participant = DutyMealParticipant::with('user')->findOrFail($id);
         
         $meal = DutyMeal::findOrFail($participant->duty_meal_id);
-        if ($meal->is_locked) {
-            return back()->with('error', 'This roster is locked and cannot be edited.');
-        }
+        if ($meal->is_locked) return back()->with('error', 'This roster is locked and cannot be edited.');
 
-        $participant->update([
-            'shift_type' => $request->shift_type
-        ]);
+        $participant->update(['shift_type' => $request->shift_type]);
         
+        // 🟢 SYSTEM LOGGING
+        try {
+            SystemLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'Update',
+                'module' => 'Duty Meal Overview',
+                'description' => "Updated shift type to '{$request->shift_type}' for employee '{$participant->user->name}'.",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+        } catch (\Exception $e) {}
+
         return back()->with('success', 'Shift successfully updated.');
     }
 
@@ -364,31 +460,38 @@ class DutyMealController extends Controller
         ]);
 
         $meal = DutyMeal::findOrFail($id);
-
-        if ($meal->is_locked) {
-            return back()->with('error', 'This roster is locked and cannot be edited.');
-        }
+        if ($meal->is_locked) return back()->with('error', 'This roster is locked and cannot be edited.');
 
         $meal->update([
             'main_meal' => $request->main_meal,
             'alt_meal' => $request->alt_meal,
         ]);
 
+        // 🟢 SYSTEM LOGGING
+        try {
+            SystemLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'Update',
+                'module' => 'Duty Meal Overview',
+                'description' => "Updated meal offerings for roster date {$meal->duty_date}.",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+        } catch (\Exception $e) {}
+
         return back()->with('success', 'Meal options successfully updated.');
     }
 
     public function archive(Request $request)
     {
+        // ... [archive function remains the same as before] ...
         $user = Auth::user();
         $allowedBranchIds = $user->branches->pluck('id')->push($user->branch_id)->filter()->unique();
 
         // 1. Get available archive months (Before current month)
         $availableDates = DutyMeal::whereDate('duty_date', '<', now()->startOfMonth())
             ->selectRaw('YEAR(duty_date) as year, MONTH(duty_date) as month')
-            ->distinct()
-            ->orderByDesc('year')
-            ->orderByDesc('month')
-            ->get();
+            ->distinct()->orderByDesc('year')->orderByDesc('month')->get();
 
         $defaultYear = $availableDates->first()->year ?? now()->subMonth()->year;
         $defaultMonth = $availableDates->first()->month ?? now()->subMonth()->month;
@@ -396,11 +499,7 @@ class DutyMealController extends Controller
         $filterYear = $request->input('year', $defaultYear);
         $filterMonth = $request->input('month', $defaultMonth);
 
-        // 2. Fetch the actual archived meals
-        $archivedMeals = DutyMeal::with([
-                'branch',
-                'participants.user:id,name' // 🟢 ADDED: We need this data for the Modal
-            ])
+        $archivedMeals = DutyMeal::with(['branch', 'participants.user:id,name'])
             ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
                 $query->whereIn('branch_id', $allowedBranchIds);
             })
@@ -408,17 +507,12 @@ class DutyMealController extends Controller
             ->whereDate('duty_date', '<', now()->startOfMonth()) 
             ->whereYear('duty_date', $filterYear)
             ->whereMonth('duty_date', $filterMonth)
-            ->withCount('participants')
-            ->orderBy('duty_date', 'asc')
-            ->get()
+            ->withCount('participants')->orderBy('duty_date', 'asc')->get()
             ->groupBy(function ($meal) {
                 return 'Week ' . Carbon::parse($meal->duty_date)->weekOfMonth;
             });
 
-        // 3. We also need to send departments/positions for the Modal to render employee details correctly
-        $employees = User::with(['department:id,name', 'position:id,name'])
-            ->select('id', 'name', 'department_id', 'position_id', 'branch_id')
-            ->get();
+        $employees = User::with(['department:id,name', 'position:id,name'])->select('id', 'name', 'department_id', 'position_id', 'branch_id')->get();
         $departments = Department::select('id', 'name')->orderBy('name')->get();
         $positions = Position::select('id', 'name', 'department_id')->orderBy('name')->get();
 
@@ -433,18 +527,47 @@ class DutyMealController extends Controller
         ]);
     }
 
-    public function destroy($id)
+    // 🟢 UPDATED: Injected Request for Logs
+    public function destroy(Request $request, $id)
     {
-        DutyMeal::findOrFail($id)->delete();
+        $meal = DutyMeal::findOrFail($id);
+        $date = $meal->duty_date;
+        $meal->delete();
+
+        // 🟢 SYSTEM LOGGING
+        try {
+            SystemLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'Delete',
+                'module' => 'Duty Meal Archive',
+                'description' => "Permanently deleted duty meal roster for date {$date}.",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+        } catch (\Exception $e) {}
+
         return back()->with('success', 'Roster permanently deleted.');
     }
 
     public function bulkDelete(Request $request)
     {
         $request->validate(['ids' => 'required|array']);
+        $count = count($request->ids);
         DutyMeal::whereIn('id', $request->ids)->delete();
         
-        return back()->with('success', count($request->ids) . ' rosters permanently deleted.');
+        // 🟢 SYSTEM LOGGING
+        try {
+            SystemLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'Delete',
+                'module' => 'Duty Meal Archive',
+                'description' => "Bulk permanently deleted {$count} duty meal rosters.",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+        } catch (\Exception $e) {}
+
+        return back()->with('success', $count . ' rosters permanently deleted.');
     }
 
     // 🟢 NEW GLOBAL EXPORT METHOD WITH SYSTEM LOGS
@@ -454,9 +577,7 @@ class DutyMealController extends Controller
         $ids = explode(',', $request->query('ids', ''));
         $ids = array_filter($ids);
         
-        if (empty($ids)) {
-            return back()->with('error', 'No duty meals found to export.');
-        }
+        if (empty($ids)) return back()->with('error', 'No duty meals found to export.');
 
         // Capture the date filter sent from the frontend
         $filterType = $request->query('filter', 'unknown');
@@ -467,7 +588,7 @@ class DutyMealController extends Controller
             'this_week' => 'This Week',
             'this_month' => 'This Month',
             'all' => 'All Active',
-            default => ucfirst(str_replace('_', ' ', $filterType)), // Catches the Custom Range
+            default => ucfirst(str_replace('_', ' ', $filterType)), 
         };
 
         // 🟢 RECORD ACTION TO SYSTEM LOGS
@@ -476,16 +597,15 @@ class DutyMealController extends Controller
                 'user_id' => Auth::id(),
                 'action' => 'Export',
                 'module' => 'Duty Meal Module',
-                'description' => "Exported Duty Meal rosters using date filter: {$readableFilter}.",
+                'description' => "Exported Duty Meal format matrix using date filter: {$readableFilter}.",
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent()
             ]);
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::info("Duty Meals exported by User " . Auth::id() . " with filter: {$readableFilter}");
-        }
+        } catch (\Exception $e) {}
         
         $fileName = "Duty_Meals_Report_" . now()->format('Y-m-d') . ".xlsx";
         
         return Excel::download(new DutyMealExport($ids), $fileName);
     }
+
 }

@@ -5,7 +5,7 @@ import Modal from '@/Components/Modal';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
 import TextInput from '@/Components/TextInput';
-import { getDocumentSidebarLinks } from '@/Config/navigation';
+import { getDocumentSidebarLinks, canEditModule, canDeleteModule } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { formatAppDate } from '@/Utils/date';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
@@ -13,8 +13,10 @@ import { useState } from 'react';
 
 export default function Documents({ auth, documents = [], categories = [], departments = [], branches = [], activeCategory }) {
 
-    const isAdmin = ['admin', 'HRBP', 'HR Assistant', 'Human Resources Assistant'].includes(auth.user?.role?.name) || 
-                    auth.user?.permissions?.includes('director of corporate services and operations');
+    // 🔐 ACL CHECK: Verify role-based permission levels for documents module
+    const canManageDocuments = canEditModule(auth, 'documents');
+    const canDeleteDocuments = canDeleteModule(auth, 'documents');
+
     const sidebarLinks = getDocumentSidebarLinks(categories, activeCategory);
     const { system } = usePage().props;
 
@@ -221,7 +223,7 @@ export default function Documents({ auth, documents = [], categories = [], depar
                         />
                     </div>
                     
-                    {isAdmin && (
+                    {canManageDocuments && (
                         <button
                             type="button"
                             onClick={() => {
@@ -301,7 +303,7 @@ export default function Documents({ auth, documents = [], categories = [], depar
                                             </a>
                                         ) : null}
 
-                                        {isAdmin && (
+                                        {canManageDocuments && (
                                             <>
                                                 <button 
                                                     onClick={() => openEditModal(doc)}
@@ -310,8 +312,11 @@ export default function Documents({ auth, documents = [], categories = [], depar
                                                     Edit
                                                 </button>
                                                 <button 
-                                                    onClick={() => triggerDelete(doc)}
-                                                    className="text-sm font-medium text-red-600 hover:text-red-800"
+                                                    type="button"
+                                                    onClick={() => canDeleteDocuments && triggerDelete(doc)}
+                                                    disabled={!canDeleteDocuments}
+                                                    className={`text-sm font-medium ${canDeleteDocuments ? 'text-red-600 hover:text-red-800' : 'text-red-300 cursor-not-allowed'}`}
+                                                    title={canDeleteDocuments ? 'Delete document' : 'Full permission required to delete documents'}
                                                 >
                                                     Delete
                                                 </button>
@@ -378,8 +383,11 @@ export default function Documents({ auth, documents = [], categories = [], depar
                                                         Edit
                                                     </button>
                                                     <button 
-                                                        onClick={() => deleteCategory(cat.id, cat.name)}
-                                                        className="text-xs font-medium text-red-500 hover:text-red-700 transition-colors"
+                                                        type="button"
+                                                        onClick={() => canDeleteDocuments && deleteCategory(cat.id, cat.name)}
+                                                        disabled={!canDeleteDocuments}
+                                                        className={`text-xs font-medium transition-colors ${canDeleteDocuments ? 'text-red-500 hover:text-red-700' : 'text-red-300 cursor-not-allowed'}`}
+                                                        title={canDeleteDocuments ? 'Delete category' : 'Full document permission required to delete categories'}
                                                     >
                                                         Delete
                                                     </button>
@@ -437,7 +445,7 @@ export default function Documents({ auth, documents = [], categories = [], depar
                         </select>
                         <InputError message={uploadErrors.category} className="mt-2" />
                         
-                        {!editingDoc && isAdmin && (
+                        {!editingDoc && canManageDocuments && (
                             <div className="mt-2 flex justify-end">
                                 <button 
                                     type="button" 

@@ -1,11 +1,14 @@
 import Modal from '@/Components/Modal';
-import { getAdminLinks } from '@/Config/navigation';
+import { getAdminLinks, canEditModule, canDeleteModule, canViewModule } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, router, useForm } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 
 export default function OrgChartAdmin({ auth, members, orgChartSvg = null, structure }) {
     const adminLinks = getAdminLinks(auth);
+    const canManageOrgChart = canEditModule(auth, 'org_chart');
+    const canDeleteOrgChart = canDeleteModule(auth, 'org_chart');
+    const canViewOrgChart = canViewModule(auth, 'org_chart');
     
     // Core Member & UI State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -535,13 +538,15 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
                                         <input
                                             type="file"
                                             accept=".svg,image/svg+xml"
+                                            disabled={!canManageOrgChart}
                                             onChange={(e) => {
                                                 const file = e.target.files[0];
                                                 setOrgChartData('org_chart_file', file || null);
                                                 if (file) { setPreviewUrl(URL.createObjectURL(file)); } 
                                                 else { setPreviewUrl(null); }
                                             }}
-                                            className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-indigo-700 transition-colors hover:file:bg-indigo-100"
+                                            className={`block w-full text-sm ${canManageOrgChart ? 'text-gray-500 file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100' : 'text-gray-300 file:bg-gray-200 file:text-gray-400 cursor-not-allowed'} file:mr-4 file:rounded-md file:border-0 file:px-4 file:py-2 file:text-sm file:font-semibold transition-colors`}
+                                            title={!canManageOrgChart ? 'Edit permission required' : ''}
                                         />
                                         {orgChartErrors.org_chart_file && <p className="mt-1 text-xs text-red-500">{orgChartErrors.org_chart_file}</p>}
                                         <p className="mt-2 text-xs text-gray-500">
@@ -558,8 +563,9 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
                                     <div className="flex justify-end">
                                         <button
                                             type="submit"
-                                            disabled={orgChartProcessing || !orgChartData.org_chart_file}
-                                            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                            disabled={orgChartProcessing || !orgChartData.org_chart_file || !canManageOrgChart}
+                                            title={!canManageOrgChart ? 'Edit permission required' : ''}
+                                            className={`rounded-lg px-4 py-2 text-sm font-bold text-white shadow transition-colors ${canManageOrgChart ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-gray-300 cursor-not-allowed'} disabled:opacity-50`}
                                         >
                                             {orgChartProcessing ? 'Uploading...' : normalizedOrgChartSvg ? 'Replace Org Chart' : 'Upload Org Chart'}
                                         </button>
@@ -576,10 +582,22 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
                             <p className="text-sm text-gray-500">Add members, assign departments, and manage them. <strong className="text-indigo-600 font-bold">Drag and Drop</strong> cards and departments to permanently reorder their visual sequence.</p>
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={() => setIsBranchManagerOpen(true)} className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition-colors hover:bg-gray-50">
+                            <button
+                                type="button"
+                                disabled={!canManageOrgChart}
+                                onClick={() => canManageOrgChart && setIsBranchManagerOpen(true)}
+                                title={!canManageOrgChart ? 'Edit permission required' : ''}
+                                className={`flex items-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-bold shadow-sm transition-colors ${canManageOrgChart ? 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50' : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+                            >
                                 + Add Branch
                             </button>
-                            <button onClick={() => openModal()} className="flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow transition-colors hover:bg-indigo-500">
+                            <button
+                                type="button"
+                                disabled={!canManageOrgChart}
+                                onClick={() => canManageOrgChart && openModal()}
+                                title={!canManageOrgChart ? 'Edit permission required' : ''}
+                                className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold shadow transition-colors ${canManageOrgChart ? 'bg-indigo-600 text-white hover:bg-indigo-500' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                            >
                                 + Add Member
                             </button>
                         </div>
@@ -589,7 +607,7 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
                         {Object.keys(groupedMembers).map((branchName) => {
                             const membersInBranch = groupedMembers[branchName];
                             const isOpen = !!openSections[branchName];
-                            const isDraggableBranch = branchName !== 'Other Staff';
+                            const isDraggableBranch = branchName !== 'Other Staff' && canManageOrgChart;
                             const currentMode = branchSettings[branchName] || 'carousel';
 
                             return (
@@ -663,9 +681,10 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
                                                 <div className="flex items-center gap-1 border-l border-gray-200 pl-3" onClick={(e) => e.stopPropagation()}>
                                                     <button
                                                         type="button"
-                                                        onClick={() => updateBranch(branchName)}
-                                                        className="p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600 rounded-md transition-colors"
-                                                        title="Edit Department Name"
+                                                        disabled={!canManageOrgChart}
+                                                        onClick={() => canManageOrgChart && updateBranch(branchName)}
+                                                        title={!canManageOrgChart ? 'Edit permission required' : 'Edit Department Name'}
+                                                        className={`p-1.5 rounded-md transition-colors ${canManageOrgChart ? 'text-gray-400 hover:bg-blue-50 hover:text-blue-600' : 'bg-gray-100 text-gray-300 cursor-not-allowed'}`}
                                                     >
                                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-4 w-4">
                                                             <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
@@ -673,9 +692,10 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
                                                     </button>
                                                     <button
                                                         type="button"
-                                                        onClick={() => deleteBranch(branchName)}
-                                                        className="p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 rounded-md transition-colors"
-                                                        title="Delete Department"
+                                                        disabled={!canDeleteOrgChart}
+                                                        onClick={() => canDeleteOrgChart && deleteBranch(branchName)}
+                                                        title={!canDeleteOrgChart ? 'Full permission required to delete department' : 'Delete Department'}
+                                                        className={`p-1.5 rounded-md transition-colors ${canDeleteOrgChart ? 'text-gray-400 hover:bg-red-50 hover:text-red-600' : 'bg-gray-100 text-red-300 cursor-not-allowed'}`}
                                                     >
                                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-4 w-4">
                                                             <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
@@ -760,9 +780,11 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
                                                                                     onClick={(e) => {
                                                                                         e.stopPropagation();
                                                                                         setActiveDropdown(null);
-                                                                                        openModal(member);
+                                                                                        canManageOrgChart && openModal(member);
                                                                                     }}
-                                                                                    className="flex w-full items-center px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                                                                    disabled={!canManageOrgChart}
+                                                                                    title={!canManageOrgChart ? 'Edit permission required' : ''}
+                                                                                    className={`flex w-full items-center px-4 py-2.5 text-sm font-medium ${canManageOrgChart ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed bg-gray-50'}`}
                                                                                 >
                                                                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 mr-2.5 text-gray-500">
                                                                                         <path d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
@@ -774,9 +796,11 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
                                                                                     onClick={(e) => {
                                                                                         e.stopPropagation();
                                                                                         setActiveDropdown(null);
-                                                                                        deleteMemberAction(member.id);
+                                                                                        canDeleteOrgChart && deleteMemberAction(member.id);
                                                                                     }}
-                                                                                    className="flex w-full items-center px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50"
+                                                                                    disabled={!canDeleteOrgChart}
+                                                                                    title={!canDeleteOrgChart ? 'Full permission required to remove member' : ''}
+                                                                                    className={`flex w-full items-center px-4 py-2.5 text-sm font-medium ${canDeleteOrgChart ? 'text-red-600 hover:bg-red-50' : 'text-red-300 cursor-not-allowed bg-red-50'}`}
                                                                                 >
                                                                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 mr-2.5">
                                                                                         <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
@@ -858,7 +882,13 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
                         <div>
                             <div className="mb-1 flex items-center justify-between">
                                 <label className="block text-sm font-bold text-gray-700">Position / Title</label>
-                                <button type="button" onClick={() => setIsPositionManagerOpen(true)} className="text-xs font-semibold text-indigo-600 transition-colors hover:text-indigo-800">
+                                <button
+                                    type="button"
+                                    onClick={() => canManageOrgChart && setIsPositionManagerOpen(true)}
+                                    disabled={!canManageOrgChart}
+                                    title={!canManageOrgChart ? 'Edit permission required' : ''}
+                                    className={`text-xs font-semibold transition-colors ${canManageOrgChart ? 'text-indigo-600 hover:text-indigo-800' : 'text-gray-400 cursor-not-allowed'}`}
+                                >
                                     Manage
                                 </button>
                             </div>
@@ -935,7 +965,12 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
                             placeholder="New position title..."
                             className="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100"
                         />
-                        <button onClick={() => addPosition(data.branch)} disabled={!data.branch} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-500 disabled:opacity-50">Add</button>
+                        <button
+                            onClick={() => addPosition(data.branch)}
+                            disabled={!data.branch || !canManageOrgChart}
+                            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={!canManageOrgChart ? 'Edit permission required' : ''}
+                        >Add</button>
                     </div>
 
                     <div className="max-h-60 overflow-y-auto space-y-2">
@@ -943,8 +978,20 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
                             <div key={pos} className="flex items-center justify-between rounded-lg bg-gray-50 p-3 border border-gray-100">
                                 <span className="text-sm font-medium text-gray-800">{pos}</span>
                                 <div className="flex gap-3 text-xs">
-                                    <button type="button" onClick={() => updatePosition(data.branch, pos)} className="text-blue-600 hover:underline">Edit</button>
-                                    <button type="button" onClick={() => deletePosition(data.branch, pos)} className="text-red-600 hover:underline">Delete</button>
+                                    <button
+                                        type="button"
+                                        onClick={() => canManageOrgChart && updatePosition(data.branch, pos)}
+                                        disabled={!canManageOrgChart}
+                                        className="text-blue-600 hover:underline disabled:text-gray-400 disabled:hover:underline-none disabled:cursor-not-allowed"
+                                        title={!canManageOrgChart ? 'Edit permission required' : ''}
+                                    >Edit</button>
+                                    <button
+                                        type="button"
+                                        onClick={() => canManageOrgChart && deletePosition(data.branch, pos)}
+                                        disabled={!canManageOrgChart}
+                                        className="text-red-600 hover:underline disabled:text-red-300 disabled:hover:underline-none disabled:cursor-not-allowed"
+                                        title={!canManageOrgChart ? 'Full permission required to delete position' : ''}
+                                    >Delete</button>
                                 </div>
                             </div>
                         ))}

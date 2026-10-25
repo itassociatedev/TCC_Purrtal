@@ -1,3 +1,4 @@
+import AnnouncementComments from '@/Components/AnnouncementComments';
 import InputLabel from '@/Components/InputLabel';
 import Modal from '@/Components/Modal';
 import SecondaryButton from '@/Components/SecondaryButton';
@@ -7,7 +8,6 @@ import SidebarLayout from '@/Layouts/SidebarLayout';
 import { formatAppDate } from '@/Utils/date';
 import { Head, usePage } from '@inertiajs/react';
 import { useMemo, useRef, useState } from 'react';
-import AnnouncementComments from '@/Components/AnnouncementComments';
 
 export default function Dashboard({ auth, announcements, priorities = [] }) {
     const dashboardLinks = getDashboardLinks();

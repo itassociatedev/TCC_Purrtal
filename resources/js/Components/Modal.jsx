@@ -121,11 +121,11 @@ export default function Modal({
                     leaveFrom="opacity-100"
                     leaveTo="opacity-0"
                 >
-                    <div className="fixed inset-0 bg-gray-500/75" />
+                    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" />
                 </Transition.Child>
 
                 <div className="fixed inset-0 overflow-hidden">
-                    <div className="flex h-full items-start justify-center p-4 sm:p-6">
+                    <div className="flex min-h-full items-center justify-center p-4 sm:p-6">
                         <Transition.Child
                             as={Fragment}
                             enter="ease-out duration-300"
@@ -137,9 +137,9 @@ export default function Modal({
                         >
                             <Dialog.Panel
                                 ref={panelRef}
-                                className={`relative mt-4 w-full ${
+                                className={`relative w-full ${
                                     maxWidthClasses[maxWidth] || maxWidthClasses['2xl']
-                                } max-h-[calc(100vh-2rem)] overflow-y-auto overscroll-none rounded-2xl bg-white text-left shadow-xl transition-all sm:mt-8 sm:max-h-[calc(100vh-4rem)]`}
+                                } max-h-[calc(100vh-2rem)] overflow-y-auto overscroll-none rounded-2xl bg-white text-left shadow-xl transition-all sm:max-h-[calc(100vh-4rem)]`}
                                 style={{
                                     overscrollBehavior: 'none',
                                     WebkitOverflowScrolling: 'touch',

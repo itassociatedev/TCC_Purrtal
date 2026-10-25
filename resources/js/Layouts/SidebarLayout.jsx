@@ -3,7 +3,12 @@ import Dropdown from '@/Components/Dropdown';
 import FlashMessage from '@/Components/FlashMessage';
 import { Link, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
+<<<<<<< HEAD
 import React, { useEffect, useState } from 'react';
+=======
+import { useEffect, useState } from 'react';
+import { hasHRModuleAccess, moduleHasAccess, hasPermission, canViewModuleCard, getFirstAttendanceRoute } from '@/Config/navigation';
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
 
 export default function SidebarLayout({
     header,
@@ -13,8 +18,26 @@ export default function SidebarLayout({
     headerClassName = '',
     onTriggerAddModal = null, 
 }) {
+
+    const formatTimeAgo = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now - date) / 1000);
+
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days}d ago`;
+    return date.toLocaleDateString();
+    };
+
     const { auth } = usePage().props;
 
+<<<<<<< HEAD
     const safeSidebarLinks = Array.isArray(sidebarLinks) ? sidebarLinks : [];
     const safeNotifications = Array.isArray(auth?.notifications) ? auth.notifications : [];
 
@@ -31,6 +54,77 @@ export default function SidebarLayout({
     
     // 🟢 NEW: Unified condition to toggle Accountability/Assets module visibility globally
     const hasAccountabilities = auth?.has_department_assets || (auth?.user?.assets && auth.user.assets.length > 0) || isSuperAdmin || isAudit;
+=======
+    const hasAnyAdminPermission = () => [
+        'admin_overview',
+        'announcements',
+        'employees',
+        'company_content',
+        'org_chart',
+        'resource_links',
+        'system_logs',
+        'access_control',
+    ].some((permission) => hasPermission(auth, permission));
+
+    const getFirstAdminRoute = () => {
+        if (hasPermission(auth, 'admin_overview')) {
+            return route('admin.dashboard');
+        }
+        if (hasPermission(auth, 'announcements')) {
+            return route('admin.announcements.index');
+        }
+        if (hasPermission(auth, 'employees')) {
+            return route('admin.employees');
+        }
+        if (hasPermission(auth, 'company_content')) {
+            return route('admin.company-content.index');
+        }
+        if (hasPermission(auth, 'org_chart')) {
+            return route('admin.org-chart.index');
+        }
+        if (hasPermission(auth, 'resource_links')) {
+            return route('admin.resource-links.index');
+        }
+        if (hasPermission(auth, 'system_logs')) {
+            return route('admin.logs.index');
+        }
+        if (hasPermission(auth, 'access_control')) {
+            return route('admin.access-control.index');
+        }
+
+        return route('admin.dashboard');
+    };
+
+    const prpoPermissions = [
+        'products',
+        'purchase_requests',
+        'approval_board',
+        'purchase_orders',
+        'prpo_status',
+    ];
+
+    const hasAnyPrpoPermission = () => prpoPermissions.some((permission) => hasPermission(auth, permission));
+    const getFirstPrpoRoute = () => {
+        if (hasPermission(auth, 'purchase_requests')) {
+            return route('prpo.purchase-requests.create');
+        }
+        if (hasPermission(auth, 'products')) {
+            return route('prpo.products.index');
+        }
+        if (hasPermission(auth, 'approval_board')) {
+            return route('prpo.approval-board');
+        }
+        if (hasPermission(auth, 'purchase_orders')) {
+            return route('prpo.purchase-orders.index');
+        }
+        return route('prpo.status.index');
+    };
+
+    // 🟢 Store notifications and count in local state
+    const [localNotifications, setLocalNotifications] = useState(auth.notifications || []);
+    const [localUnreadCount, setLocalUnreadCount] = useState(auth.unreadNotificationsCount || 0);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
 
     const [localNotifications, setLocalNotifications] = useState(safeNotifications);
     const [localUnreadCount, setLocalUnreadCount] = useState(auth?.unreadNotificationsCount || 0);
@@ -43,10 +137,26 @@ export default function SidebarLayout({
         if (isLoadingMore || !hasMore) return;
         setIsLoadingMore(true);
         try {
+<<<<<<< HEAD
             const response = await axios.get(route('notifications.load-more'), { params: { offset: localNotifications.length } });
             setLocalNotifications(prev => [...prev, ...(response.data.notifications || [])]);
         } catch (error) { console.error("Failed to load older notifications", error); }
         finally { setIsLoadingMore(false); }
+=======
+            const response = await axios.get(route('notifications.load-more'), {
+                params: { offset: localNotifications.length }
+            });
+
+            const newNotifications = response.data.notifications;
+
+            // Append the older notifications to our existing list
+            setLocalNotifications(prev => [...prev, ...newNotifications]);
+        } catch (error) {
+            console.error("Failed to load older notifications", error);
+        } finally {
+            setIsLoadingMore(false);
+        }
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
     };
 
     useEffect(() => {
@@ -57,8 +167,17 @@ export default function SidebarLayout({
     const markAsRead = (notificationId, url) => {
         const notification = localNotifications.find(n => n.id === notificationId);
         if (notification && !notification.read_at) {
+<<<<<<< HEAD
             setLocalNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n));
             setLocalUnreadCount(prev => Math.max(0, prev - 1));
+=======
+            setLocalNotifications(prev => prev.map(n =>
+                n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n
+            ));
+            setLocalUnreadCount(prev => Math.max(0, prev - 1));
+
+            // 2. Silently tell the backend
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
             axios.post(route('notifications.read', notificationId));
         }
         if (url) router.visit(url);
@@ -67,11 +186,54 @@ export default function SidebarLayout({
     const user = auth?.user;
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+<<<<<<< HEAD
     const currentModuleLabel = activeModule === 'Admin' ? 'Admin Module' 
                              : activeModule === 'Assets' ? (isSuperAdmin ? 'Accountability Module' : 'My Accountability') 
                              : activeModule === 'Asset Masterlist' ? 'Asset Masterlist'
                              : ['HR', 'HR MENU', 'HR ADMIN'].includes(activeModule) ? 'HR Module' 
                              : activeModule === 'PR/PO Module' ? 'PR/PO Module' : 'Select Module';
+=======
+    // 🟢 CHECK: Identify which Quick Links the user has access to
+    const showDocumentQuickLink = canViewModuleCard(auth, 'documents');
+    const showCalendarQuickLink = canViewModuleCard(auth, 'attendance_calendar');
+    const showPersonalMealsQuickLink = canViewModuleCard(auth, 'duty_meal_personal');
+
+    const hasAnyQuickLinks = showDocumentQuickLink || showCalendarQuickLink || showPersonalMealsQuickLink;
+
+    // 🟢 NEW: Check if the user is currently on the Dashboard
+    const isDashboard = route().current('dashboard');
+
+    // 🟢 FIX: Define broad Duty Meal access explicitly
+    const canAccessDutyMealModule = [
+        'duty_meal', 'duty_meal_setup_roster', 'duty_meal_archive', 'duty_meal_personal'
+    ].some(perm => hasPermission(auth, perm) || canViewModuleCard(auth, perm));
+
+    // 🟢 FIXED: Dynamically route the user to the FIRST Duty Meal module they have access to!
+    const getFirstDutyMealRoute = () => {
+        if (hasPermission(auth, 'duty_meal') || canViewModuleCard(auth, 'duty_meal')) return route('admin.duty-meals.index');
+        if (hasPermission(auth, 'duty_meal_setup_roster') || canViewModuleCard(auth, 'duty_meal_setup_roster')) return route('admin.duty-meals.create');
+        if (hasPermission(auth, 'duty_meal_archive') || canViewModuleCard(auth, 'duty_meal_archive')) return route('admin.duty-meals.archive');
+
+        return route('staff.duty-meals.index');
+    };
+
+    const routeToDutyMeal = getFirstDutyMealRoute();
+
+    const currentModuleLabel =
+        activeModule === 'Admin'
+            ? 'Admin Module'
+            : activeModule === 'Attendance'
+              ? 'Attendance Module'
+            : ['HR', 'HR MENU', 'HR ADMIN'].includes(activeModule)
+              ? 'HR Module'
+              : activeModule === 'Duty Meals'
+                ? 'Duty Meal Module'
+                : activeModule === 'Document Repository'
+                  ? 'Select Module'
+                  : activeModule === 'PR/PO Module'
+                    ? 'PR/PO Module'
+                    : 'Select Module';
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
 
     // Determines if we are on the main overview/dashboard to conditionally render Quick Links and Resources
     const isMainDashboard = ['General', 'Dashboard'].includes(activeModule);
@@ -85,6 +247,7 @@ export default function SidebarLayout({
 
     // Expanded Icon Dictionary to cover all module menu items
     const iconSvg = {
+<<<<<<< HEAD
         // Main & Dashboard
         Overview: (<svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" /></svg>),
         Dashboard: (<svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" /></svg>),
@@ -135,11 +298,247 @@ export default function SidebarLayout({
     const renderSidebarIcon = (link) => {
         if (!link) return <div className="h-4 w-4 rounded bg-gray-200" />;
         if (link.icon === 'document-category') return customDocumentCategoryIcon;
+=======
+        Overview: (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 21V9h6v12" />
+            </svg>
+        ),
+        Announcements: (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 8a3 3 0 00-6 0v7a3 3 0 006 0V8z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 8h1m14 0h1" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 17h6" />
+            </svg>
+        ),
+        'About Us': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v3m0 12v3m9-9h-3m-12 0H3m15.364-6.364l-2.121 2.121m-9.192 9.192l-2.121 2.121m0-12.727l2.121 2.121m9.192 9.192l2.121 2.121" />
+            </svg>
+        ),
+        'Organizational Directory': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 6h8M8 12h8M8 18h8" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12" />
+            </svg>
+        ),
+        'Resource Links': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+        ),
+        'Duty Meals': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 5l7 7-7 7" />
+            </svg>
+        ),
+        'Duty Meal Overview': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 5l7 7-7 7" />
+            </svg>
+        ),
+        'Set Up Roster': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+        ),
+        'Duty Meal Archive': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9-4v4m4-4v4" />
+            </svg>
+        ),
+        'My Duty Meals': (
+        <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        ),
+        'Document Overview': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 2h8l4 4v14a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 2v4h8" />
+            </svg>
+        ),
+        'Admin Overview': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+        ),
+        'Employee Management': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.856-1.487M15 10a3 3 0 11-6 0 3 3 0 016 0zM16 16a5 5 0 10-10 0" />
+            </svg>
+        ),
+        'Announcements & Notices': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 8a3 3 0 00-6 0v7a3 3 0 006 0V8z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 8h1m14 0h1" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 17h6" />
+            </svg>
+        ),
+        'Company Content Management': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4m0 0l-4-4m4 4H3" />
+            </svg>
+        ),
+        'System Logs & Security': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v2h8z" />
+            </svg>
+        ),
+        'Access Control': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 10-8 0v4a2 2 0 00-2 2v5a2 2 0 002 2h8a2 2 0 002-2v-5a2 2 0 00-2-2zm-6 0V7a2 2 0 114 0v4H10z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h.01" />
+            </svg>
+        ),
+        'HR Admin Overview': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+        ),
+        'HR Module Overview': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 13h4v7H4v-7zM10 4h4v16h-4V4zM16 9h4v11h-4V9z" />
+            </svg>
+        ),
+        'Manpower Request': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+            </svg>
+        ),
+        'Manpower Request Form': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+            </svg>
+        ),
+        'Approval Board': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 4h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2z" />
+            </svg>
+        ),
+        'My Requests': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 4h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2z" />
+            </svg>
+        ),
+        'Document Requests': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h8M8 11h8M8 15h5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 3h8l4 4v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2z" />
+            </svg>
+        ),
+
+        'Pending Document Requests': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h8M8 11h8M8 15h5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 3h8l4 4v14a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2z" />
+            </svg>
+        ),
+        'Form 2316 Approvals': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 4h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2z" />
+            </svg>
+        ),
+        'Feedback Form': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        ),
+        'Feedback Form Submissions': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 9h8M8 13h5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 4h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2z" />
+            </svg>
+        ),
+        'Products Masterlist': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+            </svg>
+        ),
+        'PR Form': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+        ),
+        'PR Approval Board': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        ),
+        'PO Generation': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6M7 3h8l4 4v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 3v4h4" />
+            </svg>
+        ),
+        'PR/PO Status': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+        ),
+        'Attendance Overview': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+        ),
+        'Setup Schedule': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+        ),
+        'Calendar': (
+            <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+        ),
+    };
+
+    const renderSidebarIcon = (link) => {
+        if (link.icon === 'document-category') {
+            return customDocumentCategoryIcon;
+        }
+
+        if (link.icon === 'key') {
+            return (
+                <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 10-6 0 3 3 0 006 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 11h2a2 2 0 012 2v2a2 2 0 01-2 2h-2l-3 3-3-3H9a2 2 0 01-2-2v-2a2 2 0 012-2h6z" />
+                </svg>
+            );
+        }
+
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
         const IconComponent = typeof link.icon === 'function' ? link.icon : null;
         if (IconComponent) return <IconComponent className="h-4 w-4 text-black" />;
         return iconSvg[link.label] || <div className="h-4 w-4 rounded bg-gray-200" />;
     };
 
+<<<<<<< HEAD
+=======
+    const markAllAsRead = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (localUnreadCount === 0) return;
+
+        // 1. Instantly update UI: Mark all unread as read and reset count to 0
+        setLocalNotifications(prev => prev.map(n =>
+            !n.read_at ? { ...n, read_at: new Date().toISOString() } : n
+        ));
+        setLocalUnreadCount(0);
+
+        // 2. Silently tell the backend
+        axios.post(route('notifications.mark-all-read'));
+    };
+
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
     return (
         <div className="flex h-screen overflow-hidden bg-gray-100">
             <FlashMessage />
@@ -162,6 +561,7 @@ export default function SidebarLayout({
                         </div>
                     )}
 
+<<<<<<< HEAD
                     {/* ONLY RENDER QUICK LINKS IF ON MAIN DASHBOARD */}
                     {isMainDashboard && (
                         <div className="mb-4">
@@ -191,6 +591,8 @@ export default function SidebarLayout({
                         </div>
                     )}
 
+=======
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                     {priorityLink && (
                         <div className="mb-4">
                             <Link href={priorityLink.href} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 ${priorityLink.active ? 'bg-gray-100 font-bold text-gray-900' : ''}`}>
@@ -200,6 +602,7 @@ export default function SidebarLayout({
                         </div>
                     )}
 
+<<<<<<< HEAD
                     {regularSidebarLinks.length > 0 && (
                         <>
                             <div className="mb-4 text-xs font-bold text-gray-400 uppercase tracking-wider mt-4">General Menu</div>
@@ -223,6 +626,67 @@ export default function SidebarLayout({
                             </ul>
                         </>
                     )}
+=======
+                    {/* 🟢 NEW QUICK LINKS RESTORED TO SIDEBAR (MOVED TO TOP & EMOJIS REMOVED) */}
+                    {isDashboard && hasAnyQuickLinks && (
+                        <div className="mb-6">
+                            <div className="mb-4 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                Quick Links
+                            </div>
+                            <ul className="space-y-2">
+                                {showDocumentQuickLink && (
+                                    <li>
+                                        <Link
+                                            href={route('admin.documents.index')}
+                                            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition ${
+                                                route().current('admin.documents.index') ? 'bg-emerald-50 font-bold text-emerald-700' : ''
+                                            }`}
+                                        >
+                                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                                            </svg>
+                                            <span>Document Repository</span>
+                                        </Link>
+                                    </li>
+                                )}
+                                {showCalendarQuickLink && (
+                                    <li>
+                                        <Link
+                                            href={route('attendance.calendar')}
+                                            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition ${
+                                                route().current('attendance.calendar') ? 'bg-indigo-50 font-bold text-indigo-700' : ''
+                                            }`}
+                                        >
+                                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                            </svg>
+                                            <span>My Calendar</span>
+                                        </Link>
+                                    </li>
+                                )}
+                                {showPersonalMealsQuickLink && (
+                                    <li>
+                                        <Link
+                                            href={route('staff.duty-meals.index')}
+                                            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-rose-50 hover:text-rose-700 transition ${
+                                                route().current('staff.duty-meals.index') ? 'bg-rose-50 font-bold text-rose-700' : ''
+                                            }`}
+                                        >
+                                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <span>My Duty Meals</span>
+                                        </Link>
+                                    </li>
+                                )}
+                            </ul>
+                        </div>
+                    )}
+
+                    <div className="mb-4 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                        General Menu
+                    </div>
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
 
                     {/* ONLY RENDER RESOURCES IF ON MAIN DASHBOARD */}
                     {isMainDashboard && (
@@ -246,20 +710,144 @@ export default function SidebarLayout({
             </aside>
 
             <div className="flex flex-1 flex-col overflow-hidden relative">
+<<<<<<< HEAD
+=======
+
+                {/* 🔽 CSS FIX FOR MOBILE NOTIFICATION DROPDOWN 🔽 */}
+                <style>{`
+                    @media (max-width: 639px) {
+                        .mobile-notification-fix > div > .absolute.z-50,
+                        .mobile-notification-fix .absolute.z-50 {
+                            position: fixed !important;
+                            top: 4.5rem !important;
+                            left: 50% !important;
+                            right: auto !important;
+                            transform: translateX(-50%) !important;
+                            width: 95vw !important;
+                            max-width: 400px !important;
+                        }
+                    }
+                `}</style>
+
+                {/* ✅ FIXED: Lowered Header to z-30 so the sidebar and overlay cover it when open */}
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                 <header className="relative z-30 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-3 sm:px-6">
                     <button onClick={() => setIsMobileSidebarOpen(true)} className="sm:hidden text-gray-500 hover:text-gray-700">
                         <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
                     </button>
 
+<<<<<<< HEAD
                     <div className="flex flex-1 items-center justify-end gap-3">
                         <Dropdown>
                             <Dropdown.Trigger>
                                 <button className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold bg-white hover:bg-gray-50">
                                     {currentModuleLabel}
                                     <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+=======
+                    {/* Right Side Header Items - Reduced gap on mobile */}
+                    <div className="flex flex-1 items-center justify-end gap-1.5 sm:gap-3">
+
+                        {/* 🔽 Wrapped Notifications Dropdown 🔽 */}
+                        <div className="mobile-notification-fix">
+                            <Dropdown>
+                                <Dropdown.Trigger>
+                                    <button
+                                        type="button"
+                                        className="relative inline-flex h-[36px] w-[36px] sm:h-[42px] sm:w-[42px] items-center justify-center rounded-full border border-slate-200 bg-white/90 text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus:outline-none"
+                                        aria-label="Notifications"
+                                    >
+                                        <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0018 9.75V9a6 6 0 10-12 0v.75a8.967 8.967 0 00-2.312 6.022c1.733.64 3.563 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                                        </svg>
+
+                                        {localUnreadCount > 0 && (
+                                            <span className="absolute right-0 top-0 sm:right-1 sm:top-1 flex h-3.5 w-3.5 sm:h-4 sm:w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] sm:text-[10px] font-bold text-white ring-2 ring-white">
+                                                {localUnreadCount}
+                                            </span>
+                                        )}
+                                    </button>
+                                </Dropdown.Trigger>
+
+                                <Dropdown.Content align="right" width="80">
+                                    <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100 bg-white">
+                                        <span className="text-sm font-semibold text-gray-900">Notifications</span>
+                                        {localUnreadCount > 0 && (
+                                            <button onClick={markAllAsRead} className="text-xs font-medium text-indigo-600 hover:text-indigo-800 focus:outline-none transition-colors">
+                                                Mark all as read
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {localNotifications.length === 0 ? (
+                                        <div className="px-4 py-3">
+                                            <p className="mt-1 text-xs text-gray-500">No new notifications yet.</p>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="max-h-64 overflow-y-auto divide-y divide-gray-100">
+                                                {localNotifications.map((notification) => (
+                                                    <button
+                                                        key={notification.id}
+                                                        onClick={() => markAsRead(notification.id, notification.data.action_url)}
+                                                        className={`block w-full text-left px-4 py-3 pb-6 transition relative ${notification.read_at ? 'bg-white hover:bg-slate-50' : 'bg-indigo-50/60 hover:bg-indigo-50'}`}
+                                                    >
+                                                        <p className={`text-sm pr-12 ${notification.read_at ? 'font-medium text-slate-600' : 'font-bold text-slate-900'}`}>
+                                                            {notification.data.message}
+                                                        </p>
+                                                        <p className="text-xs text-slate-500 mt-1 pr-12">
+                                                            {notification.data.user_email || notification.data.details}
+                                                        </p>
+                                                        <span className="absolute bottom-2 right-3 text-[10px] font-semibold text-slate-400">
+                                                            {formatTimeAgo(notification.created_at)}
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            {hasMore && (
+                                                <div className="block bg-gray-50 text-center border-t border-gray-100 rounded-b-md">
+                                                    <button
+                                                        onClick={loadMoreNotifications}
+                                                        disabled={isLoadingMore}
+                                                        className="block w-full py-2.5 text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:bg-gray-100 transition disabled:opacity-50"
+                                                    >
+                                                        {isLoadingMore ? 'Loading older alerts...' : 'Show Previous Notifications'}
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {!hasMore && localNotifications.length > 0 && (
+                                                <div className="block px-4 py-2.5 bg-gray-50 text-center border-t border-gray-100 rounded-b-md text-xs text-gray-400 font-medium">
+                                                    End of notification history
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                </Dropdown.Content>
+                            </Dropdown>
+                        </div>
+
+                        {/* Module Selection Dropdown */}
+                        <Dropdown>
+                            <Dropdown.Trigger>
+                                <button className="inline-flex min-h-[36px] sm:min-h-[42px] items-center gap-1 sm:gap-2 rounded-full border border-slate-200 bg-white/90 px-2.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus:outline-none">
+
+                                    {/* Hide text on mobile */}
+                                    <span className="hidden sm:block">{currentModuleLabel}</span>
+
+                                    {/* Show grid icon on mobile instead */}
+                                    <svg className="h-4 w-4 sm:hidden text-slate-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                                    </svg>
+
+                                    <svg className="h-3 w-3 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                                    </svg>
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                 </button>
                             </Dropdown.Trigger>
                             <Dropdown.Content>
+<<<<<<< HEAD
                                 {['admin', 'director of corporate services and operations', 'hrbp'].includes(userRole) && <Dropdown.Link href={route('admin.dashboard')}>Admin Module</Dropdown.Link>}
                                 <Dropdown.Link href={route('hr.index')}>HR Module</Dropdown.Link>
                                 <Dropdown.Link href={canCreatePR ? route('prpo.purchase-requests.create') : route('prpo.status.index')}>PR/PO Module</Dropdown.Link>
@@ -272,12 +860,64 @@ export default function SidebarLayout({
                                     </a>
                                 )}
                             </Dropdown.Content>
+=======
+                                    {hasAnyAdminPermission() && (
+                                        <Dropdown.Link href={getFirstAdminRoute()}>
+                                            Admin Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                    {/* HR Module: show only when user has HR-related permissions or is Admin */}
+                                    { hasHRModuleAccess(auth) && (
+                                        <Dropdown.Link href={route('hr.index')}>HR Module</Dropdown.Link>
+                                    ) }
+
+                                    { moduleHasAccess(usePage().props.auth, 'prpo_') && (
+                                        <Dropdown.Link href={getFirstPrpoRoute()}>
+                                            PR/PO Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                    {/* 🟢 FIXED: Properly routes users dynamically to the first Duty Meal module they have access to */}
+                                    { canAccessDutyMealModule && routeToDutyMeal && (
+                                        <Dropdown.Link href={routeToDutyMeal}>
+                                            Duty Meal Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                    {moduleHasAccess(auth, 'attendance') && (
+                                        <Dropdown.Link href={getFirstAttendanceRoute(auth)}>
+                                            Attendance Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                </Dropdown.Content>
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                         </Dropdown>
 
                         <Dropdown>
                             <Dropdown.Trigger>
+<<<<<<< HEAD
                                 <button className="inline-flex items-center px-4 py-2 text-sm font-semibold border rounded-full">{user?.name}</button>
                             </Dropdown.Trigger>
+=======
+                                <button className="inline-flex min-h-[36px] sm:min-h-[42px] items-center gap-1 sm:gap-2 rounded-full border border-slate-200 bg-white/90 px-2.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus:outline-none">
+
+                                    {/* Hide text on mobile, truncate if it gets too long on desktop */}
+                                    <span className="hidden sm:block max-w-[100px] lg:max-w-[150px] truncate">{user?.name}</span>
+
+                                    {/* Show simple user icon on mobile instead */}
+                                    <svg className="h-4 w-4 sm:hidden text-slate-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                                    </svg>
+
+                                    <svg className="h-3 w-3 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                                    </svg>
+                                </button>
+                            </Dropdown.Trigger>
+
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                             <Dropdown.Content>
                                 <Dropdown.Link href={route('profile.edit')}>Profile</Dropdown.Link>
                                 <Dropdown.Link href={route('logout')} method="post" as="button">Log Out</Dropdown.Link>

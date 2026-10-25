@@ -1,4 +1,5 @@
 <?php
+// Manpower request endpoints for HR workflows
 
 namespace App\Http\Controllers\HR;
 
@@ -191,6 +192,10 @@ class ManpowerRequestController extends Controller
             }
 
             $user = Auth::user();
+
+            if (!$user->canCreateModule('manpower_requests_form')) {
+                abort(403, 'Unauthorized to create manpower requests.');
+            }
 
             // --- GET ALL ALLOWED BRANCHES FOR VALIDATION ---
             $primaryBranchId = $user->branch_id;
