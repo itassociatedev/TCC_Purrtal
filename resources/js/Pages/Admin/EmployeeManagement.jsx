@@ -1384,7 +1384,6 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                         </div>
                     </div>
 
-<<<<<<< HEAD
                     {/* 🟢 ISOLATE SELECTION ROW */}
                     {selectedUsers.length > 0 && (
                         <div className="flex items-center justify-between mt-4 mb-4 border-b border-gray-200 pb-4">
@@ -1519,7 +1518,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                             <tr className="bg-gray-100 border-b border-gray-200">
                                                 <td colSpan="7" className="px-6 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider shadow-sm">
                                                     Other Filtered Employees
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
+
                                                 </td>
                                             </tr>
                                             {selectedObjects.map(employee => renderDesktopRow(employee, true))}
@@ -1566,7 +1565,6 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 </div>
                             )}
 
-<<<<<<< HEAD
                             {selectedObjects.length === 0 && unselectedFilteredUsers.length === 0 ? (
                                 <div className="px-4 py-16 text-center">
                                     <p className="text-gray-500 font-bold text-lg">No employees found.</p>
@@ -1577,35 +1575,17 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                         <>
                                             <div className="bg-indigo-100 px-4 py-2 border-b border-indigo-200 text-xs font-black text-indigo-800 uppercase tracking-wider text-center">
                                                 Selected for Bulk Actions ({selectedObjects.length})
-=======
-                        {selectedObjects.length === 0 && unselectedFilteredUsers.length === 0 ? (
-                            <div className="px-4 py-12 text-center text-gray-500 font-medium">
-                                No employees found.
-                            </div>
-                        ) : (
-                            <div className="flex flex-col">
-                                {/* 🟢 GROUP 1: SELECTED USERS PINNED TO TOP (MOBILE) */}
-                                {selectedObjects.length > 0 && (
-                                    <>
-                                        <div className="bg-indigo-100 px-4 py-2 border-b border-indigo-200 text-xs font-bold text-indigo-800 uppercase tracking-wider">
-                                            Selected for Bulk Actions ({selectedObjects.length})
-                                        </div>
-                                        {selectedObjects.map(employee => renderMobileRow(employee, true))}
-
-                                        {unselectedFilteredUsers.length > 0 && (
-                                            <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                                Other Filtered Employees
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                             </div>
                                             {selectedObjects.map(employee => renderMobileRow(employee, true))}
-                                            
-                                            {unselectedFilteredUsers.length > 0 && (
-                                                <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 text-xs font-black text-gray-500 uppercase tracking-wider text-center">
-                                                    Other Filtered Employees
-                                                </div>
-                                            )}
                                         </>
                                     )}
+
+                                    {unselectedFilteredUsers.length > 0 && (
+                                        <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 text-xs font-black text-gray-500 uppercase tracking-wider text-center">
+                                            Other Filtered Employees
+                                        </div>
+                                    )}
+
                                     {unselectedFilteredUsers.map(employee => renderMobileRow(employee, false))}
                                 </div>
                             )}
@@ -1650,23 +1630,19 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             />
                             <InputError message={positionErrors.position_name} className="mt-2" />
                         </div>
-<<<<<<< HEAD
-                        
-                        <PrimaryButton className="mt-4 md:mt-0 !py-2.5" disabled={positionProcessing}>Add</PrimaryButton>
+
+                        <PrimaryButton
+                            className="mt-4 md:mt-0 !py-2.5"
+                            disabled={positionProcessing || !canManageEmployees}
+                            title={!canManageEmployees ? 'Edit permission required' : ''}
+                        >
+                            Add
+                        </PrimaryButton>
                     </form>
 
                     <h3 className="text-[11px] font-black uppercase tracking-wider text-gray-500 mb-2">
-                        {positionData.department_id 
-                            ? `Existing Positions (${departments.find(d => d.id === parseInt(positionData.department_id))?.name || 'Selected Dept'})` 
-=======
-
-                        <PrimaryButton className="mt-4 md:mt-0" disabled={positionProcessing || !canManageEmployees} title={!canManageEmployees ? 'Edit permission required' : ''}>Add</PrimaryButton>
-                    </form>
-
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2">
                         {positionData.department_id
                             ? `Existing Positions (${departments.find(d => d.id === parseInt(positionData.department_id))?.name || 'Selected Dept'})`
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                             : 'All Existing Positions'}
                     </h3>
                     <div className="max-h-60 overflow-y-auto rounded-md border border-gray-200">
@@ -1711,11 +1687,13 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             <TextInput id="new_branch_name" className="mt-1 block w-full font-bold" value={branchData.name} onChange={(e) => setBranchData('name', e.target.value)} required placeholder="e.g. Makati, Greenhills" />
                             <InputError message={branchErrors.name} className="mt-2" />
                         </div>
-<<<<<<< HEAD
-                        <PrimaryButton disabled={branchProcessing} className="!py-2.5">Add</PrimaryButton>
-=======
-                        <PrimaryButton disabled={branchProcessing || !canManageEmployees} title={!canManageEmployees ? 'Edit permission required' : ''}>Add</PrimaryButton>
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
+                        <PrimaryButton
+                            disabled={branchProcessing || !canManageEmployees}
+                            className="!py-2.5"
+                            title={!canManageEmployees ? 'Edit permission required' : ''}
+                        >
+                            Add
+                        </PrimaryButton>
                     </form>
 
                     <h3 className="text-[11px] font-black uppercase tracking-wider text-gray-500 mb-2">Existing Branches</h3>
@@ -1760,21 +1738,12 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             </div>
 
                             <div className="mt-4">
-<<<<<<< HEAD
                                 <InputLabel htmlFor="role_id" value="System Role" className="font-bold" />
-                                <select 
-                                    id="role_id" 
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-bold" 
-                                    value={userData.role_id} 
-                                    onChange={(e) => setUserData('role_id', e.target.value)} 
-=======
-                                <InputLabel htmlFor="role_id" value="System Role" />
                                 <select
                                     id="role_id"
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm capitalize"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-bold"
                                     value={userData.role_id}
                                     onChange={(e) => setUserData('role_id', e.target.value)}
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                     required
                                 >
                                     <option value="" disabled className="normal-case">Select Role</option>
@@ -1786,27 +1755,15 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             </div>
 
                             <div className="mt-4">
-<<<<<<< HEAD
                                 <InputLabel htmlFor="device_limit" value="Device Login Limit" className="font-bold" />
-                                <TextInput 
-                                    id="device_limit" 
-                                    type="number" 
-                                    min="1" 
-                                    className={`mt-1 block w-full font-bold ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`} 
-                                    value={userData.device_limit} 
-                                    onChange={(e) => setUserData('device_limit', e.target.value)} 
-                                    required 
-=======
-                                <InputLabel htmlFor="device_limit" value="Device Login Limit" />
                                 <TextInput
                                     id="device_limit"
                                     type="number"
                                     min="1"
-                                    className={`mt-1 block w-full ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`}
+                                    className={`mt-1 block w-full font-bold ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`}
                                     value={userData.device_limit}
                                     onChange={(e) => setUserData('device_limit', e.target.value)}
                                     required
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                     disabled={!isCurrentUserAdmin}
                                 />
                                 {!isCurrentUserAdmin && (
