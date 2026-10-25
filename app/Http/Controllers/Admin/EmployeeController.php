@@ -24,6 +24,16 @@ use Inertia\Inertia;
 
 class EmployeeController extends Controller
 {
+    public function show($id)
+    {
+        // 🟢 Eager load the user profile alongside any assets assigned to them
+        $user = User::with('assets')->findOrFail($id);
+
+        // 🟢 Return the React Profile View
+        return Inertia::render('Profile/Show', [
+            'userProfile' => $user,
+        ]);
+    }
     public function index()
     {
         $users = User::with(['department', 'position', 'branches'])->get();
