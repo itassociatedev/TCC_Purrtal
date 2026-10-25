@@ -538,15 +538,6 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                         <span className="text-gray-400 italic font-medium">N/A</span>
                     )}
                 </td>
-<<<<<<< HEAD
-                <td className="px-4 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center rounded px-2.5 py-1 text-[10px] font-black uppercase tracking-widest border ${
-                        employee.status === 'Disabled' ? 'bg-gray-50 text-gray-600 border-gray-200' : 
-                        employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 border-red-200' : 
-                        employee.status === 'Active' ? 'bg-green-50 text-green-700 border-green-200' : 
-                        employee.status === 'Pending Setup' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                        'bg-gray-50 text-gray-700 border-gray-200'
-=======
                 <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${
                         employee.status === 'Disabled' ? 'bg-gray-100 text-gray-600 ring-gray-500/20' :
@@ -554,7 +545,6 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                         employee.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' :
                         employee.status === 'Pending Setup' ? 'bg-yellow-50 text-yellow-800 ring-yellow-600/20' :
                         'bg-gray-50 text-gray-800 ring-gray-600/20'
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                     }`}>
                         {employee.status}
                     </span>
@@ -573,45 +563,6 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                     {activeDropdown === uniqueKey && (
                         <div
                             onClick={(e) => e.stopPropagation()}
-<<<<<<< HEAD
-                            className="absolute right-8 top-10 z-50 w-44 overflow-hidden rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 text-left"
-                        >
-                            <button 
-                                className="block w-full px-4 py-2 text-left text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
-                                onClick={(e) => {
-                                    e.preventDefault(); e.stopPropagation(); handleAccountAction(employee);
-                                }}
-                            >
-                                {employee.status === 'Pending Setup' ? 'Activation Link' : 'Password Reset'}
-                            </button>
-                            <Link as="button" className="block w-full px-4 py-2 text-left text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors" onClick={(e) => {
-                                e.preventDefault(); e.stopPropagation(); openEditUserModal(employee);
-                            }}>
-                                Edit Settings
-                            </Link>
-                            <Link as="button" className="block w-full px-4 py-2 text-left text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors" onClick={(e) => {
-                                e.preventDefault(); e.stopPropagation(); confirmDeviceReset(employee);
-                            }}>
-                                Device Reset
-                            </Link>
-                            <button 
-                                className="block w-full px-4 py-2 text-left text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors" 
-                                onClick={(e) => {
-                                    e.preventDefault(); e.stopPropagation(); confirmToggleStatus(employee);
-                                }}
-                            >
-                                {employee.status === 'Disabled' ? 'Enable Account' : 'Disable Account'}
-                            </button>
-
-                            <button
-                                className={`block w-full px-4 py-2 text-left text-xs font-bold transition-colors ${employee.is_comment_banned ? 'text-green-600 hover:bg-green-50' : 'text-orange-600 hover:bg-orange-50'}`}
-                                onClick={(e) => {
-                                    e.preventDefault(); 
-                                    e.stopPropagation();
-                                    if (confirm(`Are you sure you want to ${employee.is_comment_banned ? 'unban' : 'ban'} ${employee.name} from commenting?`)) {
-                                        router.patch(route('admin.users.toggle-comment-ban', employee.id), {}, { preserveScroll: true });
-                                        setActiveDropdown(null); 
-=======
                             onMouseEnter={handleMouseEnter}
                             onMouseLeave={handleMouseLeave}
                             className="absolute right-8 top-10 z-50 w-36 overflow-hidden rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5"
@@ -693,23 +644,12 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                         e.preventDefault();
                                         e.stopPropagation();
                                         return;
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                     }
                                     e.preventDefault(); e.stopPropagation(); confirmDeleteUser(employee);
                                 }}
                                 title={canDeleteEmployees ? 'Delete employee' : 'Full permission required to delete employees'}
                             >
-<<<<<<< HEAD
-                                {employee.is_comment_banned ? 'Unban Comments' : 'Ban Comments'}
-                            </button>
-
-                            <Link as="button" method="delete" className="block w-full px-4 py-2 text-left text-xs font-bold text-red-600 hover:bg-red-50 transition-colors" onClick={(e) => {
-                                e.preventDefault(); e.stopPropagation(); confirmDeleteUser(employee);
-                            }}>
-                                Delete Employee
-=======
                                 Delete
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                             </Link>
                         </div>
                     )}
@@ -761,43 +701,6 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 onClick={(e) => e.stopPropagation()}
                                 className="absolute right-0 top-10 z-50 w-44 overflow-hidden rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 text-left"
                             >
-<<<<<<< HEAD
-                                <button 
-                                    className="block w-full px-4 py-2 text-left text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
-                                    onClick={(e) => {
-                                        e.preventDefault(); e.stopPropagation(); handleAccountAction(employee);
-                                    }}
-                                >
-                                    {employee.status === 'Pending Setup' ? 'Activation Link' : 'Password Reset'}
-                                </button>
-                                <Link as="button" className="block w-full px-4 py-2 text-left text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors" onClick={(e) => {
-                                    e.preventDefault(); e.stopPropagation(); openEditUserModal(employee);
-                                }}>
-                                    Edit Settings
-                                </Link>
-                                <Link as="button" className="block w-full px-4 py-2 text-left text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors" onClick={(e) => {
-                                    e.preventDefault(); e.stopPropagation(); confirmDeviceReset(employee);
-                                }}>
-                                    Device Reset
-                                </Link>
-                                <button 
-                                    className="block w-full px-4 py-2 text-left text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors" 
-                                    onClick={(e) => {
-                                        e.preventDefault(); e.stopPropagation(); confirmToggleStatus(employee);
-                                    }}
-                                >
-                                    {employee.status === 'Disabled' ? 'Enable Account' : 'Disable Account'}
-                                </button>
-
-                                <button
-                                    className={`block w-full px-4 py-2 text-left text-xs font-bold transition-colors ${employee.is_comment_banned ? 'text-green-600 hover:bg-green-50' : 'text-orange-600 hover:bg-orange-50'}`}
-                                    onClick={(e) => {
-                                        e.preventDefault(); 
-                                        e.stopPropagation();
-                                        if (confirm(`Are you sure you want to ${employee.is_comment_banned ? 'unban' : 'ban'} ${employee.name} from commenting?`)) {
-                                            router.patch(route('admin.users.toggle-comment-ban', employee.id), {}, { preserveScroll: true });
-                                            setActiveDropdown(null); 
-=======
                                 {canManageEmployees ? (
                                     <button
                                         className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors"
@@ -875,24 +778,11 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                             e.preventDefault();
                                             e.stopPropagation();
                                             return;
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                         }
                                         e.preventDefault(); e.stopPropagation(); confirmDeleteUser(employee);
                                     }}
                                     title={canDeleteEmployees ? 'Delete employee' : 'Full permission required to delete employees'}
-                                >
-<<<<<<< HEAD
-                                    {employee.is_comment_banned ? 'Unban Comments' : 'Ban Comments'}
-                                </button>
-                                
-                                <Link as="button" method="delete" className="block w-full px-4 py-2 text-left text-xs font-bold text-red-600 hover:bg-red-50 transition-colors" onClick={(e) => {
-                                    e.preventDefault(); e.stopPropagation(); confirmDeleteUser(employee);
-                                }}>
-                                    Delete Employee
-=======
-                                    Delete
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
-                                </Link>
+                                >Delete</Link>
                             </div>
                         )}
                     </div>
@@ -931,21 +821,12 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                 <div>
                     <div className="text-[10px] font-black uppercase tracking-wider text-gray-500 mt-3">Status</div>
                     <div className="mt-1">
-<<<<<<< HEAD
                         <span className={`inline-flex items-center rounded px-2.5 py-1 text-[10px] font-black uppercase tracking-widest border ${
                             employee.status === 'Disabled' ? 'bg-gray-50 text-gray-600 border-gray-200' : 
                             employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 border-red-200' : 
                             employee.status === 'Active' ? 'bg-green-50 text-green-700 border-green-200' : 
                             employee.status === 'Pending Setup' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
                             'bg-gray-50 text-gray-700 border-gray-200'
-=======
-                        <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${
-                            employee.status === 'Disabled' ? 'bg-gray-100 text-gray-600 ring-gray-500/20' :
-                            employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 ring-red-600/20' :
-                            employee.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' :
-                            employee.status === 'Pending Setup' ? 'bg-yellow-50 text-yellow-800 ring-yellow-600/20' :
-                            'bg-gray-50 text-gray-800 ring-gray-600/20'
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                         }`}>
                             {employee.status}
                         </span>
@@ -1265,48 +1146,6 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
             <div className="py-6 sm:py-12">
                 <div className="max-w-[100rem] mx-auto sm:px-6 lg:px-8">
 
-<<<<<<< HEAD
-                    {/* 🟢 TOP BUTTON ALIGNMENT (Grouped completely across the top) */}
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-6">
-                        <PrimaryButton className="!py-2 flex-shrink-0" onClick={() => setUserModalOpen(true)}>
-                            + Add Users
-                        </PrimaryButton>
-                        <SecondaryButton className="!py-2 flex-shrink-0" onClick={() => setPositionModalOpen(true)}>
-                            Edit Positions
-                        </SecondaryButton>
-                        <SecondaryButton className="!py-2 flex-shrink-0" onClick={() => setBranchModalOpen(true)}>
-                            Edit Branch
-                        </SecondaryButton>
-                        <SecondaryButton className="!py-2 flex-shrink-0" onClick={() => setDepartmentModalOpen(true)}>
-                            Edit Departments
-                        </SecondaryButton>
-                        <SecondaryButton className="!py-2 flex-shrink-0" onClick={() => setRoleModalOpen(true)}>
-                            Edit Roles
-                        </SecondaryButton>
-                        <a
-                            href={route('admin.employees.template')}
-                            onClick={() => triggerToast('Downloading Excel template...', 'success')}
-                            className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-black text-xs text-gray-700 uppercase tracking-wider hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-25 transition ease-in-out duration-150 shadow-sm flex-shrink-0"
-                        >
-                            📄 Template
-                        </a>
-                        
-                        <div className="relative inline-block flex-shrink-0">
-                            <input
-                                type="file"
-                                id="excel-upload-emp"
-                                className="hidden"
-                                accept=".xlsx, .xls, .csv"
-                                onChange={handleFileUpload}
-                            />
-                            <button
-                                onClick={() => document.getElementById('excel-upload-emp').click()}
-                                disabled={importProcessing}
-                                className="inline-flex items-center px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-md font-black text-xs text-emerald-700 uppercase tracking-wider hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-25 transition ease-in-out duration-150 shadow-sm flex-shrink-0"
-                            >
-                                {importProcessing ? 'Importing...' : '📁 Batch Import'}
-                            </button>
-=======
                 <div className="flex-none mb-4 space-y-4">
                     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -1391,9 +1230,9 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                                 >
                                                     Ban / Unban Comments
                                                 </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => canDeleteEmployees && handleBulkAction('delete')}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => canDeleteEmployees && handleBulkAction('delete')}
                                                     className={`block w-full px-4 py-2 text-left text-sm font-bold ${canDeleteEmployees ? 'text-red-600 hover:bg-red-50' : 'text-red-300 cursor-not-allowed'}`}
                                                     disabled={!canDeleteEmployees}
                                                 >
@@ -1404,34 +1243,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     )}
                                 </div>
                             )}
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                         </div>
-                        
-                        <a
-                            href={route('admin.employees.export', {
-                                search: filterSearch,
-                                department: filterDepartment,
-                                branch: filterBranch,
-                                position: filterPosition,
-                                status: filterStatus
-                            })}
-                            onClick={() => triggerToast('Preparing export. Download will start shortly...', 'success')}
-                            className="inline-flex items-center px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-md font-black text-xs text-indigo-700 uppercase tracking-wider hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-25 transition ease-in-out duration-150 shadow-sm flex-shrink-0"
-                        >
-                            📥 Export
-                        </a>
-
-<<<<<<< HEAD
-                        {/* BULK ACTIONS DROPDOWN */}
-                        {selectedUsers.length > 0 && (
-                            <div className="relative inline-block flex-shrink-0 ml-2">
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setBulkDropdownOpen(!bulkDropdownOpen);
-                                    }}
-                                    className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-xs font-black uppercase tracking-wider text-white shadow-sm hover:bg-indigo-700 transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-=======
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:justify-end">
                             <a
                                 href={canManageEmployees ? route('admin.employees.export', {
@@ -1489,34 +1301,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                             : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
                                     }`}
                                     title={!canManageEmployees ? 'Edit permission required' : ''}
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
-                                >
-                                    Bulk Actions ({selectedUsers.length})
-                                    <svg className="-mr-1 ml-2 h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-                                    </svg>
-                                </button>
-
-                                {bulkDropdownOpen && (
-                                    <div 
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="absolute left-0 z-50 mt-2 w-56 origin-top-left rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
-                                    >
-                                        <div className="py-1">
-                                            {/* PROTECTED BULK CHANGE LIMIT OPTION */}
-                                            {isCurrentUserAdmin && (
-                                                <button onClick={() => handleBulkAction('change-limit')} className="block w-full px-4 py-2 text-left text-sm font-bold text-gray-700 hover:bg-gray-100">Change Device Limit</button>
-                                            )}
-                                            <button onClick={() => handleBulkAction('password-reset')} className="block w-full px-4 py-2 text-left text-sm font-bold text-gray-700 hover:bg-gray-100">Activation Links / Send Reset</button>
-                                            <button onClick={() => handleBulkAction('device-reset')} className="block w-full px-4 py-2 text-left text-sm font-bold text-gray-700 hover:bg-gray-100">Device Reset</button>
-                                            <button onClick={() => handleBulkAction('toggle-status')} className="block w-full px-4 py-2 text-left text-sm font-bold text-gray-700 hover:bg-gray-100">Enable / Disable</button>
-                                            <button onClick={() => handleBulkAction('toggle-comment-ban')} className="block w-full px-4 py-2 text-left text-sm font-bold text-gray-700 hover:bg-gray-100">Ban / Unban Comments</button>
-                                            <button onClick={() => handleBulkAction('delete')} className="block w-full px-4 py-2 text-left text-sm text-red-600 font-bold hover:bg-red-50">Delete</button>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
-                        )}
+                        </div>
                     </div>
 
                     {/* 🟢 FULL WIDTH FILTER BAR */}
