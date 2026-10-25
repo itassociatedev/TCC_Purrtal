@@ -1,5 +1,5 @@
 <?php
-//
+
 use App\Models\Announcement;
 use App\Models\CompanyContent;
 use App\Models\ResourceLink;
@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\EmployeeController;
 use App\Http\Controllers\Admin\CompanyContentController;
 use App\Http\Controllers\Admin\SystemLogController;
 use App\Http\Controllers\Admin\ResourceLinkController;
+use App\Http\Controllers\Admin\AssetController;
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\CheckDutyMealAccess;
 use App\Http\Controllers\Admin\DocumentController;
@@ -21,6 +22,7 @@ use App\Http\Controllers\Admin\AccessControlController;
 use App\Http\Controllers\HrRequestController;
 use App\Http\Controllers\HR\ManpowerRequestController;
 use App\Http\Controllers\ProductController;
+use App\Models\Department; 
 use App\Http\Controllers\Auth\LinkExpired;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\PurchaseOrderController;
@@ -50,10 +52,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/hr-module', [HrRequestController::class, 'index'])->name('hr.index');
     Route::post('/hr-module/request', [HrRequestController::class, 'store'])->name('hr.store');
 
-    // --- HR MODULE (Admin Management) ---
+    Route::get('/my-assets', [\App\Http\Controllers\Staff\MyAssetController::class, 'index'])->name('staff.assets.index');
+    
+    // --- HR MODULE (Admin Management) --- 
     Route::get('/hr-module/admin', [HrRequestController::class, 'adminIndex'])->name('hr.admin.index');
     Route::patch('/hr-module/admin/{hrRequest}/status', [HrRequestController::class, 'updateStatus'])->name('hr.admin.update-status');
-
     // --- NEW: HR MODULE (Accounting Approvals) ---
     Route::get('/hr-module/accounting-approvals', [HrRequestController::class, 'accountingApprovals'])->name('hr.accounting.index');
     Route::patch('/hr-module/accounting-approvals/{hrRequest}/status', [HrRequestController::class, 'updateAccountingStatus'])->name('hr.accounting.update');
@@ -192,14 +195,36 @@ Route::middleware('auth')->group(function () {
             $notification->markAsRead();
         }
         return back();
-    })->middleware('auth')->name('notifications.read');
+    })->name('notifications.read');
 
     Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
+
+    // 🟢 SECURED & FIXED ROUTE NAMES (Moved inside auth middleware)
+    Route::get('/notifications/load-more', [NotificationController::class, 'loadMore'])->name('notifications.load-more');
+    Route::get('/admin/asset-masterlist', [\App\Http\Controllers\Admin\AssetController::class, 'masterlist'])->name('admin.asset-masterlist');
+    Route::get('/asset-masterlist/export', [\App\Http\Controllers\Admin\AssetController::class, 'export'])->name('masterlist.export');
+    
+    Route::post('/employees/{user}/send-activation', [EmployeeController::class, 'sendActivationLink'])->name('employees.send-activation');
+    Route::post('/employees/{user}/send-reset', [EmployeeController::class, 'sendResetLink'])->name('employees.send-reset');
+    Route::post('/announcements/{announcement}/comments', [\App\Http\Controllers\CommentController::class, 'store'])
+    ->name('announcements.comments.store');
+    Route::delete('/comments/{comment}', [\App\Http\Controllers\CommentController::class, 'destroy'])
+        ->name('comments.destroy');
 });
 
-Route::get('/notifications/load-more', [NotificationController::class, 'loadMore'])->name('notifications.load-more');
 
 Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admin')->group(function(){
+    
+    Route::post('/quick-departments', function(Illuminate\Http\Request $request) {
+        $request->validate(['name' => 'required|string|max:255']);
+        Department::firstOrCreate(['name' => $request->name]);
+        return back();
+    })->name('.departments.quick-store');
+
+    Route::delete('/quick-departments/{name}', function($name) {
+        Department::where('name', $name)->delete();
+        return back();
+    })->name('.departments.quick-destroy');
 
     Route::get('/logs', [SystemLogController::class, 'index'])->name('.logs.index');
     Route::get('/logs/export', [SystemLogController::class, 'export'])->name('.logs.export');
@@ -225,7 +250,10 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
     Route::get('/employees', [EmployeeController::class, 'index'])->name('.employees');
     Route::post('/positions', [EmployeeController::class, 'storePosition'])->name('.positions.store');
     Route::post('/branches', [EmployeeController::class, 'storeBranch'])->name('.branches.store');
+    
     Route::post('/departments', [EmployeeController::class, 'storeDepartment'])->name('.departments.store');
+    Route::delete('/departments/{department}', [EmployeeController::class, 'destroyDepartment'])->name('.departments.destroy');
+    
     Route::post('/roles', [EmployeeController::class, 'storeRole'])->name('.roles.store');
     Route::post('/users', [EmployeeController::class, 'storeUser'])->name('.users.store');
 
@@ -235,7 +263,6 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
     Route::patch('/users/{user}/toggle-comment-ban', [EmployeeController::class, 'toggleCommentBan'])->name('.users.toggle-comment-ban');
 
     Route::post('/users/bulk-send-links', [EmployeeController::class, 'bulkSendLinks'])->name('.users.bulk-send-links');
-    // 🟢 NEW BULK DEVICE LIMIT ROUTE ADDED HERE
     Route::patch('/users/bulk-device-limit', [EmployeeController::class, 'bulkUpdateDeviceLimit'])->name('.users.bulk-update-device-limit');
     Route::patch('/users/bulk-reset-device', [EmployeeController::class, 'bulkResetDevice'])->name('.users.bulk-reset-device');
     Route::patch('/users/bulk-toggle-status', [EmployeeController::class, 'bulkToggleStatus'])->name('.users.bulk-toggle-status');
@@ -243,7 +270,6 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
     Route::delete('/users/bulk-destroy', [EmployeeController::class, 'bulkDestroy'])->name('.users.bulk-destroy');
 
     Route::delete('/users/{user}', [EmployeeController::class, 'destroy'])->name('.users.destroy');
-    Route::delete('/departments/{department}', [EmployeeController::class, 'destroyDepartment'])->name('.departments.destroy');
     Route::delete('/roles/{role}', [EmployeeController::class, 'destroyRole'])->name('.roles.destroy');
     Route::delete('/positions/{position}', [EmployeeController::class, 'destroyPosition'])->name('.positions.destroy');
     Route::delete('/branches/{branch}', [EmployeeController::class, 'destroyBranch'])->name('.branches.destroy');
@@ -286,12 +312,22 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
     Route::delete('/documents/category/{id}', [DocumentController::class, 'destroyCategory'])->name('.documents.category.destroy');
     Route::patch('/documents/category/{id}/toggle-downloadable', [DocumentController::class, 'toggleDownloadable'])->name('.documents.category.toggle-downloadable');
 
-    // RESOURCE LINKS ADMIN ROUTES
     Route::post('/resource-links/reorder', [ResourceLinkController::class, 'reorder'])->name('.resource-links.reorder');
     Route::get('/resource-links', [ResourceLinkController::class, 'index'])->name('.resource-links.index');
     Route::post('/resource-links', [ResourceLinkController::class, 'store'])->name('.resource-links.store');
     Route::put('/resource-links/{resourceLink}', [ResourceLinkController::class, 'update'])->name('.resource-links.update');
     Route::delete('/resource-links/{resourceLink}', [ResourceLinkController::class, 'destroy'])->name('.resource-links.destroy');
+
+    Route::post('/assets/bulk-transfer', [\App\Http\Controllers\Admin\AssetController::class, 'bulkTransfer'])->name('.assets.bulk-transfer');
+    Route::post('/assets/bulk-delete', [\App\Http\Controllers\Admin\AssetController::class, 'bulkDelete'])->name('.assets.bulk-delete'); 
+    Route::post('/assets/import', [\App\Http\Controllers\Admin\AssetController::class, 'import'])->name('.assets.import');
+    Route::post('/assets/log-template', [\App\Http\Controllers\Admin\AssetController::class, 'logTemplateDownload'])->name('.assets.log-template');
+    Route::post('/assets/log-export', [\App\Http\Controllers\Admin\AssetController::class, 'logExport'])->name('.assets.log-export');
+
+    Route::get('/assets', [\App\Http\Controllers\Admin\AssetController::class, 'index'])->name('.assets.index');
+    Route::post('/assets', [\App\Http\Controllers\Admin\AssetController::class, 'store'])->name('.assets.store');
+    Route::put('/assets/{asset}', [\App\Http\Controllers\Admin\AssetController::class, 'update'])->name('.assets.update');
+    Route::delete('/assets/{asset}', [\App\Http\Controllers\Admin\AssetController::class, 'destroy'])->name('.assets.destroy');
 });
 
 // ACCESS CONTROL MODULE (Admin only)
