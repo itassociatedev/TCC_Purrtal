@@ -3,12 +3,8 @@ import Dropdown from '@/Components/Dropdown';
 import FlashMessage from '@/Components/FlashMessage';
 import { Link, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
-<<<<<<< HEAD
-import React, { useEffect, useState } from 'react';
-=======
 import { useEffect, useState } from 'react';
 import { hasHRModuleAccess, moduleHasAccess, hasPermission, canViewModuleCard, getFirstAttendanceRoute } from '@/Config/navigation';
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
 
 export default function SidebarLayout({
     header,
@@ -37,7 +33,6 @@ export default function SidebarLayout({
 
     const { auth } = usePage().props;
 
-<<<<<<< HEAD
     const safeSidebarLinks = Array.isArray(sidebarLinks) ? sidebarLinks : [];
     const safeNotifications = Array.isArray(auth?.notifications) ? auth.notifications : [];
 
@@ -54,7 +49,7 @@ export default function SidebarLayout({
     
     // 🟢 NEW: Unified condition to toggle Accountability/Assets module visibility globally
     const hasAccountabilities = auth?.has_department_assets || (auth?.user?.assets && auth.user.assets.length > 0) || isSuperAdmin || isAudit;
-=======
+
     const hasAnyAdminPermission = () => [
         'admin_overview',
         'announcements',
@@ -120,12 +115,6 @@ export default function SidebarLayout({
         return route('prpo.status.index');
     };
 
-    // 🟢 Store notifications and count in local state
-    const [localNotifications, setLocalNotifications] = useState(auth.notifications || []);
-    const [localUnreadCount, setLocalUnreadCount] = useState(auth.unreadNotificationsCount || 0);
-    const [isLoadingMore, setIsLoadingMore] = useState(false);
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
-
     const [localNotifications, setLocalNotifications] = useState(safeNotifications);
     const [localUnreadCount, setLocalUnreadCount] = useState(auth?.unreadNotificationsCount || 0);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -137,17 +126,11 @@ export default function SidebarLayout({
         if (isLoadingMore || !hasMore) return;
         setIsLoadingMore(true);
         try {
-<<<<<<< HEAD
-            const response = await axios.get(route('notifications.load-more'), { params: { offset: localNotifications.length } });
-            setLocalNotifications(prev => [...prev, ...(response.data.notifications || [])]);
-        } catch (error) { console.error("Failed to load older notifications", error); }
-        finally { setIsLoadingMore(false); }
-=======
             const response = await axios.get(route('notifications.load-more'), {
                 params: { offset: localNotifications.length }
             });
 
-            const newNotifications = response.data.notifications;
+            const newNotifications = response.data.notifications || [];
 
             // Append the older notifications to our existing list
             setLocalNotifications(prev => [...prev, ...newNotifications]);
@@ -156,7 +139,6 @@ export default function SidebarLayout({
         } finally {
             setIsLoadingMore(false);
         }
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
     };
 
     useEffect(() => {
@@ -167,17 +149,8 @@ export default function SidebarLayout({
     const markAsRead = (notificationId, url) => {
         const notification = localNotifications.find(n => n.id === notificationId);
         if (notification && !notification.read_at) {
-<<<<<<< HEAD
             setLocalNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n));
             setLocalUnreadCount(prev => Math.max(0, prev - 1));
-=======
-            setLocalNotifications(prev => prev.map(n =>
-                n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n
-            ));
-            setLocalUnreadCount(prev => Math.max(0, prev - 1));
-
-            // 2. Silently tell the backend
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
             axios.post(route('notifications.read', notificationId));
         }
         if (url) router.visit(url);
@@ -186,13 +159,6 @@ export default function SidebarLayout({
     const user = auth?.user;
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
-<<<<<<< HEAD
-    const currentModuleLabel = activeModule === 'Admin' ? 'Admin Module' 
-                             : activeModule === 'Assets' ? (isSuperAdmin ? 'Accountability Module' : 'My Accountability') 
-                             : activeModule === 'Asset Masterlist' ? 'Asset Masterlist'
-                             : ['HR', 'HR MENU', 'HR ADMIN'].includes(activeModule) ? 'HR Module' 
-                             : activeModule === 'PR/PO Module' ? 'PR/PO Module' : 'Select Module';
-=======
     // 🟢 CHECK: Identify which Quick Links the user has access to
     const showDocumentQuickLink = canViewModuleCard(auth, 'documents');
     const showCalendarQuickLink = canViewModuleCard(auth, 'attendance_calendar');
@@ -222,6 +188,10 @@ export default function SidebarLayout({
     const currentModuleLabel =
         activeModule === 'Admin'
             ? 'Admin Module'
+                        : activeModule === 'Assets'
+                            ? (isSuperAdmin ? 'Accountability Module' : 'My Accountability')
+                        : activeModule === 'Asset Masterlist'
+                            ? 'Asset Masterlist'
             : activeModule === 'Attendance'
               ? 'Attendance Module'
             : ['HR', 'HR MENU', 'HR ADMIN'].includes(activeModule)
@@ -233,7 +203,6 @@ export default function SidebarLayout({
                   : activeModule === 'PR/PO Module'
                     ? 'PR/PO Module'
                     : 'Select Module';
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
 
     // Determines if we are on the main overview/dashboard to conditionally render Quick Links and Resources
     const isMainDashboard = ['General', 'Dashboard'].includes(activeModule);
@@ -247,7 +216,6 @@ export default function SidebarLayout({
 
     // Expanded Icon Dictionary to cover all module menu items
     const iconSvg = {
-<<<<<<< HEAD
         // Main & Dashboard
         Overview: (<svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" /></svg>),
         Dashboard: (<svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" /></svg>),
@@ -298,7 +266,12 @@ export default function SidebarLayout({
     const renderSidebarIcon = (link) => {
         if (!link) return <div className="h-4 w-4 rounded bg-gray-200" />;
         if (link.icon === 'document-category') return customDocumentCategoryIcon;
-=======
+        const IconComponent = typeof link.icon === 'function' ? link.icon : null;
+        if (IconComponent) return <IconComponent className="h-4 w-4 text-black" />;
+        return iconSvg[link.label] || <div className="h-4 w-4 rounded bg-gray-200" />;
+    };
+
+    /*
         Overview: (
             <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9" />
@@ -505,23 +478,9 @@ export default function SidebarLayout({
             return customDocumentCategoryIcon;
         }
 
-        if (link.icon === 'key') {
-            return (
-                <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 10-6 0 3 3 0 006 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 11h2a2 2 0 012 2v2a2 2 0 01-2 2h-2l-3 3-3-3H9a2 2 0 01-2-2v-2a2 2 0 012-2h6z" />
-                </svg>
-            );
-        }
+        if (link.icon === 'key') return null;
+    */
 
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
-        const IconComponent = typeof link.icon === 'function' ? link.icon : null;
-        if (IconComponent) return <IconComponent className="h-4 w-4 text-black" />;
-        return iconSvg[link.label] || <div className="h-4 w-4 rounded bg-gray-200" />;
-    };
-
-<<<<<<< HEAD
-=======
     const markAllAsRead = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -537,8 +496,6 @@ export default function SidebarLayout({
         // 2. Silently tell the backend
         axios.post(route('notifications.mark-all-read'));
     };
-
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
     return (
         <div className="flex h-screen overflow-hidden bg-gray-100">
             <FlashMessage />
@@ -561,7 +518,6 @@ export default function SidebarLayout({
                         </div>
                     )}
 
-<<<<<<< HEAD
                     {/* ONLY RENDER QUICK LINKS IF ON MAIN DASHBOARD */}
                     {isMainDashboard && (
                         <div className="mb-4">
@@ -590,9 +546,6 @@ export default function SidebarLayout({
                             </ul>
                         </div>
                     )}
-
-=======
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                     {priorityLink && (
                         <div className="mb-4">
                             <Link href={priorityLink.href} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 ${priorityLink.active ? 'bg-gray-100 font-bold text-gray-900' : ''}`}>
@@ -602,7 +555,6 @@ export default function SidebarLayout({
                         </div>
                     )}
 
-<<<<<<< HEAD
                     {regularSidebarLinks.length > 0 && (
                         <>
                             <div className="mb-4 text-xs font-bold text-gray-400 uppercase tracking-wider mt-4">General Menu</div>
@@ -626,7 +578,6 @@ export default function SidebarLayout({
                             </ul>
                         </>
                     )}
-=======
                     {/* 🟢 NEW QUICK LINKS RESTORED TO SIDEBAR (MOVED TO TOP & EMOJIS REMOVED) */}
                     {isDashboard && hasAnyQuickLinks && (
                         <div className="mb-6">
@@ -686,7 +637,6 @@ export default function SidebarLayout({
                     <div className="mb-4 text-xs font-bold text-gray-400 uppercase tracking-wider">
                         General Menu
                     </div>
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
 
                     {/* ONLY RENDER RESOURCES IF ON MAIN DASHBOARD */}
                     {isMainDashboard && (
@@ -710,9 +660,6 @@ export default function SidebarLayout({
             </aside>
 
             <div className="flex flex-1 flex-col overflow-hidden relative">
-<<<<<<< HEAD
-=======
-
                 {/* 🔽 CSS FIX FOR MOBILE NOTIFICATION DROPDOWN 🔽 */}
                 <style>{`
                     @media (max-width: 639px) {
@@ -730,20 +677,11 @@ export default function SidebarLayout({
                 `}</style>
 
                 {/* ✅ FIXED: Lowered Header to z-30 so the sidebar and overlay cover it when open */}
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                 <header className="relative z-30 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-3 sm:px-6">
                     <button onClick={() => setIsMobileSidebarOpen(true)} className="sm:hidden text-gray-500 hover:text-gray-700">
                         <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
                     </button>
 
-<<<<<<< HEAD
-                    <div className="flex flex-1 items-center justify-end gap-3">
-                        <Dropdown>
-                            <Dropdown.Trigger>
-                                <button className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold bg-white hover:bg-gray-50">
-                                    {currentModuleLabel}
-                                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-=======
                     {/* Right Side Header Items - Reduced gap on mobile */}
                     <div className="flex flex-1 items-center justify-end gap-1.5 sm:gap-3">
 
@@ -847,20 +785,6 @@ export default function SidebarLayout({
                                 </button>
                             </Dropdown.Trigger>
                             <Dropdown.Content>
-<<<<<<< HEAD
-                                {['admin', 'director of corporate services and operations', 'hrbp'].includes(userRole) && <Dropdown.Link href={route('admin.dashboard')}>Admin Module</Dropdown.Link>}
-                                <Dropdown.Link href={route('hr.index')}>HR Module</Dropdown.Link>
-                                <Dropdown.Link href={canCreatePR ? route('prpo.purchase-requests.create') : route('prpo.status.index')}>PR/PO Module</Dropdown.Link>
-                                {['admin', 'duty meal custodian', 'director of corporate services and operations', 'housekeeping tl', 'auditor tl', 'audit assistant'].includes(userRole) && <Dropdown.Link href={route('admin.duty-meals.index')}>Duty Meal Module</Dropdown.Link>}
-                                
-                                {/* 🟢 CONDITIONALLY HIDE ACCOUNTABILITY LINK IF 0 DEPT ASSETS */}
-                                {hasAccountabilities && (
-                                    <a href={isSuperAdmin ? "/admin/assets" : (isAudit ? "/admin/asset-masterlist" : "/my-assets")} className="block w-full px-4 py-2 text-left text-sm leading-5 text-gray-700 hover:bg-gray-100 focus:outline-none focus:bg-gray-100 transition duration-150 ease-in-out">
-                                        {isSuperAdmin ? 'Accountability Module' : (isAudit ? 'Asset Masterlist' : 'My Accountability')}
-                                    </a>
-                                )}
-                            </Dropdown.Content>
-=======
                                     {hasAnyAdminPermission() && (
                                         <Dropdown.Link href={getFirstAdminRoute()}>
                                             Admin Module
@@ -891,16 +815,11 @@ export default function SidebarLayout({
                                         </Dropdown.Link>
                                     )}
 
-                                </Dropdown.Content>
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
+                            </Dropdown.Content>
                         </Dropdown>
 
                         <Dropdown>
                             <Dropdown.Trigger>
-<<<<<<< HEAD
-                                <button className="inline-flex items-center px-4 py-2 text-sm font-semibold border rounded-full">{user?.name}</button>
-                            </Dropdown.Trigger>
-=======
                                 <button className="inline-flex min-h-[36px] sm:min-h-[42px] items-center gap-1 sm:gap-2 rounded-full border border-slate-200 bg-white/90 px-2.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus:outline-none">
 
                                     {/* Hide text on mobile, truncate if it gets too long on desktop */}
@@ -916,8 +835,6 @@ export default function SidebarLayout({
                                     </svg>
                                 </button>
                             </Dropdown.Trigger>
-
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                             <Dropdown.Content>
                                 <Dropdown.Link href={route('profile.edit')}>Profile</Dropdown.Link>
                                 <Dropdown.Link href={route('logout')} method="post" as="button">Log Out</Dropdown.Link>
