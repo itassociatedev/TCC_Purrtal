@@ -1,5 +1,4 @@
 <?php
-// Purchase order controller: PO creation and management
 
 namespace App\Http\Controllers;
 
@@ -16,12 +15,10 @@ use Inertia\Inertia;
 use App\Notifications\POStatusUpdate;
 use App\Notifications\PRStatusUpdate;
 use App\Notifications\PRPOCcStatusUpdate;
+use App\Notifications\DeletionRequestNotification;
 
 class PurchaseOrderController extends Controller
 {
-    // =====================================================================
-    // 1. VIEW ALL PURCHASE ORDERS (Procurement Dashboard)
-    // =====================================================================
     public function index(Request $request)
     {
         $user = Auth::user();
@@ -31,12 +28,9 @@ class PurchaseOrderController extends Controller
         }
 
         $userRole = strtolower(trim($user->role->name ?? ''));
-
-        // 🟢 1. Define who gets restricted to the "My Request" tab
         $restrictedRoles = ['operations manager', 'inventory assist', 'inventory tl'];
         $isRestricted = in_array($userRole, $restrictedRoles);
 
-        // 🟢 2. Get the requested view, but FORCE 'my_request' if they are restricted
         $view = $request->query('view', 'action_needed');
         if ($isRestricted) {
             $view = 'my_request';
@@ -47,40 +41,106 @@ class PurchaseOrderController extends Controller
             'purchaseRequest.user', 'purchaseRequest.items.product', 'purchaseRequest.items.supplier'
         ])->latest();
 
-        // 🟢 3. Filter based on the selected view
+
         if ($view === 'action_needed') {
-            if (in_array($userRole, ['procurement assist', 'procurement tl'])) {
-                $query->where('status', 'drafted'); // Procurement must edit and submit drafts
-            } elseif ($userRole === 'director of corporate services and operations') {
-                $query->where('status', 'pending_approval'); // DCSO must approve submitted POs
-            } elseif ($userRole === 'admin') {
-                $query->whereIn('status', ['drafted', 'pending_approval']);
-            }
-            
+
+            $query->whereRaw('1 = 0');
+        } elseif ($view === 'po_generation') {
+
+            $query->where('status', 'po_generated');
+        } elseif ($view === 'po_generated') {
+
+            $query->where('status', 'pending_evp_final');
+        } elseif ($view === 'all') {
+
+            $query->where('status', 'approved');
         } elseif ($view === 'my_request') {
-            // 🟢 NEW: Filter POs where the linked PR was created by the logged-in user
             $query->whereHas('purchaseRequest', function ($q) {
                 $q->where('user_id', Auth::id());
             });
         }
-        // If $view === 'all', it naturally bypasses the above and loads everything.
+        elseif ($view === 'deletion_request') {
+            if ($request->has('pending_delete')) {
+                $ids = explode(',', $request->query('pending_delete'));
+                $query->whereIn('id', $ids);
+            } else {
+                $query->whereRaw('1 = 0');
+            }
+        } else {
+            $query->whereRaw('1 = 0');
+        }
 
         $purchaseOrders = $query->paginate(15)->withQueryString();
+
+
+        $pendingPRs = [];
+        if ($view === 'action_needed') {
+            $pendingPRs = PurchaseRequest::with(['user', 'items.product', 'items.supplier'])
+                ->where('status', 'pending_procurement_tl')
+                ->whereDoesntHave('purchaseOrders')
+                ->latest()
+                ->get();
+        }
+
+        $employees = User::select('id', 'name')->orderBy('name')->get();
 
         return Inertia::render('PRPO/PurchaseOrdersIndex', [
             'purchaseOrders' => $purchaseOrders,
             'currentView' => $view,
-            'isRestrictedRole' => $isRestricted // 🟢 4. Pass the restriction flag to React
+            'isRestrictedRole' => $isRestricted,
+            'pendingPRs' => $pendingPRs,
+            'employees' => $employees
         ]);
     }
 
-    // =====================================================================
-    // 2. UPDATE / FINALIZE A PURCHASE ORDER
-    // =====================================================================
+    public function batchDestroy(Request $request)
+    {
+        $user = Auth::user();
+        $userRole = strtolower(trim($user->role->name ?? ''));
+
+        $isAdminOrEVP = str_contains($userRole, 'admin') || str_contains($userRole, 'evp') || str_contains($userRole, 'president') || $user->role_id === 9;
+
+        $request->validate([
+            'ids'   => 'required|array',
+            'ids.*' => 'exists:purchase_orders,id',
+        ]);
+
+        if ($isAdminOrEVP) {
+            try {
+                \Illuminate\Support\Facades\DB::transaction(function () use ($request) {
+                    \App\Models\PurchaseOrderItem::whereIn('purchase_order_id', $request->ids)->delete();
+                    \App\Models\PurchaseOrder::whereIn('id', $request->ids)->delete();
+                });
+
+                \Illuminate\Support\Facades\DB::table('system_logs')->insert([
+                    'user_id' => $user->id,
+                    'module' => 'PR/PO Module',
+                    'action' => 'Delete',
+                    'description' => 'Deleted ' . count($request->ids) . ' Purchase Order(s)',
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->header('User-Agent'),
+                    'status' => 'SUCCESS',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                return back()->with('success', count($request->ids) . ' Purchase Order(s) has been deleted.');
+            } catch (\Exception $e) {
+                return back()->with('error', 'DELETION FAILED!: ' . $e->getMessage());
+            }
+        } else {
+            $admins = \App\Models\User::whereHas('role', function($q) { $q->where('name', 'admin'); })->get();
+            if ($admins->isNotEmpty()) {
+                $message = $user->name . " has requested the deletion of " . count($request->ids) . " Purchase Order(s).";
+                \Illuminate\Support\Facades\Notification::send($admins, new \App\Notifications\DeletionRequestNotification($message, 'PO', $request->ids));
+            }
+            return back()->with('success', 'Deletion request for ' . count($request->ids) . ' Purchase Order(s) sent to Admin successfully.');
+        }
+    }
+
+
     public function update(Request $request, PurchaseOrder $purchaseOrder)
     {
-        // 🔐 ACL CHECK: Verify user can EDIT purchase_orders
-        // Permission Hierarchy: Full only can edit
         $user = Auth::user();
         if (!$user->canEditModule('purchase_orders')) {
             abort(403, 'You do not have permission to update purchase orders.');
@@ -89,34 +149,29 @@ class PurchaseOrderController extends Controller
         $userRole = strtolower(trim(Auth::user()->role->name ?? ''));
         $requestedStatus = $request->input('status');
 
-        // 🟢 SECURITY CHECK: Procurement Assistants can ONLY save as drafted
-        if (str_contains($userRole, 'procurement assist') && $requestedStatus !== 'drafted') {
-            return back()->withErrors(['status' => 'Procurement Assistants are only authorized to Save Drafts. Please contact your TL to submit.']);
+        if ($requestedStatus === 'approved' && !str_contains($userRole, 'evp') && !str_contains($userRole, 'president') && $userRole !== 'admin') {
+            return back()->withErrors(['status' => 'Unauthorized Action. Only the Executive Vice President can give final approval for Purchase Orders.']);
         }
 
         $validated = $request->validate([
             'delivery_date' => 'nullable|date',
             'payment_terms' => 'nullable|string|max:255',
             'ship_to' => 'nullable|string|max:255',
-            'no_of_quotations' => 'required|integer|min:0', // 🟢 NEW REQUIREMENT
+            'no_of_quotations' => 'required|integer|min:0',
             'discount_total' => 'nullable|numeric|min:0',
-            'vat_rate' => 'nullable|numeric|min:0|max:100', 
-            'status' => 'required|in:drafted,pending_approval,approved,cancelled',
-            'remarks' => 'nullable|string', 
-            'removed_item_ids' => 'nullable', 
-            'new_attachments' => 'nullable',  
+            'vat_rate' => 'nullable|numeric|min:0|max:100',
+            'status' => 'required|in:po_generated,pending_evp_final,approved,cancelled',
+            'remarks' => 'nullable|string',
+            'removed_item_ids' => 'nullable',
+            'new_attachments' => 'nullable',
             'new_attachments.*' => 'file|max:10240',
             'items' => 'nullable|array',
             'items.*.id' => 'required_with:items',
-            'items.*.notes' => 'nullable|string|max:255', 
+            'items.*.notes' => 'nullable|string|max:255',
         ]);
 
-        // Process Removed Items
         if ($request->filled('removed_item_ids')) {
-            $removedIds = is_array($request->removed_item_ids) 
-                ? $request->removed_item_ids 
-                : explode(',', $request->removed_item_ids); 
-                
+            $removedIds = is_array($request->removed_item_ids) ? $request->removed_item_ids : explode(',', $request->removed_item_ids);
             $purchaseOrder->items()->whereIn('id', $removedIds)->update(['status' => 'removed']);
         }
 
@@ -128,15 +183,10 @@ class PurchaseOrderController extends Controller
             }
         }
 
-        // Process New File Uploads
-        $attachments = $purchaseOrder->attachments ?? []; 
-        
+        $attachments = $purchaseOrder->attachments ?? [];
         if ($request->hasFile('new_attachments')) {
             $files = $request->file('new_attachments');
-            if (!is_array($files)) {
-                $files = [$files];
-            }
-
+            if (!is_array($files)) $files = [$files];
             foreach ($files as $file) {
                 if ($file->isValid()) {
                     $path = $file->store('po_attachments', 'public');
@@ -149,22 +199,19 @@ class PurchaseOrderController extends Controller
             }
         }
 
-        // Recalculate Math
         $activeItems = $purchaseOrder->items()->where('status', 'active')->get();
         $grossAmount = $activeItems->sum('net_payable');
-        
         $discount = $validated['discount_total'] ?? 0;
         $netOfDiscount = $grossAmount - $discount;
         $vatDecimal = ($validated['vat_rate'] ?? 12) / 100;
         $vatTotal = $netOfDiscount * $vatDecimal;
         $grandTotal = $netOfDiscount + $vatTotal;
 
-        // Save updates to DB
         $purchaseOrder->update([
             'delivery_date' => $validated['delivery_date'],
             'payment_terms' => $validated['payment_terms'],
             'ship_to' => $validated['ship_to'],
-            'no_of_quotations' => $validated['no_of_quotations'], // 🟢 SAVE NEW FIELD
+            'no_of_quotations' => $validated['no_of_quotations'],
             'gross_amount' => $grossAmount,
             'discount_total' => $discount,
             'net_of_discount' => $netOfDiscount,
@@ -175,27 +222,24 @@ class PurchaseOrderController extends Controller
             'attachments' => empty($attachments) ? null : $attachments,
         ]);
 
-        // Status Notifications...
         $status = $validated['status'];
         $originalRequester = $purchaseOrder->purchaseRequest->user ?? null;
 
-        if ($status === 'pending_approval') {
-            $message = 'Purchase Order submitted to DCSO for approval.';
-            $dcsoUsers = User::whereHas('role', function($q) {
-                $q->where('name', 'like', '%director%')->orWhere('name', 'admin');
+        if ($status === 'pending_evp_final') {
+            $message = 'Purchase Order submitted to the Executive Vice President for final approval.';
+            $evpUsers = User::whereHas('role', function($q) {
+                $q->where('name', 'like', '%evp%')->orWhere('name', 'like', '%president%')->orWhere('name', 'admin');
             })->get();
-            
-            if ($dcsoUsers->isNotEmpty()) {
-                Notification::send($dcsoUsers, new POStatusUpdate($purchaseOrder, "Requires DCSO Approval"));
+            if ($evpUsers->isNotEmpty()) {
+                Notification::send($evpUsers, new POStatusUpdate($purchaseOrder, "Requires Executive Vice President Final Approval"));
             }
         } elseif ($status === 'approved') {
-            $message = 'Purchase Order has been officially Approved by DCSO!';
+            $message = 'Purchase Order has been officially Approved by the Executive Vice President!';
             $procurementUsers = User::whereHas('role', function($q) {
                 $q->where('name', 'like', '%procurement%')->orWhere('name', 'admin');
             })->get();
-            
             if ($procurementUsers->isNotEmpty()) {
-                Notification::send($procurementUsers, new POStatusUpdate($purchaseOrder, "Officially Approved by DCSO!"));
+                Notification::send($procurementUsers, new POStatusUpdate($purchaseOrder, "Officially Approved by the Executive Vice President!"));
             }
             if ($originalRequester) {
                 $originalRequester->notify(new POStatusUpdate($purchaseOrder, "Great news! Your items have been officially ordered."));
@@ -213,7 +257,7 @@ class PurchaseOrderController extends Controller
         if ($status === 'approved' && $ccUser) {
             $ccUser->notify(new PRPOCcStatusUpdate($purchaseOrder, 'PO', "Items on a request you are copied on have been officially ordered."));
         } elseif ($status === 'cancelled' && $ccUser) {
-            $ccUser->notify(new PRPOCcStatusUpdate($purchaseOrder, 'PO', "Notice: A Purchase Order for a request you are copied on was cancelled."));
+            $ccUser->notify(new PRPOCcStatusUpdate($purchaseOrder, 'PO', "Notice: Your Purchase Order request was cancelled."));
         }
 
         return back()->with('success', $message);
@@ -221,120 +265,159 @@ class PurchaseOrderController extends Controller
 
     public function generateFromPR(Request $request, PurchaseRequest $purchaseRequest)
     {
-        // 🔐 ACL CHECK: Verify user can CREATE purchase_orders
-        // Permission Hierarchy: Full + Edit can create
         $user = Auth::user();
         if (!$user->canCreateModule('purchase_orders')) {
             abort(403, 'You do not have permission to generate purchase orders.');
         }
 
         $userRole = strtolower(trim(Auth::user()->role->name ?? ''));
-        $allowedRoles = ['procurement assist', 'procurement tl', 'director of corporate services and operations', 'admin'];
-        
+        $allowedRoles = ['procurement tl', 'president', 'admin', 'evp'];
+
         if (!in_array($userRole, $allowedRoles)) {
-            abort(403, 'Unauthorized Action. Only Procurement or Directors can generate Purchase Orders.');
+            abort(403, 'Unauthorized Action. Only the Procurement Team Leader or Executive Vice President can generate Purchase Orders.');
         }
 
-        if ($purchaseRequest->status !== 'approved') {
-            return back()->with('error', 'Only approved Purchase Requests can be converted to Purchase Orders.');
-        }
+        try {
+            DB::transaction(function () use ($purchaseRequest) {
+                $lockedPR = PurchaseRequest::where('id', $purchaseRequest->id)->lockForUpdate()->first();
+                if (!$lockedPR || $lockedPR->status !== 'pending_procurement_tl') {
+                    throw new \Exception('This Purchase Request is no longer in the correct status for PO generation.');
+                }
+                if (PurchaseOrder::where('purchase_request_id', $lockedPR->id)->exists()) {
+                    throw new \Exception('Purchase Orders have already been generated for this request.');
+                }
+                $items = $lockedPR->items()->with('product')->get();
+                $groupedBySupplier = $items->groupBy('supplier_id');
 
-        if (PurchaseOrder::where('purchase_request_id', $purchaseRequest->id)->exists()) {
-            return back()->with('error', 'Purchase Orders have already been generated for this request.');
-        }
+                $takenPoNumbers = \App\Models\PurchaseOrder::lockForUpdate()
+                    ->pluck('po_number')
+                    ->filter(fn($num) => $num !== 'TEMP' && $num !== null)
+                    ->map(function ($poNumber) {
+                        $parts = explode('-', $poNumber);
+                        return (int) end($parts);
+                    })
+                    ->toArray();
 
-        $items = $purchaseRequest->items()->with('product')->get();
-        $groupedBySupplier = $items->groupBy('supplier_id');
+                $branchName = strtoupper(trim($lockedPR->branch));
+                $knownBranches = ['MAKATI' => 'MKT', 'GREENHILLS' => 'GH', 'ALABANG' => 'ALB'];
 
-        DB::transaction(function () use ($groupedBySupplier, $purchaseRequest) {
-            foreach ($groupedBySupplier as $supplierId => $supplierItems) {
-                if (!$supplierId) continue;
+                if (isset($knownBranches[$branchName])) {
+                    $branchInitials = $knownBranches[$branchName];
+                } else {
+                    $words = array_filter(explode(' ', $branchName));
+                    if (count($words) > 1) {
+                        $branchInitials = '';
+                        foreach (array_slice($words, 0, 3) as $w) $branchInitials .= $w[0];
+                    } else {
+                        $firstLetter = $branchName[0] ?? 'U';
+                        $consonants = preg_replace('/[AEIOU\W]/', '', substr($branchName, 1));
+                        $branchInitials = substr($firstLetter . $consonants, 0, 3);
+                        if (strlen($branchInitials) < 2) $branchInitials = substr($branchName, 0, 3);
+                    }
+                }
+                foreach ($groupedBySupplier as $supplierId => $supplierItems) {
+                    if (!$supplierId) continue;
+                    sort($takenPoNumbers);
+                    $nextPoNumber = 1;
+                    foreach ($takenPoNumbers as $num) {
+                        if ($num === $nextPoNumber) {
+                            $nextPoNumber++;
+                        } elseif ($num > $nextPoNumber) {
+                            break;
+                        }
+                    }
+                    $takenPoNumbers[] = $nextPoNumber;
 
-                $year = date('Y');
-                $latestPo = PurchaseOrder::whereYear('created_at', $year)->orderBy('id', 'desc')->first();
-                $nextNumber = $latestPo ? intval(substr($latestPo->po_number, -4)) + 1 : 1;
-                $poNumber = 'PO-' . $year . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+                    $po = PurchaseOrder::create([
+                        'purchase_request_id' => $lockedPR->id,
+                        'supplier_id' => $supplierId,
+                        'prepared_by_id' => Auth::id(),
+                        'po_number' => 'TEMP',
+                        'po_date' => now()->toDateString(),
+                        'delivery_date' => $lockedPR->date_needed,
+                        'purpose' => $lockedPR->purpose_of_request,
+                        'department' => $lockedPR->department,
+                        'no_of_quotations' => 0,
+                        'status' => 'po_generated'
+                    ]);
 
-                $po = PurchaseOrder::create([
-                    'purchase_request_id' => $purchaseRequest->id,
-                    'supplier_id' => $supplierId,
-                    'prepared_by_id' => Auth::id(),
-                    'po_number' => $poNumber,
-                    'po_date' => now()->toDateString(),
-                    'delivery_date' => $purchaseRequest->date_needed,
-                    'purpose' => $purchaseRequest->purpose_of_request,
-                    'department' => $purchaseRequest->department,
-                    'no_of_quotations' => 0, // 🟢 INIT TO 0 SO DB DOESN'T COMPLAIN
-                    'status' => 'drafted'
-                ]);
+                    $po->update([
+                        'po_number' => 'PO-' . $branchInitials . '-' . str_pad($nextPoNumber, 5, '0', STR_PAD_LEFT)
+                    ]);
 
-                $grossAmount = 0;
+                    $grossAmount = 0;
 
-                foreach ($supplierItems as $prItem) {
-                    $description = $prItem->product ? $prItem->product->name : 'Custom Item';
-                    if ($prItem->specifications) {
-                        $description .= ' - ' . $prItem->specifications;
+                    foreach ($supplierItems as $prItem) {
+                        $description = $prItem->product ? $prItem->product->name : 'Custom Item';
+                        if ($prItem->specifications) {
+                            $description .= ' - ' . $prItem->specifications;
+                        }
+
+                        $qty = $prItem->qty_requested;
+                        $unitPrice = $prItem->est_unit_cost ?? 0;
+                        $lineTotal = $qty * $unitPrice;
+                        $grossAmount += $lineTotal;
+
+                        PurchaseOrderItem::create([
+                            'purchase_order_id' => $po->id,
+                            'product_id' => $prItem->product_id,
+                            'description' => $description,
+                            'qty' => $qty,
+                            'unit' => $prItem->unit,
+                            'unit_price' => $unitPrice,
+                            'vat_rate' => 12.00,
+                            'net_payable' => $lineTotal
+                        ]);
                     }
 
-                    $qty = $prItem->qty_requested;
-                    $unitPrice = $prItem->est_unit_cost ?? 0;
-                    $lineTotal = $qty * $unitPrice;
-                    
-                    $grossAmount += $lineTotal;
+                    $vatTotal = $grossAmount * 0.12;
+                    $grandTotal = $grossAmount + $vatTotal;
 
-                    PurchaseOrderItem::create([
-                        'purchase_order_id' => $po->id,
-                        'product_id' => $prItem->product_id,
-                        'description' => $description,
-                        'qty' => $qty,
-                        'unit' => $prItem->unit,
-                        'unit_price' => $unitPrice,
-                        'vat_rate' => 12.00,
-                        'net_payable' => $lineTotal
+                    $po->update([
+                        'gross_amount' => $grossAmount,
+                        'vat_total' => $vatTotal,
+                        'grand_total' => $grandTotal
                     ]);
                 }
 
-                $vatTotal = $grossAmount * 0.12;
-                $grandTotal = $grossAmount + $vatTotal;
-
-                $po->update([
-                    'gross_amount' => $grossAmount,
-                    'vat_total' => $vatTotal,
-                    'grand_total' => $grandTotal
-                ]);
-            }
-
-            DB::table('purchase_requests')
-                ->where('id', $purchaseRequest->id)
-                ->update([
-                    'status' => 'po_generated',
-                    'updated_at' => now()
-                ]);
-        });
+                DB::table('purchase_requests')
+                    ->where('id', $lockedPR->id)
+                    ->update([
+                        'status' => 'po_generated',
+                        'updated_at' => now()
+                    ]);
+            });
+        } catch (\Exception $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         $originalRequester = $purchaseRequest->user;
         if ($originalRequester) {
-            $originalRequester->notify(new PRStatusUpdate($purchaseRequest, "Your request is currently being processed into Purchase Orders."));
+            $originalRequester->notify(new PRStatusUpdate($purchaseRequest, "Your request has been successfully generated into Purchase Orders."));
         }
 
-        $ccUser = $purchaseRequest->cc_user; 
+        $ccUser = $purchaseRequest->cc_user;
         if ($ccUser) {
-            $ccUser->notify(new PRPOCcStatusUpdate($purchaseRequest, 'PR', "A request you are copied on is being processed into Purchase Orders."));
+            $ccUser->notify(new PRPOCcStatusUpdate($purchaseRequest, 'PR', "Your Purchase Request has been processed into Purchase Orders."));
         }
 
-        return back()->with('success', 'Purchase Orders drafted successfully! You can now review them.');
+        return back()->with('success', 'Purchase Orders generated successfully! You can now review them.');
     }
 
     public function print(PurchaseOrder $purchaseOrder)
     {
-        // 1. Load relationships, but ONLY grab active items!
-        $purchaseOrder->load([
-            'supplier', 
-            'preparedBy', 
+        $allPOs = PurchaseOrder::with([
+            'supplier',
+            'preparedBy.role',
+            'purchaseRequest.user.role',
+            'purchaseRequest.reviewedBy.role',
+            'purchaseRequest.approvedBy.role',
+            'purchaseRequest.cc_user',
             'items' => fn($query) => $query->where('status', 'active')
-        ]);
+        ])->where('purchase_request_id', $purchaseOrder->purchase_request_id)->get();
 
-        // 2. Return the PDF view
-        return view('prpo.pdf.purchase-order', ['po' => $purchaseOrder]);
+        return Inertia::render('PRPO/PrintablePO', [
+            'pos' => $allPOs
+        ]);
     }
 }

@@ -122,6 +122,11 @@ class User extends Authenticatable
         return $this->belongsTo(Role::class);
     }
 
+<<<<<<< HEAD
+    public function assets()
+    {
+        return $this->hasMany(Asset::class, 'user_id');
+=======
     public function getAllowedModulesForUser(): array
     {
         if (!$this->role) {
@@ -328,5 +333,6 @@ class User extends Authenticatable
     public function dutyMealParticipants()
     {
         return $this->hasMany(\App\Models\DutyMealParticipant::class, 'user_id');
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
     }
 }

@@ -1,5 +1,5 @@
 <?php
-//
+
 use App\Models\Announcement;
 use App\Models\CompanyContent;
 use App\Models\ResourceLink;
@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\EmployeeController;
 use App\Http\Controllers\Admin\CompanyContentController;
 use App\Http\Controllers\Admin\SystemLogController;
 use App\Http\Controllers\Admin\ResourceLinkController;
+use App\Http\Controllers\Admin\AssetController;
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\CheckDutyMealAccess;
 use App\Http\Controllers\Admin\DocumentController;
@@ -21,6 +22,7 @@ use App\Http\Controllers\Admin\AccessControlController;
 use App\Http\Controllers\HrRequestController;
 use App\Http\Controllers\HR\ManpowerRequestController;
 use App\Http\Controllers\ProductController;
+use App\Models\Department; 
 use App\Http\Controllers\Auth\LinkExpired;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\PurchaseOrderController;
@@ -49,8 +51,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // --- HR MODULE (User Requests) ---
     Route::get('/hr-module', [HrRequestController::class, 'index'])->name('hr.index');
     Route::post('/hr-module/request', [HrRequestController::class, 'store'])->name('hr.store');
+
+<<<<<<< HEAD
+    Route::get('/my-assets', [\App\Http\Controllers\Staff\MyAssetController::class, 'index'])->name('staff.assets.index');
     
     // --- HR MODULE (Admin Management) --- 
+=======
+    // --- HR MODULE (Admin Management) ---
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
     Route::get('/hr-module/admin', [HrRequestController::class, 'adminIndex'])->name('hr.admin.index');
     Route::patch('/hr-module/admin/{hrRequest}/status', [HrRequestController::class, 'updateStatus'])->name('hr.admin.update-status');
 
@@ -68,12 +76,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         if (!$isGlobalViewer) {
             $branchIds = [$user->branch_id];
-            
+
             $rotating = Illuminate\Support\Facades\DB::table('branch_user')
                 ->where('user_id', $user->id)
                 ->pluck('branch_id')
                 ->toArray();
-            
+
             $allowedBranchIds = array_values(array_unique(array_filter(array_merge($branchIds, $rotating))));
 
             \Illuminate\Support\Facades\Log::info('OVERVIEW RENDERED - Security Check:', [
@@ -83,10 +91,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ]);
 
             if (empty($allowedBranchIds)) {
-                $query->where('id', 0); 
+                $query->where('id', 0);
             } else {
                 $query->whereHas('branches', function ($q) use ($allowedBranchIds) {
-                    $q->whereIn('branches.id', $allowedBranchIds); 
+                    $q->whereIn('branches.id', $allowedBranchIds);
                 });
             }
         }
@@ -95,7 +103,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'announcements' => $query->get(),
             'contents' => CompanyContent::all()
         ]);
-    })->name('dashboard'); 
+    })->name('dashboard');
 
 
     // --- ANNOUNCEMENTS BOARD ---
@@ -112,10 +120,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             $allowedBranchIds = array_values(array_unique(array_filter(array_merge($branchIds, $rotating))));
 
             if (empty($allowedBranchIds)) {
-                $query->where('id', 0); 
+                $query->where('id', 0);
             } else {
                 $query->whereHas('branches', function ($q) use ($allowedBranchIds) {
-                    $q->whereIn('branches.id', $allowedBranchIds); 
+                    $q->whereIn('branches.id', $allowedBranchIds);
                 });
             }
         }
@@ -138,9 +146,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/resources/internal-links', function () {
         $links = ResourceLink::where('type', 'internal')
             ->where('is_active', true)
-            ->orderBy('sort_order', 'asc') 
+            ->orderBy('sort_order', 'asc')
             ->get();
-            
+
         return Inertia::render('Resources/InternalLinks', [
             'links' => $links
         ]);
@@ -149,9 +157,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/resources/external-links', function () {
         $links = ResourceLink::where('type', 'external')
             ->where('is_active', true)
-            ->orderBy('sort_order', 'asc') 
+            ->orderBy('sort_order', 'asc')
             ->get();
-            
+
         return Inertia::render('Resources/ExternalLinks', [
             'links' => $links
         ]);
@@ -192,18 +200,40 @@ Route::middleware('auth')->group(function () {
             $notification->markAsRead();
         }
         return back();
-    })->middleware('auth')->name('notifications.read');
+    })->name('notifications.read');
 
     Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
+
+    // 🟢 SECURED & FIXED ROUTE NAMES (Moved inside auth middleware)
+    Route::get('/notifications/load-more', [NotificationController::class, 'loadMore'])->name('notifications.load-more');
+    Route::get('/admin/asset-masterlist', [\App\Http\Controllers\Admin\AssetController::class, 'masterlist'])->name('admin.asset-masterlist');
+    Route::get('/asset-masterlist/export', [\App\Http\Controllers\Admin\AssetController::class, 'export'])->name('masterlist.export');
+    
+    Route::post('/employees/{user}/send-activation', [EmployeeController::class, 'sendActivationLink'])->name('employees.send-activation');
+    Route::post('/employees/{user}/send-reset', [EmployeeController::class, 'sendResetLink'])->name('employees.send-reset');
+    Route::post('/announcements/{announcement}/comments', [\App\Http\Controllers\CommentController::class, 'store'])
+    ->name('announcements.comments.store');
+    Route::delete('/comments/{comment}', [\App\Http\Controllers\CommentController::class, 'destroy'])
+        ->name('comments.destroy');
 });
 
-Route::get('/notifications/load-more', [NotificationController::class, 'loadMore'])->name('notifications.load-more');
 
 Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admin')->group(function(){
+    
+    Route::post('/quick-departments', function(Illuminate\Http\Request $request) {
+        $request->validate(['name' => 'required|string|max:255']);
+        Department::firstOrCreate(['name' => $request->name]);
+        return back();
+    })->name('.departments.quick-store');
+
+    Route::delete('/quick-departments/{name}', function($name) {
+        Department::where('name', $name)->delete();
+        return back();
+    })->name('.departments.quick-destroy');
 
     Route::get('/logs', [SystemLogController::class, 'index'])->name('.logs.index');
     Route::get('/logs/export', [SystemLogController::class, 'export'])->name('.logs.export');
-    
+
     Route::get('/dashboard', function(){
         $totalActiveEmployees = \App\Models\User::whereIn('status', ['Active', 'Password reset'])->count();
         $totalBranches = \App\Models\Branch::count();
@@ -225,25 +255,26 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
     Route::get('/employees', [EmployeeController::class, 'index'])->name('.employees');
     Route::post('/positions', [EmployeeController::class, 'storePosition'])->name('.positions.store');
     Route::post('/branches', [EmployeeController::class, 'storeBranch'])->name('.branches.store');
+    
     Route::post('/departments', [EmployeeController::class, 'storeDepartment'])->name('.departments.store');
+    Route::delete('/departments/{department}', [EmployeeController::class, 'destroyDepartment'])->name('.departments.destroy');
+    
     Route::post('/roles', [EmployeeController::class, 'storeRole'])->name('.roles.store');
     Route::post('/users', [EmployeeController::class, 'storeUser'])->name('.users.store');
-    
+
     Route::put('/users/{user}', [EmployeeController::class, 'updateUser'])->name('.users.update');
     Route::patch('/users/{user}/reset-device', [EmployeeController::class, 'resetDevice'])->name('.users.reset-device');
     Route::patch('/users/{user}/toggle-status', [EmployeeController::class, 'toggleStatus'])->name('.users.toggle-status');
     Route::patch('/users/{user}/toggle-comment-ban', [EmployeeController::class, 'toggleCommentBan'])->name('.users.toggle-comment-ban');
 
     Route::post('/users/bulk-send-links', [EmployeeController::class, 'bulkSendLinks'])->name('.users.bulk-send-links');
-    // 🟢 NEW BULK DEVICE LIMIT ROUTE ADDED HERE
     Route::patch('/users/bulk-device-limit', [EmployeeController::class, 'bulkUpdateDeviceLimit'])->name('.users.bulk-update-device-limit');
     Route::patch('/users/bulk-reset-device', [EmployeeController::class, 'bulkResetDevice'])->name('.users.bulk-reset-device');
     Route::patch('/users/bulk-toggle-status', [EmployeeController::class, 'bulkToggleStatus'])->name('.users.bulk-toggle-status');
     Route::patch('/users/bulk-toggle-comment-ban', [EmployeeController::class, 'bulkToggleCommentBan'])->name('.users.bulk-toggle-comment-ban');
     Route::delete('/users/bulk-destroy', [EmployeeController::class, 'bulkDestroy'])->name('.users.bulk-destroy');
-    
+
     Route::delete('/users/{user}', [EmployeeController::class, 'destroy'])->name('.users.destroy');
-    Route::delete('/departments/{department}', [EmployeeController::class, 'destroyDepartment'])->name('.departments.destroy');
     Route::delete('/roles/{role}', [EmployeeController::class, 'destroyRole'])->name('.roles.destroy');
     Route::delete('/positions/{position}', [EmployeeController::class, 'destroyPosition'])->name('.positions.destroy');
     Route::delete('/branches/{branch}', [EmployeeController::class, 'destroyBranch'])->name('.branches.destroy');
@@ -256,7 +287,7 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
     Route::post('/company-content', [CompanyContentController::class, 'store'])->name('.company-content.store');
     Route::put('/company-content/{companyContent}', [CompanyContentController::class, 'update'])->name('.company-content.update');
     Route::delete('/company-content/{companyContent}', [CompanyContentController::class, 'destroy'])->name('.company-content.destroy');
-    
+
     Route::post('/company-content/type', [CompanyContentController::class, 'storeType'])->name('.company-content.type.store');
     Route::put('/company-content/type/{type}', [CompanyContentController::class, 'updateType'])->name('.company-content.type.update');
     Route::delete('/company-content/type/{type}', [CompanyContentController::class, 'destroyType'])->name('.company-content.type.destroy');
@@ -271,29 +302,41 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
 
     Route::post('/org-chart/asset', [OrgChartController::class, 'storeAsset'])->name('.org-chart.asset.store');
     Route::get('/org-chart', [OrgChartController::class, 'index'])->name('.org-chart.index');
-    Route::post('/org-chart/structure', [OrgChartController::class, 'saveStructure'])->name('.org-chart.structure.save'); 
+    Route::post('/org-chart/structure', [OrgChartController::class, 'saveStructure'])->name('.org-chart.structure.save');
     Route::post('/org-chart', [OrgChartController::class, 'store'])->name('.org-chart.store');
     Route::put('/org-chart/{member}', [OrgChartController::class, 'update'])->name('.org-chart.update');
-    Route::post('/org-chart/reorder', [OrgChartController::class, 'reorder'])->name('.org-chart.reorder'); 
+    Route::post('/org-chart/reorder', [OrgChartController::class, 'reorder'])->name('.org-chart.reorder');
     Route::delete('/org-chart/{member}', [OrgChartController::class, 'destroy'])->name('.org-chart.destroy');
 
     Route::post('/documents', [DocumentController::class, 'store'])->name('.documents.store');
     Route::put('/documents/{document}', [DocumentController::class, 'update'])->name('.documents.update');
     Route::delete('/documents/{document}', [DocumentController::class, 'destroy'])->name('.documents.destroy');
-    
+
     Route::post('/documents/category', [DocumentController::class, 'storeCategory'])->name('.documents.category.store');
-    Route::patch('/documents/category/{id}', [DocumentController::class, 'updateCategory'])->name('.documents.category.update'); 
+    Route::patch('/documents/category/{id}', [DocumentController::class, 'updateCategory'])->name('.documents.category.update');
     Route::delete('/documents/category/{id}', [DocumentController::class, 'destroyCategory'])->name('.documents.category.destroy');
     Route::patch('/documents/category/{id}/toggle-downloadable', [DocumentController::class, 'toggleDownloadable'])->name('.documents.category.toggle-downloadable');
 
-    // RESOURCE LINKS ADMIN ROUTES
     Route::post('/resource-links/reorder', [ResourceLinkController::class, 'reorder'])->name('.resource-links.reorder');
     Route::get('/resource-links', [ResourceLinkController::class, 'index'])->name('.resource-links.index');
     Route::post('/resource-links', [ResourceLinkController::class, 'store'])->name('.resource-links.store');
     Route::put('/resource-links/{resourceLink}', [ResourceLinkController::class, 'update'])->name('.resource-links.update');
     Route::delete('/resource-links/{resourceLink}', [ResourceLinkController::class, 'destroy'])->name('.resource-links.destroy');
+
+    Route::post('/assets/bulk-transfer', [\App\Http\Controllers\Admin\AssetController::class, 'bulkTransfer'])->name('.assets.bulk-transfer');
+    Route::post('/assets/bulk-delete', [\App\Http\Controllers\Admin\AssetController::class, 'bulkDelete'])->name('.assets.bulk-delete'); 
+    Route::post('/assets/import', [\App\Http\Controllers\Admin\AssetController::class, 'import'])->name('.assets.import');
+    Route::post('/assets/log-template', [\App\Http\Controllers\Admin\AssetController::class, 'logTemplateDownload'])->name('.assets.log-template');
+    Route::post('/assets/log-export', [\App\Http\Controllers\Admin\AssetController::class, 'logExport'])->name('.assets.log-export');
+
+    Route::get('/assets', [\App\Http\Controllers\Admin\AssetController::class, 'index'])->name('.assets.index');
+    Route::post('/assets', [\App\Http\Controllers\Admin\AssetController::class, 'store'])->name('.assets.store');
+    Route::put('/assets/{asset}', [\App\Http\Controllers\Admin\AssetController::class, 'update'])->name('.assets.update');
+    Route::delete('/assets/{asset}', [\App\Http\Controllers\Admin\AssetController::class, 'destroy'])->name('.assets.destroy');
 });
 
+<<<<<<< HEAD
+=======
 // ACCESS CONTROL MODULE (Admin only)
 Route::middleware(['auth', 'admin_acl:access_control'])->prefix('admin')->name('admin')->group(function(){
     Route::get('/access-control', [AccessControlController::class, 'index'])->name('.access-control.index');
@@ -311,11 +354,12 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/comments/{comment}', [\App\Http\Controllers\CommentController::class, 'destroy'])
         ->name('comments.destroy');
 });
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
 
 Route::middleware(['guest'])->group(function () {
     Route::get('/setup-account', [SetupAccountController::class, 'showSetupForm'])->name('setup.account');
     Route::post('/setup-account', [SetupAccountController::class, 'setupPassword'])->name('setup.account.store');
-    
+
     Route::get('/reset-password', [PasswordResetLinkController::class, 'showResetForm'])->name('password.reset-link');
     Route::post('/reset-password', [PasswordResetLinkController::class, 'resetPassword'])->name('password.reset-link.store');
 
@@ -356,7 +400,7 @@ Route::middleware(['auth'])->group(function(){
         Route::middleware(['auth', 'admin_acl:feedback_form'])->group(function () {
             Route::get('/feedback-submissions', [\App\Http\Controllers\HR\FeedbackController::class, 'index'])->name('feedback.index');
         });
-        
+
         Route::middleware(['auth', 'admin_acl:approval_board_hr'])->group(function () {
             Route::get('/manpower-requests', [ManpowerRequestController::class, 'index'])->name('manpower-requests.index');
             Route::patch('/manpower-requests/{manpowerRequest}/status', [ManpowerRequestController::class, 'updateStatus'])->name('manpower-requests.update-status');
@@ -394,7 +438,7 @@ Route::prefix('prpo')->name('prpo.')->middleware(['auth'])->group(function () {
     Route::patch('/suppliers/{supplier}/toggle-status', [SupplierController::class, 'toggleStatus'])
         ->middleware('admin_acl:suppliers')
         ->name('suppliers.toggle-status');
-    
+
     // 🔐 PROTECTED: Product CRUD operations require 'edit' permission
     Route::post('/products', [ProductController::class, 'store'])->middleware('admin_acl:products')->name('products.store');
     Route::put('/products/{product}', [ProductController::class, 'update'])->middleware('admin_acl:products')->name('products.update');
@@ -402,7 +446,10 @@ Route::prefix('prpo')->name('prpo.')->middleware(['auth'])->group(function () {
     Route::post('/products/batch-destroy', [ProductController::class, 'batchDestroy'])->middleware('admin_acl:products')->name('products.batch-destroy');
     Route::patch('/products/{product}/toggle-status', [ProductController::class, 'toggleStatus'])->middleware('admin_acl:products')->name('products.toggle-status');
 
-    // --- PR/PO WORKFLOW ---
+    // --- PR/PO WORKFLOW --- BUG FIXES AND IMPROVEMENTS BY PRIMO ---
+    Route::post('/purchase-requests/batch-destroy', [PurchaseRequestController::class, 'batchDestroy'])->middleware('admin_acl:purchase_requests')->name('purchase-requests.batch-destroy');
+    Route::post('/purchase-orders/batch-destroy', [PurchaseOrderController::class, 'batchDestroy'])->middleware('admin_acl:purchase_orders')->name('purchase-orders.batch-destroy');
+
     Route::get('/purchase-request/create', [PurchaseRequestController::class, 'create'])->name('purchase-requests.create');
     Route::post('/purchase-request', [PurchaseRequestController::class, 'store'])->middleware('admin_acl:purchase_requests')->name('purchase-requests.store');
     Route::put('/purchase-requests/{id}', [PurchaseRequestController::class, 'update'])->middleware('admin_acl:purchase_requests')->name('purchase-requests.update');
@@ -419,7 +466,7 @@ Route::prefix('prpo')->name('prpo.')->middleware(['auth'])->group(function () {
 });
 
 // --- ATTENDANCE MODULE NI MARX HAHAHAHAH ---
-Route::prefix('attendance')->middleware(['auth'])->group(function () {
+    Route::prefix('attendance')->middleware(['auth'])->group(function () {
     Route::get('/overview', [AttendanceController::class, 'overview'])->name('attendance.overview');
     Route::get('/setup-schedule', [AttendanceController::class, 'setupSchedule'])->name('attendance.setup-schedule');
     Route::get('/schedule-view', [AttendanceController::class, 'scheduleView'])->name('attendance.schedule-view');

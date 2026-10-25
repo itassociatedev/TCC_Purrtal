@@ -3,7 +3,7 @@ import ConfirmModal from '@/Components/ConfirmModal';
 import { getAdminLinks, canEditModule, canDeleteModule, canViewModule } from "@/Config/navigation";
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 import InputError from '@/Components/InputError';
 import InputLabel from '@/Components/InputLabel';
@@ -32,13 +32,13 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     const isAdminRole = (roleId) => {
         if (!roleId) return false;
         const role = roles.find(r => r.id.toString() === roleId.toString());
-        
+
         if (!role) return false;
-        
+
         const roleName = role.name.toLowerCase();
-        
+
         return (
-            roleName === 'admin' || 
+            roleName === 'admin' ||
             roleName === 'director of corporate services and operations'
         );
     };
@@ -135,22 +135,18 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
     const renderHeaderSortButton = (field) => {
         const isActive = sortField === field;
-        const upClass = isActive && sortDirection === 'asc' ? 'text-gray-900' : 'text-gray-300';
-        const downClass = isActive && sortDirection === 'desc' ? 'text-gray-900' : 'text-gray-300';
+        const upClass = isActive && sortDirection === 'asc' ? 'text-indigo-600' : 'text-gray-300';
+        const downClass = isActive && sortDirection === 'desc' ? 'text-indigo-600' : 'text-gray-300';
 
         return (
-            <button type="button" onClick={() => toggleSort(field)} className="ml-2 inline-flex items-center justify-center hover:opacity-80 transition">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" className="w-4 h-4">
-                    <g className={upClass} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M7 17V7" />
-                        <path d="M4 10l3-3 3 3" />
-                    </g>
-                    <g className={downClass} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M17 7v10" />
-                        <path d="M14 14l3 3 3-3" />
-                    </g>
+            <div className="ml-1.5 flex flex-col items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={`w-3 h-3 -mb-1 ${upClass}`}>
+                    <path d="M12 8l4 4H8z" />
                 </svg>
-            </button>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={`w-3 h-3 ${downClass}`}>
+                    <path d="M12 16l-4-4h8z" />
+                </svg>
+            </div>
         );
     };
 
@@ -159,10 +155,20 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     // ==========================================
     const [selectedUsers, setSelectedUsers] = useState([]);
     const [bulkDropdownOpen, setBulkDropdownOpen] = useState(false);
+    
+    // 🟢 ISOLATE SELECTION STATE
+    const [showOnlySelected, setShowOnlySelected] = useState(false);
+
+    // Auto-disable isolate mode if no items remain selected
+    useEffect(() => {
+        if (selectedUsers.length === 0) {
+            setShowOnlySelected(false);
+        }
+    }, [selectedUsers]);
 
     // BULK DEVICE LIMIT STATE
     const [isBulkLimitModalOpen, setBulkLimitModalOpen] = useState(false);
-    
+
     const {
         data: bulkLimitData,
         setData: setBulkLimitData,
@@ -187,14 +193,18 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     };
 
     const handleSelect = (userId) => {
-        setSelectedUsers(prev => 
+        setSelectedUsers(prev =>
             prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
         );
     };
 
     // 🟢 EXTRACT FULL OBJECTS FOR THE TABLES
     const selectedObjects = users.filter((u) => u && selectedUsers.includes(getEmployeeKey(u)));
-    const unselectedFilteredUsers = filteredUsers.filter((u) => u && !selectedUsers.includes(getEmployeeKey(u)));
+    
+    // 🟢 If Isolated mode is on, hide all unselected items
+    const unselectedFilteredUsers = showOnlySelected 
+        ? [] 
+        : filteredUsers.filter((u) => u && !selectedUsers.includes(getEmployeeKey(u)));
 
     // Generate Display Names for Modals
     let displayNames = '';
@@ -207,7 +217,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     }
 
     // ==========================================
-    // ACTION HANDLERS (Must be defined before Rows)
+    // ACTION HANDLERS
     // ==========================================
     const confirmDeviceReset = (employee) => {
         setActiveDropdown(null);
@@ -246,11 +256,11 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     const confirmToggleStatus = (employee) => {
         setActiveDropdown(null);
         const isDisabling = employee.status !== 'Disabled';
-        
+
         setConfirmDialog({
             isOpen: true,
             title: isDisabling ? 'Disable Account' : 'Enable Account',
-            message: isDisabling 
+            message: isDisabling
                 ? `Are you sure you want to disable access for ${employee.name}? They will immediately be locked out of the system.`
                 : `Are you sure you want to re-enable access for ${employee.name}?`,
             confirmText: isDisabling ? 'Disable Account' : 'Enable Account',
@@ -265,7 +275,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     };
 
     const handleAccountAction = (employee) => {
-        setActiveDropdown(null); 
+        setActiveDropdown(null);
         if (employee.status === 'Pending Setup') {
             router.post(route('employees.send-activation', [employee.id]), {}, {
                 preserveScroll: true,
@@ -346,7 +356,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     // Bulk Actions handler
     const handleBulkAction = (action) => {
         setBulkDropdownOpen(false);
-        
+
         let title = '';
         let messageText = '';
         let confirmText = '';
@@ -358,7 +368,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
             case 'change-limit':
                 setBulkLimitData({ limit: 2, ids: selectedUsers });
                 setBulkLimitModalOpen(true);
-                return; 
+                return;
             case 'password-reset':
                 title = 'Send Password/Activation Links';
                 messageText = `Are you sure you want to send account links to the following ${selectedObjects.length} employee(s): ${displayNames}?`;
@@ -437,7 +447,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
         setConfirmDialog({
             isOpen: true,
             title,
-            message: messageText, // MUST BE PURE STRING TO PREVENT REACT CRASH
+            message: messageText, 
             confirmText,
             confirmColor,
             onConfirm: () => {
@@ -473,16 +483,30 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     // EXTRACTED RENDER METHODS FOR THE TABLE ROWS
     // ==========================================
     const [activeDropdown, setActiveDropdown] = useState(null);
+    const hideTimeoutRef = useRef(null);
+
+    const handleMouseEnter = () => {
+        if (hideTimeoutRef.current) {
+            clearTimeout(hideTimeoutRef.current);
+            hideTimeoutRef.current = null;
+        }
+    };
+
+    const handleMouseLeave = () => {
+        hideTimeoutRef.current = setTimeout(() => {
+            setActiveDropdown(null);
+        }, 1000); // 1-second auto-hide delay
+    };
 
     const renderDesktopRow = (employee, isSelected) => {
         const uniqueKey = getEmployeeKey(employee);
         return (
-            <tr 
-                key={`desktop-${uniqueKey}`} 
+            <tr
+                key={`desktop-${uniqueKey}`}
                 onClick={() => handleSelect(uniqueKey)}
-                className={`border-b cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50/80 hover:bg-indigo-100' : 'bg-white hover:bg-gray-50'}`}
+                className={`border-b border-gray-100 cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border-l-4 border-l-indigo-500' : 'bg-white hover:bg-indigo-50/50'}`}
             >
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-4 py-4 text-center whitespace-nowrap border-r border-gray-100 w-10">
                     <input
                         type="checkbox"
                         className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer"
@@ -491,41 +515,51 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                         onClick={(e) => e.stopPropagation()}
                     />
                 </td>
-                <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
-                    {employee.name}
-                    <div className="text-xs text-gray-500 mt-0.5">{employee.email}</div>
+                <td className="px-4 py-4 whitespace-nowrap pl-4">
+                    <div className="font-black text-gray-900">{employee.name}</div>
+                    <div className="text-[11px] font-bold text-gray-500 mt-0.5">{employee.email}</div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                    {employee.department?.name ? <span className="text-gray-900">{employee.department.name}</span> : <span className="text-gray-400 italic">Unassigned</span>}
+                <td className="px-4 py-4 whitespace-nowrap">
+                    {employee.department?.name ? <span className="font-bold text-gray-700">{employee.department.name}</span> : <span className="text-gray-400 italic font-medium">Unassigned</span>}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                    {employee.position?.name ? <span className="text-gray-900 font-medium">{employee.position.name}</span> : <span className="text-gray-400 italic">Unassigned</span>}
+                <td className="px-4 py-4 whitespace-nowrap">
+                    {employee.position?.name ? <span className="font-bold text-gray-700">{employee.position.name}</span> : <span className="text-gray-400 italic font-medium">Unassigned</span>}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-4 py-4 whitespace-nowrap">
                     {employee.branches && employee.branches.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                             {employee.branches.map((branch) => (
-                                <span key={branch.id} className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                                <span key={branch.id} className="inline-flex items-center rounded bg-blue-50 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-blue-700 border border-blue-200">
                                     {branch.name}
                                 </span>
                             ))}
                         </div>
                     ) : (
-                        <span className="text-gray-400 italic">N/A</span>
+                        <span className="text-gray-400 italic font-medium">N/A</span>
                     )}
                 </td>
+<<<<<<< HEAD
+                <td className="px-4 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center rounded px-2.5 py-1 text-[10px] font-black uppercase tracking-widest border ${
+                        employee.status === 'Disabled' ? 'bg-gray-50 text-gray-600 border-gray-200' : 
+                        employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 border-red-200' : 
+                        employee.status === 'Active' ? 'bg-green-50 text-green-700 border-green-200' : 
+                        employee.status === 'Pending Setup' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                        'bg-gray-50 text-gray-700 border-gray-200'
+=======
                 <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${
-                        employee.status === 'Disabled' ? 'bg-gray-100 text-gray-600 ring-gray-500/20' : 
-                        employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 ring-red-600/20' : 
-                        employee.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' : 
+                        employee.status === 'Disabled' ? 'bg-gray-100 text-gray-600 ring-gray-500/20' :
+                        employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 ring-red-600/20' :
+                        employee.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' :
                         employee.status === 'Pending Setup' ? 'bg-yellow-50 text-yellow-800 ring-yellow-600/20' :
                         'bg-gray-50 text-gray-800 ring-gray-600/20'
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                     }`}>
                         {employee.status}
                     </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-center relative">
+                <td className="px-4 py-4 whitespace-nowrap text-right relative pr-6 w-20">
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
@@ -539,10 +573,51 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                     {activeDropdown === uniqueKey && (
                         <div
                             onClick={(e) => e.stopPropagation()}
+<<<<<<< HEAD
+                            className="absolute right-8 top-10 z-50 w-44 overflow-hidden rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 text-left"
+                        >
+                            <button 
+                                className="block w-full px-4 py-2 text-left text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                                onClick={(e) => {
+                                    e.preventDefault(); e.stopPropagation(); handleAccountAction(employee);
+                                }}
+                            >
+                                {employee.status === 'Pending Setup' ? 'Activation Link' : 'Password Reset'}
+                            </button>
+                            <Link as="button" className="block w-full px-4 py-2 text-left text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors" onClick={(e) => {
+                                e.preventDefault(); e.stopPropagation(); openEditUserModal(employee);
+                            }}>
+                                Edit Settings
+                            </Link>
+                            <Link as="button" className="block w-full px-4 py-2 text-left text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors" onClick={(e) => {
+                                e.preventDefault(); e.stopPropagation(); confirmDeviceReset(employee);
+                            }}>
+                                Device Reset
+                            </Link>
+                            <button 
+                                className="block w-full px-4 py-2 text-left text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors" 
+                                onClick={(e) => {
+                                    e.preventDefault(); e.stopPropagation(); confirmToggleStatus(employee);
+                                }}
+                            >
+                                {employee.status === 'Disabled' ? 'Enable Account' : 'Disable Account'}
+                            </button>
+
+                            <button
+                                className={`block w-full px-4 py-2 text-left text-xs font-bold transition-colors ${employee.is_comment_banned ? 'text-green-600 hover:bg-green-50' : 'text-orange-600 hover:bg-orange-50'}`}
+                                onClick={(e) => {
+                                    e.preventDefault(); 
+                                    e.stopPropagation();
+                                    if (confirm(`Are you sure you want to ${employee.is_comment_banned ? 'unban' : 'ban'} ${employee.name} from commenting?`)) {
+                                        router.patch(route('admin.users.toggle-comment-ban', employee.id), {}, { preserveScroll: true });
+                                        setActiveDropdown(null); 
+=======
+                            onMouseEnter={handleMouseEnter}
+                            onMouseLeave={handleMouseLeave}
                             className="absolute right-8 top-10 z-50 w-36 overflow-hidden rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5"
                         >
                             {canManageEmployees ? (
-                                <button 
+                                <button
                                     className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors"
                                     onClick={(e) => {
                                         e.preventDefault(); e.stopPropagation(); handleAccountAction(employee);
@@ -574,8 +649,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 </button>
                             )}
                             {canManageEmployees ? (
-                                <button 
-                                    className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" 
+                                <button
+                                    className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors"
                                     onClick={(e) => {
                                         e.preventDefault(); e.stopPropagation(); confirmToggleStatus(employee);
                                     }}
@@ -592,7 +667,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 <button
                                     className={`block w-full px-4 py-2 text-left text-sm font-medium transition-colors ${employee.is_comment_banned ? 'text-green-600 hover:bg-green-50' : 'text-orange-600 hover:bg-orange-50'}`}
                                     onClick={(e) => {
-                                        e.preventDefault(); 
+                                        e.preventDefault();
                                         e.stopPropagation();
                                         if (confirm(`Are you sure you want to ${employee.is_comment_banned ? 'unban' : 'ban'} ${employee.name} from commenting?`)) {
                                             router.patch(route('admin.users.toggle-comment-ban', employee.id), {}, { preserveScroll: true });
@@ -608,9 +683,9 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 </button>
                             )}
 
-                            <Link 
-                                as="button" 
-                                method="delete" 
+                            <Link
+                                as="button"
+                                method="delete"
                                 className={`block w-full px-4 py-2 text-left text-sm font-medium transition-colors ${canDeleteEmployees ? 'text-black hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}
                                 disabled={!canDeleteEmployees}
                                 onClick={(e) => {
@@ -618,12 +693,23 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                         e.preventDefault();
                                         e.stopPropagation();
                                         return;
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                     }
                                     e.preventDefault(); e.stopPropagation(); confirmDeleteUser(employee);
                                 }}
                                 title={canDeleteEmployees ? 'Delete employee' : 'Full permission required to delete employees'}
                             >
+<<<<<<< HEAD
+                                {employee.is_comment_banned ? 'Unban Comments' : 'Ban Comments'}
+                            </button>
+
+                            <Link as="button" method="delete" className="block w-full px-4 py-2 text-left text-xs font-bold text-red-600 hover:bg-red-50 transition-colors" onClick={(e) => {
+                                e.preventDefault(); e.stopPropagation(); confirmDeleteUser(employee);
+                            }}>
+                                Delete Employee
+=======
                                 Delete
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                             </Link>
                         </div>
                     )}
@@ -635,10 +721,10 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     const renderMobileRow = (employee, isSelected) => {
         const uniqueKey = getEmployeeKey(employee);
         return (
-            <div 
-                key={`mobile-${uniqueKey}`} 
+            <div
+                key={`mobile-${uniqueKey}`}
                 onClick={() => handleSelect(uniqueKey)}
-                className={`p-4 cursor-pointer transition-colors border-b border-gray-100 ${isSelected ? 'bg-indigo-50/80' : 'bg-white'}`}
+                className={`p-4 cursor-pointer transition-colors border-b border-gray-100 ${isSelected ? 'bg-indigo-50/80 border-l-4 border-l-indigo-500' : 'bg-white'}`}
             >
                 <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0">
@@ -650,10 +736,10 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             onClick={(e) => e.stopPropagation()}
                         />
                         <div>
-                            <div className="font-medium text-gray-900 break-words">
+                            <div className="font-black text-gray-900 break-words">
                                 {employee.name}
                             </div>
-                            <div className="text-xs text-gray-500 mt-0.5 break-all">
+                            <div className="text-[11px] font-bold text-gray-500 mt-0.5 break-all">
                                 {employee.email}
                             </div>
                         </div>
@@ -673,10 +759,47 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                         {activeDropdown === uniqueKey && (
                             <div
                                 onClick={(e) => e.stopPropagation()}
-                                className="absolute right-0 top-10 z-50 w-56 overflow-hidden rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5"
+                                className="absolute right-0 top-10 z-50 w-44 overflow-hidden rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 text-left"
                             >
+<<<<<<< HEAD
+                                <button 
+                                    className="block w-full px-4 py-2 text-left text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                                    onClick={(e) => {
+                                        e.preventDefault(); e.stopPropagation(); handleAccountAction(employee);
+                                    }}
+                                >
+                                    {employee.status === 'Pending Setup' ? 'Activation Link' : 'Password Reset'}
+                                </button>
+                                <Link as="button" className="block w-full px-4 py-2 text-left text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors" onClick={(e) => {
+                                    e.preventDefault(); e.stopPropagation(); openEditUserModal(employee);
+                                }}>
+                                    Edit Settings
+                                </Link>
+                                <Link as="button" className="block w-full px-4 py-2 text-left text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors" onClick={(e) => {
+                                    e.preventDefault(); e.stopPropagation(); confirmDeviceReset(employee);
+                                }}>
+                                    Device Reset
+                                </Link>
+                                <button 
+                                    className="block w-full px-4 py-2 text-left text-xs font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors" 
+                                    onClick={(e) => {
+                                        e.preventDefault(); e.stopPropagation(); confirmToggleStatus(employee);
+                                    }}
+                                >
+                                    {employee.status === 'Disabled' ? 'Enable Account' : 'Disable Account'}
+                                </button>
+
+                                <button
+                                    className={`block w-full px-4 py-2 text-left text-xs font-bold transition-colors ${employee.is_comment_banned ? 'text-green-600 hover:bg-green-50' : 'text-orange-600 hover:bg-orange-50'}`}
+                                    onClick={(e) => {
+                                        e.preventDefault(); 
+                                        e.stopPropagation();
+                                        if (confirm(`Are you sure you want to ${employee.is_comment_banned ? 'unban' : 'ban'} ${employee.name} from commenting?`)) {
+                                            router.patch(route('admin.users.toggle-comment-ban', employee.id), {}, { preserveScroll: true });
+                                            setActiveDropdown(null); 
+=======
                                 {canManageEmployees ? (
-                                    <button 
+                                    <button
                                         className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors"
                                         onClick={(e) => {
                                             e.preventDefault(); e.stopPropagation(); handleAccountAction(employee);
@@ -708,8 +831,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     </button>
                                 )}
                                 {canManageEmployees ? (
-                                    <button 
-                                        className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors" 
+                                    <button
+                                        className="block w-full px-4 py-2 text-left text-sm font-medium text-black hover:bg-gray-100 transition-colors"
                                         onClick={(e) => {
                                             e.preventDefault(); e.stopPropagation(); confirmToggleStatus(employee);
                                         }}
@@ -726,7 +849,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     <button
                                         className={`block w-full px-4 py-2 text-left text-sm font-medium transition-colors ${employee.is_comment_banned ? 'text-green-600 hover:bg-green-50' : 'text-orange-600 hover:bg-orange-50'}`}
                                         onClick={(e) => {
-                                            e.preventDefault(); 
+                                            e.preventDefault();
                                             e.stopPropagation();
                                             if (confirm(`Are you sure you want to ${employee.is_comment_banned ? 'unban' : 'ban'} ${employee.name} from commenting?`)) {
                                                 router.patch(route('admin.users.toggle-comment-ban', employee.id), {}, { preserveScroll: true });
@@ -741,10 +864,10 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                         {employee.is_comment_banned ? 'Unban Comments' : 'Ban Comments'}
                                     </button>
                                 )}
-                            
-                                <Link 
-                                    as="button" 
-                                    method="delete" 
+
+                                <Link
+                                    as="button"
+                                    method="delete"
                                     className={`block w-full px-4 py-2 text-left text-sm font-medium transition-colors ${canDeleteEmployees ? 'text-black hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'}`}
                                     disabled={!canDeleteEmployees}
                                     onClick={(e) => {
@@ -752,12 +875,23 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                             e.preventDefault();
                                             e.stopPropagation();
                                             return;
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                         }
                                         e.preventDefault(); e.stopPropagation(); confirmDeleteUser(employee);
                                     }}
                                     title={canDeleteEmployees ? 'Delete employee' : 'Full permission required to delete employees'}
                                 >
+<<<<<<< HEAD
+                                    {employee.is_comment_banned ? 'Unban Comments' : 'Ban Comments'}
+                                </button>
+                                
+                                <Link as="button" method="delete" className="block w-full px-4 py-2 text-left text-xs font-bold text-red-600 hover:bg-red-50 transition-colors" onClick={(e) => {
+                                    e.preventDefault(); e.stopPropagation(); confirmDeleteUser(employee);
+                                }}>
+                                    Delete Employee
+=======
                                     Delete
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                 </Link>
                             </div>
                         )}
@@ -766,43 +900,52 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
                 <div className="mt-4 space-y-3">
                     <div>
-                        <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Department</div>
+                        <div className="text-[10px] font-black uppercase tracking-wider text-gray-500">Department</div>
                         <div className="mt-1 text-sm text-gray-900">
-                            {employee.department?.name ? employee.department.name : <span className="text-gray-400 italic">Unassigned</span>}
+                            {employee.department?.name ? <span className="font-bold">{employee.department.name}</span> : <span className="text-gray-400 italic font-medium">Unassigned</span>}
                         </div>
                     </div>
                     <div>
-                        <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Position</div>
+                        <div className="text-[10px] font-black uppercase tracking-wider text-gray-500">Position</div>
                         <div className="mt-1 text-sm text-gray-900">
-                            {employee.position?.name ? employee.position.name : <span className="text-gray-400 italic">Unassigned</span>}
+                            {employee.position?.name ? <span className="font-bold">{employee.position.name}</span> : <span className="text-gray-400 italic font-medium">Unassigned</span>}
                         </div>
                     </div>
                     <div>
-                        <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Branch</div>
+                        <div className="text-[10px] font-black uppercase tracking-wider text-gray-500">Branch</div>
                         <div className="mt-1">
                             {employee.branches && employee.branches.length > 0 ? (
                                 <div className="flex flex-wrap gap-1">
                                     {employee.branches.map((branch) => (
-                                        <span key={branch.id} className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700 ring-1 ring-inset ring-blue-700/10">
+                                        <span key={branch.id} className="inline-flex items-center rounded bg-blue-50 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-blue-700 border border-blue-200">
                                             {branch.name}
                                         </span>
                                     ))}
                                 </div>
                             ) : (
-                                <span className="text-sm text-gray-400 italic">N/A</span>
+                                <span className="text-sm text-gray-400 italic font-medium">N/A</span>
                             )}
                         </div>
                     </div>
                 </div>
                 <div>
-                    <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mt-3">Status</div>
+                    <div className="text-[10px] font-black uppercase tracking-wider text-gray-500 mt-3">Status</div>
                     <div className="mt-1">
+<<<<<<< HEAD
+                        <span className={`inline-flex items-center rounded px-2.5 py-1 text-[10px] font-black uppercase tracking-widest border ${
+                            employee.status === 'Disabled' ? 'bg-gray-50 text-gray-600 border-gray-200' : 
+                            employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 border-red-200' : 
+                            employee.status === 'Active' ? 'bg-green-50 text-green-700 border-green-200' : 
+                            employee.status === 'Pending Setup' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                            'bg-gray-50 text-gray-700 border-gray-200'
+=======
                         <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${
-                            employee.status === 'Disabled' ? 'bg-gray-100 text-gray-600 ring-gray-500/20' : 
-                            employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 ring-red-600/20' : 
-                            employee.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' : 
+                            employee.status === 'Disabled' ? 'bg-gray-100 text-gray-600 ring-gray-500/20' :
+                            employee.status === 'Password Reset' ? 'bg-red-50 text-red-700 ring-red-600/20' :
+                            employee.status === 'Active' ? 'bg-green-50 text-green-700 ring-green-600/20' :
                             employee.status === 'Pending Setup' ? 'bg-yellow-50 text-yellow-800 ring-yellow-600/20' :
                             'bg-gray-50 text-gray-800 ring-gray-600/20'
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                         }`}>
                             {employee.status}
                         </span>
@@ -875,14 +1018,14 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     // ==========================================
     const [isPositionModalOpen, setPositionModalOpen] = useState(false);
 
-    const { 
-        data: positionData, 
-        setData: setPositionData, 
-        post: postPosition, 
-        processing: positionProcessing, 
-        errors: positionErrors, 
-        reset: resetPosition, 
-        clearErrors: clearPositionErrors 
+    const {
+        data: positionData,
+        setData: setPositionData,
+        post: postPosition,
+        processing: positionProcessing,
+        errors: positionErrors,
+        reset: resetPosition,
+        clearErrors: clearPositionErrors
     } = useForm({
         department_id: '',
         position_name: '',
@@ -987,8 +1130,14 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
         }
     };
 
+    useEffect(() => {
+        if (userData.department_id) {
+            setUserData('position_id', '');
+        }
+    }, [userData.department_id]);
+
     const filteredPositionsForUser = positions.filter(
-        pos => pos.department_id === parseInt(userData.department_id)
+        pos => String(pos.department_id) === String(userData.department_id)
     );
 
     // ==========================================
@@ -1056,8 +1205,14 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
         }
     };
 
+    useEffect(() => {
+        if (editUserData.department_id && editingUser && String(editUserData.department_id) !== String(editingUser.department_id)) {
+            setEditData('position_id', '');
+        }
+    }, [editUserData.department_id]);
+
     const filteredEditPositions = positions.filter(
-        (pos) => pos.department_id === parseInt(editUserData.department_id)
+        (pos) => String(pos.department_id) === String(editUserData.department_id)
     );
 
     const { processing: importProcessing, reset: resetImport } = useForm({
@@ -1107,8 +1262,51 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
         >
             <Head title="Employee Management" />
 
-            <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 flex flex-col md:h-[calc(100vh-240px)] md:overflow-hidden">
+            <div className="py-6 sm:py-12">
+                <div className="max-w-[100rem] mx-auto sm:px-6 lg:px-8">
 
+<<<<<<< HEAD
+                    {/* 🟢 TOP BUTTON ALIGNMENT (Grouped completely across the top) */}
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-6">
+                        <PrimaryButton className="!py-2 flex-shrink-0" onClick={() => setUserModalOpen(true)}>
+                            + Add Users
+                        </PrimaryButton>
+                        <SecondaryButton className="!py-2 flex-shrink-0" onClick={() => setPositionModalOpen(true)}>
+                            Edit Positions
+                        </SecondaryButton>
+                        <SecondaryButton className="!py-2 flex-shrink-0" onClick={() => setBranchModalOpen(true)}>
+                            Edit Branch
+                        </SecondaryButton>
+                        <SecondaryButton className="!py-2 flex-shrink-0" onClick={() => setDepartmentModalOpen(true)}>
+                            Edit Departments
+                        </SecondaryButton>
+                        <SecondaryButton className="!py-2 flex-shrink-0" onClick={() => setRoleModalOpen(true)}>
+                            Edit Roles
+                        </SecondaryButton>
+                        <a
+                            href={route('admin.employees.template')}
+                            onClick={() => triggerToast('Downloading Excel template...', 'success')}
+                            className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-black text-xs text-gray-700 uppercase tracking-wider hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-25 transition ease-in-out duration-150 shadow-sm flex-shrink-0"
+                        >
+                            📄 Template
+                        </a>
+                        
+                        <div className="relative inline-block flex-shrink-0">
+                            <input
+                                type="file"
+                                id="excel-upload-emp"
+                                className="hidden"
+                                accept=".xlsx, .xls, .csv"
+                                onChange={handleFileUpload}
+                            />
+                            <button
+                                onClick={() => document.getElementById('excel-upload-emp').click()}
+                                disabled={importProcessing}
+                                className="inline-flex items-center px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-md font-black text-xs text-emerald-700 uppercase tracking-wider hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-25 transition ease-in-out duration-150 shadow-sm flex-shrink-0"
+                            >
+                                {importProcessing ? 'Importing...' : '📁 Batch Import'}
+                            </button>
+=======
                 <div className="flex-none mb-4 space-y-4">
                     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -1145,7 +1343,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     </button>
 
                                     {bulkDropdownOpen && (
-                                        <div 
+                                        <div
                                             onClick={(e) => e.stopPropagation()}
                                             className="absolute left-0 z-50 mt-2 w-56 origin-top-left rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
                                         >
@@ -1206,8 +1404,34 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     )}
                                 </div>
                             )}
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                         </div>
+                        
+                        <a
+                            href={route('admin.employees.export', {
+                                search: filterSearch,
+                                department: filterDepartment,
+                                branch: filterBranch,
+                                position: filterPosition,
+                                status: filterStatus
+                            })}
+                            onClick={() => triggerToast('Preparing export. Download will start shortly...', 'success')}
+                            className="inline-flex items-center px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-md font-black text-xs text-indigo-700 uppercase tracking-wider hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-25 transition ease-in-out duration-150 shadow-sm flex-shrink-0"
+                        >
+                            📥 Export
+                        </a>
 
+<<<<<<< HEAD
+                        {/* BULK ACTIONS DROPDOWN */}
+                        {selectedUsers.length > 0 && (
+                            <div className="relative inline-block flex-shrink-0 ml-2">
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setBulkDropdownOpen(!bulkDropdownOpen);
+                                    }}
+                                    className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-xs font-black uppercase tracking-wider text-white shadow-sm hover:bg-indigo-700 transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+=======
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:justify-end">
                             <a
                                 href={canManageEmployees ? route('admin.employees.export', {
@@ -1222,8 +1446,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                     else triggerToast('Preparing export. Download will start shortly...', 'success');
                                 }}
                                 className={`inline-flex items-center rounded-md border px-4 py-2 text-xs font-bold uppercase tracking-widest shadow-sm transition flex-shrink-0 ${
-                                    canManageEmployees 
-                                        ? 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100' 
+                                    canManageEmployees
+                                        ? 'border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
                                         : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
                                 }`}
                                 title={!canManageEmployees ? 'Edit permission required' : ''}
@@ -1265,18 +1489,43 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                             : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
                                     }`}
                                     title={!canManageEmployees ? 'Edit permission required' : ''}
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                 >
-                                    {importProcessing ? 'Importing...' : '📁 Batch Import'}
+                                    Bulk Actions ({selectedUsers.length})
+                                    <svg className="-mr-1 ml-2 h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                                    </svg>
                                 </button>
+
+                                {bulkDropdownOpen && (
+                                    <div 
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="absolute left-0 z-50 mt-2 w-56 origin-top-left rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
+                                    >
+                                        <div className="py-1">
+                                            {/* PROTECTED BULK CHANGE LIMIT OPTION */}
+                                            {isCurrentUserAdmin && (
+                                                <button onClick={() => handleBulkAction('change-limit')} className="block w-full px-4 py-2 text-left text-sm font-bold text-gray-700 hover:bg-gray-100">Change Device Limit</button>
+                                            )}
+                                            <button onClick={() => handleBulkAction('password-reset')} className="block w-full px-4 py-2 text-left text-sm font-bold text-gray-700 hover:bg-gray-100">Activation Links / Send Reset</button>
+                                            <button onClick={() => handleBulkAction('device-reset')} className="block w-full px-4 py-2 text-left text-sm font-bold text-gray-700 hover:bg-gray-100">Device Reset</button>
+                                            <button onClick={() => handleBulkAction('toggle-status')} className="block w-full px-4 py-2 text-left text-sm font-bold text-gray-700 hover:bg-gray-100">Enable / Disable</button>
+                                            <button onClick={() => handleBulkAction('toggle-comment-ban')} className="block w-full px-4 py-2 text-left text-sm font-bold text-gray-700 hover:bg-gray-100">Ban / Unban Comments</button>
+                                            <button onClick={() => handleBulkAction('delete')} className="block w-full px-4 py-2 text-left text-sm text-red-600 font-bold hover:bg-red-50">Delete</button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                        </div>
+                        )}
                     </div>
 
-                    <div className="flex flex-wrap gap-4 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                    {/* 🟢 FULL WIDTH FILTER BAR */}
+                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex flex-wrap gap-4 items-end">
                         <div className="flex-1 min-w-[200px] relative">
+                            <InputLabel value="Search Directory" className="font-black tracking-tighter text-xs" />
                             <input
                                 type="text"
-                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm pr-8"
+                                className="block w-full mt-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs font-bold pr-8"
                                 placeholder="Search by name, email, department, position, or branch..."
                                 value={filterSearch}
                                 onChange={(e) => setFilterSearch(e.target.value)}
@@ -1284,7 +1533,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             {filterSearch && (
                                 <button
                                     type="button"
-                                    className="absolute right-2 top-2 text-gray-400 hover:text-gray-600 font-bold"
+                                    className="absolute right-2 top-8 text-gray-400 hover:text-gray-600 font-bold"
                                     onClick={() => setFilterSearch('')}
                                 >
                                     ✕
@@ -1292,54 +1541,139 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             )}
                         </div>
 
-                        <select
-                            className="block w-full sm:w-auto rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            value={filterDepartment}
-                            onChange={(e) => setFilterDepartment(e.target.value)}
-                        >
-                            <option value="">All Departments</option>
-                            {uniqueDepartments.map(dept => (
-                                <option key={dept} value={dept}>{dept}</option>
-                            ))}
-                        </select>
+                        <div className="w-36">
+                            <InputLabel value="Department" className="font-black tracking-tighter text-xs" />
+                            <select
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs font-bold py-2"
+                                value={filterDepartment}
+                                onChange={(e) => setFilterDepartment(e.target.value)}
+                            >
+                                <option value="">All Departments</option>
+                                {uniqueDepartments.map(dept => (
+                                    <option key={dept} value={dept}>{dept}</option>
+                                ))}
+                            </select>
+                        </div>
 
-                        <select
-                            className="block w-full sm:w-auto rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            value={filterPosition}
-                            onChange={(e) => setFilterPosition(e.target.value)}
-                        >
-                            <option value="">All Positions</option>
-                            {uniquePositions.map(pos => (
-                                <option key={pos} value={pos}>{pos}</option>
-                            ))}
-                        </select>
+                        <div className="w-36">
+                            <InputLabel value="Position" className="font-black tracking-tighter text-xs" />
+                            <select
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs font-bold py-2"
+                                value={filterPosition}
+                                onChange={(e) => setFilterPosition(e.target.value)}
+                            >
+                                <option value="">All Positions</option>
+                                {uniquePositions.map(pos => (
+                                    <option key={pos} value={pos}>{pos}</option>
+                                ))}
+                            </select>
+                        </div>
 
-                        <select
-                            className="block w-full sm:w-auto rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            value={filterBranch}
-                            onChange={(e) => setFilterBranch(e.target.value)}
-                        >
-                            <option value="">All Branches</option>
-                            {uniqueBranches.map(branch => (
-                                <option key={branch} value={branch}>{branch}</option>
-                            ))}
-                        </select>
+                        <div className="w-36">
+                            <InputLabel value="Branch" className="font-black tracking-tighter text-xs" />
+                            <select
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs font-bold py-2"
+                                value={filterBranch}
+                                onChange={(e) => setFilterBranch(e.target.value)}
+                            >
+                                <option value="">All Branches</option>
+                                {uniqueBranches.map(branch => (
+                                    <option key={branch} value={branch}>{branch}</option>
+                                ))}
+                            </select>
+                        </div>
 
-                        <select
-                            className="block w-full sm:w-auto rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value)}
-                        >
-                            <option value="">All Statuses</option>
-                            {uniqueStatuses.map(status => (
-                                <option key={status} value={status}>{status}</option>
-                            ))}
-                        </select>
+                        <div className="w-36">
+                            <InputLabel value="Status" className="font-black tracking-tighter text-xs" />
+                            <select
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs font-bold py-2"
+                                value={filterStatus}
+                                onChange={(e) => setFilterStatus(e.target.value)}
+                            >
+                                <option value="">All Statuses</option>
+                                {uniqueStatuses.map(status => (
+                                    <option key={status} value={status}>{status}</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
-                </div>
 
+<<<<<<< HEAD
+                    {/* 🟢 ISOLATE SELECTION ROW */}
+                    {selectedUsers.length > 0 && (
+                        <div className="flex items-center justify-between mt-4 mb-4 border-b border-gray-200 pb-4">
+                            <button type="button" onClick={handleSelectAll} className="text-xs font-black uppercase tracking-wider text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-4 py-2 rounded shadow-sm border border-indigo-200">
+                                Deselect All
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setShowOnlySelected(!showOnlySelected)}
+                                className={`text-xs font-black uppercase tracking-wider px-5 py-2 rounded-lg shadow-sm border transition-all ${
+                                    showOnlySelected
+                                    ? 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700'
+                                    : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                                }`}
+                            >
+                                {showOnlySelected ? 'Show All Employees' : `Isolate Selected (${selectedUsers.length})`}
+                            </button>
+                        </div>
+                    )}
+
+                    {/* 🟢 ENLARGED TABLE VIEW (Fixed max height, internal scrolling) */}
+                    <div className="bg-white rounded-lg shadow border border-gray-200 mb-6 overflow-hidden">
+                        <div className="hidden md:block overflow-x-auto overflow-y-auto max-h-[350px] relative">
+                            <table className="min-w-full table-auto divide-y divide-gray-200 text-left text-sm text-gray-500">
+                                <thead className="bg-gray-50 sticky top-0 z-20 shadow-sm">
+                                    <tr>
+                                        <th scope="col" className="px-4 py-4 text-center w-6 whitespace-nowrap border-r border-gray-100">
+                                            <input
+                                                type="checkbox"
+                                                className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer"
+                                                checked={filteredUsers.length > 0 && selectedUsers.length === filteredUsers.length}
+                                                onChange={handleSelectAll}
+                                            />
+                                        </th>
+                                        <th scope="col" className="px-4 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-tighter whitespace-nowrap pl-4">
+                                            <div className="flex items-center cursor-pointer hover:text-indigo-700 transition" onClick={() => toggleSort('name')}>
+                                                <span>Name</span>
+                                                {renderHeaderSortButton('name')}
+                                            </div>
+                                        </th>
+                                        <th scope="col" className="px-4 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-tighter whitespace-nowrap">
+                                            <div className="flex items-center cursor-pointer hover:text-indigo-700 transition" onClick={() => toggleSort('department')}>
+                                                <span>Department</span>
+                                                {renderHeaderSortButton('department')}
+                                            </div>
+                                        </th>
+                                        <th scope="col" className="px-4 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-tighter whitespace-nowrap">
+                                            <div className="flex items-center cursor-pointer hover:text-indigo-700 transition" onClick={() => toggleSort('position')}>
+                                                <span>Position</span>
+                                                {renderHeaderSortButton('position')}
+                                            </div>
+                                        </th>
+                                        <th scope="col" className="px-4 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-tighter whitespace-nowrap">Branch</th>
+                                        
+                                        <th scope="col" className="px-4 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-tighter whitespace-nowrap">
+                                            <div className="flex items-center cursor-pointer hover:text-indigo-700 transition" onClick={() => toggleSort('status')}>
+                                                <span>Status</span>
+                                                {renderHeaderSortButton('status')}
+                                            </div>
+                                        </th>
+                                        <th scope="col" className="px-4 py-4 text-right text-xs font-black text-gray-500 uppercase tracking-tighter whitespace-nowrap pr-6">Action</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    
+                                    {/* 🟢 GROUP 1: SELECTED USERS PINNED TO THE TOP OF THE TABLE */}
+                                    {selectedObjects.length > 0 && (
+                                        <>
+                                            <tr className="bg-indigo-100 border-b border-indigo-200">
+                                                <td colSpan="7" className="px-4 py-2 text-[11px] font-black text-indigo-800 uppercase tracking-wider shadow-sm text-center">
+                                                    Selected For Bulk Actions ({selectedObjects.length})
+=======
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-1 min-h-0 flex flex-col md:overflow-hidden relative">
-                    
+
                     {/* 🟢 DESKTOP TABLE */}
                     <div className="hidden md:block overflow-x-auto overflow-y-auto flex-1 relative">
                         <table className="min-w-full divide-y divide-gray-200 text-left text-sm text-gray-500 relative">
@@ -1372,7 +1706,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                         </div>
                                     </th>
                                     <th scope="col" className="px-6 py-3 bg-gray-50 font-bold tracking-wider">Branch</th>
-                                    
+
                                     <th scope="col" className="px-6 py-3 bg-gray-50 font-bold tracking-wider">
                                         <div className="flex items-center">
                                             <span>Status</span>
@@ -1384,7 +1718,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             </thead>
 
                             <tbody className="bg-white divide-y divide-gray-200">
-                                
+
                                 {/* 🟢 GROUP 1: SELECTED USERS PINNED TO THE TOP OF THE TABLE */}
                                 {selectedObjects.length > 0 && (
                                     <>
@@ -1394,49 +1728,70 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                             </td>
                                         </tr>
                                         {selectedObjects.map(employee => renderDesktopRow(employee, true))}
-                                        
+
                                         {unselectedFilteredUsers.length > 0 && (
                                             <tr className="bg-gray-100 border-b border-gray-200">
                                                 <td colSpan="7" className="px-6 py-2 text-xs font-bold text-gray-500 uppercase tracking-wider shadow-sm">
                                                     Other Filtered Employees
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                                 </td>
                                             </tr>
-                                        )}
-                                    </>
-                                )}
+                                            {selectedObjects.map(employee => renderDesktopRow(employee, true))}
+                                            
+                                            {unselectedFilteredUsers.length > 0 && (
+                                                <tr className="bg-gray-100 border-b border-gray-200">
+                                                    <td colSpan="7" className="px-4 py-2 text-[11px] font-black text-gray-500 uppercase tracking-wider shadow-sm text-center">
+                                                        Other Filtered Employees
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </>
+                                    )}
 
-                                {/* 🟢 GROUP 2: NORMAL UNSELECTED USERS */}
-                                {unselectedFilteredUsers.map(employee => renderDesktopRow(employee, false))}
+                                    {/* 🟢 GROUP 2: NORMAL UNSELECTED USERS */}
+                                    {unselectedFilteredUsers.map(employee => renderDesktopRow(employee, false))}
 
-                                {/* NO RESULTS */}
-                                {selectedObjects.length === 0 && unselectedFilteredUsers.length === 0 && (
-                                    <tr>
-                                        <td colSpan="7" className="px-6 py-12 text-center text-gray-500 font-medium">
-                                            No employees found.
-                                        </td>
-                                    </tr>
-                                )}
+                                    {/* NO RESULTS */}
+                                    {selectedObjects.length === 0 && unselectedFilteredUsers.length === 0 && (
+                                        <tr>
+                                            <td colSpan="7" className="px-6 py-16 text-center">
+                                                <p className="text-gray-500 font-bold text-lg">No employees found.</p>
+                                            </td>
+                                        </tr>
+                                    )}
 
-                            </tbody>
-                        </table>
-                    </div>
+                                </tbody>
+                            </table>
+                        </div>
 
-                    {/* 🟢 MOBILE VIEW */}
-                    <div className="md:hidden">
-                        {filteredUsers.length > 0 && (
-                            <div className="p-4 bg-gray-50 border-b border-gray-200 flex items-center">
-                                <input
-                                    type="checkbox"
-                                    className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer mr-3"
-                                    checked={filteredUsers.length > 0 && selectedUsers.length === filteredUsers.length}
-                                    onChange={handleSelectAll}
-                                />
-                                <span className="text-sm font-medium text-gray-700 truncate w-full pr-2">
-                                    {selectedUsers.length > 0 ? `${selectedUsers.length} Selected` : 'Select All Filtered'}
-                                </span>
-                            </div>
-                        )}
+                        {/* 🟢 MOBILE VIEW */}
+                        <div className="md:hidden overflow-y-auto max-h-[400px]">
+                            {filteredUsers.length > 0 && (
+                                <div className="p-4 bg-gray-50 border-b border-gray-200 flex items-center sticky top-0 z-20">
+                                    <input
+                                        type="checkbox"
+                                        className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 cursor-pointer mr-3"
+                                        checked={filteredUsers.length > 0 && selectedUsers.length === filteredUsers.length}
+                                        onChange={handleSelectAll}
+                                    />
+                                    <span className="text-sm font-black text-gray-700 truncate w-full pr-2 uppercase tracking-tighter">
+                                        {selectedUsers.length > 0 ? `${selectedUsers.length} Selected` : 'Select All Filtered'}
+                                    </span>
+                                </div>
+                            )}
 
+<<<<<<< HEAD
+                            {selectedObjects.length === 0 && unselectedFilteredUsers.length === 0 ? (
+                                <div className="px-4 py-16 text-center">
+                                    <p className="text-gray-500 font-bold text-lg">No employees found.</p>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col">
+                                    {selectedObjects.length > 0 && (
+                                        <>
+                                            <div className="bg-indigo-100 px-4 py-2 border-b border-indigo-200 text-xs font-black text-indigo-800 uppercase tracking-wider text-center">
+                                                Selected for Bulk Actions ({selectedObjects.length})
+=======
                         {selectedObjects.length === 0 && unselectedFilteredUsers.length === 0 ? (
                             <div className="px-4 py-12 text-center text-gray-500 font-medium">
                                 No employees found.
@@ -1450,33 +1805,39 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                             Selected for Bulk Actions ({selectedObjects.length})
                                         </div>
                                         {selectedObjects.map(employee => renderMobileRow(employee, true))}
-                                        
+
                                         {unselectedFilteredUsers.length > 0 && (
                                             <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
                                                 Other Filtered Employees
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                             </div>
-                                        )}
-                                    </>
-                                )}
-
-                                {/* 🟢 GROUP 2: NORMAL UNSELECTED USERS (MOBILE) */}
-                                {unselectedFilteredUsers.map(employee => renderMobileRow(employee, false))}
-                            </div>
-                        )}
+                                            {selectedObjects.map(employee => renderMobileRow(employee, true))}
+                                            
+                                            {unselectedFilteredUsers.length > 0 && (
+                                                <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 text-xs font-black text-gray-500 uppercase tracking-wider text-center">
+                                                    Other Filtered Employees
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                    {unselectedFilteredUsers.map(employee => renderMobileRow(employee, false))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
 
             <Modal show={isPositionModalOpen} onClose={closePositionModal} maxWidth="2xl">
                 <div className="p-6">
-                    <h2 className="text-lg font-medium text-gray-900 mb-4">Edit Positions</h2>
+                    <h2 className="text-lg font-black text-gray-900 mb-4 uppercase tracking-wider">Edit Positions</h2>
 
                     <form onSubmit={submitPosition} className="mb-6 flex flex-col md:flex-row items-start md:items-end gap-3 rounded-md bg-gray-50 p-4 border border-gray-100">
                         <div className="flex-grow w-full md:w-auto">
-                            <InputLabel htmlFor="department_id" value="Department" />
+                            <InputLabel htmlFor="department_id" value="Department" className="font-bold" />
                             <select
                                 id="department_id"
-                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-bold"
                                 value={positionData.department_id}
                                 onChange={(e) => setPositionData('department_id', e.target.value)}
                                 required
@@ -1492,10 +1853,10 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                         </div>
 
                         <div className="flex-grow w-full md:w-auto">
-                            <InputLabel htmlFor="position_name" value="New Position Name" />
+                            <InputLabel htmlFor="position_name" value="New Position Name" className="font-bold" />
                             <TextInput
                                 id="position_name"
-                                className="mt-1 block w-full"
+                                className="mt-1 block w-full font-bold"
                                 value={positionData.position_name}
                                 onChange={(e) => setPositionData('position_name', e.target.value)}
                                 required
@@ -1503,13 +1864,23 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             />
                             <InputError message={positionErrors.position_name} className="mt-2" />
                         </div>
+<<<<<<< HEAD
                         
+                        <PrimaryButton className="mt-4 md:mt-0 !py-2.5" disabled={positionProcessing}>Add</PrimaryButton>
+                    </form>
+
+                    <h3 className="text-[11px] font-black uppercase tracking-wider text-gray-500 mb-2">
+                        {positionData.department_id 
+                            ? `Existing Positions (${departments.find(d => d.id === parseInt(positionData.department_id))?.name || 'Selected Dept'})` 
+=======
+
                         <PrimaryButton className="mt-4 md:mt-0" disabled={positionProcessing || !canManageEmployees} title={!canManageEmployees ? 'Edit permission required' : ''}>Add</PrimaryButton>
                     </form>
 
                     <h3 className="text-sm font-semibold text-gray-700 mb-2">
-                        {positionData.department_id 
-                            ? `Existing Positions (${departments.find(d => d.id === parseInt(positionData.department_id))?.name || 'Selected Dept'})` 
+                        {positionData.department_id
+                            ? `Existing Positions (${departments.find(d => d.id === parseInt(positionData.department_id))?.name || 'Selected Dept'})`
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                             : 'All Existing Positions'}
                     </h3>
                     <div className="max-h-60 overflow-y-auto rounded-md border border-gray-200">
@@ -1517,22 +1888,21 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             {filteredManagePositions.map((pos) => {
                                 const deptName = departments.find(d => d.id === pos.department_id)?.name || 'Unknown Dept';
                                 return (
-                                    <li key={pos.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
+                                    <li key={pos.id} className="flex items-center justify-between p-3 hover:bg-gray-50 transition-colors">
                                         <div>
-                                            <span className="text-sm font-medium text-gray-800 block">{pos.name}</span>
-                                            {/* Only show the department name below the position if they are viewing "All Existing Positions" */}
+                                            <span className="text-sm font-black text-gray-800 block">{pos.name}</span>
                                             {!positionData.department_id && (
-                                                <span className="text-xs text-gray-500">{deptName}</span>
+                                                <span className="text-[11px] font-bold text-gray-500">{deptName}</span>
                                             )}
                                         </div>
-                                        <button onClick={() => confirmDeletePosition(pos)} className="text-xs font-medium text-red-600 hover:text-red-900">
+                                        <button onClick={() => confirmDeletePosition(pos)} className="text-xs font-black text-red-600 hover:text-red-900 uppercase tracking-wider">
                                             Delete
                                         </button>
                                     </li>
                                 );
                             })}
                             {filteredManagePositions.length === 0 && (
-                                <li className="p-4 text-sm text-gray-500 text-center">
+                                <li className="p-4 text-sm font-bold text-gray-500 text-center">
                                     {positionData.department_id ? 'No positions found for this department.' : 'No positions found.'}
                                 </li>
                             )}
@@ -1547,30 +1917,34 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
             <Modal show={isBranchModalOpen} onClose={closeBranchModal}>
                 <div className="p-6">
-                    <h2 className="text-lg font-medium text-gray-900 mb-4">Manage Branches</h2>
+                    <h2 className="text-lg font-black text-gray-900 mb-4 uppercase tracking-wider">Manage Branches</h2>
 
                     <form onSubmit={submitBranch} className="mb-6 flex items-end gap-3 rounded-md bg-gray-50 p-4 border border-gray-100">
                         <div className="flex-grow">
-                            <InputLabel htmlFor="new_branch_name" value="New Branch Name" />
-                            <TextInput id="new_branch_name" className="mt-1 block w-full" value={branchData.name} onChange={(e) => setBranchData('name', e.target.value)} required placeholder="e.g. Makati, Greenhills" />
+                            <InputLabel htmlFor="new_branch_name" value="New Branch Name" className="font-bold" />
+                            <TextInput id="new_branch_name" className="mt-1 block w-full font-bold" value={branchData.name} onChange={(e) => setBranchData('name', e.target.value)} required placeholder="e.g. Makati, Greenhills" />
                             <InputError message={branchErrors.name} className="mt-2" />
                         </div>
+<<<<<<< HEAD
+                        <PrimaryButton disabled={branchProcessing} className="!py-2.5">Add</PrimaryButton>
+=======
                         <PrimaryButton disabled={branchProcessing || !canManageEmployees} title={!canManageEmployees ? 'Edit permission required' : ''}>Add</PrimaryButton>
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                     </form>
 
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Existing Branches</h3>
+                    <h3 className="text-[11px] font-black uppercase tracking-wider text-gray-500 mb-2">Existing Branches</h3>
                     <div className="max-h-60 overflow-y-auto rounded-md border border-gray-200">
                         <ul className="divide-y divide-gray-200">
                             {branches.map((branch) => (
-                                <li key={branch.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
-                                    <span className="text-sm text-gray-800">{branch.name}</span>
-                                    <button onClick={() => confirmDeleteBranch(branch)} className="text-xs font-medium text-red-600 hover:text-red-900">
+                                <li key={branch.id} className="flex items-center justify-between p-3 hover:bg-gray-50 transition-colors">
+                                    <span className="text-sm font-black text-gray-800">{branch.name}</span>
+                                    <button onClick={() => confirmDeleteBranch(branch)} className="text-xs font-black text-red-600 hover:text-red-900 uppercase tracking-wider">
                                         Delete
                                     </button>
                                 </li>
                             ))}
                             {branches.length === 0 && (
-                                <li className="p-4 text-sm text-gray-500 text-center">No branches found.</li>
+                                <li className="p-4 text-sm font-bold text-gray-500 text-center">No branches found.</li>
                             )}
                         </ul>
                     </div>
@@ -1583,32 +1957,41 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
             <Modal show={isUserModalOpen} onClose={closeUserModal} maxWidth="2xl">
                 <form onSubmit={submitUser} className="p-6">
-                    <h2 className="mb-6 text-lg font-medium text-gray-900">Add New Employee</h2>
+                    <h2 className="mb-6 text-lg font-black text-gray-900 uppercase tracking-wider">Add New Employee</h2>
 
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                         <div>
                             <div>
-                                <InputLabel htmlFor="name" value="Full Name" />
-                                <TextInput id="name" className="mt-1 block w-full" value={userData.name} onChange={(e) => setUserData('name', e.target.value)} required />
+                                <InputLabel htmlFor="name" value="Full Name" className="font-bold" />
+                                <TextInput id="name" className="mt-1 block w-full font-bold" value={userData.name} onChange={(e) => setUserData('name', e.target.value)} required />
                                 <InputError message={userErrors.name} className="mt-2" />
                             </div>
 
                             <div className="mt-4">
-                                <InputLabel htmlFor="email" value="Email Address" />
-                                <TextInput id="email" type="email" className="mt-1 block w-full" value={userData.email} onChange={(e) => setUserData('email', e.target.value)} required />
+                                <InputLabel htmlFor="email" value="Email Address" className="font-bold" />
+                                <TextInput id="email" type="email" className="mt-1 block w-full font-bold" value={userData.email} onChange={(e) => setUserData('email', e.target.value)} required />
                                 <InputError message={userErrors.email} className="mt-2" />
                             </div>
 
                             <div className="mt-4">
-                                <InputLabel htmlFor="role_id" value="System Role" />
+<<<<<<< HEAD
+                                <InputLabel htmlFor="role_id" value="System Role" className="font-bold" />
                                 <select 
                                     id="role_id" 
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" 
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-bold" 
                                     value={userData.role_id} 
                                     onChange={(e) => setUserData('role_id', e.target.value)} 
+=======
+                                <InputLabel htmlFor="role_id" value="System Role" />
+                                <select
+                                    id="role_id"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm capitalize"
+                                    value={userData.role_id}
+                                    onChange={(e) => setUserData('role_id', e.target.value)}
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                     required
                                 >
-                                    <option value="" disabled>Select Role</option>
+                                    <option value="" disabled className="normal-case">Select Role</option>
                                     {roles.map((role) => (
                                         <option key={role.id} value={role.id} className="capitalize">{role.name}</option>
                                     ))}
@@ -1617,19 +2000,31 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             </div>
 
                             <div className="mt-4">
-                                <InputLabel htmlFor="device_limit" value="Device Login Limit" />
+<<<<<<< HEAD
+                                <InputLabel htmlFor="device_limit" value="Device Login Limit" className="font-bold" />
                                 <TextInput 
                                     id="device_limit" 
                                     type="number" 
                                     min="1" 
-                                    className={`mt-1 block w-full ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`} 
+                                    className={`mt-1 block w-full font-bold ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`} 
                                     value={userData.device_limit} 
                                     onChange={(e) => setUserData('device_limit', e.target.value)} 
                                     required 
+=======
+                                <InputLabel htmlFor="device_limit" value="Device Login Limit" />
+                                <TextInput
+                                    id="device_limit"
+                                    type="number"
+                                    min="1"
+                                    className={`mt-1 block w-full ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`}
+                                    value={userData.device_limit}
+                                    onChange={(e) => setUserData('device_limit', e.target.value)}
+                                    required
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                     disabled={!isCurrentUserAdmin}
                                 />
                                 {!isCurrentUserAdmin && (
-                                    <p className="mt-1 text-xs text-orange-500">Only Admins can adjust device limits.</p>
+                                    <p className="mt-1 text-[11px] font-bold text-orange-500 uppercase tracking-wider">Only Admins can adjust device limits.</p>
                                 )}
                                 <InputError message={userErrors.device_limit} className="mt-2" />
                             </div>
@@ -1637,17 +2032,17 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
                         <div>
                             <div>
-                                <InputLabel htmlFor="user_department" value="Department" />
-                                <select id="user_department" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={userData.department_id} onChange={(e) => setUserData('department_id', e.target.value)} required>
+                                <InputLabel htmlFor="user_department" value="Department" className="font-bold" />
+                                <select id="user_department" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-bold" value={userData.department_id} onChange={(e) => setUserData('department_id', e.target.value)} required>
                                     <option value="" disabled>Select Department</option>
-                                    {departments.map((dept) => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
+                                    {departments.map((dept) => <option key={dept.id} value={String(dept.id)}>{dept.name}</option>)}
                                 </select>
                                 <InputError message={userErrors.department_id} className="mt-2" />
                             </div>
 
                             <div className="mt-4">
-                                <InputLabel htmlFor="user_position" value="Position" />
-                                <select id="user_position" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={userData.position_id} onChange={(e) => setUserData('position_id', e.target.value)} required disabled={!userData.department_id}>
+                                <InputLabel htmlFor="user_position" value="Position" className="font-bold" />
+                                <select id="user_position" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-bold" value={userData.position_id} onChange={(e) => setUserData('position_id', e.target.value)} required disabled={!userData.department_id}>
                                     <option value="" disabled>Select Position</option>
                                     {filteredPositionsForUser.map((pos) => <option key={pos.id} value={pos.id}>{pos.name}</option>)}
                                 </select>
@@ -1655,17 +2050,17 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             </div>
 
                             <div className="mt-4">
-                                <InputLabel value="Assign Branches" />
-                                <div className="mt-2 max-h-32 space-y-2 overflow-y-auto rounded-md border border-gray-200 p-3">
+                                <InputLabel value="Assign Branches" className="font-bold" />
+                                <div className="mt-2 max-h-32 space-y-2 overflow-y-auto rounded-md border border-gray-200 p-3 bg-gray-50">
                                     {branches.map((branch) => (
-                                        <label key={branch.id} className="flex items-center">
+                                        <label key={branch.id} className="flex items-center hover:bg-gray-100 p-1 rounded transition-colors">
                                             <input type="checkbox" className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" value={branch.id} checked={userData.branch_ids.includes(branch.id)} onChange={(e) => handleBranchCheckbox(e, branch.id)} />
-                                            <span className="ml-2 text-sm text-gray-600">{branch.name}</span>
+                                            <span className="ml-2 text-sm font-bold text-gray-700">{branch.name}</span>
                                         </label>
                                     ))}
                                 </div>
                                 <InputError message={userErrors.branch_ids} className="mt-2" />
-                                <p className="mt-1 text-xs text-gray-500">Selecting multiple branches automatically sets the employee as rotating.</p>
+                                <p className="mt-2 text-[10px] font-black text-gray-500 uppercase tracking-wider">Selecting multiple branches automatically sets the employee as rotating.</p>
                             </div>
                         </div>
                     </div>
@@ -1682,51 +2077,72 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
             {/* EDIT USER MODAL */}
             <Modal show={isEditUserModalOpen} onClose={closeEditUserModal} maxWidth="2xl">
                 <form onSubmit={submitEditUser} className="p-6">
-                    <h2 className="mb-6 text-lg font-medium text-gray-900">Edit Employee</h2>
+                    <h2 className="mb-6 text-lg font-black text-gray-900 uppercase tracking-wider">Edit Employee</h2>
 
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                         <div>
                             <div>
-                                <InputLabel htmlFor="edit_name" value="Full Name" />
-                                <TextInput id="edit_name" className="mt-1 block w-full" value={editUserData.name} onChange={(e) => setEditData('name', e.target.value)} required />
+                                <InputLabel htmlFor="edit_name" value="Full Name" className="font-bold" />
+                                <TextInput id="edit_name" className="mt-1 block w-full font-bold" value={editUserData.name} onChange={(e) => setEditData('name', e.target.value)} required />
                                 <InputError message={editErrors.name} className="mt-2" />
                             </div>
 
                             <div className="mt-4">
-                                <InputLabel htmlFor="edit_email" value="Email Address" />
-                                <TextInput id="edit_email" type="email" className="mt-1 block w-full" value={editUserData.email} onChange={(e) => setEditData('email', e.target.value)} required />
+                                <InputLabel htmlFor="edit_email" value="Email Address" className="font-bold" />
+                                <TextInput id="edit_email" type="email" className="mt-1 block w-full font-bold" value={editUserData.email} onChange={(e) => setEditData('email', e.target.value)} required />
                                 <InputError message={editErrors.email} className="mt-2" />
                             </div>
 
                             <div className="mt-4">
-                                <InputLabel htmlFor="edit_role_id" value="System Role" />
+<<<<<<< HEAD
+                                <InputLabel htmlFor="edit_role_id" value="System Role" className="font-bold" />
                                 <select 
                                     id="edit_role_id" 
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" 
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-bold" 
                                     value={editUserData.role_id || ''} 
                                     onChange={(e) => setEditData('role_id', e.target.value)} 
+=======
+                                <InputLabel htmlFor="edit_role_id" value="System Role" />
+                                <select
+                                    id="edit_role_id"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm capitalize"
+                                    value={editUserData.role_id || ''}
+                                    onChange={(e) => setEditData('role_id', e.target.value)}
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                     required
                                 >
-                                    <option value="" disabled>Select Role</option>
+                                    <option value="" disabled className="normal-case">Select Role</option>
                                     {roles.map((role) => <option key={role.id} value={role.id} className="capitalize">{role.name}</option>)}
                                 </select>
                                 <InputError message={editErrors.role_id} className="mt-2" />
                             </div>
 
                             <div className="mt-4">
-                                <InputLabel htmlFor="edit_device_limit" value="Device Login Limit" />
+<<<<<<< HEAD
+                                <InputLabel htmlFor="edit_device_limit" value="Device Login Limit" className="font-bold" />
                                 <TextInput 
                                     id="edit_device_limit" 
                                     type="number" 
                                     min="1" 
-                                    className={`mt-1 block w-full ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`} 
+                                    className={`mt-1 block w-full font-bold ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`} 
                                     value={editUserData.device_limit} 
                                     onChange={(e) => setEditData('device_limit', e.target.value)} 
                                     required 
+=======
+                                <InputLabel htmlFor="edit_device_limit" value="Device Login Limit" />
+                                <TextInput
+                                    id="edit_device_limit"
+                                    type="number"
+                                    min="1"
+                                    className={`mt-1 block w-full ${!isCurrentUserAdmin ? 'bg-gray-100 text-gray-500' : ''}`}
+                                    value={editUserData.device_limit}
+                                    onChange={(e) => setEditData('device_limit', e.target.value)}
+                                    required
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                     disabled={!isCurrentUserAdmin}
                                 />
                                 {!isCurrentUserAdmin && (
-                                    <p className="mt-1 text-xs text-orange-500">Only Admins can adjust device limits.</p>
+                                    <p className="mt-1 text-[11px] font-black text-orange-500 uppercase tracking-wider">Only Admins can adjust device limits.</p>
                                 )}
                                 <InputError message={editErrors.device_limit} className="mt-2" />
                             </div>
@@ -1734,22 +2150,32 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
                         <div>
                             <div>
-                                <InputLabel htmlFor="edit_department" value="Department" />
-                                <select id="edit_department" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" value={editUserData.department_id} onChange={(e) => setEditData('department_id', e.target.value)} required>
+                                <InputLabel htmlFor="edit_department" value="Department" className="font-bold" />
+                                <select id="edit_department" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-bold" value={editUserData.department_id} onChange={(e) => setEditData('department_id', e.target.value)} required>
                                     <option value="" disabled>Select Department</option>
-                                    {departments.map((dept) => <option key={dept.id} value={dept.id}>{dept.name}</option>)}
+                                    {departments.map((dept) => <option key={dept.id} value={String(dept.id)}>{dept.name}</option>)}
                                 </select>
                                 <InputError message={editErrors.department_id} className="mt-2" />
                             </div>
 
                             <div className="mt-4">
-                                <InputLabel htmlFor="edit_position" value="Position" />
+<<<<<<< HEAD
+                                <InputLabel htmlFor="edit_position" value="Position" className="font-bold" />
                                 <select 
                                     id="edit_position" 
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" 
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-bold" 
                                     value={editUserData.position_id} 
                                     onChange={(e) => setEditData('position_id', e.target.value)} 
                                     required 
+=======
+                                <InputLabel htmlFor="edit_position" value="Position" />
+                                <select
+                                    id="edit_position"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                    value={editUserData.position_id}
+                                    onChange={(e) => setEditData('position_id', e.target.value)}
+                                    required
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                                     disabled={!editUserData.department_id}
                                 >
                                     <option value="" disabled>Select Position</option>
@@ -1759,12 +2185,12 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                             </div>
 
                             <div className="mt-4">
-                                <InputLabel value="Assign Branches" />
-                                <div className="mt-2 max-h-32 space-y-2 overflow-y-auto rounded-md border border-gray-200 p-3">
+                                <InputLabel value="Assign Branches" className="font-bold" />
+                                <div className="mt-2 max-h-32 space-y-2 overflow-y-auto rounded-md border border-gray-200 p-3 bg-gray-50">
                                     {branches.map((branch) => (
-                                        <label key={`edit-branch-${branch.id}`} className="flex items-center">
+                                        <label key={`edit-branch-${branch.id}`} className="flex items-center hover:bg-gray-100 p-1 rounded transition-colors">
                                             <input type="checkbox" className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" value={branch.id} checked={editUserData.branch_ids.includes(branch.id)} onChange={(e) => handleEditBranchCheckbox(e, branch.id)} />
-                                            <span className="ml-2 text-sm text-gray-600">{branch.name}</span>
+                                            <span className="ml-2 text-sm font-bold text-gray-700">{branch.name}</span>
                                         </label>
                                     ))}
                                 </div>
@@ -1784,30 +2210,34 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
             <Modal show={isDepartmentModalOpen} onClose={closeDepartmentModal}>
                 <div className="p-6">
-                    <h2 className="text-lg font-medium text-gray-900 mb-4">Manage Departments</h2>
+                    <h2 className="text-lg font-black text-gray-900 mb-4 uppercase tracking-wider">Manage Departments</h2>
 
                     <form onSubmit={submitDepartment} className="mb-6 flex items-end gap-3 rounded-md bg-gray-50 p-4 border border-gray-100">
                         <div className="flex-grow">
-                            <InputLabel htmlFor="dept_name" value="New Department Name" />
-                            <TextInput id="dept_name" className="mt-1 block w-full" value={deptData.name} onChange={(e) => setDeptData('name', e.target.value)} required placeholder="e.g. Grooming, Surgery" />
+                            <InputLabel htmlFor="dept_name" value="New Department Name" className="font-bold" />
+                            <TextInput id="dept_name" className="mt-1 block w-full font-bold" value={deptData.name} onChange={(e) => setDeptData('name', e.target.value)} required placeholder="e.g. Grooming, Surgery" />
                             <InputError message={deptErrors.name} className="mt-2" />
                         </div>
+<<<<<<< HEAD
+                        <PrimaryButton disabled={deptProcessing} className="!py-2.5">Add</PrimaryButton>
+=======
                         <PrimaryButton disabled={deptProcessing || !canManageEmployees} title={!canManageEmployees ? 'Edit permission required' : ''}>Add</PrimaryButton>
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                     </form>
 
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Existing Departments</h3>
+                    <h3 className="text-[11px] font-black uppercase tracking-wider text-gray-500 mb-2">Existing Departments</h3>
                     <div className="max-h-60 overflow-y-auto rounded-md border border-gray-200">
                         <ul className="divide-y divide-gray-200">
                             {departments.map((dept) => (
-                                <li key={dept.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
-                                    <span className="text-sm text-gray-800">{dept.name}</span>
-                                    <button type="button" onClick={() => confirmDeleteDepartment(dept)} className="text-xs font-medium text-red-600 hover:text-red-900">
+                                <li key={dept.id} className="flex items-center justify-between p-3 hover:bg-gray-50 transition-colors">
+                                    <span className="text-sm font-black text-gray-800">{dept.name}</span>
+                                    <button type="button" onClick={() => confirmDeleteDepartment(dept)} className="text-xs font-black text-red-600 hover:text-red-900 uppercase tracking-wider">
                                         Delete
                                     </button>
                                 </li>
                             ))}
                             {departments.length === 0 && (
-                                <li className="p-4 text-sm text-gray-500 text-center">No departments found.</li>
+                                <li className="p-4 text-sm font-bold text-gray-500 text-center">No departments found.</li>
                             )}
                         </ul>
                     </div>
@@ -1820,30 +2250,34 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
             <Modal show={isRoleModalOpen} onClose={closeRoleModal}>
                 <div className="p-6">
-                    <h2 className="text-lg font-medium text-gray-900 mb-4">Manage Roles</h2>
+                    <h2 className="text-lg font-black text-gray-900 mb-4 uppercase tracking-wider">Manage Roles</h2>
 
                     <form onSubmit={submitRole} className="mb-6 flex items-end gap-3 rounded-md bg-gray-50 p-4 border border-gray-100">
                         <div className="flex-grow">
-                            <InputLabel htmlFor="role_name" value="New Role Name" />
-                            <TextInput id="role_name" className="mt-1 block w-full" value={roleData.name} onChange={(e) => setRoleData('name', e.target.value)} required placeholder="e.g. Admin, Staff" />
+                            <InputLabel htmlFor="role_name" value="New Role Name" className="font-bold" />
+                            <TextInput id="role_name" className="mt-1 block w-full font-bold" value={roleData.name} onChange={(e) => setRoleData('name', e.target.value)} required placeholder="e.g. Admin, Staff" />
                             <InputError message={roleErrors.name} className="mt-2" />
                         </div>
+<<<<<<< HEAD
+                        <PrimaryButton disabled={roleProcessing} className="!py-2.5">Add</PrimaryButton>
+=======
                         <PrimaryButton disabled={roleProcessing || !canManageEmployees} title={!canManageEmployees ? 'Edit permission required' : ''}>Add</PrimaryButton>
+>>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
                     </form>
 
-                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Existing System Roles</h3>
+                    <h3 className="text-[11px] font-black uppercase tracking-wider text-gray-500 mb-2">Existing System Roles</h3>
                     <div className="max-h-60 overflow-y-auto rounded-md border border-gray-200">
                         <ul className="divide-y divide-gray-200">
                             {roles.map((role) => (
-                                <li key={role.id} className="flex items-center justify-between p-3 hover:bg-gray-50">
-                                    <span className="text-sm text-gray-800 capitalize">{role.name}</span>
-                                    <button type="button" onClick={() => confirmDeleteRole(role)} className="text-xs font-medium text-red-600 hover:text-red-900">
+                                <li key={role.id} className="flex items-center justify-between p-3 hover:bg-gray-50 transition-colors">
+                                    <span className="text-sm font-black text-gray-800 capitalize">{role.name}</span>
+                                    <button type="button" onClick={() => confirmDeleteRole(role)} className="text-xs font-black text-red-600 hover:text-red-900 uppercase tracking-wider">
                                         Delete
                                     </button>
                                 </li>
                             ))}
                             {roles.length === 0 && (
-                                <li className="p-4 text-sm text-gray-500 text-center">No roles found.</li>
+                                <li className="p-4 text-sm font-bold text-gray-500 text-center">No roles found.</li>
                             )}
                         </ul>
                     </div>
@@ -1857,18 +2291,18 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
             {/* BULK CHANGE DEVICE LIMIT MODAL */}
             <Modal show={isBulkLimitModalOpen} onClose={() => setBulkLimitModalOpen(false)} maxWidth="md">
                 <form onSubmit={submitBulkLimit} className="p-6">
-                    <h2 className="mb-4 text-lg font-medium text-gray-900">Bulk Change Device Limit</h2>
-                    <p className="mb-4 text-sm text-gray-600">
-                        Set a new device limit for the following {selectedObjects.length} employee(s): {displayNames}
+                    <h2 className="mb-4 text-lg font-black text-gray-900 uppercase tracking-wider">Bulk Change Device Limit</h2>
+                    <p className="mb-4 text-sm font-bold text-gray-600">
+                        Set a new device limit for the following {selectedObjects.length} employee(s): <span className="text-indigo-600">{displayNames}</span>
                     </p>
 
                     <div>
-                        <InputLabel htmlFor="bulk_limit" value="Device Login Limit" />
+                        <InputLabel htmlFor="bulk_limit" value="Device Login Limit" className="font-bold" />
                         <TextInput
                             id="bulk_limit"
                             type="number"
                             min="1"
-                            className="mt-1 block w-full"
+                            className="mt-1 block w-full font-bold"
                             value={bulkLimitData.limit}
                             onChange={(e) => setBulkLimitData('limit', e.target.value)}
                             required
