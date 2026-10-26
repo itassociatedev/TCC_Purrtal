@@ -1,0 +1,110 @@
+name: Checks
+
+# Runs on every push to beta and on pull requests into main,
+# so broken code is caught before it is merged and deployed.
+on:
+  push:
+    branches:
+      - beta
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: tccportal_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1. Leftover merge conflict markers (what broke the site on Oct 25)
+      - name: No merge conflict markers
+        run: |
+          if git grep -nE '^(<<<<<<<|>>>>>>>)( |$)' -- app bootstrap config database resources routes; then
+            echo "::error::Unresolved merge conflict markers found"
+            exit 1
+          fi
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, zip, gd
+          coverage: none
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      # 2. PHP syntax errors
+      - name: PHP syntax check
+        run: find app bootstrap config database routes -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null
+
+      # 3. Every class file must declare the class it is named after
+      #    (AppServiceProvider.php once contained a copy of the User model)
+      - name: Class names match file names
+        run: |
+          status=0
+          for f in $(find app -name '*.php'); do
+            expected=$(basename "$f" .php)
+            actual=$(grep -m1 -oE '^\s*(final |abstract )?(class|trait|interface|enum) [A-Za-z0-9_]+' "$f" | awk '{print $NF}')
+            if [ -n "$actual" ] && [ "$actual" != "$expected" ]; then
+              echo "::error file=$f::declares $actual, expected $expected"
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Prepare environment
+        run: |
+          cat > .env <<'EOF'
+          APP_NAME=TCC_Purrtal
+          APP_ENV=testing
+          APP_KEY=
+          APP_DEBUG=true
+          APP_URL=http://localhost
+          DB_CONNECTION=mysql
+          DB_HOST=127.0.0.1
+          DB_PORT=3306
+          DB_DATABASE=tccportal_ci
+          DB_USERNAME=root
+          DB_PASSWORD=root
+          CACHE_STORE=array
+          SESSION_DRIVER=array
+          QUEUE_CONNECTION=sync
+          MAIL_MAILER=array
+          EOF
+          php artisan key:generate --force
+
+      # 4. Migrations must run on a fresh database (several failed on production)
+      - name: Run migrations
+        run: php artisan migrate --force
+
+      # 5. Production caches must build (a duplicate route name blocked route:cache)
+      - name: Laravel caches build
+        run: php artisan optimize && php artisan optimize:clear
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      # 6. Front-end must compile
+      - name: Build front-end
+        run: |
+          npm ci
+          npm run build
