@@ -766,7 +766,6 @@ export const getPRPOLinks = (auth) => {
     return links;
 };
 
-<<<<<<< HEAD
 // 🟢 SECURE ROLE-BASED ASSET LINKS
 export const getAssetLinks = (auth) => {
     const userRole = auth?.user?.role?.name?.toLowerCase().trim() || '';
@@ -797,7 +796,8 @@ export const getAssetLinks = (auth) => {
     }
 
     return links;
-=======
+};
+
 // 🟢 FIXED: Changed schedule_view to canViewModule so standard staff can route to it
 export const getFirstAttendanceRoute = (auth) => {
     if (canViewModule(auth, 'attendance_overview')) return route('attendance.overview');
@@ -807,5 +807,4 @@ export const getFirstAttendanceRoute = (auth) => {
     
     // 🟢 FIXED: If they have no access to anything, return null so the UI knows not to route them!
     return null; 
->>>>>>> af00d83e60a0b0a40db181ef24f1eff5029f52f1
 };

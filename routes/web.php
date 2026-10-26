@@ -454,7 +454,6 @@ Route::prefix('prpo')->name('prpo.')->middleware(['auth'])->group(function () {
 
     Route::get('/purchase-requests/{purchaseRequest}/print', [PurchaseRequestController::class, 'print'])->name('purchase-requests.print');
     Route::get('/purchase-orders/{purchaseOrder}/print', [PurchaseOrderController::class, 'print'])->name('purchase-orders.print');
-    Route::get('/prpo/status', [PRPOStatusController::class, 'index'])->name('status.index');
 });
 
 // --- ATTENDANCE MODULE NI MARX HAHAHAHAH ---

@@ -1,0 +1,96 @@
+[33m3cf3143[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Merge pull request #36 from itassociatedev/beta
+[33m7855f9e[m[33m ([m[1;31morigin/beta[m[33m, [m[1;32mbeta[m[33m)[m Acoountability module
+[33me0326f1[m Merge pull request #34 from itassociatedev/beta
+[33me2a7c2a[m Saved new branch progress
+[33m6172766[m Saved new branch progress
+[33m786c9e4[m ACCOUNTABILITY MODULE
+[33maf00d83[m Merge branch 'fix/prpo-segretation' of https://github.com/itassociatedev/TCC_Purrtal into beta
+[33m02bdb8d[m[33m ([m[1;31morigin/fix/prpo-segretation[m[33m, [m[1;32mfix/prpo-segretation[m[33m)[m PRPO Bug Fixes and Improvements FINAL
+[33m4448d3c[m Merge pull request #33 from itassociatedev/fix/prpo-segretation
+[33me2f7cdf[m Merge branch 'beta' of https://github.com/itassociatedev/TCC_Purrtal into fix/prpo-segretation
+[33mbb6248e[m PRPO Bug Fixes and Improvements FINAL
+[33m1a6725e[m PRPO Bug Fixes and Improvements FINAL
+[33m1b19693[m PRPO Bug Fixes and Improvements FINAL
+[33m642cbec[m PRPO Bug Fixes and Improvements v2.5
+[33ma00ad06[m PRPO Bug Fixes and Improvements v2.5
+[33mbbe6788[m PRPO Bug Fixes and Improvements v2.5
+[33m88cf9c2[m PRPO Bug Fixes and Improvements v2.5
+[33m8648fbc[m PRPO Bug Fixes and Improvements v2.5
+[33mb08ba4f[m PRPO Bug Fixes and Improvements v2.5
+[33m0799a85[m PRPO Bug Fixes and Improvements v2.1
+[33m846c9bb[m PRPO Bug Fixes and Improvements v2.0
+[33m49d1110[m PRPO Bug Fixes and Improvements v1.5
+[33m4345c6d[m PRPO Bug Fixes and Improvements v1
+[33m8822294[m Segregation v4.0
+[33m727e5cf[m Segregation v3.5
+[33m6d57b1c[m Segregation v2.0
+[33m3743be6[m Merge pull request #32 from itassociatedev/beta
+[33m8981f48[m feat: Update deployment script to use consistent secret variable names for SSH connection
+[33mf57f955[m Merge pull request #31 from itassociatedev/beta
+[33md00f994[m feat: Update deployment script to use consistent secret variable names for SSH connection
+[33mc38f816[m feat: Update deployment script to fetch latest data and ensure server matches GitHub
+[33m7acf8b8[m Merge pull request #30 from itassociatedev/beta
+[33ma01563a[m Segregation v1.4
+[33mdf37023[m Segregation v1.3
+[33mafb7fd5[m Segregation v1.25
+[33me40409a[m Segregation v1.2
+[33m6738ca5[m Segregation v1.1
+[33m45a3767[m PO Generation bug Fixed
+[33m152c58d[m[33m ([m[1;31morigin/feat/attendance-module[m[33m)[m feat/fix: - DutyMeal locks in clinic by default - Adding of notes in "Add Staff in Pool" - DutyMeal creation does not detect off/leave
+[33m489d917[m[33m ([m[1;31morigin/primo[m[33m)[m Merge branch 'beta' of https://github.com/itassociatedev/TCC_Purrtal into primo
+[33m2243b3b[m EVP OM as Fallback
+[33m50c206c[m Merge pull request #29 from itassociatedev/beta
+[33m9e15bcd[m feat: Update deployment script to ensure site is online and handle old script removal
+[33macd5556[m Merge pull request #28 from itassociatedev/beta
+[33m7dd767e[m feat: Add bulletproof deployment script with error handling and cache optimization
+[33m9fb9796[m Merge pull request #27 from itassociatedev/beta
+[33mb938da0[m Merge branch 'main' of https://github.com/itassociatedev/TCC_Purrtal into beta
+[33m3b3545e[m feat/fix: Enhance DutyMealExport to handle corrupted character validation
+[33m3c6a868[m Merge branch 'beta' of https://github.com/itassociatedev/TCC_Purrtal into primo
+[33m3bb88ab[m Update purchase request approval messages for clarity and enhance CreatePR component labels
+[33m7c7d5a2[m Refactor code structure for improved readability and maintainability
+[33m298deb6[m feat/fix: Module selection text UI shifting in SetupSchedule
+[33mcabc8d1[m Optimize AttendanceController.php- #26
+[33m36da773[m Optimize AttendanceController.php
+[33m0c8fdd7[m Merge pull request #25 from itassociatedev/beta
+[33m5685a17[m Update browser mapping v2.11.19
+[33m984c2ce[m Update DatabaseSeeder.php
+[33m1374875[m Merge pull request #23 from itassociatedev/beta
+[33mbeb9525[m feat/fix: Update grid header logic and improve branch selection text
+[33mf9190e2[m Merge pull request #22 from itassociatedev/beta
+[33m1037047[m Merge branch 'main' of https://github.com/itassociatedev/TCC_Purrtal into beta
+[33m83ae3e0[m feat/fix: Update branch selection options and improve UI text for clarity
+[33m9bcb739[m Merge pull request #21 from itassociatedev/feat/attendance-module
+[33m533c8e3[m Merge branch 'beta' of https://github.com/itassociatedev/TCC_Purrtal into feat/attendance-module
+[33m06a4c18[m feat/fix: Resolve bugs in shift handling and improve grid display for empty states
+[33m59f32bb[m feat/fix: Bugs in shift details evaluation and enhance schedule handling with accurate base shift checks
+[33m583bf00[m feat/update: Enhance attendance overview and schedule setup with leave handling and modified shift indicators
+[33m0f0ae1f[m feat/update: Enhance Duty Meal creation with missing meal validation and unified publish modal
+[33m108ef90[m feat/update: Change meal icon from plate to meat for better representation
+[33m5885f34[m feat/update: Enhance attendance module with leave management and copy-to-others functionality
+[33md4fed37[m feat/update: Add 'is_leave' field to schedule overrides and enhance schedule mapping for leave status
+[33m534b3b5[m feat/update: Enhance Duty Meal Floating Badge size and styling for better visibility
+[33m2326590[m feat/update: Extract first and last name from user for custom requests in Duty Meal export
+[33mb15d69e[m feat/fix: Update shift details extraction to support new 7-day pattern in Calendar and Overview components
+[33mbf8f07d[m feat/remove: Branch Requests handling and related components from Duty Meal module
+[33mda9e43e[m feat/remove: Branch request handling and related access checks from Duty Meal module
+[33m35b314d[m[33m ([m[1;31morigin/feat/branch-request[m[33m)[m feat/fix: Prevent branch changes for past dates and enhance date handling in branch request
+[33mf9ac64b[m feat/fix: Duty Meal access permissions and routing for user access
+[33mad3797a[m feat/fix: Inconsistent routes for improved clarity and consistency
+[33meb1db57[m feat/update: Implement dropdown lock logic for branches and departments across attendance components
+[33m42f50a6[m feat/update: Enhance holiday management with editing capabilities and smooth scrolling to the Holiday Editor
+[33m0243670[m feat/update: Implement explicit Duty Meal access permissions and improve routing for users with limited access
+[33m68706a2[m feat/update: Extend duty meal access permissions to include branch requests and personal meal modules
+[33m9a33216[m feat/update: Enhance holiday management by allowing edits and improving validation
+[33mc40aff7[m feat/update: Add "Attendance Settings" to HR_BASE role permissions
+[33ma31c8ae[m feat/update: Rename "Personal Meal Selection" to "My Duty Meals" and "Branch Meal Requests" to "Branch Requests" for consistency in Access Control and Admin ACL
+[33m33b396e[m feat/update: Enhance Excel export formatting by enabling text wrapping and vertical alignment for better readability
+[33m6af374c[m feat/update: Add weekly pattern support to schedules
+[33m9f06844[m feat/update: Rename "My Personal Meals" to "My Duty Meals" for clarity in SidebarLayout
+[33m9cb0667[m feat/update: Rename headers in Overview and SetupSchedule components for clarity
+[33mdc8dd91[m feat/update: Expand cutoff period generation to include 12 months and add Current Cut-off button in SetupSchedule component
+[33mfc0e71d[m feat/update: Implement dynamic date generation for weekly, cut-off, and monthly views in Overview component
+[33me7eff21[m feat/fix: "Reject" pops up in the fade-out transition when confirming a branch request
+[33m31b3182[m feat/update: Smart check for existing rosters in DutyMealController to prevent overwriting published meals
+[33m1e09dbc[m feat/update: Fix date formatting in DutyMealController and BranchRequestDropdown to ensure strict Y-m-d format
+[33m628d4bd[m feat/update: Refactor DutyMealController to use updateOrCreate for duty 

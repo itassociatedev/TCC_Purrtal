@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up()
     {
+        if (Schema::hasColumn('assets', 'image_path')) {
+            return;
+        }
+
         Schema::table('assets', function (Blueprint $table) {
             // 🟢 ADD THE IMAGE PATH COLUMN
             $table->string('image_path')->nullable()->after('asset_status');

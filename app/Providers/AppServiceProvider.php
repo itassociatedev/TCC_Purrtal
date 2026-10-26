@@ -1,337 +1,67 @@
 <?php
-// User model with ACL helper methods and relationships
 
-namespace App\Models;
+namespace App\Providers;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Spatie\Permission\Traits\HasRoles;
+use Illuminate\Support\Facades\Vite;
+use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Event;
 
-class User extends Authenticatable
+// Security Events
+use Illuminate\Auth\Events\Failed;
+use Illuminate\Auth\Events\Lockout;
+use Illuminate\Auth\Events\PasswordReset;
+
+// Models to Observe
+use App\Models\User;
+use App\Models\Announcement;
+use App\Models\CompanyContent;
+use App\Models\OrgChartMember; // <-- Make sure this is imported!
+
+// Add other models like HrRequest if you have created them
+
+// The Observer and Logger
+use App\Observers\AuditObserver;
+use App\Services\LoggerService;
+
+class AppServiceProvider extends ServiceProvider
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
-
     /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
+     * Register any application services.
      */
-    protected $fillable = [
-        'name',
-        'email',
-        'password',
-        'image_path',
-        'email_verified_at',
-        'is_comment_banned',
-        'role_id',
-        'branch_id',
-        'is_rotating',
-        'device_limit',
-        'authorized_device_ids',
-        'department_id',
-        'position_id',
-        'status',
-        'failed_login_attempts',
-    ];
-
-    protected $with = ['role'];
-
-    protected $appends = ['has_password', 'has_global_access'];  
-
-    public function getHasPasswordAttribute()
+    public function register(): void
     {
-        return !is_null($this->password);
-    }
-
-    public function getHasGlobalAccessAttribute()
-    {
-        if (!$this->role) {
-            return false;
-        }
-
-        $safeRoleName = strtolower(trim($this->role->name));
-
-        // Add ANY future top-level roles to this array!
-        $allowedRoles = [
-            'admin',
-            'executive vice president', // 🟢 Added EVP LEZGO RRS
-            'director of corporate services and operations',
-            'hrbp',
-            'hr assistant'
-        ];
-
-        return in_array($safeRoleName, $allowedRoles);
+        //
     }
 
     /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
+     * Bootstrap any application services.
      */
-    protected $hidden = [
-        'password',
-        'remember_token',
-    ];
-
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
+    public function boot(): void
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'is_rotating' => 'boolean',
-            'authorized_device_ids' => 'array',
-        ];
-    }
+        \Illuminate\Support\Facades\Vite::prefetch(concurrency: 3);
 
-    public function branch()
-    {
-        return $this->belongsTo(Branch::class);
-    }
+        // Existing Observers
+        \App\Models\User::observe(\App\Observers\AuditObserver::class);
+        \App\Models\Announcement::observe(\App\Observers\AuditObserver::class);
+        \App\Models\CompanyContent::observe(\App\Observers\AuditObserver::class);
 
-    public function branches()
-    {
-        return $this->belongsToMany(Branch::class, 'branch_user');
-    }
-
-    public function canAccessBranch($branchId): bool
-    {
-        return $this->branches()->where('branch_id', $branchId)->exists();
-    }
-
-    public function department()
-    {
-        return $this->belongsTo(Department::class);
-    }
-
-    public function position()
-    {
-        return $this->belongsTo(Position::class);
-    }
-
-    public function role()
-    {
-        return $this->belongsTo(Role::class);
-    }
-
-    public function assets()
-    {
-        return $this->hasMany(Asset::class, 'user_id');
-    }
-
-    public function getAllowedModulesForUser(): array
-    {
-        if (!$this->role) {
-            return [];
-        }
-
-        $adminAcls = $this->role->relationLoaded('adminAcls')
-            ? $this->role->adminAcls
-            : $this->role->adminAcls()->get();
-
-        $permissions = $adminAcls
-            ->filter(fn ($acl) => strtolower(trim($acl->permission_level)) !== 'no_access')
-            ->pluck('module')
-            ->map(fn ($module) => trim(strtolower($module)))
-            ->values()
-            ->all();
-
-        if (empty($permissions) && strtolower(trim($this->role->name)) === strtolower(trim(config('admin-acl.superadmin_role', 'admin')))) {
-            return array_map('strtolower', array_keys(config('admin-acl.modules', [])));
-        }
-
-        return $permissions;
-    }
-
-    public function aclPermissionForModule(string $module): string
-    {
-        if (!$this->role) {
-            return 'no_access';
-        }
-
-        $normalizedModule = strtolower(trim($module));
-
-        if ($this->role->relationLoaded('adminAcls')) {
-            $acl = $this->role->adminAcls
-                ->first(fn ($entry) => strtolower(trim($entry->module)) === $normalizedModule);
-        } else {
-            $acl = $this->role->adminAcls()
-                ->whereRaw('LOWER(TRIM(module)) = ?', [$normalizedModule])
-                ->first();
-        }
-
-        if ($acl) {
-            return strtolower(trim($acl->permission_level));
-        }
+        // 🟢 NEW: Document Repository Module
+        \App\Models\Document::observe(\App\Observers\AuditObserver::class);
+        \App\Models\DocumentCategory::observe(\App\Observers\AuditObserver::class);
         
-        // 🟢 DEFAULT PERMISSION FALLBACK
-        // If the ACL entry doesn't exist in the database at all, 
-        // default to 'edit' so all staff can access their personal duty meals.
-        if ($normalizedModule === 'duty_meal_personal') {
-            return 'edit';
-        }
+        // 🟢 NEW: Organizational Chart
+        \App\Models\OrgChartMember::observe(\App\Observers\AuditObserver::class); 
 
-        if (strtolower(trim($this->role->name)) === strtolower(trim(config('admin-acl.superadmin_role', 'admin')))) {
-            return 'full';
-        }
+        // 🟢 NEW: HR Module
+        \App\Models\HrRequest::observe(\App\Observers\AuditObserver::class);
+        \App\Models\ManpowerRequest::observe(\App\Observers\AuditObserver::class);
 
-        return 'no_access';
-    }
+        // 🟢 NEW: PR/PO Module
+        \App\Models\Product::observe(\App\Observers\AuditObserver::class);
+        \App\Models\PurchaseRequest::observe(\App\Observers\AuditObserver::class);
+        \App\Models\PurchaseOrder::observe(\App\Observers\AuditObserver::class);
 
-    protected function resolveAclPermissionLevel(string $module): string
-    {
-        $permission = $this->aclPermissionForModule($module);
-        if (!$this->isHrChildModule($module)) {
-            return $permission;
-        }
-
-        $overviewPermission = $this->aclPermissionForModule('hr_overview');
-
-        return $this->higherPermissionLevel($permission, $overviewPermission);
-    }
-
-    protected function higherPermissionLevel(string $a, string $b): string
-    {
-        $levels = [
-            'no_access' => 0,
-            'view' => 1,
-            'edit' => 2,
-            'full' => 3,
-        ];
-
-        $aIndex = $levels[$a] ?? 0;
-        $bIndex = $levels[$b] ?? 0;
-
-        return array_search(max($aIndex, $bIndex), $levels, true) ?: 'no_access';
-    }
-
-    protected function isHrChildModule(string $module): bool
-    {
-        return in_array($module, [
-            'documents',
-            'form_2316_approvals',
-            'manpower_requests_form',
-            'approval_board_hr',
-            'feedback_form',
-        ], true);
-    }
-
-    public function canAccessModule(string $module): bool
-    {
-        return $this->resolveAclPermissionLevel($module) !== 'no_access';
-    }
-
-    /**
-     * 🔐 PERMISSION HIERARCHY - Following clear ACL structure
-     * 
-     * Full = Create / Edit / Delete / Admin
-     * Edit = Create, Approve, Reject (NOT Delete)
-     * View = Request and View only (Read-only)
-     * None = No access
-     */
-
-    /**
-     * Can user VIEW data for this module?
-     * Returns true for: 'full', 'edit', 'view'
-     */
-    public function canViewModule(string $module): bool
-    {
-        $permission = $this->resolveAclPermissionLevel($module);
-
-        return in_array($permission, ['full', 'edit', 'view'], true);
-    }
-
-    /**
-     * Can user CREATE/REQUEST in this module?
-     * Returns true for: 'full', 'edit'
-     * (NOT for 'view' - view-only users cannot create)
-     */
-    public function canCreateModule(string $module): bool
-    {
-        return in_array($this->aclPermissionForModule($module), ['full', 'edit'], true);
-    }
-
-    /**
-     * Can user EDIT data in this module?
-     * Returns true for: 'full', 'edit'
-     */
-    public function canEditModule(string $module): bool
-    {
-        return in_array($this->aclPermissionForModule($module), ['full', 'edit'], true);
-    }
-
-    /**
-     * Can user APPROVE requests in this module?
-     * Returns true for: 'full', 'edit'
-     */
-    public function canApproveModule(string $module): bool
-    {
-        $permission = $this->resolveAclPermissionLevel($module);
-
-        return in_array($permission, ['full', 'edit'], true);
-    }
-
-    /**
-     * Can user REJECT requests in this module?
-     * Returns true for: 'full', 'edit'
-     */
-    public function canRejectModule(string $module): bool
-    {
-        return in_array($this->aclPermissionForModule($module), ['full', 'edit'], true);
-    }
-
-    /**
-     * Can user DELETE data in this module?
-     * Returns true for: 'full' only
-     */
-    public function canDeleteModule(string $module): bool
-    {
-        return $this->aclPermissionForModule($module) === 'full';
-    }
-
-    /**
-     * Can user perform ADMIN functions in this module?
-     * Returns true for: 'full' only
-     */
-    public function canAdminModule(string $module): bool
-    {
-        return $this->aclPermissionForModule($module) === 'full';
-    }
-
-    public function hasPermission(string $permission): bool
-    {
-        return $this->canAccessModule($permission);
-    }
-
-    public function schedule()
-    {
-        return $this->hasOne(Schedule::class);
-    }
-
-    public function schedules()
-    {
-        return $this->hasMany(Schedule::class);
-    }
-
-    // override sched
-    public function scheduleOverrides()
-    {
-        return $this->hasMany(ScheduleOverride::class);
-    }
-
-    /**
-     * Get the duty meal selections for the user.
-     */
-    public function dutyMealParticipants()
-    {
-        return $this->hasMany(\App\Models\DutyMealParticipant::class, 'user_id');
+        // 🟢 NEW: Duty Meal Module
+        \App\Models\DutyMeal::observe(\App\Observers\AuditObserver::class); 
     }
 }

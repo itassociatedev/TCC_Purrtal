@@ -11,17 +11,21 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasColumn('assets', 'branch')) {
+            return;
+        }
+
         Schema::table('assets', function (Blueprint $table) {
-            // Links the asset directly to the users table
-            $table->foreignId('user_id')->nullable()->after('assigned_personnel')->constrained('users')->nullOnDelete();
+            $table->string('branch')->nullable()->after('department');
         });
     }
 
     public function down(): void
     {
-        Schema::table('assets', function (Blueprint $table) {
-            $table->dropForeign(['user_id']);
-            $table->dropColumn('user_id');
-        });
+        if (Schema::hasColumn('assets', 'branch')) {
+            Schema::table('assets', function (Blueprint $table) {
+                $table->dropColumn('branch');
+            });
+        }
     }
 };

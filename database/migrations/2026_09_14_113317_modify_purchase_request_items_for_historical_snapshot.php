@@ -10,9 +10,11 @@ return new class extends Migration
     public function up(): void
     {
         // 1. Add the historical snapshot column
-        Schema::table('purchase_request_items', function (Blueprint $table) {
-            $table->string('product_name')->nullable()->after('product_id');
-        });
+        if (!Schema::hasColumn('purchase_request_items', 'product_name')) {
+            Schema::table('purchase_request_items', function (Blueprint $table) {
+                $table->string('product_name')->nullable()->after('product_id');
+            });
+        }
 
         // 2. Safely backfill existing PR items with current product names
         DB::table('purchase_request_items')
