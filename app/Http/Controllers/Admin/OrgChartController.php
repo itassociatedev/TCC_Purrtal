@@ -10,6 +10,27 @@ use Inertia\Inertia;
 
 class OrgChartController extends Controller
 {
+    // The uploaded chart SVG has its own folder; member photos are stored in org_chart/
+    private const CHART_DIR = 'org_chart_svg';
+
+    private function getOrgChartSvgUrl(): ?string
+    {
+        $disk = Storage::disk('public');
+        $filePath = $disk->files(self::CHART_DIR)[0] ?? null;
+
+        // Charts uploaded before the folder split were saved next to the member photos
+        if (!$filePath) {
+            $filePath = collect($disk->files('org_chart'))
+                ->first(fn ($path) => str_ends_with(strtolower($path), '.svg'));
+        }
+
+        if (!$filePath) {
+            return null;
+        }
+
+        return 'storage/' . $filePath . '?v=' . $disk->lastModified($filePath);
+    }
+
     // Helper to load the dynamic structure (100% clean, zero hardcoding)
     private function getStructure()
     {
@@ -48,15 +69,7 @@ class OrgChartController extends Controller
     {
         $members = OrgChartMember::orderBy('sort_order')->latest()->get();
 
-        $orgChartSvg = null;
-        $files = Storage::disk('public')->files('org_chart');
-
-        if (!empty($files)) {
-            // Dynamically grab the first file in the directory, regardless of its name
-            $filePath = $files[0];
-            $timestamp = Storage::disk('public')->lastModified($filePath);
-            $orgChartSvg = 'storage/' . $filePath . '?v=' . $timestamp;
-        }
+        $orgChartSvg = $this->getOrgChartSvgUrl();
 
         return Inertia::render('Admin/OrgChart', [
             'members' => $members,
@@ -70,15 +83,7 @@ class OrgChartController extends Controller
     {
         $members = OrgChartMember::orderBy('sort_order')->latest()->get();
 
-        $orgChartSvg = null;
-        $files = Storage::disk('public')->files('org_chart');
-
-        if (!empty($files)) {
-            // Dynamically grab the first file in the directory, regardless of its name
-            $filePath = $files[0];
-            $timestamp = Storage::disk('public')->lastModified($filePath);
-            $orgChartSvg = 'storage/' . $filePath . '?v=' . $timestamp;
-        }
+        $orgChartSvg = $this->getOrgChartSvgUrl();
 
         return Inertia::render('OrgChart', [
             'members' => $members,
@@ -94,13 +99,13 @@ class OrgChartController extends Controller
         ]);
 
         if ($request->hasFile('org_chart_file')) {
-            // 1. Delete any existing files in the directory to ensure only 1 active chart exists
-            $oldFiles = Storage::disk('public')->files('org_chart');
+            // 1. Replace only the previous chart file. Member photos live in org_chart/ and must never be touched here.
+            $oldFiles = Storage::disk('public')->files(self::CHART_DIR);
             Storage::disk('public')->delete($oldFiles);
 
             // 2. Save the new file using its actual original uploaded name
             $file = $request->file('org_chart_file');
-            $file->storeAs('org_chart', $file->getClientOriginalName(), 'public');
+            $file->storeAs(self::CHART_DIR, $file->getClientOriginalName(), 'public');
         }
 
         return back()->with('success', 'Organizational Chart updated successfully!');
