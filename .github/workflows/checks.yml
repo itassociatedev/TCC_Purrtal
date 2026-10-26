@@ -1,6 +1,6 @@
 name: Checks
 
-# Runs on every push to beta and on pull requests into main,
+# Runs on every push to beta and on pull requests into beta or main,
 # so broken code is caught before it is merged and deployed.
 on:
   push:
@@ -8,6 +8,7 @@ on:
       - beta
   pull_request:
     branches:
+      - beta
       - main
 
 jobs:
