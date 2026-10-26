@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up()
     {
+        if (Schema::hasColumn('assets', 'deviation')) {
+            return;
+        }
+
         Schema::table('assets', function (Blueprint $table) {
             $table->string('deviation')->nullable()->after('warranty_expiration');
         });

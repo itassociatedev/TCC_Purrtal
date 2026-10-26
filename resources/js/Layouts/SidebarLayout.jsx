@@ -518,34 +518,6 @@ export default function SidebarLayout({
                         </div>
                     )}
 
-                    {/* ONLY RENDER QUICK LINKS IF ON MAIN DASHBOARD */}
-                    {isMainDashboard && (
-                        <div className="mb-4">
-                            <div className="mb-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Quick Links</div>
-                            <ul className="space-y-2">
-                                <li>
-                                    <Link href={route('staff.duty-meals.index')} className="flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900">
-                                        {iconSvg['Duty Meals']} Duty Meal
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link href={route('admin.documents.index')} className="flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900">
-                                        {iconSvg['Document Overview']} Document Repository
-                                    </Link>
-                                </li>
-                                
-                                {/* 🟢 CONDITIONALLY HIDE ACCOUNTABILITY LINK IF 0 DEPT ASSETS */}
-                                {hasAccountabilities && (
-                                    <li>
-                                        <a href={isSuperAdmin ? "/admin/assets" : (isAudit ? "/admin/asset-masterlist" : "/my-assets")} className="flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900">
-                                            {iconSvg['Asset Management']}
-                                            {isSuperAdmin ? 'Asset Management' : (isAudit ? 'Asset Masterlist' : 'My Accountability')}
-                                        </a>
-                                    </li>
-                                )}
-                            </ul>
-                        </div>
-                    )}
                     {priorityLink && (
                         <div className="mb-4">
                             <Link href={priorityLink.href} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 ${priorityLink.active ? 'bg-gray-100 font-bold text-gray-900' : ''}`}>
@@ -555,31 +527,8 @@ export default function SidebarLayout({
                         </div>
                     )}
 
-                    {regularSidebarLinks.length > 0 && (
-                        <>
-                            <div className="mb-4 text-xs font-bold text-gray-400 uppercase tracking-wider mt-4">General Menu</div>
-                            <ul className="space-y-2">
-                                {regularSidebarLinks.map((link, index) => {
-                                    if (!link) return null;
-                                    return (
-                                    <li key={index}>
-                                        {link.isAction ? (
-                                            <button type="button" onClick={(e) => { e.preventDefault(); if (link.label === 'Add Asset' && onTriggerAddModal) onTriggerAddModal(); }} className={`w-full flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition ease-in-out duration-150`}>
-                                                {renderSidebarIcon(link)} <span>{link.label}</span>
-                                            </button>
-                                        ) : (
-                                            <Link href={link.href} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 ${link.active ? 'bg-gray-100 font-bold text-gray-900' : ''}`}>
-                                                {renderSidebarIcon(link)} <span>{link.label}</span>
-                                            </Link>
-                                        )}
-                                    </li>
-                                    );
-                                })}
-                            </ul>
-                        </>
-                    )}
                     {/* 🟢 NEW QUICK LINKS RESTORED TO SIDEBAR (MOVED TO TOP & EMOJIS REMOVED) */}
-                    {isDashboard && hasAnyQuickLinks && (
+                    {isDashboard && (hasAnyQuickLinks || hasAccountabilities) && (
                         <div className="mb-6">
                             <div className="mb-4 text-xs font-bold text-gray-400 uppercase tracking-wider">
                                 Quick Links
@@ -630,13 +579,45 @@ export default function SidebarLayout({
                                         </Link>
                                     </li>
                                 )}
+                                {/* 🟢 CONDITIONALLY HIDE ACCOUNTABILITY LINK IF 0 DEPT ASSETS */}
+                                {hasAccountabilities && (
+                                    <li>
+                                        <Link
+                                            href={isSuperAdmin ? route('admin.assets.index') : (isAudit ? route('admin.asset-masterlist') : route('staff.assets.index'))}
+                                            className="flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition"
+                                        >
+                                            {iconSvg['Asset Management']}
+                                            <span>{isSuperAdmin ? 'Asset Management' : (isAudit ? 'Asset Masterlist' : 'My Accountability')}</span>
+                                        </Link>
+                                    </li>
+                                )}
                             </ul>
                         </div>
                     )}
 
-                    <div className="mb-4 text-xs font-bold text-gray-400 uppercase tracking-wider">
-                        General Menu
-                    </div>
+                    {regularSidebarLinks.length > 0 && (
+                        <>
+                            <div className="mb-4 text-xs font-bold text-gray-400 uppercase tracking-wider mt-4">General Menu</div>
+                            <ul className="space-y-2">
+                                {regularSidebarLinks.map((link, index) => {
+                                    if (!link) return null;
+                                    return (
+                                    <li key={index}>
+                                        {link.isAction ? (
+                                            <button type="button" onClick={(e) => { e.preventDefault(); if (link.label === 'Add Asset' && onTriggerAddModal) onTriggerAddModal(); }} className={`w-full flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition ease-in-out duration-150`}>
+                                                {renderSidebarIcon(link)} <span>{link.label}</span>
+                                            </button>
+                                        ) : (
+                                            <Link href={link.href} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 ${link.active ? 'bg-gray-100 font-bold text-gray-900' : ''}`}>
+                                                {renderSidebarIcon(link)} <span>{link.label}</span>
+                                            </Link>
+                                        )}
+                                    </li>
+                                    );
+                                })}
+                            </ul>
+                        </>
+                    )}
 
                     {/* ONLY RENDER RESOURCES IF ON MAIN DASHBOARD */}
                     {isMainDashboard && (
@@ -811,6 +792,13 @@ export default function SidebarLayout({
                                     {moduleHasAccess(auth, 'attendance') && (
                                         <Dropdown.Link href={getFirstAttendanceRoute(auth)}>
                                             Attendance Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                    {/* 🟢 CONDITIONALLY HIDE ACCOUNTABILITY LINK IF 0 DEPT ASSETS */}
+                                    {hasAccountabilities && (
+                                        <Dropdown.Link href={isSuperAdmin ? route('admin.assets.index') : (isAudit ? route('admin.asset-masterlist') : route('staff.assets.index'))}>
+                                            {isSuperAdmin ? 'Accountability Module' : (isAudit ? 'Asset Masterlist' : 'My Accountability')}
                                         </Dropdown.Link>
                                     )}
 
