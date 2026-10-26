@@ -503,7 +503,7 @@ export default function SidebarLayout({
 
             <aside className={`fixed inset-y-0 left-0 z-50 w-64 transform bg-white border-r border-gray-200 transition-transform duration-300 ease-in-out sm:translate-x-0 sm:static sm:inset-0 ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="flex h-20 items-center justify-center border-b border-gray-100 px-6">
-                    <Link href={route('dashboard')} className="-ml-6 inline-flex items-center gap-0">
+                    <Link prefetch cacheFor="5s" href={route('dashboard')} className="-ml-6 inline-flex items-center gap-0">
                         <ApplicationLogo className="block h-14 w-auto fill-current text-gray-800 sm:h-16" />
                         <span className="-ml-0.5 whitespace-nowrap text-lg font-semibold text-gray-800 sm:text-xl">The Cat Clinic</span>
                     </Link>
@@ -512,7 +512,7 @@ export default function SidebarLayout({
                 <div className="overflow-y-auto px-4 py-6 text-sm font-medium">
                     {!['General', 'Profile'].includes(activeModule) && (
                         <div className="mb-4">
-                            <Link href={route('dashboard')} className="flex items-center gap-2 rounded-lg px-4 py-2 text-black hover:bg-gray-100 hover:text-black transition ease-in-out duration-150">
+                            <Link prefetch cacheFor="5s" href={route('dashboard')} className="flex items-center gap-2 rounded-lg px-4 py-2 text-black hover:bg-gray-100 hover:text-black transition ease-in-out duration-150">
                                 {iconSvg.Overview} Dashboard
                             </Link>
                         </div>
@@ -520,7 +520,7 @@ export default function SidebarLayout({
 
                     {priorityLink && (
                         <div className="mb-4">
-                            <Link href={priorityLink.href} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 ${priorityLink.active ? 'bg-gray-100 font-bold text-gray-900' : ''}`}>
+                            <Link prefetch cacheFor="5s" href={priorityLink.href} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 ${priorityLink.active ? 'bg-gray-100 font-bold text-gray-900' : ''}`}>
                                 {renderSidebarIcon(priorityLink) || priorityDefaultIcon}
                                 <span>{priorityLink.label}</span>
                             </Link>
@@ -536,7 +536,7 @@ export default function SidebarLayout({
                             <ul className="space-y-2">
                                 {showDocumentQuickLink && (
                                     <li>
-                                        <Link
+                                        <Link prefetch cacheFor="5s"
                                             href={route('admin.documents.index')}
                                             className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition ${
                                                 route().current('admin.documents.index') ? 'bg-emerald-50 font-bold text-emerald-700' : ''
@@ -551,7 +551,7 @@ export default function SidebarLayout({
                                 )}
                                 {showCalendarQuickLink && (
                                     <li>
-                                        <Link
+                                        <Link prefetch cacheFor="5s"
                                             href={route('attendance.calendar')}
                                             className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition ${
                                                 route().current('attendance.calendar') ? 'bg-indigo-50 font-bold text-indigo-700' : ''
@@ -566,7 +566,7 @@ export default function SidebarLayout({
                                 )}
                                 {showPersonalMealsQuickLink && (
                                     <li>
-                                        <Link
+                                        <Link prefetch cacheFor="5s"
                                             href={route('staff.duty-meals.index')}
                                             className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-rose-50 hover:text-rose-700 transition ${
                                                 route().current('staff.duty-meals.index') ? 'bg-rose-50 font-bold text-rose-700' : ''
@@ -582,7 +582,7 @@ export default function SidebarLayout({
                                 {/* 🟢 CONDITIONALLY HIDE ACCOUNTABILITY LINK IF 0 DEPT ASSETS */}
                                 {hasAccountabilities && (
                                     <li>
-                                        <Link
+                                        <Link prefetch cacheFor="5s"
                                             href={isSuperAdmin ? route('admin.assets.index') : (isAudit ? route('admin.asset-masterlist') : route('staff.assets.index'))}
                                             className="flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition"
                                         >
@@ -608,7 +608,7 @@ export default function SidebarLayout({
                                                 {renderSidebarIcon(link)} <span>{link.label}</span>
                                             </button>
                                         ) : (
-                                            <Link href={link.href} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 ${link.active ? 'bg-gray-100 font-bold text-gray-900' : ''}`}>
+                                            <Link prefetch cacheFor="5s" href={link.href} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 ${link.active ? 'bg-gray-100 font-bold text-gray-900' : ''}`}>
                                                 {renderSidebarIcon(link)} <span>{link.label}</span>
                                             </Link>
                                         )}
