@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import GHImage from '@/Assets/GH.jpg';
-import ALBImage from '@/Assets/ALB.jpg';
-import GHPortraitImage from '@/Assets/GH Portrait.jpg';
-import ALBPortraitImage from '@/Assets/ALB Portrait.png';
-import MKTPortraitImage from '@/Assets/MKT Portrait 1.png';
-import MKTImage from '@/Assets/MKT.jpg';
+import GHImage from '@/Assets/GH.webp';
+import ALBImage from '@/Assets/ALB.webp';
+import GHPortraitImage from '@/Assets/GH Portrait.webp';
+import ALBPortraitImage from '@/Assets/ALB Portrait.webp';
+import MKTPortraitImage from '@/Assets/MKT Portrait 1.webp';
+import MKTImage from '@/Assets/MKT.webp';
 
 export default function BackgroundCarousel() {
     const [currentSlide, setCurrentSlide] = useState(0);

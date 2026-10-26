@@ -82,6 +82,9 @@ export default function Dashboard({ auth, announcements, priorities = [] }) {
     // --- CAROUSEL AND PROGRESS BAR STATE ---
     const carouselRef = useRef(null);
     const [activeSlide, setActiveSlide] = useState(0);
+    // Images are only downloaded for slides up to this index (current slide + 1), so the
+    // page does not fetch every announcement image at once
+    const [loadedUpToSlide, setLoadedUpToSlide] = useState(1);
 
     // Updates the active dot/progress bar when the user scrolls or swipes
     const handleScroll = (e) => {
@@ -91,6 +94,9 @@ export default function Dashboard({ auth, announcements, priorities = [] }) {
         const current = Math.round(scrollPos / slideWidth);
         if (current !== activeSlide) {
             setActiveSlide(current);
+        }
+        if (current + 1 > loadedUpToSlide) {
+            setLoadedUpToSlide(current + 1);
         }
     };
 
@@ -365,10 +371,12 @@ export default function Dashboard({ auth, announcements, priorities = [] }) {
                                                         {/* ✅ FIXED: Changed to aspect-[16/9] to match the cropper perfectly */}
                                                         <div className="aspect-[16/9] w-full shrink-0 bg-gray-100 relative overflow-hidden flex items-center justify-center">
                                                             {item.image_path ? (
-                                                                <img 
-                                                                    src={`/storage/${item.image_path}`} 
-                                                                    alt={item.title} 
-                                                                    className="absolute left-1/2 top-1/2" 
+                                                                pageIndex <= loadedUpToSlide && <img
+                                                                    src={`/storage/${item.image_path}`}
+                                                                    alt={item.title}
+                                                                    loading="lazy"
+                                                                    decoding="async"
+                                                                    className="absolute left-1/2 top-1/2"
                                                                     style={{
                                                                         transform: `translate(calc(-50% + ${item.image_offset_x ?? 0}px), calc(-50% + ${item.image_offset_y ?? 0}px)) scale(${item.image_zoom ?? 1})`,
                                                                         transformOrigin: 'center center',

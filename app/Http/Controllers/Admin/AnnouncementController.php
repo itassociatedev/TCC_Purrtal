@@ -9,6 +9,7 @@ use App\Notifications\AnnouncementAlert;
 use App\Models\Branch;
 use App\Models\PriorityLevel;
 use App\Models\User;
+use App\Services\ImageOptimizer;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Auth;
@@ -59,7 +60,7 @@ class AnnouncementController extends Controller
 
         // Handle Cover Photo Upload
         if ($request->hasFile('image')) {
-            $validated['image_path'] = $request->file('image')->store('announcements/images', 'public');
+            $validated['image_path'] = ImageOptimizer::store($request->file('image'), 'announcements/images');
         }
 
         // Handle Document Attachment Upload
@@ -116,10 +117,8 @@ class AnnouncementController extends Controller
         // Handle Cover Photo Update
         if ($request->hasFile('image')) {
             // Delete the old image if it exists
-            if ($announcement->image_path) {
-                Storage::disk('public')->delete($announcement->image_path);
-            }
-            $validated['image_path'] = $request->file('image')->store('announcements/images', 'public');
+            ImageOptimizer::delete($announcement->image_path);
+            $validated['image_path'] = ImageOptimizer::store($request->file('image'), 'announcements/images');
         }
 
         // Handle Document Attachment Update
@@ -145,9 +144,7 @@ class AnnouncementController extends Controller
         }
 
         try{
-            if($announcement->image_path){
-                Storage::disk('public')->delete($announcement->image_path);
-            }
+            ImageOptimizer::delete($announcement->image_path);
 
             $announcement->delete();
 

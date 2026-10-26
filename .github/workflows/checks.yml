@@ -98,13 +98,31 @@ jobs:
       - name: Laravel caches build
         run: php artisan optimize && php artisan optimize:clear
 
+      # 6. Uploaded images are shrunk to WebP, the original is kept, and both are deleted together
+      - name: Image optimizer converts uploads
+        run: |
+          php artisan tinker --execute='
+            $img = imagecreatetruecolor(3000, 2000);
+            for ($i = 0; $i < 3000; $i += 7) { imageline($img, $i, 0, 3000 - $i, 2000, imagecolorallocate($img, $i % 255, 80, 160)); }
+            $tmp = tempnam(sys_get_temp_dir(), "img") . ".png";
+            imagepng($img, $tmp);
+            $file = new Illuminate\Http\UploadedFile($tmp, "poster.png", "image/png", null, true);
+            $path = App\Services\ImageOptimizer::store($file, "ci-check");
+            $disk = Storage::disk("public");
+            [$width] = getimagesizefromstring($disk->get($path));
+            echo $path, ": ", $disk->size($path), " bytes, ", $width, "px wide (upload was ", filesize($tmp), " bytes)", PHP_EOL;
+            if (!str_ends_with($path, ".webp") || $width !== 1920 || count($disk->files("ci-check/originals")) !== 1) { exit(1); }
+            App\Services\ImageOptimizer::delete($path);
+            if ($disk->exists($path) || count($disk->files("ci-check/originals")) !== 0) { exit(1); }
+          '
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: npm
 
-      # 6. Front-end must compile
+      # 7. Front-end must compile
       - name: Build front-end
         run: |
           npm ci

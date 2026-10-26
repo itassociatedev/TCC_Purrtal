@@ -959,7 +959,7 @@ export default function Announcements({ auth, announcements = [], branches = [],
 
                                                         <div className={`${FRAME_RATIO_CLASS} relative overflow-hidden border-b border-gray-100 bg-gray-100`}>
                                                             {item.image_path ? (
-                                                                <img
+                                                                <img loading="lazy" decoding="async"
                                                                     src={`/storage/${item.image_path}`}
                                                                     alt={item.title}
                                                                     className="absolute left-1/2 top-1/2"

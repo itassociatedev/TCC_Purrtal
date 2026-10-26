@@ -326,7 +326,7 @@ export default function Overview({ auth, announcements, contents }) {
 
                                                             <div className="aspect-[16/9] w-full shrink-0 bg-gray-100 relative overflow-hidden flex items-center justify-center">
                                                                 {item.image_path ? (
-                                                                    <img
+                                                                    <img loading="lazy" decoding="async"
                                                                         src={`/storage/${item.image_path}`}
                                                                         alt={item.title}
                                                                         className="absolute left-1/2 top-1/2"
@@ -479,7 +479,7 @@ export default function Overview({ auth, announcements, contents }) {
                                         {/* ✅ FIXED: Added Zoom Styles */}
                                         {item.image_path && (
                                             <div className="relative aspect-[16/9] w-full bg-gray-50 flex items-center justify-center border-b border-gray-100 overflow-hidden">
-                                                <img
+                                                <img loading="lazy" decoding="async"
                                                     src={`/storage/${item.image_path}`}
                                                     alt={item.title}
                                                     className="absolute left-1/2 top-1/2"
@@ -519,7 +519,7 @@ export default function Overview({ auth, announcements, contents }) {
                                         {/* ✅ FIXED: Added Zoom Styles */}
                                         {mission.image_path && (
                                             <div className="relative aspect-[16/9] w-full bg-gray-50 flex items-center justify-center border-b border-gray-100 overflow-hidden">
-                                                <img
+                                                <img loading="lazy" decoding="async"
                                                     src={`/storage/${mission.image_path}`}
                                                     alt="Mission"
                                                     className="absolute left-1/2 top-1/2"
@@ -553,7 +553,7 @@ export default function Overview({ auth, announcements, contents }) {
                                         {/* ✅ FIXED: Added Zoom Styles */}
                                         {vision.image_path && (
                                             <div className="relative aspect-[16/9] w-full bg-gray-50 flex items-center justify-center border-b border-gray-100 overflow-hidden">
-                                                <img
+                                                <img loading="lazy" decoding="async"
                                                     src={`/storage/${vision.image_path}`}
                                                     alt="Vision"
                                                     className="absolute left-1/2 top-1/2"
@@ -592,7 +592,7 @@ export default function Overview({ auth, announcements, contents }) {
                                         {/* ✅ FIXED: Added Zoom Styles */}
                                         {item.image_path && (
                                             <div className="relative aspect-[16/9] w-full bg-gray-50 flex items-center justify-center border-b border-gray-100 overflow-hidden">
-                                                <img
+                                                <img loading="lazy" decoding="async"
                                                     src={`/storage/${item.image_path}`}
                                                     alt={item.title}
                                                     className="absolute left-1/2 top-1/2"

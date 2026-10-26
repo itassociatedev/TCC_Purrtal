@@ -49,7 +49,7 @@ function MemberCard({ member }) {
         <div className="group relative flex w-full flex-col items-center rounded-3xl border border-gray-200 bg-white p-5 text-center shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md min-h-[235px]">
             <div className="mb-4 h-24 w-24 shrink-0 overflow-hidden rounded-full bg-gray-100">
                 {member?.image_path ? (
-                    <img
+                    <img loading="lazy" decoding="async"
                         src={`/storage/${member.image_path}`}
                         alt={member?.name || 'Member'}
                         className="h-full w-full object-cover pointer-events-none"
