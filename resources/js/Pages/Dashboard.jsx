@@ -76,8 +76,12 @@ export default function Dashboard({ auth, announcements, priorities = [] }) {
         chunkedAnnouncements.push(announcementList.slice(i, i + 6));
     }
 
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
+    // Notification links pass ?open=<announcement id> so that announcement opens straight away
+    const [selectedAnnouncement, setSelectedAnnouncement] = useState(() => {
+        const openId = new URLSearchParams(window.location.search).get('open');
+        return openId ? allAnnouncements.find((item) => String(item.id) === openId) ?? null : null;
+    });
+    const [isModalOpen, setIsModalOpen] = useState(() => selectedAnnouncement !== null);
 
     // --- CAROUSEL AND PROGRESS BAR STATE ---
     const carouselRef = useRef(null);
@@ -189,6 +193,11 @@ export default function Dashboard({ auth, announcements, priorities = [] }) {
     const closeModal = () => {
         setIsModalOpen(false);
         setTimeout(() => setSelectedAnnouncement(null), 300);
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('open')) {
+            url.searchParams.delete('open');
+            window.history.replaceState(window.history.state, '', url);
+        }
     };
 
     return (

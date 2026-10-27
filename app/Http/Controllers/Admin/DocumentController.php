@@ -96,7 +96,7 @@ class DocumentController extends Controller
 
             // 3. Send the in-app notification to the filtered users
             if ($usersToNotify->isNotEmpty()) {
-                Notification::send($usersToNotify, new NewDocumentAlert($document->title, Auth::user()->name));
+                Notification::send($usersToNotify, new NewDocumentAlert($document->title, Auth::user()->name, $document->id));
             }
 
             return redirect()->back()->with('success', 'Document uploaded successfully.');

@@ -85,7 +85,7 @@ class AnnouncementController extends Controller
             })->get();
 
         if ($targetUsers->isNotEmpty()) {
-           Notification::send($targetUsers, new AnnouncementAlert($announcement->title, $announcement->author));
+           Notification::send($targetUsers, new AnnouncementAlert($announcement->title, $announcement->author, $announcement->id));
         }
 
         return back()->with('success', 'Announcement posted successfully.');
