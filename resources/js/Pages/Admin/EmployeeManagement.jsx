@@ -1285,9 +1285,9 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                         </div>
                     )}
 
-                    {/* 🟢 ENLARGED TABLE VIEW (Fixed max height, internal scrolling) */}
+                    {/* 🟢 ENLARGED TABLE VIEW (up to almost a full screen tall, internal scrolling) */}
                     <div className="bg-white rounded-lg shadow border border-gray-200 mb-6 overflow-hidden">
-                        <div className="hidden md:block overflow-x-auto overflow-y-auto max-h-[350px] relative">
+                        <div className="hidden md:block overflow-x-auto overflow-y-auto max-h-[calc(100vh-10rem)] relative">
                             <table className="min-w-full table-auto divide-y divide-gray-200 text-left text-sm text-gray-500">
                                 <thead className="bg-gray-50 sticky top-0 z-20 shadow-sm">
                                     <tr>
@@ -1368,7 +1368,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                         </div>
 
                         {/* 🟢 MOBILE VIEW */}
-                        <div className="md:hidden overflow-y-auto max-h-[400px]">
+                        <div className="md:hidden overflow-y-auto max-h-[calc(100vh-8rem)]">
                             {filteredUsers.length > 0 && (
                                 <div className="p-4 bg-gray-50 border-b border-gray-200 flex items-center sticky top-0 z-20">
                                     <input
