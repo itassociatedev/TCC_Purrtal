@@ -230,7 +230,7 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
     Route::get('/logs/export', [SystemLogController::class, 'export'])->name('.logs.export');
 
     Route::get('/dashboard', function(){
-        $totalActiveEmployees = \App\Models\User::whereIn('status', ['Active', 'Password reset'])->count();
+        $totalActiveEmployees = \App\Models\User::whereIn('status', ['Active', 'Password Reset'])->count();
         $totalBranches = \App\Models\Branch::count();
 
         $activeSessions = DB::table('sessions')

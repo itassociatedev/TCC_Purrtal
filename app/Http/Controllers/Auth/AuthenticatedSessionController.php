@@ -170,8 +170,8 @@ class AuthenticatedSessionController extends Controller
         // 1. Find the user
         $user = User::where('email', $request->email)->first();
 
-        // 2. Change their status to "Password reset"
-        $user->update(['status' => 'Password reset']);
+        // 2. Change their status to "Password Reset" (same spelling as the admin reset in EmployeeController)
+        $user->update(['status' => 'Password Reset']);
 
         // 3. Find the Admins and notify them
         $admins = User::whereHas('role', function ($q) {

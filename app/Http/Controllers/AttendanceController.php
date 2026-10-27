@@ -44,7 +44,7 @@ class AttendanceController extends Controller
         // Base Employee Query
         // 🟢 FIXED: Added 'dutyMealParticipants.dutyMeal' to prevent massive N+1 query lag on initial load!
         $query = User::with(['department', 'schedules', 'scheduleOverrides', 'branches', 'dutyMealParticipants.dutyMeal'])
-            ->whereIn('status', ['Active', 'Password reset']);
+            ->whereIn('status', ['Active', 'Password Reset']);
 
         // 🟢 GLOBAL BYPASS: Admin sees everyone across all branches
         if ($hasGlobalVisibility) {
