@@ -1067,11 +1067,12 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
         >
             <Head title="Employee Management" />
 
-            <div className="py-6 sm:py-12">
-                <div className="max-w-[100rem] mx-auto sm:px-6 lg:px-8">
+            {/* Desktop: the page fits the window and the table fills the remaining height */}
+            <div className="md:h-[calc(100vh-13.5rem)] md:flex md:flex-col">
+                <div className="max-w-[100rem] w-full mx-auto sm:px-6 lg:px-8 md:flex-1 md:min-h-0 md:flex md:flex-col">
 
                     {/* 🟢 TOP BUTTON ALIGNMENT (Grouped completely across the top) */}
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-6">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 md:flex-none">
                         <PrimaryButton className="!py-2 flex-shrink-0" disabled={!canManageEmployees} onClick={() => canManageEmployees && setUserModalOpen(true)} title={!canManageEmployees ? 'Edit permission required' : ''}>
                             + Add Users
                         </PrimaryButton>
@@ -1187,7 +1188,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                     </div>
 
                     {/* 🟢 FULL WIDTH FILTER BAR */}
-                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex flex-wrap gap-4 items-end">
+                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-4 md:flex-none flex flex-wrap gap-4 items-end">
                         <div className="flex-1 min-w-[200px] relative">
                             <InputLabel value="Search Directory" className="font-black tracking-tighter text-xs" />
                             <input
@@ -1267,7 +1268,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
 
                     {/* 🟢 ISOLATE SELECTION ROW */}
                     {selectedUsers.length > 0 && (
-                        <div className="flex items-center justify-between mt-4 mb-4 border-b border-gray-200 pb-4">
+                        <div className="flex items-center justify-between mb-4 md:flex-none border-b border-gray-200 pb-4">
                             <button type="button" onClick={handleSelectAll} className="text-xs font-black uppercase tracking-wider text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-4 py-2 rounded shadow-sm border border-indigo-200">
                                 Deselect All
                             </button>
@@ -1285,9 +1286,9 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                         </div>
                     )}
 
-                    {/* 🟢 ENLARGED TABLE VIEW (up to almost a full screen tall, internal scrolling) */}
-                    <div className="bg-white rounded-lg shadow border border-gray-200 mb-6 overflow-hidden">
-                        <div className="hidden md:block overflow-x-auto overflow-y-auto max-h-[calc(100vh-10rem)] relative">
+                    {/* 🟢 TABLE VIEW (fills the rest of the window on desktop, internal scrolling) */}
+                    <div className="bg-white rounded-lg shadow border border-gray-200 mb-4 md:mb-0 overflow-hidden md:flex-1 md:min-h-0 md:flex md:flex-col">
+                        <div className="hidden md:block md:flex-1 md:min-h-0 overflow-x-auto overflow-y-auto relative">
                             <table className="min-w-full table-auto divide-y divide-gray-200 text-left text-sm text-gray-500">
                                 <thead className="bg-gray-50 sticky top-0 z-20 shadow-sm">
                                     <tr>
@@ -1368,7 +1369,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                         </div>
 
                         {/* 🟢 MOBILE VIEW */}
-                        <div className="md:hidden overflow-y-auto max-h-[calc(100vh-8rem)]">
+                        <div className="md:hidden">
                             {filteredUsers.length > 0 && (
                                 <div className="p-4 bg-gray-50 border-b border-gray-200 flex items-center sticky top-0 z-20">
                                     <input
