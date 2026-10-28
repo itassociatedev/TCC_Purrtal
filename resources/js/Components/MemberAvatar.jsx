@@ -28,7 +28,7 @@ export default function MemberAvatar({ member, className = 'h-24 w-24', initials
                     src={`/storage/${member.image_path}`}
                     alt={member?.name || 'Member'}
                     onError={() => setFailed(true)}
-                    className="h-full w-full object-cover object-top pointer-events-none"
+                    className="h-full w-full object-cover pointer-events-none"
                 />
             ) : (
                 <div className={`flex h-full w-full items-center justify-center font-semibold tracking-wide text-indigo-500 select-none ${initialsClassName}`}>
