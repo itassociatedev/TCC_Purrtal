@@ -131,9 +131,12 @@ class OrgChartController extends Controller
             'position' => 'required|string|max:255',
             'branch' => 'required|string|max:255',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:768000',
+            'image_position_x' => 'nullable|numeric|between:0,100',
+            'image_position_y' => 'nullable|numeric|between:0,100',
+            'image_zoom' => 'nullable|numeric|between:1,4',
         ]);
 
-        $data = $request->only(['name', 'position', 'branch']);
+        $data = $request->only(['name', 'position', 'branch', 'image_position_x', 'image_position_y', 'image_zoom']);
 
         if ($request->hasFile('image')) {
             $data['image_path'] = $request->file('image')->store('org_chart', 'public');
@@ -151,9 +154,12 @@ class OrgChartController extends Controller
             'position' => 'required|string|max:255',
             'branch' => 'required|string|max:255',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:768000', // Image optional on update
+            'image_position_x' => 'nullable|numeric|between:0,100',
+            'image_position_y' => 'nullable|numeric|between:0,100',
+            'image_zoom' => 'nullable|numeric|between:1,4',
         ]);
 
-        $data = $request->only(['name', 'position', 'branch']);
+        $data = $request->only(['name', 'position', 'branch', 'image_position_x', 'image_position_y', 'image_zoom']);
 
         if ($request->hasFile('image')) {
             if ($member->image_path) {

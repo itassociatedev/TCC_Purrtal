@@ -48,7 +48,7 @@ function getTouchHandlers(ref) {
 function MemberCard({ member }) {
     return (
         <div className="group relative flex w-full flex-col items-center rounded-3xl border border-gray-200 bg-white p-5 text-center shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md min-h-[235px]">
-            <MemberAvatar member={member} className="mb-4 h-24 w-24" />
+            <MemberAvatar member={member} className="mb-4 h-32 w-32" initialsClassName="text-3xl" />
 
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
                 <h4 className="line-clamp-2 text-xl font-semibold leading-7 text-gray-900">
