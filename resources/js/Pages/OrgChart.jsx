@@ -1,3 +1,4 @@
+import MemberAvatar from '@/Components/MemberAvatar';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { getDashboardLinks } from '@/Config/navigation';
 import { Head } from '@inertiajs/react';
@@ -47,19 +48,7 @@ function getTouchHandlers(ref) {
 function MemberCard({ member }) {
     return (
         <div className="group relative flex w-full flex-col items-center rounded-3xl border border-gray-200 bg-white p-5 text-center shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md min-h-[235px]">
-            <div className="mb-4 h-24 w-24 shrink-0 overflow-hidden rounded-full bg-gray-100">
-                {member?.image_path ? (
-                    <img loading="lazy" decoding="async"
-                        src={`/storage/${member.image_path}`}
-                        alt={member?.name || 'Member'}
-                        className="h-full w-full object-cover pointer-events-none"
-                    />
-                ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">
-                        IMG
-                    </div>
-                )}
-            </div>
+            <MemberAvatar member={member} className="mb-4 h-24 w-24" />
 
             <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
                 <h4 className="line-clamp-2 text-xl font-semibold leading-7 text-gray-900">

@@ -1,3 +1,4 @@
+import MemberAvatar from '@/Components/MemberAvatar';
 import Modal from '@/Components/Modal';
 import { getAdminLinks, canEditModule, canDeleteModule, canViewModule } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
@@ -813,15 +814,7 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
                                                                 )}
                                                             </div>
 
-                                                            <div className="relative z-10 mb-4 h-28 w-28 shrink-0 overflow-hidden rounded-full border-4 border-white bg-gray-100 shadow-md transition-colors group-hover:border-indigo-100">
-                                                                {member.image_path ? (
-                                                                    <img loading="lazy" decoding="async" src={`/storage/${member.image_path}`} alt={member.name} className="h-full w-full object-cover pointer-events-none" />
-                                                                ) : (
-                                                                    <svg className="h-full w-full bg-gray-50 p-6 text-black pointer-events-none" fill="currentColor" viewBox="0 0 24 24">
-                                                                        <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
-                                                                    </svg>
-                                                                )}
-                                                            </div>
+                                                            <MemberAvatar member={member} className="relative z-10 mb-4 h-28 w-28" initialsClassName="text-3xl" />
 
                                                             <div className="relative z-10 w-full text-center pointer-events-none">
                                                                 <h4 className="px-2 text-lg font-bold text-gray-900 transition-colors group-hover:text-indigo-900">{member.name}</h4>
