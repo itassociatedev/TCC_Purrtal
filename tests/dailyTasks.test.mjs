@@ -24,7 +24,7 @@ test('daily tasks roll over at Philippine midnight, independently of UTC dates',
 test('IT receives both IT reports and Cashier receives the operations report', () => {
     const config = defaultSettings();
     const tasks = ensureDailyTasks([], config, day);
-    assert.equal(tasks.filter(task => task.template === 'narrative-report').length, config.employees.filter(person => person.department === 'IT').length);
+    assert.equal(tasks.filter(task => task.template === 'narrative-report' && task.recurrence==='daily').length, config.employees.filter(person => person.department === 'IT').length);
     assert.equal(tasks.filter(task => task.template === 'it-opening-rounds').length, config.branches.length);
     assert.ok(tasks.filter(task => task.template === 'it-opening-rounds').every(task => task.department === 'IT'));
     assert.equal(tasks.filter(task => task.template === 'daily-operations').length, config.employees.filter(person => person.department === 'Cashier').length);
@@ -36,7 +36,7 @@ test('new days create new instances without resetting completed work or issue im
     const previous = ensureDailyTasks([], config, '2026-10-22');
     previous[0] = { ...previous[0], status: 'Completed', narrative: { summary: 'Lorem ipsum.' }, rounds: { images: [{ id: 'saved-photo' }] } };
     const next = ensureDailyTasks(previous, config, day);
-    assert.equal(next.length, previous.length * 2);
+    assert.equal(next.filter(task=>task.recurrence==='daily').length, previous.filter(task=>task.recurrence==='daily').length * 2);
     assert.equal(next[0].status, 'Completed');
     assert.equal(next[0].rounds.images[0].id, 'saved-photo');
     assert.ok(next.filter(task => task.scheduledDate === day).every(task => task.status === 'Not Started'));
@@ -75,5 +75,5 @@ test('narrative submission requires a summary, the scheduled date, and a valid w
     assert.equal(validateNarrative(report, ['Makati'], day), '');
     assert.match(validateNarrative({ ...report, summary: '  ' }, ['Makati'], day), /summary/);
     assert.match(validateNarrative({ ...report, date: '2026-10-22' }, ['Makati'], day), /scheduled date/);
-    assert.ok(formatNarrative(report).includes('SUMMARY OF THE DAY\nLorem ipsum dolor sit amet.'));
+    assert.ok(formatNarrative(report).includes('SUMMARY\n(Tasks Completed)\nLorem ipsum dolor sit amet.'));
 });

@@ -1,0 +1,119 @@
+/* Motion is opt-in through resolved preferences and never overrides reduced motion. */
+html[data-clinic-motion=on] :is(button,a,input,select,textarea,summary){transition-property:background-color,color,border-color,box-shadow,opacity,transform,translate,scale;transition-duration:160ms;transition-timing-function:ease-out}
+@media(hover:hover){html[data-clinic-motion=on] :is(button:not(:disabled),a):hover{translate:0 -1px}html[data-clinic-motion=on] :is(button:not(:disabled),a):active{translate:0 0;scale:.98}}
+html[data-clinic-motion=on] .clinic-page-body{animation:clinic-enter 230ms ease-out}
+html[data-clinic-motion=on] details[open]>:not(summary){animation:clinic-reveal 180ms ease-out}
+html[data-clinic-motion=on] [role=tabpanel]:not([hidden]){animation:clinic-reveal 180ms ease-out}
+html[data-clinic-motion=on] .clinic-settings{animation:clinic-enter 200ms ease-out}
+@keyframes clinic-enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes clinic-reveal{from{opacity:.5;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
+html[data-clinic-motion=off] *,html[data-clinic-motion=off] *:before,html[data-clinic-motion=off] *:after{animation:none!important;transition:none!important;scroll-behavior:auto!important;translate:none!important;scale:none!important}
+html[data-clinic-compatibility=on] *,html[data-clinic-compatibility=on] *:before,html[data-clinic-compatibility=on] *:after{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important}
+html[data-clinic-compatibility=on] .clinic-signin-card{background:#fff!important}
+/* Settings use the same accessible controls in original and updated designs. */
+.clinic-settings{background:#fff;color:#1f2937;padding:26px;border-radius:10px}
+.clinic-settings>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.clinic-settings h2{font-size:23px;font-weight:650;letter-spacing:-.02em}.clinic-settings>header p{font-size:13px;color:#64748b;margin-top:5px}.clinic-settings>header button{font-size:26px;line-height:1;border-radius:6px;padding:0 6px;color:#64748b}
+.clinic-settings-tabs{display:flex;gap:6px;border-bottom:1px solid #e2e8f0;margin:22px 0}
+.clinic-settings-tabs button{padding:9px 13px;font-size:13px;border-bottom:2px solid transparent;color:#64748b}.clinic-settings-tabs button[aria-selected=true]{color:#111;border-color:#111;font-weight:600}
+.clinic-settings fieldset legend{font-size:14px;font-weight:600}.clinic-settings fieldset>p{font-size:12px;color:#64748b;margin-top:5px}
+.clinic-theme-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:16px 0 24px}
+.clinic-theme-options>label{border:1px solid #dbe1ea;border-radius:8px;padding:10px;cursor:pointer;position:relative}.clinic-theme-options label.selected{border-color:#111;box-shadow:0 0 0 1px #111}.clinic-theme-options input{position:absolute;right:8px;bottom:10px;color:#111;width:13px;height:13px}.clinic-theme-options strong{font-size:12px;font-weight:500}.clinic-theme-preview{display:block;height:62px;border:1px solid #dbe1ea;border-radius:4px;background:#f5f6fa;margin-bottom:9px;padding:10px 8px 10px 30px;position:relative}.clinic-theme-preview i{position:absolute;inset:0 auto 0 0;width:20px;background:#e2e8f0}.clinic-theme-preview b{display:block;height:8px;background:#fff;margin:4px 0;border-radius:2px}.clinic-theme-preview.dark{background:#111827;border-color:#475569}.clinic-theme-preview.dark i{background:#334155}.clinic-theme-preview.dark b{background:#475569}.clinic-theme-preview.system{background:linear-gradient(90deg,#f1f5f9 50%,#1e293b 50%)}
+.clinic-setting-select{display:flex;justify-content:space-between;align-items:center;font-size:13px;gap:14px}.clinic-setting-select select{border:1px solid #cbd5e1;border-radius:6px;font-size:13px;padding:7px 32px 7px 10px}
+.clinic-setting-toggle{display:flex;align-items:center;gap:24px;justify-content:space-between}.clinic-setting-toggle strong{display:block;font-size:14px}.clinic-setting-toggle small{display:block;color:#64748b;font-size:12px;line-height:1.7;margin-top:7px}.clinic-setting-toggle input{color:#111;width:20px;height:20px;flex-shrink:0}.clinic-setting-hint{font-size:12px;line-height:1.7;color:#64748b;padding:14px;background:#f8fafc;border-radius:7px;margin-top:20px}
+.clinic-settings>footer{display:flex;justify-content:space-between;align-items:center;gap:14px;padding-top:22px;margin-top:24px;border-top:1px solid #e2e8f0}.clinic-settings footer small{font-size:11px;color:#64748b}.clinic-settings footer button{background:#111;color:#fff;padding:9px 18px;border-radius:6px;font-size:13px}.clinic-settings button:focus-visible,.clinic-settings input:focus-visible,.clinic-settings select:focus-visible{outline:2px solid #64748b;outline-offset:3px}
+/* Explicit dark surfaces, rather than an image/color inversion filter. */
+html[data-clinic-theme=dark]{background:#10141d;color:#e2e8f0}
+html[data-clinic-theme=dark] body{background:#10141d;color:#e2e8f0}
+html[data-clinic-theme=dark] :is(.clinic-shell,.clinic-content,.tm-main){background:#131923!important;color:#dbe3ee}
+html[data-clinic-theme=dark] :is(.clinic-sidebar,.clinic-topbar){background:#191f2a!important;border-color:#303948!important;color:#cbd5e1}
+html[data-clinic-theme=dark] :is(.clinic-shell,[role=dialog]) :is(.bg-white,.bg-gray-50,.bg-gray-100,.bg-slate-50,.bg-slate-100,.clinic-settings,.tm-panel,.tm-work-card,.tm-completion-pie,.tm-top-cats,.tm-podium,.tm-collection-filters,.tm-task-action-card,.tm-create-section,.tm-form-note,.tm-submission){background-color:#1d2532!important;border-color:#354153!important;color:#dbe3ee}
+html[data-clinic-theme=dark] :is(.clinic-shell,[role=dialog]) :is([class*="bg-white/"],[class*="bg-gray-50/"]){background-color:#1d2532f2!important}
+html[data-clinic-theme=dark] :is(.clinic-shell,[role=dialog]) :is(.text-black,.text-gray-900,.text-gray-800,.text-gray-700,.text-slate-900,.text-slate-800,.text-slate-700,h1,h2,h3,h4,label,legend){color:#e2e8f0!important}
+html[data-clinic-theme=dark] :is(.clinic-shell,[role=dialog]) :is(.text-gray-600,.text-gray-500,.text-slate-600,.text-slate-500){color:#a9b6ca!important}
+html[data-clinic-theme=dark] :is(.clinic-shell,[role=dialog]) :is(.border-gray-100,.border-gray-200,.border-slate-200,.divide-gray-200){border-color:#354153!important}
+html[data-clinic-theme=dark] .clinic-sidebar a{color:#bac7da!important}
+html[data-clinic-theme=dark] .clinic-sidebar :is(a:hover,a[aria-current=page],a.bg-gray-100,a.bg-indigo-50){background:#303a4c!important;color:#fff!important;box-shadow:inset 3px 0 #e2e8f0}
+html[data-clinic-theme=dark] .clinic-sidebar a[aria-current=page] :is(svg,span){color:#fff!important}
+html[data-clinic-theme=dark] :is(.clinic-shell,[role=dialog],.clinic-guest) :is(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]),select,textarea){background:#111923!important;border-color:#46536a!important;color:#e2e8f0!important;--tw-ring-color:#94a3b8}
+html[data-clinic-theme=dark] :is(.clinic-shell,[role=dialog]) input::placeholder,html[data-clinic-theme=dark] :is(.clinic-shell,[role=dialog]) textarea::placeholder{color:#8999b0!important}
+html[data-clinic-theme=dark] .clinic-content table thead th{background:#263143!important;color:#cbd5e1!important;border-color:#354153}
+html[data-clinic-theme=dark] .clinic-content table tbody tr:nth-child(even){background:#202a39}
+html[data-clinic-theme=dark] .clinic-content table tbody tr:hover{background:#2a3649}
+html[data-clinic-theme=dark] .clinic-content table td{border-color:#354153}
+html[data-clinic-theme=dark] :is(.tm-ranking-table td strong,.tm-pie-legend strong,.tm-podium strong,.tm-work-card-title,.tm-collection-title strong,.tm-work-card-person strong,.tm-section-heading h3){color:#e2e8f0!important}
+html[data-clinic-theme=dark] :is(.tm-pie-legend,.tm-leaderboard-note,.tm-performance-clear,.tm-work-card-description,.tm-daily-caption,.tm-work-card-person small,.tm-podium small){color:#a9b6ca!important}
+html[data-clinic-theme=dark] :is(.tm-secondary,.tm-work-open,.tm-layout-switch button,.tm-tabs button,.clinic-appearance){background:#263143!important;color:#e2e8f0!important;border-color:#46536a!important}
+html[data-clinic-theme=dark] .clinic-content :is(button,a):focus-visible{outline-color:#cbd5e1}
+html[data-clinic-theme=dark] .clinic-signin-card{background:rgba(22,29,41,.88)!important;border-color:#65718a66!important;color:#e2e8f0}
+html[data-clinic-theme=dark] .clinic-signin-card :is(h1,label,.text-white,.text-sm){color:#e2e8f0!important;text-shadow:none}
+html[data-clinic-theme=dark] .clinic-settings{background:#1d2532!important;color:#e2e8f0}
+html[data-clinic-theme=dark] .clinic-settings :is(header p,fieldset>p,.clinic-setting-toggle small,.clinic-setting-hint,footer small){color:#a9b6ca}
+html[data-clinic-theme=dark] .clinic-settings :is(footer,.clinic-settings-tabs,.clinic-theme-options>label){border-color:#46536a}
+html[data-clinic-theme=dark] .clinic-theme-options label.selected{border-color:#e2e8f0;box-shadow:0 0 0 1px #e2e8f0}
+html[data-clinic-theme=dark] .clinic-settings-tabs button[aria-selected=true]{color:#fff;border-color:#fff}
+html[data-clinic-theme=dark] .clinic-setting-hint{background:#111923}
+html[data-clinic-theme=dark][data-clinic-compatibility=on] .clinic-signin-card{background:#1d2532!important}
+@media(max-width:480px){.clinic-settings{padding:20px}.clinic-theme-options{gap:7px}.clinic-theme-options>label{padding:7px}.clinic-theme-preview{padding-left:24px}.clinic-settings>footer{align-items:flex-start}}
+
+/* Theme coverage shared by both appearances and by dialogs rendered outside the shell. */
+html[data-clinic-theme=dark][data-clinic-appearance] {
+ --clinic-accent-soft:#252d45;--clinic-accent-line:#414c70;--clinic-accent-ink:#b9c4ff;
+}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app{
+ --work-border:#354153;--work-muted:#a9b6ca;--work-surface:#1d2532;--work-subtle:#263143;--work-ink:#e2e8f0;
+ --tm-ink:#e2e8f0;--tm-muted:#a9b6ca;background:#131923!important;color:#e2e8f0;
+}
+html[data-clinic-theme=dark][data-clinic-appearance] :is(.bg-white,.bg-gray-50,.bg-gray-100,.bg-slate-50,.bg-slate-100,.bg-neutral-50,.bg-zinc-50,.bg-indigo-50){background-color:#1d2532!important;color:#dbe3ee;border-color:#354153!important}
+html[data-clinic-theme=dark][data-clinic-appearance] :is(.text-black,.text-gray-900,.text-gray-800,.text-gray-700,.text-slate-900,.text-slate-800,.text-slate-700,.text-neutral-900){color:#e2e8f0!important}
+html[data-clinic-theme=dark][data-clinic-appearance] :is(.text-gray-400,.text-gray-500,.text-gray-600,.text-slate-400,.text-slate-500,.text-slate-600){color:#a9b6ca!important}
+html[data-clinic-theme=dark][data-clinic-appearance] :is(.border-gray-100,.border-gray-200,.border-gray-300,.border-slate-200,.border-slate-300,.border-indigo-100){border-color:#354153!important}
+html[data-clinic-theme=dark][data-clinic-appearance] :is(.hover\:bg-gray-100,.hover\:bg-gray-50,.hover\:bg-slate-50,.hover\:bg-indigo-50):hover{background-color:#303c50!important}
+html[data-clinic-theme=dark][data-clinic-appearance] :is(input:not([type=checkbox]):not([type=radio]):not([type=range]),textarea,select,option){background-color:#111923!important;color:#e2e8f0!important;border-color:#46536a!important}
+html[data-clinic-theme=dark][data-clinic-appearance] :is(input,textarea)::placeholder{color:#8999b0!important}
+html[data-clinic-theme=dark][data-clinic-appearance] :is(.tm-modal,.tm-panel,.tm-stat,.tm-task-overview,.tm-task-action-card,.tm-review-feedback,.tm-task-pings,.tm-final-submission,.tm-collaboration,.tm-child-card,.tm-child-row,.tm-workflow-step,.tm-workflow-breadcrumb,.tm-child-step,.tm-child-dependencies,.tm-monitoring-setup,.tm-ping-list article,.tm-setup-form,.tm-setup-confirm,.tm-report-field,.tm-rounds-report,.tm-daily-card,.tm-notification-panel,.tm-notification-clear>div,.tm-issue-image,.tm-report-filter-drawer,.tm-leaderboard-filters,.tm-progress-person,.tm-completion-pie,.tm-podium,.tm-collection-panel,.tm-work-card,.tm-preview,.tm-preview-panel){background:#1d2532!important;color:#dbe3ee!important;border-color:#354153!important}
+html[data-clinic-theme=dark][data-clinic-appearance] :is(.tm-task-form-dialog>header,.tm-task-create-form>.tm-modal-actions,.tm-task-create-form .tm-create-reference,.tm-calendar-people-tools,.tm-calendar-large,.tm-calendar-day,.tm-search,.tm-date,.tm-filters,.tm-list-filter-bar,.tm-report-tabs,.tm-collab-progress,.tm-work-card-tags>span,.tm-task-location>span,.tm-dashboard-task-row,.tm-notification-bell,.tm-progress-search,.tm-rank){background:#263143!important;color:#dbe3ee!important;border-color:#354153!important}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app :is(h1,h2,h3,h4,label,legend,dt,dd,.tm-task-title,.tm-child-title,.tm-work-card-title,.tm-calendar-task-card-heading button,.tm-task-action-card strong){color:#e2e8f0!important}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app :is(.tm-action-description,.tm-create-intro,.tm-daily-caption,.tm-page-heading p,.tm-task-overview dt,.tm-work-card-description,.tm-workflow-intro p,.tm-leaderboard-note){color:#a9b6ca!important}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app :is(th,td){border-color:#354153!important}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app table th{background:#263143!important;color:#cbd5e1!important}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app table tbody tr{background:#1d2532!important;color:#dbe3ee}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app table tbody tr:nth-child(even){background:#202a39!important}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app table tbody tr:hover{background:#2a3649!important}
+html[data-clinic-theme=dark][data-clinic-appearance] :is(.tm-secondary,.tm-work-open,.tm-layout-switch button,.tm-daily-type-tabs button,.tm-calendar-nav>button,.tm-child-mode button,.tm-rounds-choice,.tm-rounds-branches>button,.tm-workflow-list-toggle button){background:#263143!important;color:#e2e8f0!important;border-color:#46536a!important}
+html[data-clinic-theme=dark][data-clinic-appearance] :is(.tm-primary,.tm-tabs button.active,.tm-task-detail-tabs button[aria-selected=true],.tm-layout-switch button[aria-pressed=true]){background:#080d15!important;color:#fff!important;border-color:#64748b!important}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-calendar-large>.tm-selected-day{background:#354265!important;border-color:#a5b4fc!important}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-start-overview .tm-modal-actions{border-color:#354153}
+html[data-clinic-theme=dark][data-clinic-appearance] .clinic-theme-preview:not(.dark):not(.system){background:#f5f6fa!important}
+
+html[data-clinic-theme=dark][data-clinic-appearance] :is(.clinic-module-tile,.clinic-module-tile.sand,.clinic-module-tile.peach,.clinic-module-tile.blue,.announcement-card,.tm-calendar-task-card,.tm-task-detail-tabs,.tm-task-detail-panels,.tm-start-overview,.tm-report-done-card,.tm-report-editor,.tm-rounds,.tm-daily-controls,.tm-filter-basics,.tm-dashboard-tool,.tm-dashboard-weekly){background-color:#1d2532!important;color:#dbe3ee!important;border-color:#354153!important}
+html[data-clinic-theme=dark][data-clinic-appearance] :is(.clinic-module-tile,.announcement-card) :is(p,small){color:#a9b6ca!important}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app a:not(.tm-primary){color:#bac7ff}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app :is(.tm-form-note,.tm-submission,.tm-create-permissions){background:#263143!important;color:#cbd5e1!important;border-color:#46536a!important}
+
+/* Dashboard preview text has its own colors; changing the card alone cannot recolor it. */
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app :is(.tm-dashboard-task-main strong,.tm-dashboard-empty strong,.tm-deadlines strong,.tm-activity p,.tm-stat strong,.tm-attention strong,.tm-progress-person strong,.tm-pie-legend strong,.tm-ranking-table strong,.tm-child-title,.tm-work-card-person strong,.tm-work-due strong){color:#e2e8f0!important}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app :is(.tm-dashboard-task-main>span,.tm-dashboard-task-tags time,.tm-dashboard-task-tags time span,.tm-dashboard-empty p,.tm-deadlines span,.tm-activity small,.tm-stat p,.tm-stat small,.tm-work-card-person small,.tm-work-due small,.tm-child-meta,.tm-child-description,.tm-collab-context,.tm-calendar-task-card>p,.tm-calendar-task-card dt){color:#b3c0d3!important}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app .tm-dashboard-task-main .tm-submission-stamp time{color:#b3c0d3!important}
+
+/* Neutral component colors resolve at the theme boundary, regardless of CSS load order. */
+html[data-clinic-theme=dark][data-clinic-appearance]{--clinic-dark-ink:#e2e8f0;--clinic-dark-muted:#b3c0d3;--clinic-dark-surface:#1d2532;--clinic-dark-subtle:#263143;--clinic-dark-border:#354153;--clinic-ink:#e2e8f0;--clinic-muted:#b3c0d3;--clinic-line:#354153;--clinic-paper:#131923}
+
+/* Page canvas stays continuous; only cards and controls receive raised surfaces. */
+html[data-clinic-theme=dark][data-clinic-appearance] :is(.clinic-content,.tm-app){background:#131923!important}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app :is(.tm-main,.tm-page-heading,.tm-heading-actions,.tm-preview-panel){background:transparent!important}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app .tm-heading-actions .tm-search{background:#1d2532!important;border:1px solid #46536a!important;color:#cbd5e1;padding:0 11px!important;min-height:38px;height:38px;gap:8px}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app .tm-heading-actions .tm-search input{background:transparent!important;border:0!important;box-shadow:none!important;outline:none;min-height:36px;height:36px;padding:0!important;margin:0;border-radius:0;color:#e2e8f0!important;--tw-ring-shadow:0 0 #0000}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app .tm-heading-actions .tm-search:focus-within{outline:2px solid #a5b4fc;outline-offset:2px}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app .tm-heading-actions :is(.tm-date,.tm-secondary,.tm-import-menu>summary){background:#1d2532!important;color:#e2e8f0!important;border-color:#46536a!important;min-height:38px}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app .tm-import-menu>div{background:#1d2532!important;color:#e2e8f0;border:1px solid #46536a;border-radius:7px}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app .tm-tabs>button{background:#263143!important;color:#e2e8f0!important;border-color:#46536a!important}
+html[data-clinic-theme=dark][data-clinic-appearance] .tm-app .tm-tabs>button.active{background:#080d15!important;color:#fff!important;border-color:#94a3b8!important}
+
+.clinic-help{display:inline-block;position:relative;vertical-align:middle;margin-left:5px;font-size:12px;font-weight:400;letter-spacing:normal;line-height:1.5;text-transform:none}.clinic-help .clinic-help-trigger{display:inline-grid!important;place-items:center;min-width:20px!important;width:20px;height:20px;min-height:20px!important;padding:0!important;border:1px solid #94a3b8!important;border-radius:50%!important;background:transparent!important;color:#64748b!important;font:600 12px/1 sans-serif!important;cursor:pointer;box-shadow:none!important}.clinic-help-trigger:focus-visible{outline:2px solid #6366f1;outline-offset:3px}.clinic-help .clinic-help-description{display:block;position:absolute;z-index:80;top:calc(100% + 8px);left:0;width:min(310px,70vw);padding:12px 14px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;color:#334155;box-shadow:0 6px 20px #0f172a20;font-family:inherit;font-size:12px;font-weight:400;line-height:1.6;text-align:left;white-space:normal;overflow-wrap:anywhere;text-transform:none;letter-spacing:normal}.tm-task-detail-panels>.clinic-help{margin-bottom:8px}html[data-clinic-theme=dark] .clinic-help .clinic-help-trigger{color:#cbd5e1!important;border-color:#94a3b8!important}html[data-clinic-theme=dark] .clinic-help .clinic-help-description{background:#263143;color:#e2e8f0;border-color:#64748b}
+
+.clinic-help .clinic-help-description{position:fixed;max-height:45vh;overflow:auto;z-index:1000}
+
+.csv-import-control,.csv-import-toolbar,.csv-import-format,.csv-import-format-body{box-sizing:border-box;min-width:0;max-width:100%}.csv-import-control{overflow-wrap:anywhere;white-space:normal}.csv-import-format{flex:1 0 100%;width:100%}.csv-import-format-body{width:100%;overflow:hidden}.csv-import-format-body>p{white-space:normal;overflow-wrap:anywhere}.csv-import-preview-scroll{display:block;width:100%;max-width:100%;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-gutter:stable}.csv-import-preview-scroll table{width:max-content!important;min-width:100%;max-width:none!important;table-layout:auto}.csv-import-preview-scroll:focus-visible{outline:2px solid #818cf8;outline-offset:2px}.csv-import-control .csv-import-preview-scroll :is(th,td){padding:7px 10px!important;white-space:nowrap}.tm-import-menu>.csv-import-control{width:min(560px,calc(100vw - 48px))!important;max-height:70dvh;overflow-y:auto;overflow-x:hidden}.tm-file-actions-menu .tm-import-menu>.csv-import-control{width:min(560px,calc(100vw - 48px))!important;padding:12px;right:0}
+
+.clinic-help-trigger>span{font-family:Georgia,serif;font-size:13px;font-weight:700;line-height:1;font-style:normal}

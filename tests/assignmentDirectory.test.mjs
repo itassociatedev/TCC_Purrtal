@@ -6,11 +6,14 @@ import { canSubmitAssignedTask } from '../resources/js/Pages/Tasks/taskPolicy.mj
 import { canDelegate, createChildTask } from '../resources/js/Pages/Tasks/collaborativeTasks.mjs';
 import { tasksForPreview } from '../resources/js/Pages/Tasks/taskDirectory.mjs';
 
-test('EVP, Corporate Services and OM can assign individuals across every default role and branch', () => {
+test('EVP assignments are limited to direct reports while Corporate Services and OMs can assign across roles', () => {
     const config = defaultSettings(); const all = assignmentDirectory(config);
     for (const role of config.roles) assert.ok(all.some(person => person.role === role.name), role.name);
     assert.equal(new Set(all.map(person => person.name)).size, all.length);
-    assert.equal(eligibleAssignees(config, { role: 'EVP' }).length, all.length);
+    const evpChoices = eligibleAssignees(config, { role: 'EVP' });
+    assert.ok(evpChoices.some(person => person.baseRole === 'Operations Manager'));
+    assert.ok(evpChoices.every(person => ['Operations Manager', 'Team Leader'].includes(person.baseRole) || person.role === 'Corporate Services'));
+    assert.equal(eligibleAssignees(config, { role: 'Corporate Services' }).length, all.length);
     assert.equal(eligibleAssignees(config, { role: 'Operations Manager', branch: 'Makati' }).length, all.length);
     assert.ok(eligibleAssignees(config, { role: 'Team Leader', department: 'IT' }).some(person => person.department !== 'IT' && person.baseRole === 'Employee'));
     const legacy = structuredClone(config); delete legacy.roleHolders;
@@ -51,8 +54,7 @@ test('edit choices preserve a TL owner and existing branch without broadening ne
     assert.equal(owner.department, task.department);
     assert.ok(owner.availableBranches.includes(task.branch));
     assert.equal(choices.filter(person => person.name === leader.name).length, 1);
-    assert.ok(choices.every(person => person.name === leader.name || person.baseRole === 'Employee'));
-    assert.equal(eligibleAssignees(config, scope).some(person => person.name === leader.name), false);
+    assert.equal(choices.length, eligibleAssignees(config, scope).length);
     const removed = taskEditAssignees(config, scope, { ...task, assignee: 'John Doe Former Member' });
     assert.equal(removed.find(person => person.name === 'John Doe Former Member').branch, 'Makati');
 });
@@ -66,11 +68,13 @@ test('a Team Leader can assign their own task when their department has no emplo
     assert.ok(choices.find(person=>person.name===leader.name).availableBranches.includes(leader.branch));
 });
 
-test('Team Leaders may assign employees across departments while excluding other leaders', () => {
+test('Team Leaders and Supervisors can assign Operations Managers across branches', () => {
     const config=defaultSettings();
     const leader=config.teamLeaders.find(person=>person.department==='Vet Tech');
     const choices=eligibleAssignees(config,{role:'Team Leader',department:leader.department,actor:leader.name});
     assert.ok(choices.some(person=>person.name===leader.name));
     assert.ok(choices.some(person=>person.baseRole==='Employee'));
-    assert.ok(choices.every(person=>person.baseRole==='Employee'||person.name===leader.name));
+    assert.deepEqual(choices.filter(person=>person.baseRole==='Operations Manager').map(person=>person.branch).sort(), [...config.branches].sort());
+    assert.ok(choices.some(person=>person.baseRole==='Team Leader'&&person.name!==leader.name));
+    assert.ok(choices.every(person=>['Employee','Team Leader','Operations Manager'].includes(person.baseRole)||person.role==='Corporate Services'));
 });

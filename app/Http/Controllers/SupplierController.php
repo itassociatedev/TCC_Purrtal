@@ -161,39 +161,29 @@ class SupplierController extends Controller
 
     public function downloadTemplate()
     {
-        $headers = [
-            "Content-type"        => "text/csv",
-            "Content-Disposition" => "attachment; filename=suppliers_template.csv",
-            "Pragma"              => "no-cache",
-            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
-            "Expires"             => "0"
-        ];
-
-        $columns = ['name', 'contact_person', 'contact_number', 'address', 'tin'];
-
-        $callback = function() use($columns) {
-            $file = fopen('php://output', 'w');
-            fputcsv($file, $columns);
-            fclose($file);
-        };
-
-        return response()->stream($callback, 200, $headers);
+        return response()->streamDownload(function () {
+            $book = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            $book->getActiveSheet()->fromArray([['name', 'contact_person', 'contact_number', 'address', 'tin']]);
+            (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save('php://output');
+            $book->disconnectWorksheets();
+        }, 'suppliers_template.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
 
     public function import(Request $request)
     {
         $request->validate([
-            'file' => 'required|file|mimes:csv,txt|max:2048',
+            'file' => 'required|file|mimes:xlsx|max:2048',
         ]);
 
         $file = $request->file('file');
-        $handle = fopen($file->getPathname(), "r");
-        $header = fgetcsv($handle); 
+        $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($file->getPathname());
+        $rows = $book->getSheet(0)->toArray('', false, true, false);
+        array_shift($rows); 
 
         $importedCount = 0;
         $skippedCount = 0;
 
-        while (($row = fgetcsv($handle)) !== false) {
+        foreach ($rows as $row) {
             if (empty(trim($row[0]))) {
                 $skippedCount++;
                 continue;
@@ -215,7 +205,7 @@ class SupplierController extends Controller
             $importedCount++;
         }
         
-        fclose($handle);
+        $book->disconnectWorksheets();
 
         return back()->with('success', "Import complete: $importedCount added, $skippedCount skipped (duplicates or missing names).");
     }

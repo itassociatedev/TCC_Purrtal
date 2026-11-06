@@ -3,7 +3,7 @@ export const isSelfCreatedRequest=task=>['Self-created request','Turnover reques
 export const approvalBlocksWork=task=>(task.approvalRequired||isSelfCreatedRequest(task))&&!task.approvalGrantedAt&&!task.history?.some(event=>/: approved\.$|request approved|task approved/i.test(event.text||''));
 export function routeTaskApproval(task,config,scope){
  if(task.template==='collaborative')return task;
- const required=scope.role==='Team Leader'||isSelfCreatedRequest(task);
+ const required=isSelfCreatedRequest(task)||scope.role==='Team Leader'&&task.assignee===scope.actor;
  if(!required)return task;
  const people=assignmentDirectory(config).filter(person=>person.name!==scope.actor);
  const reviewer=(scope.role==='Team Leader'?people.find(person=>person.baseRole==='Operations Manager'&&person.branch===task.branch):null)

@@ -8,9 +8,10 @@ use Illuminate\Contracts\View\View;
 use Maatwebsite\Excel\Concerns\FromView;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Concerns\WithColumnWidths;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class DutyMealExport implements FromView, ShouldAutoSize, WithStyles
+class DutyMealExport implements FromView, WithStyles, WithColumnWidths
 {
     protected $dutyMealIds;
 
@@ -141,9 +142,14 @@ class DutyMealExport implements FromView, ShouldAutoSize, WithStyles
         ]);
     }
 
+    public function columnWidths(): array { return ['A'=>16,'B'=>30,'C'=>12,'D'=>12,'E'=>14,'F'=>18,'G'=>60]; }
+
     public function styles(Worksheet $sheet)
     {
+        $sheet->freezePane('C3');
+        if ($sheet->getHighestRow() > 2) $sheet->setAutoFilter('A2:G'.$sheet->getHighestRow());
         return [
+            2 => ['font'=>['bold'=>true]],
             1 => ['font' => ['bold' => true, 'size' => 14]],
             // 🟢 NEW: Tell Excel to wrap text and align to the top so cells automatically expand vertically!
             'A:Z' => [

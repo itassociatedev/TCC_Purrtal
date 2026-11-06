@@ -23,6 +23,19 @@ export function taskNotificationChanges(previous, current, actor = {}) {
                 else if (!previousPing.acknowledgedAt && ping.acknowledgedAt) events.push(notificationForTask(task, 'Follow-up acknowledged', `${ping.acknowledgedBy} acknowledged the follow-up from ${ping.sender}.`));
             }
         }
+        const handover=task.handover;
+        if(handover && (!old || handover.status!==old.handover?.status || handover.requestedAt!==old.handover?.requestedAt)) {
+            const action={pending:'Handover requested',accepted:'Handover accepted',declined:'Handover declined',cancelled:'Handover cancelled'}[handover.status];
+            if(action){
+                const description=handover.status==='pending'
+                    ? handover.requestedBy+' offered “'+task.title+'” to '+handover.to+'. '+handover.from+' remains responsible until acceptance. Due '+task.due+'.'
+                    : handover.status==='accepted'?handover.to+' accepted “'+task.title+'” from '+handover.from+'. The deadline remains '+task.due+'.'
+                    : handover.status==='declined'?handover.to+' declined “'+task.title+'”. '+handover.from+' remains responsible.'
+                    : 'The handover of “'+task.title+'” to '+handover.to+' was cancelled. '+task.assignee+' remains responsible.';
+                events.push({...notificationForTask(task,action,description),handover,recipientNames:[...new Set([handover.from,handover.to,handover.requestedBy])],dedupeKey:'handover:'+task.id+':'+handover.requestedAt+':'+handover.status,createdAt:handover.resolvedAt||handover.requestedAt});
+                if(handover.status!=='cancelled'||!old||task.status===old.status)continue;
+            }
+        }
         let action, description;
         if (!old) {
             action = task.status === 'Pending Approval' ? 'Task requested' : 'New task';

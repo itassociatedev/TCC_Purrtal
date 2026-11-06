@@ -13,7 +13,8 @@ export function dailyReportTypes({ role, department, config }) {
     return ['Employee', 'Team Leader'].includes(role) ? reports.filter(report => report[3] === department) : reports;
 }
 // Report authorship belongs to the assigned department employee; management reviews without rewriting it.
-export function canEditDailyReport(task, { role, employee, config }) {
+export function canEditDailyReport(task, { role, employee, config, actor }) {
+    if(role==='Team Leader'&&actor?.department===config.itDepartment&&task.template==='it-opening-rounds'&&task.department===config.itDepartment&&task.sharedBranchReport&&['Not Started','In Progress','Revision Needed'].includes(task.status))return true;
     const department = reportTemplates(config).find(report => report.id === task.template)?.department || (task.reportDefinition ? task.department : null) || (task.template === 'daily-operations' ? config.cashierDepartment || 'Cashier'
         : ['it-opening-rounds', 'narrative-report'].includes(task.template) ? config.itDepartment : null);
     return Boolean(department && role === 'Employee' && (employee?.name === task.assignee || task.template === 'it-opening-rounds' && task.sharedBranchReport && (employee?.availableBranches || [employee?.branch]).includes(task.branch))
@@ -26,5 +27,5 @@ export const itReportDone = task => ['it-opening-rounds', 'narrative-report'].in
 export const canCorrectITReport = (task, context) => !task.sharedBranchReport && itReportDone(task)
     && canEditDailyReport({ ...task, status: 'In Progress' }, context);
 export const pageTitle = ({ view, role, roleLabel, scope }) => view === 'Workspace Setup' ? 'Workspace Setup'
-    : role === 'EVP' ? view === 'Dashboard' ? `${roleLabel} Dashboard` : view
-    : view === 'Dashboard' ? `${scope} · ${roleLabel} Dashboard` : `${view} · ${scope}`;
+    : role === 'EVP' ? view === 'Dashboard' ? `${roleLabel} Dashboard` : view==='Task Archive'?'Task History':view
+    : view === 'Dashboard' ? `${scope} · ${roleLabel} Dashboard` : `${view==='Task Archive'?'Task History':view} · ${scope}`;

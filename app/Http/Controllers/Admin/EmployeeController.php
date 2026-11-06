@@ -382,7 +382,7 @@ class EmployeeController extends Controller
 
     public function import(Request $request)
     {
-        $request->validate(['import_file' => 'required|mimes:xlsx,xls,csv|max:10240']);
+        $request->validate(['import_file' => 'required|mimes:xlsx|max:10240']);
         
         try {
             Excel::import(new UsersImport, $request->file('import_file'));

@@ -4,7 +4,7 @@ import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 
-export default function SystemLogsIndex({ auth, logs, filters, dutyLogs=false, canDeleteLogs=false }) {
+export default function SystemLogsIndex({ auth, logs, filters, dutyLogs=false, modules=[] }) {
     const [search, setSearch] = useState(filters.search || '');
     const [moduleFilter, setModuleFilter] = useState(filters.module || '');
     const [actionFilter, setActionFilter] = useState(filters.action || '');
@@ -162,20 +162,9 @@ export default function SystemLogsIndex({ auth, logs, filters, dutyLogs=false, c
                             value={moduleFilter}
                             onChange={(e) => setModuleFilter(e.target.value)}
                         >
-                            {dutyLogs ? <><option value="">All Duty Meal logs</option>{['Duty Meal Setup','Duty Meal Overview','Duty Meal Archive'].map(name=><option key={name} value={name}>{name}</option>)}</> : <><option value="">All Modules</option>
-                            <option value="Authentication">Authentication</option>
-                            <option value="Employee Management">Employee Management</option>
-                            <option value="Organizational Chart">Organizational Chart</option>
-                            <option value="Announcements">Announcements</option>
-                            <option value="Company Content">Company Content</option>
-                            <option value="Document Repository">Document Repository</option>
-                            <option value="HR Module">HR Module</option>
-                            <option value="Manpower Requests">Manpower Requests</option>
-                            <option value="Feedback">Feedback</option>
-                            <option value="PR/PO Module">PR/PO Module</option>
-                            <option value="Duty Meal Module">Duty Meal Module</option>
-                            <option value="Profile">Profile</option>
-                        </>}</select>
+                            <option value="">{dutyLogs?'All Duty Meal logs':'All modules'}</option>
+                            {[...new Set([...modules.filter(name=>dutyLogs||(!['Auth','Authentication'].includes(name)&&!name.startsWith('Duty Meal'))),...(!dutyLogs?['Authentication','Duty Meal Module','Task Module']:[])])].sort().map(name=><option key={name} value={name}>{name}</option>)}
+                        </select>
 
                         {/* ACTIONS */}
                         <select
@@ -284,7 +273,7 @@ export default function SystemLogsIndex({ auth, logs, filters, dutyLogs=false, c
                                 <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider text-xs">Module & Action</th>
                                 <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider text-xs">Description</th>
                                 <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider text-xs">Security</th>
-                                <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider text-xs">Status</th>{canDeleteLogs&&<th className="px-6 py-3 text-left text-xs">Actions</th>}
+                                <th className="px-6 py-3 text-left font-semibold text-gray-700 uppercase tracking-wider text-xs">Status</th>
                             </tr>
                         </thead>
 
@@ -307,13 +296,13 @@ export default function SystemLogsIndex({ auth, logs, filters, dutyLogs=false, c
                                     <td className="px-6 py-4 text-gray-500 font-mono text-xs whitespace-nowrap">
                                         <span className="bg-gray-100 px-2 py-1 rounded">IP: {log.ip_address}</span>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(log.status)}</td>{canDeleteLogs&&<td className="px-6 py-4"><button type="button" className="font-semibold text-red-700" onClick={()=>{if(window.confirm('Delete this log entry permanently?'))router.delete(route(dutyLogs?'admin.duty-meals.logs.destroy':'admin.logs.destroy',log.id),{preserveScroll:true});}}>Delete</button></td>}
+                                    <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(log.status)}</td>
                                 </tr>
                             ))}
                             
                             {logs.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={canDeleteLogs?7:6} className="px-6 py-8 text-center text-gray-500 bg-gray-50">
+                                    <td colSpan={6} className="px-6 py-8 text-center text-gray-500 bg-gray-50">
                                         <div className="flex flex-col items-center justify-center">
                                             <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                                             No logs found matching your criteria.

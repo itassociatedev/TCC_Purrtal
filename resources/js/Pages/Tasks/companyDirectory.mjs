@@ -25,10 +25,10 @@ export function companySettings(config,directory) {
             : /chief veterinar/.test(title)?'Chief Vet'
             : /operations? manager/.test(title)?'Operations Manager'
             : /hr manager|human resources business partner|internal auditor|coordination lead|marketing manager/.test(title)?'Corporate Services'
-            : /team leader|\btl\b|^it supervisor$/.test(title)?'Team Leader':'Employee';
+            : /team leader|\btl\b|\bsupervisor\b/.test(title)?'Team Leader':'Employee';
         const availableBranches=[...new Set([user.branch,...(user.branches||[])].filter(Boolean))];
         const branch=user.branch||availableBranches[0]||config.branches[0];
-        return {id:user.id,name:user.name,position:user.position||'Team member',department:departmentFor(user),branch,
+        return {id:user.id,name:user.name,position:departmentFor(user)==='IT'&&role==='Team Leader'?'IT Supervisor':user.position||'Team member',department:departmentFor(user),branch,
             role,accountName:user.name,accountLinked:true,
             previousNames:[...new Set([...(saved?.previousNames||[]),saved?.name,saved?.accountName].filter(Boolean))],
             ...(saved?.branchSchedule?{branchSchedule:saved.branchSchedule}:{}),

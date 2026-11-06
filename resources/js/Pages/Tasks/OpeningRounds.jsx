@@ -4,7 +4,7 @@ import IssueImage from './IssueImage.jsx';
 import { deleteIssueImage, imageLimit, storeIssueImages, validateIssueImages } from './roundImages.mjs';
 
 // A structured submission form replaces the generic text box for IT Opening Rounds tasks.
-export default function OpeningRounds({ canEdit = false, task, onDraft, onSubmit, onNotice, branches, checks: configuredChecks = systemChecks, itDepartment = 'IT' }) {
+export default function OpeningRounds({ canEdit = false, requiresApproval = true, task, onDraft, onSubmit, onNotice, branches, checks: configuredChecks = systemChecks, itDepartment = 'IT' }) {
     // Save a checklist snapshot with each draft so settings edits never rewrite old reports.
     const [rounds, setRounds] = useState(() => {
         const checks = task.rounds ? task.rounds.checks || systemChecks : configuredChecks;
@@ -76,7 +76,7 @@ export default function OpeningRounds({ canEdit = false, task, onDraft, onSubmit
             <section className="tm-issue-images" aria-label="Issue images"><h4>Issue images <span>({images.length}/{imageLimit})</span></h4>{editable && <><label>Attach images<input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={uploading || images.length >= imageLimit} onChange={attachImages}/></label><p>JPG, PNG, or WebP · up to 3 MB each. Images stay in this browser with the prototype.</p></>}{uploading && <p role="status">Saving images…</p>}<div className="tm-issue-gallery">{images.map(image => <IssueImage key={image.id} image={image} editable={editable && !uploading} onRemove={removeImage}/>)}</div>{!editable && !images.length && <p>No images attached.</p>}</section>
             <label>Help needed <span>(optional)</span><textarea rows={2} value={rounds.helpNeeded} onChange={event => setField('helpNeeded', event.target.value)} placeholder="None" disabled={!editable}/></label>
             {error && <p className="tm-rounds-error" role="alert">{error}</p>}
-            {editable && <div className="tm-modal-actions"><button className="tm-secondary" type="button" disabled={uploading} onClick={() => { commitImages(); onDraft(rounds); setError(''); }}>Save draft</button><button className="tm-primary" type="submit" disabled={uploading}>{task.sharedBranchReport ? 'Submit branch report for approval' : 'Submit rounds for review'}</button></div>}
+            {editable && <div className="tm-modal-actions"><button className="tm-secondary" type="button" disabled={uploading} onClick={() => { commitImages(); onDraft(rounds); setError(''); }}>Save draft</button><button className="tm-primary" type="submit" disabled={uploading}>{!requiresApproval?'Complete Opening Rounds':task.sharedBranchReport ? 'Submit branch report for approval' : 'Submit rounds for review'}</button></div>}
         </form>
         {task.sharedBranchReport && <p className="tm-form-note">One opening report per branch per day. {task.submittedBy ? `${task.status === 'Completed' ? 'Approved report submitted' : 'Report submitted'} by ${task.submittedBy}. ${task.status === 'Pending Review' ? 'Awaiting approval; no duplicate submission is needed.' : task.status === 'Revision Needed' ? 'Needs revision before approval.' : 'No duplicate submission is needed.'}` : 'Any IT employee or intern with access to this branch can complete it.'}</p>}
         <details className="tm-rounds-report" open={!editable}><summary>{editable ? 'Preview formatted report' : 'Submitted report'}</summary><pre>{formatRounds(rounds)}</pre><button className="tm-secondary" type="button" onClick={copyReport}>Copy report</button></details>

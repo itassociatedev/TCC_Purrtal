@@ -772,7 +772,7 @@ export default function SetupSchedule({ employees = [], branches = [], shifts = 
                                 type="file" 
                                 ref={fileInputRef} 
                                 style={{ display: 'none' }} 
-                                accept=".xlsx,.xls,.csv" 
+                                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" 
                                 onChange={handleFileImport} 
                             />
                             <button 

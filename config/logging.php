@@ -51,6 +51,7 @@ return [
     */
 
     'channels' => [
+        'task-mail' => ['driver'=>'single','path'=>storage_path('logs/task-mail.log'),'level'=>'debug'],
 
         'stack' => [
             'driver' => 'stack',

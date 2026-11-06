@@ -1,0 +1,14 @@
+import {useState} from 'react';
+import Modal from './Modal';
+import useDisplayPreferences from './useDisplayPreferences';
+
+export default function DisplaySettings({onClose}){
+ const [preferences,update]=useDisplayPreferences();
+ const [tab,setTab]=useState('Appearance');
+ return <Modal show onClose={onClose} maxWidth="xl"><section className="clinic-settings">
+  <header><div><h2>Settings</h2><p>Make the portal comfortable for you.</p></div><button type="button" onClick={onClose} aria-label="Close settings">×</button></header>
+  <div className="clinic-settings-tabs" role="tablist" aria-label="Settings categories">{['Appearance','Accessibility'].map(name=><button type="button" role="tab" id={'settings-tab-'+name} aria-controls={'settings-panel-'+name} aria-selected={tab===name} tabIndex={tab===name?0:-1} onKeyDown={event=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();const next=event.key==='Home'?'Appearance':event.key==='End'?'Accessibility':tab==='Appearance'?'Accessibility':'Appearance';setTab(next);document.getElementById('settings-tab-'+next)?.focus();}}} onClick={()=>setTab(name)} key={name}>{name}</button>)}</div>
+  {tab==='Appearance'?<div role="tabpanel" id="settings-panel-Appearance" aria-labelledby="settings-tab-Appearance"><fieldset><legend>Color theme</legend><p>Choose a light or dark workspace, or follow your device.</p><div className="clinic-theme-options">{['light','dark','system'].map(theme=><label key={theme} className={preferences.theme===theme?'selected':''}><input type="radio" name="clinic-theme" checked={preferences.theme===theme} onChange={()=>update({theme})}/><span className={'clinic-theme-preview '+theme} aria-hidden="true"><i/><b/><b/></span><strong>{theme[0].toUpperCase()+theme.slice(1)}</strong></label>)}</div></fieldset><label className="clinic-setting-select">Website design<select value={preferences.appearance} onChange={event=>update({appearance:event.target.value})}><option value="updated">Updated</option><option value="original">Original</option></select></label></div>:<div role="tabpanel" id="settings-panel-Accessibility" aria-labelledby="settings-tab-Accessibility"><label className="clinic-setting-toggle"><span><strong>Compatibility mode</strong><small>Turn off animations, automatic background photo changes, blur, and decorative shadows for a simpler experience.</small></span><input type="checkbox" role="switch" checked={preferences.compatibility} onChange={event=>update({compatibility:event.target.checked})}/></label><p className="clinic-setting-hint">Your device’s reduced-motion preference is also respected, even when compatibility mode is off.</p></div>}
+  <footer><small>Saved automatically in this browser.</small><button type="button" onClick={onClose}>Done</button></footer>
+ </section></Modal>;
+}

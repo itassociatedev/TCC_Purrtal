@@ -441,30 +441,16 @@ class AttendanceController extends Controller
         if (!$user->canEditModule('attendance_setup')) abort(403);
 
         $request->validate([
-            'file' => 'required|file',
+            'file' => 'required|file|mimes:xlsx',
         ]);
 
         try {
             $file = $request->file('file');
-            $extension = strtolower($file->getClientOriginalExtension());
             $rows = [];
 
-            // 1. Read the file
-            if ($extension === 'csv' || $extension === 'txt') {
-                $path = $file->getRealPath();
-                if (($handle = fopen($path, 'r')) !== FALSE) {
-                    while (($row = fgetcsv($handle, 10000, ',')) !== FALSE) {
-                        $rows[] = $row;
-                    }
-                    fclose($handle);
-                }
-            } else {
-                if (!class_exists('ZipArchive')) {
-                    return redirect()->back()->with('error', 'Server Error: The PHP "ZipArchive" extension is missing. Please save and upload your backup as a CSV file instead!');
-                }
-                $data = \Maatwebsite\Excel\Facades\Excel::toArray(new \App\Imports\AttendanceImport(null, null), $file);
-                $rows = $data[0] ?? [];
-            }
+            // Read the XLSX workbook through the existing attendance importer.
+            $data = \Maatwebsite\Excel\Facades\Excel::toArray(new \App\Imports\AttendanceImport(null, null), $file);
+            $rows = $data[0] ?? [];
 
             if (count($rows) < 2) {
                 return redirect()->back()->with('error', 'The uploaded file is empty or formatted incorrectly.');

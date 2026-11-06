@@ -128,7 +128,7 @@ public function update(Request $request, Product $product)
         // Import products from uploaded spreadsheet (XLSX/CSV)
         $request->validate([
             // 🟢 Allowed txt to prevent strict CSV MIME checks from blocking uploads
-            'import_file' => 'required|mimes:xlsx,xls,csv,txt|max:10240',
+            'import_file' => 'required|mimes:xlsx|max:10240',
         ]);
 
         try {

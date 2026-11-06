@@ -21,7 +21,7 @@ test('IT schedules apply to the scheduled day only and skip day-off assignments'
     assert.equal(scheduledBranch(employee, '2026-10-23'), 'Alabang');
     assert.equal(scheduledBranch(employee, '2026-10-25'), 'Makati');
     const tasks = ensureDailyTasks([], config, '2026-10-23');
-    assert.ok(tasks.filter(task => task.assignee === employee.name).every(task => task.branch === 'Alabang'));
+    assert.ok(tasks.filter(task => task.assignee === employee.name&&task.recurrence==='daily').every(task => task.branch === 'Alabang'));
     const next = ensureDailyTasks(tasks, config, '2026-10-24');
     assert.equal(next.filter(task => task.assignee === employee.name && task.due === '2026-10-24').length, 0);
     assert.ok(ensureDailyTasks(next, config, '2026-10-25').filter(task => task.assignee === employee.name && task.due === '2026-10-25').every(task => task.branch === 'Makati'));

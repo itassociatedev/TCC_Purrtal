@@ -1,0 +1,237 @@
+/* Opt-in visual layer. Original appearance retains the pre-redesign module styles. */
+.clinic-appearance{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid #eaecf5;border-radius:7px;background:var(--clinic-dark-surface, #fff);flex-shrink:0}
+.clinic-appearance button{padding:5px 8px;border-radius:4px;font:500 11px/1.3 system-ui,sans-serif;color:var(--clinic-dark-muted, #4c5972);white-space:nowrap}
+.clinic-appearance button[aria-pressed=true]{background:var(--clinic-dark-subtle, #f4f5fa);color:var(--clinic-dark-ink, #20283b)}
+.clinic-appearance button:focus-visible{outline:2px solid #111111;outline-offset:2px}
+.clinic-workspace-label,.clinic-guest-story{display:none}.clinic-guest-appearance{position:absolute;right:20px;top:20px;z-index:20}
+html[data-clinic-appearance=updated]{--clinic-ink:#29344c;--clinic-muted:#66738d;--clinic-line:#eaecf5;--clinic-accent:#111111;--clinic-paper:#f4f5fa}
+html[data-clinic-appearance=updated] body{font-family:Gilroy,Figtree,ui-sans-serif,system-ui,sans-serif;color:var(--clinic-ink);-webkit-font-smoothing:antialiased}
+html[data-clinic-appearance=updated] .clinic-shell{background:var(--clinic-paper);font-size:14px}
+html[data-clinic-appearance=updated] .clinic-sidebar{background:var(--clinic-dark-surface, #fafbfe);border-color:var(--clinic-line);width:244px;flex-shrink:0;display:flex;flex-direction:column}
+html[data-clinic-appearance=updated] .clinic-sidebar>div:first-child{height:88px;min-height:88px;border-color:var(--clinic-line);padding:14px 20px;justify-content:flex-start}
+html[data-clinic-appearance=updated] .clinic-sidebar>div:first-child>a{margin:0;gap:8px}
+html[data-clinic-appearance=updated] .clinic-sidebar>div:first-child svg{height:43px;width:auto}
+html[data-clinic-appearance=updated] .clinic-sidebar>div:first-child span{font-size:16px;letter-spacing:-.5px;color:var(--clinic-dark-ink, #20283b);margin:0}
+html[data-clinic-appearance=updated] .clinic-sidebar>.clinic-sidebar-navigation{padding:22px 14px;flex:1;min-height:0;overflow:auto}
+html[data-clinic-appearance=updated] .clinic-sidebar .uppercase{font-size:10px;letter-spacing:.13em;color:var(--clinic-dark-muted, #66738d);font-weight:600;margin-bottom:12px;padding-left:10px}
+html[data-clinic-appearance=updated] .clinic-sidebar ul{display:grid;gap:4px}
+html[data-clinic-appearance=updated] .clinic-sidebar ul>li{margin-top:0}
+html[data-clinic-appearance=updated] .clinic-sidebar a:not(:first-child),html[data-clinic-appearance=updated] .clinic-sidebar li a{border-radius:6px;min-height:40px;padding:10px 12px;gap:11px;color:var(--clinic-dark-muted, #4c5972);font-size:13px;line-height:1.4;font-weight:500;transition:background .12s,color .12s}
+html[data-clinic-appearance=updated] .clinic-sidebar a:hover{background:var(--clinic-dark-subtle, #f4f5fa);color:var(--clinic-dark-ink, #20283b)}
+html[data-clinic-appearance=updated] .clinic-sidebar a[aria-current=page],html[data-clinic-appearance=updated] .clinic-sidebar a.bg-gray-100,html[data-clinic-appearance=updated] .clinic-sidebar a.bg-indigo-50{background:var(--clinic-dark-subtle, #f4f5fa);color:var(--clinic-dark-ink, #111111);box-shadow:inset 3px 0 #111111;font-weight:650}
+html[data-clinic-appearance=updated] .clinic-sidebar li svg{color:currentColor;opacity:.8;width:17px;height:17px;flex-shrink:0}
+html[data-clinic-appearance=updated] .clinic-topbar{height:68px;min-height:68px;flex-shrink:0;background:var(--clinic-dark-surface, #fff);border-color:var(--clinic-line);padding-left:28px;padding-right:28px}
+html[data-clinic-appearance=updated] .clinic-workspace-label{display:flex;flex-direction:column;gap:2px;min-width:140px}
+html[data-clinic-appearance=updated] .clinic-workspace-label>span{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--clinic-dark-muted, #66738d)}
+html[data-clinic-appearance=updated] .clinic-workspace-label>strong{font-size:13px;font-weight:600;color:var(--clinic-dark-ink, #29344c)}
+html[data-clinic-appearance=updated] .clinic-topbar button.rounded-full{border-radius:7px;box-shadow:none;border-color:var(--clinic-line)}
+html[data-clinic-appearance=updated] .clinic-content{background:var(--clinic-paper);padding:24px 28px 36px;scrollbar-gutter:stable}
+html[data-clinic-appearance=updated] .clinic-page-heading{background:transparent;padding:0 0 17px;border:0;border-bottom:1px solid var(--clinic-line);border-radius:0;box-shadow:none;margin-bottom:22px}
+html[data-clinic-appearance=updated] .clinic-content h1,html[data-clinic-appearance=updated] .clinic-content h2{letter-spacing:-.025em;color:var(--clinic-dark-ink, #29344c);line-height:1.25}
+html[data-clinic-appearance=updated] .clinic-content h1{font-size:26px;font-weight:650}
+html[data-clinic-appearance=updated] .clinic-page-heading h2{font-size:24px;font-weight:650}
+html[data-clinic-appearance=updated] .clinic-content h3{letter-spacing:-.015em}
+html[data-clinic-appearance=updated] .clinic-content .bg-white{border-color:var(--clinic-line)}
+html[data-clinic-appearance=updated] .clinic-content :is(.shadow-sm,.shadow-md,.shadow-lg){box-shadow:0 1px 3px #20283b08}
+html[data-clinic-appearance=updated] .clinic-content :is(.rounded-2xl,.rounded-3xl){border-radius:12px}
+html[data-clinic-appearance=updated] .clinic-content :is(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]),select,textarea){border-color:var(--clinic-dark-border, #dce0ee);border-radius:6px;box-shadow:none;font-family:inherit;font-size:13px;line-height:1.5}
+html[data-clinic-appearance=updated] .clinic-content :is(input,select,textarea):focus{border-color:#111111;--tw-ring-color:#11111155}
+html[data-clinic-appearance=updated] .clinic-content :is(input,textarea)::placeholder{color:var(--clinic-dark-muted, #8792ab)}
+html[data-clinic-appearance=updated] .clinic-content :is(input[type=checkbox],input[type=radio]){color:var(--clinic-dark-ink, #111111);--tw-ring-color:#111111}
+html[data-clinic-appearance=updated] .clinic-content label{font-weight:500;color:var(--clinic-dark-muted, #4c5972)}
+html[data-clinic-appearance=updated] .clinic-content :is(button,a).bg-indigo-600,html[data-clinic-appearance=updated] .clinic-content :is(button,a).bg-blue-600,html[data-clinic-appearance=updated] .clinic-content .tm-primary{background:#111111;color:#fff;border-color:#111111;border-radius:6px;box-shadow:none}
+html[data-clinic-appearance=updated] .clinic-content :is(button,a).bg-indigo-600:hover,html[data-clinic-appearance=updated] .clinic-content .tm-primary:hover{background:#111111}
+html[data-clinic-appearance=updated] .clinic-content button{letter-spacing:normal}
+html[data-clinic-appearance=updated] .clinic-content button:focus-visible,html[data-clinic-appearance=updated] .clinic-content a:focus-visible{outline:2px solid #111111;outline-offset:3px}
+html[data-clinic-appearance=updated] .clinic-content table{border-collapse:separate;border-spacing:0;font-size:13px}
+html[data-clinic-appearance=updated] .clinic-content table thead th{background:var(--clinic-dark-subtle, #f4f5fa);color:var(--clinic-dark-muted, #4c5972);font-size:10px!important;font-weight:650;letter-spacing:.07em;text-transform:uppercase;border-bottom:1px solid #eaecf5;padding:12px 14px}
+html[data-clinic-appearance=updated] .clinic-content table tbody td{border-color:var(--clinic-dark-border, #eaecf5);padding:12px 14px;line-height:1.5}
+html[data-clinic-appearance=updated] .clinic-content table tbody tr:hover{background:var(--clinic-dark-subtle, #f4f5fa)}
+html[data-clinic-appearance=updated] .clinic-content .tm-panel{border-radius:10px;border-color:var(--clinic-line);box-shadow:0 1px 2px #20283b05}
+html[data-clinic-appearance=updated] .clinic-content .tm-tabs button.active{background:#111111;color:#fff;border-color:#111111}
+html[data-clinic-appearance=updated] .clinic-content .tm-top-cats{background:var(--clinic-dark-surface, #fafbfe)}
+html[data-clinic-appearance=updated] .clinic-content .tm-podium-1{background:var(--clinic-dark-subtle, #f4f5fa);border-color:var(--clinic-dark-border, #c1c7d9)}
+html[data-clinic-appearance=updated] .clinic-content .tm-podium b{color:var(--clinic-dark-ink, #111111)}
+html[data-clinic-appearance=updated] .clinic-content .tm-ranking-table .tm-rank-top{color:var(--clinic-dark-ink, #111111);background:var(--clinic-dark-subtle, #f4f5fa);box-shadow:inset 0 0 0 1px #dce0ee}
+html[data-clinic-appearance=updated] .clinic-content .py-0.sm\:py-12{padding-top:0;padding-bottom:0}
+/* Sign-in: retain the actual clinic photography, replace the glass treatment. */
+html[data-clinic-appearance=updated] .clinic-guest{background:var(--clinic-dark-subtle, #f4f5fa);align-items:flex-end;padding:48px 8%;isolation:isolate}
+html[data-clinic-appearance=updated] .clinic-guest>.absolute{z-index:-1}
+html[data-clinic-appearance=updated] .clinic-guest>.absolute.inset-0.bg-black\/30{background:rgba(15,23,42,.35)}
+html[data-clinic-appearance=updated] .clinic-guest-story{display:block;position:absolute;left:7%;top:50%;transform:translateY(-50%);width:40%;color:#fff;z-index:1}
+html[data-clinic-appearance=updated] .clinic-guest-story>span{font-size:12px;letter-spacing:.2em;color:#dce0ee}
+html[data-clinic-appearance=updated] .clinic-guest-story h1{font-size:clamp(32px,4vw,60px);font-weight:500;letter-spacing:-.04em;line-height:1.15;margin:26px 0}
+html[data-clinic-appearance=updated] .clinic-guest-story p{font-size:15px;line-height:1.7;max-width:310px;color:#eaecf5}
+html[data-clinic-appearance=updated] .clinic-guest-story small{display:block;font-size:11px;letter-spacing:.04em;margin-top:50px;color:#c1c7d9}
+html[data-clinic-appearance=updated] .clinic-signin-card{width:40%;max-width:440px;padding:30px;background:#fff;border:1px solid #eaecf5;border-radius:12px;box-shadow:0 8px 30px #29344c0a;backdrop-filter:none;overflow:visible;margin:0;z-index:2}
+html[data-clinic-appearance=updated] .clinic-signin-card input{border-color:#dce0ee;border-radius:6px;background:#fafbfe;box-shadow:none}
+html[data-clinic-appearance=updated] .clinic-signin-card button[type=submit]{background:#111111;border-radius:6px;box-shadow:none}
+@media(max-width:900px){html[data-clinic-appearance=updated] .clinic-topbar{padding:0 16px}html[data-clinic-appearance=updated] .clinic-content{padding:20px 16px}html[data-clinic-appearance=updated] .clinic-workspace-label{min-width:100px}html[data-clinic-appearance=updated] .clinic-signin-card{width:46%;padding:24px}html[data-clinic-appearance=updated] .clinic-guest{padding:36px 4%}}
+@media(max-width:639px){html[data-clinic-appearance=updated] .clinic-workspace-label{display:none}html[data-clinic-appearance=updated] .clinic-topbar{height:60px;min-height:60px;padding:0 10px}.clinic-topbar .clinic-appearance button{padding:5px;font-size:10px}html[data-clinic-appearance=updated] .clinic-guest{align-items:center;padding:80px 20px 32px}html[data-clinic-appearance=updated] .clinic-guest-story{display:none}html[data-clinic-appearance=updated] .clinic-signin-card{width:100%;max-width:420px}html[data-clinic-appearance=updated] .clinic-guest>.absolute.inset-0.bg-black\/30{background:#f4f5faf2}}
+@media(prefers-reduced-motion:reduce){html[data-clinic-appearance=updated] *,html[data-clinic-appearance=updated] *:before,html[data-clinic-appearance=updated] *:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+html[data-clinic-appearance=updated] .clinic-signin-card .text-white{color:#29344c;text-shadow:none}
+html[data-clinic-appearance=updated] .clinic-signin-card h1{font-size:22px;line-height:1.4;letter-spacing:-.04em;white-space:normal;font-weight:650;color:#29344c}
+html[data-clinic-appearance=updated] .clinic-signin-card h1+ a svg{height:95px;width:auto;margin:12px auto 24px}
+html[data-clinic-appearance=updated] .clinic-signin-card label{font-size:12px;font-weight:600}
+html[data-clinic-appearance=updated] .clinic-signin-card .text-sm{font-size:12px;font-weight:500}
+html[data-clinic-appearance=updated] .clinic-signin-card .-mt-5{margin-top:0}
+html[data-clinic-appearance=updated] .clinic-signin-card form>div:last-child{margin-bottom:0}
+html[data-clinic-appearance=updated] .clinic-signin-card button.bg-gray-800{background:#111111;color:#fff;letter-spacing:.03em}
+/* Second composition: workspace rail, editorial home, and a dedicated sign-in split. */
+.clinic-updated-only{display:none}
+html[data-clinic-appearance=updated] .clinic-updated-only{display:block}
+
+html[data-clinic-appearance=updated] .clinic-module-rail{display:flex;width:64px;flex:0 0 64px;background:#20283b;flex-direction:column;align-items:center;gap:9px;padding:18px 8px;z-index:51}
+html[data-clinic-appearance=updated] .clinic-module-rail>a{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;color:#dce0ee;font-size:14px;font-weight:550;border:1px solid transparent}
+html[data-clinic-appearance=updated] .clinic-module-rail>a:hover,html[data-clinic-appearance=updated] .clinic-module-rail>a:focus-visible{background:#20283b;color:#fff;border-color:#4c5972}
+html[data-clinic-appearance=updated] .clinic-module-rail .clinic-rail-brand{font-family:inherit;font-size:29px;background:var(--clinic-dark-subtle, #eaecf5);color:var(--clinic-dark-ink, #20283b);position:relative;margin-bottom:26px;border-radius:12px}
+html[data-clinic-appearance=updated] .clinic-rail-brand>span{position:absolute;font-size:18px;right:6px;top:0;color:var(--clinic-dark-muted, #66738d)}
+html[data-clinic-appearance=updated] .clinic-module-rail .clinic-rail-profile{margin-top:auto;border-color:#4c5972;border-radius:50%;color:#fff}
+html[data-clinic-appearance=updated] .clinic-sidebar{width:222px;background:var(--clinic-dark-surface, #fafbfe)}
+html[data-clinic-appearance=updated] .clinic-sidebar>div:first-child{height:68px;min-height:68px;padding:12px 18px}
+html[data-clinic-appearance=updated] .clinic-sidebar>div:first-child img{height:34px}
+html[data-clinic-appearance=updated] .clinic-sidebar>div:first-child span{font-size:15px}
+html[data-clinic-appearance=updated] .clinic-sidebar>.clinic-sidebar-navigation{padding:20px 12px}
+html[data-clinic-appearance=updated] .clinic-nav-context{padding:0 8px 22px}
+html[data-clinic-appearance=updated] .clinic-nav-context>span{font-size:9px;color:var(--clinic-dark-muted, #8792ab);letter-spacing:.14em;font-weight:650}
+html[data-clinic-appearance=updated] .clinic-nav-context h2{font-size:18px;color:var(--clinic-dark-ink, #29344c);letter-spacing:-.04em;margin:6px 0 18px;font-weight:600}
+html[data-clinic-appearance=updated] .clinic-nav-context input{width:100%;font-size:12px;padding:9px 10px;border:1px solid #eaecf5;background:var(--clinic-dark-surface, #fff);border-radius:6px;box-shadow:none}
+html[data-clinic-appearance=updated] .clinic-nav-search-hidden{display:none}
+html[data-clinic-appearance=updated] .clinic-content{padding:26px 32px 40px;background:var(--clinic-dark-subtle, #f4f5fa)}
+html[data-clinic-appearance=updated] .clinic-content:has(.clinic-home)>.clinic-page-heading{display:none}
+html[data-clinic-appearance=updated] .clinic-page-body{width:100%;margin:0 auto;max-width:1640px}
+.clinic-eyebrow{font-size:10px;letter-spacing:.16em;font-weight:650;color:var(--clinic-dark-muted, #66738d)}
+.clinic-home-intro{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin:4px 0 30px}
+.clinic-home-intro h1{font-size:38px!important;letter-spacing:-.055em!important;line-height:1.15!important;font-weight:500!important;margin:8px 0}
+.clinic-home-intro p{color:var(--clinic-dark-muted, #66738d);font-size:13px}
+.clinic-home-intro>time{font-size:11px;color:var(--clinic-dark-muted, #66738d);white-space:nowrap;padding-bottom:4px}
+.clinic-home-grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(265px,1fr);gap:28px}
+.clinic-section-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:15px;min-height:25px}
+.clinic-section-title h2{font-size:16px!important;letter-spacing:-.03em;font-weight:600}
+.clinic-section-title>span,.clinic-section-title>a{font-size:10px;color:var(--clinic-dark-muted, #66738d);white-space:nowrap}
+.clinic-module-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.clinic-module-tile{position:relative;border:1px solid #eaecf5;border-radius:12px;min-height:145px;padding:18px 20px;background:var(--clinic-dark-subtle, #eaecf5);transition:transform .15s,border-color .15s}
+.clinic-module-tile:hover{transform:translateY(-2px);border-color:#8792ab}
+.clinic-module-tile.sand{background:var(--clinic-dark-subtle, #eaecf5);border-color:var(--clinic-dark-border, #dce0ee)}.clinic-module-tile.peach{background:var(--clinic-dark-subtle, #eaecf5);border-color:var(--clinic-dark-border, #dce0ee)}.clinic-module-tile.blue{background:var(--clinic-dark-subtle, #eaecf5);border-color:var(--clinic-dark-border, #dce0ee)}
+.clinic-module-number{font-size:10px;color:var(--clinic-dark-muted, #66738d);letter-spacing:.05em}
+.clinic-module-arrow{position:absolute;right:17px;top:16px;color:var(--clinic-dark-muted, #4c5972);font-size:17px}
+.clinic-module-tile h3{font-size:19px!important;color:var(--clinic-dark-ink, #29344c);margin:24px 0 6px;line-height:1.2;font-weight:550;letter-spacing:-.04em}
+.clinic-module-tile p{font-size:11px;color:var(--clinic-dark-muted, #66738d);line-height:1.5;max-width:210px}
+.clinic-bulletin{padding:0 0 0 24px;border-left:1px solid #eaecf5}
+.clinic-notice-row{display:flex;align-items:flex-start;width:100%;gap:12px;text-align:left;border-bottom:1px solid #eaecf5;padding:15px 0}
+.clinic-notice-index{font-size:11px;color:var(--clinic-dark-muted, #8792ab);padding-top:3px;font-variant-numeric:tabular-nums}.clinic-notice-row>span:nth-child(2){flex:1;min-width:0}.clinic-notice-row small{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--clinic-dark-muted, #8792ab);margin-bottom:5px}.clinic-notice-row strong{font-size:13px;line-height:1.5;font-weight:550;color:var(--clinic-dark-ink, #29344c);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.clinic-notice-row time{display:block;font-size:10px;color:var(--clinic-dark-muted, #8792ab);margin-top:8px}.clinic-notice-row>span:last-child{font-size:14px;color:var(--clinic-dark-muted, #66738d)}.clinic-notice-row:hover strong{text-decoration:underline;text-underline-offset:3px}
+.clinic-directory-link{margin-top:22px;padding:20px;border:1px solid #eaecf5;border-radius:10px;background:var(--clinic-dark-subtle, #f4f5fa)}.clinic-directory-link>span{font-size:8px;letter-spacing:.13em;color:var(--clinic-dark-muted, #66738d)}.clinic-directory-link h3{font-family:inherit;font-size:25px;font-weight:400;color:var(--clinic-dark-ink, #111111);margin:9px 0 18px}.clinic-directory-link a{display:flex;justify-content:space-between;font-size:11px;color:var(--clinic-dark-ink, #111111)}
+.clinic-home-empty{font-size:12px;color:var(--clinic-dark-muted, #66738d);line-height:1.7;padding:25px 0}
+.clinic-home-footer{display:flex;gap:26px;align-items:center;border-top:1px solid #eaecf5;margin-top:28px;padding-top:24px}.clinic-home-footer img{width:155px;height:118px;object-fit:cover;border-radius:9px;filter:saturate(.65)}.clinic-home-footer h2{font-family:inherit;font-size:24px!important;font-weight:400;line-height:1.25;margin:9px 0;color:var(--clinic-dark-ink, #29344c)}.clinic-home-footer p{font-size:10px;color:var(--clinic-dark-muted, #66738d)}.clinic-home-footer>a{margin-left:auto;font-size:11px;color:var(--clinic-dark-ink, #111111)}
+/* The auth page is a new composition, with the existing form kept intact. */
+html[data-clinic-appearance=updated] .clinic-guest{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(360px,.85fr);gap:0;align-items:center;padding:0;isolation:isolate;background:var(--clinic-dark-surface, #fafbfe);min-height:100svh}
+html[data-clinic-appearance=updated] .clinic-guest>div.absolute{display:none}
+html[data-clinic-appearance=updated] .clinic-auth-feature{grid-column:1;grid-row:1;min-height:100svh;background:#eaecf5;padding:42px 8% 22px;display:flex;flex-direction:column;justify-content:space-between;border-right:1px solid #dce0ee;align-self:stretch}
+.clinic-auth-wordmark{font-size:14px;letter-spacing:.07em;color:#29344c;font-weight:650}.clinic-auth-wordmark>span{display:block;font-size:8px;letter-spacing:.21em;color:#8792ab;margin-top:6px;font-weight:500}
+.clinic-auth-copy{padding:40px 0 28px}.clinic-auth-copy .clinic-eyebrow{color:#8792ab}.clinic-auth-copy h1{font-family:inherit;font-size:clamp(36px,4.3vw,68px);font-weight:400;letter-spacing:-.055em;line-height:1.05;color:#20283b;margin:18px 0 20px}.clinic-auth-copy p{font-size:13px;color:#66738d;line-height:1.7;max-width:285px}
+.clinic-auth-photo{height:clamp(180px,30vh,310px);position:relative;overflow:hidden;border-radius:12px 12px 70px 12px;margin:0 0 26px}.clinic-auth-photo>img{height:100%;width:100%;object-fit:cover;filter:saturate(.55)}.clinic-auth-photo:after{content:'';position:absolute;inset:0;background:linear-gradient(transparent 35%,#20283bb3)}.clinic-auth-photo>div{position:absolute;bottom:24px;left:24px;z-index:1;color:#fff}.clinic-auth-photo span{font-size:8px;letter-spacing:.16em;color:#eaecf5;display:block;margin-bottom:8px}.clinic-auth-photo strong{font-size:13px;font-weight:500}
+.clinic-auth-feature footer{display:flex;justify-content:space-between;gap:15px;font-size:8px;color:#8792ab;padding-bottom:5px}
+html[data-clinic-appearance=updated] .clinic-signin-card{grid-column:2;grid-row:1;align-self:center;justify-self:center;margin:70px 0;width:78%;max-width:380px;padding:0;background:transparent;border:0;box-shadow:none;border-radius:0}
+html[data-clinic-appearance=updated] .clinic-auth-welcome{display:block;margin-bottom:32px}.clinic-auth-welcome h2{font-size:28px;font-weight:500;color:#29344c;letter-spacing:-.05em;margin:10px 0}.clinic-auth-welcome p{font-size:12px;color:#66738d}
+html[data-clinic-appearance=updated] .clinic-signin-card form>div:first-child.text-center{display:none}
+html[data-clinic-appearance=updated] .clinic-signin-card input:not([type=checkbox]){background:#fff;border-color:#eaecf5;min-height:46px;border-radius:7px;font-size:14px;color:#29344c}
+html[data-clinic-appearance=updated] .clinic-signin-card label{font-size:11px;color:#4c5972;font-weight:500}
+html[data-clinic-appearance=updated] .clinic-signin-card button.bg-gray-800{background:#111111;min-height:46px;border-radius:7px;font-size:12px;font-weight:500;letter-spacing:0;text-transform:none}
+html[data-clinic-appearance=updated] .clinic-signin-card .clinic-auth-help{display:block;border-top:1px solid #eaecf5;margin-top:30px;padding-top:20px;text-align:center;font-size:10px;color:#8792ab}
+html[data-clinic-appearance=updated] .clinic-guest-appearance{right:24px;top:22px}
+/* Replace sideways announcement browsing with a quiet responsive reading grid. */
+html[data-clinic-appearance=updated] .clinic-content .hide-scroll{display:grid;overflow:visible;gap:18px}
+html[data-clinic-appearance=updated] .clinic-content .hide-scroll>div{width:100%;min-width:0}
+html[data-clinic-appearance=updated] .announcement-card{border-radius:10px;box-shadow:none;transform:none;transition:border-color .15s}
+html[data-clinic-appearance=updated] .announcement-card:hover{transform:none;border-color:#8792ab;box-shadow:none}
+@media(min-width:640px) and (max-width:1100px){html[data-clinic-appearance=updated] .clinic-sidebar{width:194px}.clinic-home-grid{grid-template-columns:1fr}.clinic-bulletin{border-left:0;padding-left:0;border-top:1px solid #eaecf5;padding-top:24px}.clinic-home-intro>time{display:none}html[data-clinic-appearance=updated] .clinic-content{padding:22px}}
+@media(max-width:639px){html[data-clinic-appearance=updated] .clinic-module-rail{display:none}html[data-clinic-appearance=updated] .clinic-sidebar{width:244px}.clinic-home-intro{margin-bottom:24px}.clinic-home-intro h1{font-size:31px!important}.clinic-home-intro>time{display:none}.clinic-home-grid{grid-template-columns:1fr;gap:24px}.clinic-module-tile{padding:14px;min-height:135px}.clinic-module-tile h3{font-size:17px!important}.clinic-module-tile p{font-size:10px}.clinic-bulletin{border:0;padding:0}.clinic-home-footer{gap:15px;flex-wrap:wrap}.clinic-home-footer img{width:100px;height:100px}.clinic-home-footer h2{font-size:21px!important}.clinic-home-footer>a{margin-left:0;width:100%}html[data-clinic-appearance=updated] .clinic-guest{display:flex;flex-direction:column;padding:0;background:var(--clinic-dark-surface, #fafbfe);justify-content:flex-start;align-items:stretch}html[data-clinic-appearance=updated] .clinic-auth-feature{min-height:0;padding:28px 24px 25px;border:0}.clinic-auth-wordmark{font-size:12px}.clinic-auth-copy{padding:30px 0 0}.clinic-auth-copy h1{font-size:39px;margin:12px 0 0}.clinic-auth-copy p,.clinic-auth-photo,.clinic-auth-feature footer,.clinic-auth-copy>.clinic-eyebrow{display:none}html[data-clinic-appearance=updated] .clinic-signin-card{width:auto;max-width:none;margin:30px 24px 24px;padding:0;align-self:stretch}html[data-clinic-appearance=updated] .clinic-auth-welcome{margin-bottom:22px}.clinic-auth-welcome .clinic-eyebrow{display:none}.clinic-auth-welcome h2{font-size:24px!important}.clinic-auth-welcome p{font-size:11px!important}html[data-clinic-appearance=updated] .clinic-guest-appearance{top:20px;right:16px}.clinic-guest-appearance .clinic-appearance button{font-size:10px;padding:4px 6px}}
+/* Photo-led sign-in, preserving the clinic logo and original brand typography. */
+html[data-clinic-appearance=updated] .clinic-guest{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:70px 24px 62px;min-height:100svh;background:#182135;isolation:isolate}
+html[data-clinic-appearance=updated] .clinic-guest>div.absolute{display:block;z-index:-2}
+html[data-clinic-appearance=updated] .clinic-guest>div.absolute.bg-black\/30{display:block;background:linear-gradient(120deg,#11182770,#11182728 50%,#11182780);z-index:-1}
+html[data-clinic-appearance=updated] .clinic-signin-card{display:block;align-self:auto;justify-self:auto;width:100%;max-width:440px;margin:0;padding:28px 34px 22px;background:rgba(255,255,255,.92);border:1px solid rgba(255,255,255,.85);border-radius:24px;box-shadow:0 24px 70px #0f172a40,inset 0 1px #fff;backdrop-filter:blur(18px);overflow:visible;font-family:inherit}
+html[data-clinic-appearance=updated] .clinic-signin-card form>div:first-child.text-center{display:block}
+html[data-clinic-appearance=updated] .clinic-signin-card h1{font-family:inherit;font-size:27px;line-height:1.3;font-weight:700;letter-spacing:-.025em;color:#182237;white-space:normal;margin:0}
+html[data-clinic-appearance=updated] .clinic-signin-card h1+a img{height:108px;width:auto;margin:16px auto 22px;filter:drop-shadow(0 4px 4px #1118270d)}
+html[data-clinic-appearance=updated] .clinic-signin-card .-mt-5{margin-top:0}
+html[data-clinic-appearance=updated] .clinic-signin-card input:not([type=checkbox]){background:#fff;border:1px solid #d8deea;border-radius:9px;min-height:46px;color:#182237;font-family:inherit;box-shadow:0 1px 2px #11182703;transition:border-color .15s,box-shadow .15s}
+html[data-clinic-appearance=updated] .clinic-signin-card input:focus{border-color:#111111;--tw-ring-color:#1111114d;box-shadow:0 0 0 3px #11111118}
+html[data-clinic-appearance=updated] .clinic-signin-card label{font-family:inherit;font-size:13px;font-weight:600;color:#334155;letter-spacing:0}
+html[data-clinic-appearance=updated] .clinic-signin-card .text-sm{font-size:12px;color:#475569}
+html[data-clinic-appearance=updated] .clinic-signin-card button.bg-gray-800{min-height:46px;border-radius:9px;background:#20293b;color:#fff;font-size:14px;font-family:inherit;font-weight:600;letter-spacing:.01em;text-transform:none;box-shadow:0 4px 9px #1822371a}
+html[data-clinic-appearance=updated] .clinic-signin-card button.bg-gray-800:hover{background:#353e53}
+html[data-clinic-appearance=updated] .clinic-signin-card .clinic-auth-help{display:block;margin:22px 0 0;padding:16px 0 0;border-top:1px solid #dde2ec;color:#7b8497;font-size:11px;text-align:center;letter-spacing:.01em}
+html[data-clinic-appearance=updated] .clinic-auth-locations{display:flex;align-items:center;gap:16px;position:relative;margin-top:22px;color:#fff;font-size:11px;letter-spacing:.06em;text-shadow:0 1px 4px #11182780}
+.clinic-auth-locations i{width:3px;height:3px;background:#ffffffb3;border-radius:50%}
+html[data-clinic-appearance=updated] .clinic-sidebar{width:244px;background:var(--clinic-dark-surface, #fff)}
+html[data-clinic-appearance=updated] .clinic-sidebar>div:first-child{height:80px;min-height:80px;padding:14px 20px}
+html[data-clinic-appearance=updated] .clinic-sidebar>div:first-child img{height:46px}
+html[data-clinic-appearance=updated] .clinic-sidebar>div:first-child span{font-family:inherit;font-size:18px;font-weight:600;letter-spacing:normal;color:var(--clinic-dark-ink, #1f2937)}
+html[data-clinic-appearance=updated] .clinic-module-tile{background:var(--clinic-dark-surface, #fff);box-shadow:0 3px 12px #1f293705;border-color:var(--clinic-dark-border, #e1e5ef);border-top:3px solid #111111}
+html[data-clinic-appearance=updated] .clinic-module-tile.sand{background:var(--clinic-dark-surface, #fff);border-color:var(--clinic-dark-border, #e1e5ef);border-top-color:#475569}
+html[data-clinic-appearance=updated] .clinic-module-tile.peach{background:var(--clinic-dark-surface, #fff);border-color:var(--clinic-dark-border, #e1e5ef);border-top-color:#8b5cf6}
+html[data-clinic-appearance=updated] .clinic-module-tile.blue{background:var(--clinic-dark-surface, #fff);border-color:var(--clinic-dark-border, #e1e5ef);border-top-color:#3b82f6}
+html[data-clinic-appearance=updated] .clinic-module-tile:hover{border-color:var(--clinic-dark-border, #b9bdf2);box-shadow:0 7px 20px #1f29370a}
+@media(max-width:639px){html[data-clinic-appearance=updated] .clinic-guest{padding:76px 20px 38px;justify-content:center;align-items:center}html[data-clinic-appearance=updated] .clinic-signin-card{width:100%;max-width:420px;align-self:auto;margin:0;padding:25px 24px 20px;border-radius:20px}html[data-clinic-appearance=updated] .clinic-signin-card h1{font-size:24px}html[data-clinic-appearance=updated] .clinic-signin-card h1+a img{height:94px;margin:15px auto 20px}html[data-clinic-appearance=updated] .clinic-guest>.absolute.inset-0.bg-black\/30{background:#11182755}html[data-clinic-appearance=updated] .clinic-auth-locations{gap:12px;font-size:10px}}
+
+/* Original home content stays visible in both appearances. */
+html[data-clinic-appearance=updated] .clinic-preserved-home>div{padding-top:4px;padding-bottom:24px}
+html[data-clinic-appearance=updated] .clinic-preserved-home section{scroll-margin-top:24px}
+html[data-clinic-appearance=updated] .clinic-preserved-home section>h3{font-size:18px;font-weight:650;text-transform:none;letter-spacing:-.02em;color:var(--clinic-dark-ink, #243047);border-bottom:1px solid #e1e5ef;padding-bottom:14px}
+html[data-clinic-appearance=updated] .clinic-preserved-home section:last-child{margin-top:30px}
+
+/* Keep the original translucent login treatment instead of an opaque white card. */
+html[data-clinic-appearance=updated] .clinic-signin-card{background:rgba(255,255,255,.55);border-color:rgba(255,255,255,.65);backdrop-filter:blur(14px);box-shadow:0 18px 45px #0f172a30,inset 0 1px #ffffffb3}
+.clinic-background-slide{transition:opacity 1200ms ease-in-out;will-change:opacity;pointer-events:none}
+@media(prefers-reduced-motion:reduce){.clinic-background-slide{transition:none}}
+
+/* Uniform overlay: no leftover white half-screen from the discarded split login. */
+html[data-clinic-appearance=updated] .clinic-guest>.absolute.inset-0.bg-black\/30{background:rgba(15,23,42,.35)}
+
+/* Consistent monochrome interaction accents; report/status badges retain meaning. */
+html[data-clinic-appearance=updated] .clinic-sidebar a[aria-current=page],
+html[data-clinic-appearance=updated] .clinic-sidebar a.bg-gray-100,
+html[data-clinic-appearance=updated] .clinic-sidebar a.bg-indigo-50{color:var(--clinic-dark-ink, #111)!important;background:var(--clinic-dark-subtle, #f3f3f3)!important;box-shadow:inset 3px 0 #111}
+html[data-clinic-appearance=updated] .clinic-sidebar a[aria-current=page] svg,
+html[data-clinic-appearance=updated] .clinic-sidebar a[aria-current=page] span{color:var(--clinic-dark-ink, #111)!important}
+html[data-clinic-appearance=updated] .clinic-shell :is(button,a)[class*="text-indigo-"],
+html[data-clinic-appearance=updated] .clinic-shell :is(button,a)[class*="text-violet-"]{color:var(--clinic-dark-ink, #111)}
+html[data-clinic-appearance=updated] .clinic-shell :is(button,a)[class*="bg-indigo-6"],
+html[data-clinic-appearance=updated] .clinic-shell :is(button,a)[class*="bg-blue-6"],
+html[data-clinic-appearance=updated] .clinic-shell :is(button,a)[class*="bg-violet-6"],
+html[data-clinic-appearance=updated] .clinic-shell .tm-primary,
+html[data-clinic-appearance=updated] .clinic-shell .tm-tabs button.active,
+html[data-clinic-appearance=updated] .clinic-shell button[aria-pressed=true],
+html[data-clinic-appearance=updated] .clinic-shell button[aria-selected=true]{background:#111!important;color:#fff!important;border-color:#111!important}
+html[data-clinic-appearance=updated] .clinic-shell :is(button,a):focus-visible{outline-color:#111;--tw-ring-color:#11111140}
+html[data-clinic-appearance=updated] :is(.clinic-shell,.clinic-guest) :is(input,select,textarea):focus{border-color:#111;--tw-ring-color:#11111140}
+html[data-clinic-appearance=updated] :is(.clinic-shell,.clinic-guest) :is(input[type=checkbox],input[type=radio]){color:var(--clinic-dark-ink, #111);--tw-ring-color:#11111140}
+html[data-clinic-appearance=updated] .clinic-signin-card button.bg-gray-800{background:#111}
+html[data-clinic-appearance=updated] .clinic-signin-card button.bg-gray-800:hover{background:#292929}
+html[data-clinic-appearance=updated] .clinic-appearance button[aria-pressed=true]{background:#111;color:#fff}
+/* Restrained color accents, with black interaction highlights retained. */
+html[data-clinic-appearance=updated]{--clinic-accent-soft:#eff1fb;--clinic-accent-line:#dce1f3;--clinic-accent-ink:#59658f;--clinic-canvas:#f5f6fa}
+html[data-clinic-appearance=updated][data-clinic-theme=dark]{--clinic-accent-soft:#252d45;--clinic-accent-line:#414c6b;--clinic-accent-ink:#b3bfeb;--clinic-canvas:#131923}
+html[data-clinic-appearance=updated] .clinic-content{background:var(--clinic-canvas)}
+html[data-clinic-appearance=updated] .clinic-topbar{border-bottom:2px solid var(--clinic-accent-line)}
+html[data-clinic-appearance=updated] .clinic-workspace-label>span{color:var(--clinic-accent-ink)}
+html[data-clinic-appearance=updated] .clinic-sidebar>div:first-child{border-bottom-color:var(--clinic-accent-line)}
+html[data-clinic-appearance=updated] .clinic-sidebar li>a>svg{color:var(--clinic-accent-ink);opacity:1}
+html[data-clinic-appearance=updated] .clinic-sidebar a[aria-current=page]>svg{color:var(--clinic-dark-ink, #111)!important}
+html[data-clinic-appearance=updated] .clinic-page-heading{border-bottom-color:var(--clinic-accent-line)}
+html[data-clinic-appearance=updated] .clinic-preserved-home section>h3{border-bottom-color:var(--clinic-accent-line)}
+html[data-clinic-appearance=updated] .clinic-preserved-home section:last-child .bg-white{border-top:2px solid var(--clinic-accent-line)}
+html[data-clinic-appearance=updated] .announcement-card{border-color:var(--clinic-accent-line)}
+html[data-clinic-appearance=updated] .clinic-content table thead th{background:var(--clinic-accent-soft);color:var(--clinic-accent-ink);border-bottom-color:var(--clinic-accent-line)}
+html[data-clinic-appearance=updated] .clinic-settings-tabs{border-bottom-color:var(--clinic-accent-line)}
+html[data-clinic-appearance=updated] .clinic-theme-options label.selected .clinic-theme-preview{border-color:var(--clinic-accent-line)}
+html[data-clinic-appearance=updated][data-clinic-theme=dark] .clinic-sidebar a[aria-current=page]>svg{color:#fff!important}
+
+/* Shared module navigation belongs beside the sidebar's page navigation. */
+.clinic-sidebar-module{position:relative;z-index:60;padding:14px 16px 0;flex-shrink:0}.clinic-module-trigger{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;text-align:left;border:1px solid var(--clinic-dark-border,#dfe3eb);border-radius:9px;background:var(--clinic-dark-subtle,#f7f8fb);color:var(--clinic-dark-ink,#182132)}.clinic-module-trigger:hover{border-color:var(--clinic-dark-muted,#a8b1c1)}.clinic-module-trigger:focus-visible{outline:2px solid var(--clinic-dark-ink,#111);outline-offset:3px}.clinic-module-icon{display:grid;place-items:center;flex:none}.clinic-module-label{flex:1;min-width:0}.clinic-module-label small{display:block;font-size:9px;letter-spacing:.1em;color:var(--clinic-dark-muted,#738096);line-height:1.4}.clinic-module-label strong{display:block;font-size:13px;font-weight:600;line-height:1.6}.clinic-sidebar-module [class*="absolute"]{width:100%;max-width:100%;margin-top:7px}.clinic-sidebar-module a{display:flex;align-items:center;gap:10px}.clinic-sidebar-module a:before{content:'';width:6px;height:6px;flex:none;border:1px solid currentColor;border-radius:2px;opacity:.5}
+
+/* Keep the module control outside the scrolling navigation region. */
+.clinic-sidebar{display:flex;flex-direction:column}.clinic-sidebar>.clinic-sidebar-navigation{flex:1;min-height:0;overflow-y:auto}.clinic-sidebar>.clinic-sidebar-module{flex:0 0 auto;overflow:visible;padding:12px 12px 0}
+html[data-clinic-appearance=updated] .clinic-sidebar>.clinic-sidebar-module{flex:0 0 auto;min-height:auto;overflow:visible;padding:12px 12px 0}
+.clinic-sidebar-module .clinic-module-trigger{padding:9px 10px;min-height:42px;border-radius:6px;background:transparent;border-color:var(--clinic-dark-border,#e1e5ed)}.clinic-module-label strong{font-size:13px;line-height:20px}.clinic-sidebar-module [class*="absolute"]>div{border-radius:8px!important}.clinic-sidebar-module a:before{display:none}.clinic-sidebar-module a{min-height:38px!important;padding:9px 12px!important;font-size:13px!important}.clinic-sidebar-module [class*="absolute"]{max-height:calc(100dvh - 170px);overflow-y:auto}

@@ -14,7 +14,7 @@ export function defaultSettings() {
         corporateServicesVersion: 1, internRoleVersion: 2,
         dailyReports: defaultReportTemplates({}),
         employees: employees.map(employee => ({ ...employee, role: 'Employee', employeeType: 'Regular', availableBranches: [...branches] })),
-        operationsManagers, teamLeaders: legacyDepartmentLeaders, priorities: ['High', 'Medium', 'Low'], checks: systemChecks,
+        operationsManagers, teamLeaders: legacyDepartmentLeaders, priorities: ['High', 'Medium', 'Low', 'Critical'], checks: systemChecks,
     });
     return applyOrganizationStructure({ ...config, roleHolders: defaultRoleHolders(config) });
 }
@@ -29,7 +29,7 @@ export function loadSettings(raw) {
     const upgradedRoles = roles.filter(role => role.name !== 'Intern').map(({ weeklyReport, ...role }) => role);
     if (!upgradedRoles.some(role => role.baseRole === 'Employee')) upgradedRoles.unshift({ name: employeeRole, baseRole: 'Employee' });
     const employees = raw.employees.map(person => ({ ...person, role: person.role === 'Intern' ? employeeRole : person.role, employeeType: person.role === 'Intern' || raw.roles.find(role => role.name === person.role)?.weeklyReport ? 'Intern' : person.employeeType || 'Regular' }));
-    return applyOrganizationStructure({ ...defaults, ...raw, organizationStructureVersion: raw.organizationStructureVersion || 0, internRoleVersion: 2, roles: upgradedRoles, employees, roleHolders: raw.roleHolders || defaultRoleHolders({ ...defaults, ...raw, roles: upgradedRoles, employees }), corporateServicesVersion: 1, dailyReports: raw.dailyReports || defaultReportTemplates(raw) });
+    return applyOrganizationStructure({ ...defaults, ...raw, priorities:[...raw.priorities.filter(name=>name!=='Critical'),'Critical'], organizationStructureVersion: raw.organizationStructureVersion || 0, internRoleVersion: 2, roles: upgradedRoles, employees, roleHolders: raw.roleHolders || defaultRoleHolders({ ...defaults, ...raw, roles: upgradedRoles, employees }), corporateServicesVersion: 1, dailyReports: raw.dailyReports || defaultReportTemplates(raw) });
 }
 export const canWorkAt = (employee, branch) => (employee?.availableBranches || [employee?.branch]).includes(branch);
 export function eligibleEmployees(config, { role, branch, department, employee }) {

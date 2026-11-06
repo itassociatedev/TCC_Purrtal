@@ -1,3 +1,4 @@
+import useDisplayPreferences from './useDisplayPreferences';
 import { useEffect, useMemo, useState } from 'react';
 import GHImage from '@/Assets/GH.jpg';
 import ALBImage from '@/Assets/ALB.jpg';
@@ -7,6 +8,7 @@ import MKTPortraitImage from '@/Assets/MKT Portrait 1.png';
 import MKTImage from '@/Assets/MKT.jpg';
 
 export default function BackgroundCarousel() {
+    const [{compatibility}]=useDisplayPreferences();
     const [currentSlide, setCurrentSlide] = useState(0);
     const [isMobile, setIsMobile] = useState(false);
 
@@ -41,19 +43,24 @@ export default function BackgroundCarousel() {
     }, [isMobile]);
 
     useEffect(() => {
+        // Decode the next photograph before fading it in to avoid an unloaded frame.
+        if(compatibility)return;
+        let cancelled=false;
         const interval = setInterval(() => {
-            setCurrentSlide((prev) => (prev + 1) % slides.length);
+            const next=(currentSlide+1)%slides.length;
+            const image=new Image();image.src=slides[next].src;
+            image.decode().then(()=>{if(!cancelled)setCurrentSlide(next);}).catch(()=>{});
         }, 5000);
 
-        return () => clearInterval(interval);
-    }, [slides.length]);
+        return () => {cancelled=true;clearInterval(interval);};
+    }, [slides,currentSlide,compatibility]);
 
     return (
         <>
             {slides.map((slide, index) => (
                 <div
                     key={index}
-                    className={`absolute inset-0 transition-opacity duration-1000 ${
+                    className={`clinic-background-slide absolute inset-0 transition-opacity duration-1000 ${
                         index === currentSlide ? 'opacity-100' : 'opacity-0'
                     }`}
                 >

@@ -13,6 +13,6 @@ export function prepareTaskImport(rows,tasks,config,scope,today,stamp=Date.now()
   if(row.reference_link&&!/^https?:\/\//i.test(row.reference_link))throw new Error(line+'use an HTTP or HTTPS reference link.');
   const key=[row.title,person.name,row.deadline,row.branch].join('|');
   if(keys.has(key))throw new Error(line+'duplicate task. Remove duplicate rows before importing.');keys.add(key);
-  return routeTaskApproval({id:stamp+index,title:row.title,description:row.description,assignee:person.name,assigneeRole:person.role,department:person.department,branch:row.branch,priority:row.priority,startDate,due:row.deadline,link:row.reference_link||'',template:'standard',kind:'Assigned task',status:'Not Started',requestedBy:scope.actor,submission:'',history:[{text:'Task imported from CSV.',at:new Date().toISOString()}]},config,scope);
+  return routeTaskApproval({id:stamp+index,title:row.title,description:row.description,assignee:person.name,assigneeRole:person.role,department:person.department,branch:row.branch,priority:row.priority,startDate,due:row.deadline,link:row.reference_link||'',template:'standard',kind:'Assigned task',status:'Not Started',requestedBy:scope.actor,submission:'',history:[{text:'Task imported from XLSX.',at:new Date().toISOString()}]},config,scope);
  });
 }

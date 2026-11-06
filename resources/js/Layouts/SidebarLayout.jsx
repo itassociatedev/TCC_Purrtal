@@ -1,3 +1,5 @@
+import DisplaySettings from '@/Components/DisplaySettings';
+import AppearanceSwitch from '@/Components/AppearanceSwitch';
 import ApplicationLogo from '@/Components/ApplicationLogo';
 import Dropdown from '@/Components/Dropdown';
 import FlashMessage from '@/Components/FlashMessage';
@@ -13,6 +15,7 @@ export default function SidebarLayout({
     activeModule = 'Dashboard',
     headerClassName = '',
     notificationSlot = null,
+    previewProfile = null,
 }) {
 
     const formatTimeAgo = (dateString) => {
@@ -32,6 +35,7 @@ export default function SidebarLayout({
     };
 
     const { auth } = usePage().props;
+    const [settingsOpen,setSettingsOpen]=useState(false);
 
     const hasAnyAdminPermission = () => [
         'admin_overview',
@@ -485,8 +489,9 @@ export default function SidebarLayout({
     };
 
     return (
-        <div className="flex h-screen overflow-hidden bg-gray-100">
+        <div className="clinic-shell flex h-screen overflow-hidden bg-gray-100">
             <FlashMessage />
+            {settingsOpen&&<DisplaySettings onClose={()=>setSettingsOpen(false)}/>}
 
             {/* ✅ FIXED: Overlay raised to z-40 so it covers the header properly */}
             {isMobileSidebarOpen && (
@@ -498,7 +503,7 @@ export default function SidebarLayout({
 
             {/* ✅ FIXED: Sidebar raised to z-50 to float above everything else on mobile */}
             <aside
-                className={`fixed inset-y-0 left-0 z-50 w-64 transform bg-white border-r border-gray-200 transition-transform duration-300 ease-in-out sm:translate-x-0 sm:static sm:inset-0 ${
+                className={`clinic-sidebar fixed inset-y-0 left-0 z-50 w-64 transform bg-white border-r border-gray-200 transition-transform duration-300 ease-in-out sm:translate-x-0 sm:static sm:inset-0 ${
                     isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
                 }`}
             >
@@ -511,22 +516,53 @@ export default function SidebarLayout({
                     </Link>
                 </div>
 
-                <div className="overflow-y-auto px-4 py-6 text-sm font-medium">
-                    {!['General', 'Profile'].includes(activeModule) && (
-                        <div className="mb-4">
-                            <Link
-                                href={route('dashboard')}
-                                className="flex items-center gap-2 rounded-lg px-4 py-2 text-black hover:bg-gray-100 hover:text-black transition ease-in-out duration-150"
-                            >
-                                <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l9-9 9 9" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 21V9h6v12" />
-                                </svg>
-                                Dashboard
-                            </Link>
-                        </div>
-                    )}
+                <div className="clinic-sidebar-module">{/* Module Selection Dropdown */}
+                        <Dropdown>
+                            <Dropdown.Trigger>
+                                <button type="button" className="clinic-module-trigger" aria-label={'Switch module: '+currentModuleLabel}>
+                                    <span className="clinic-module-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+                                    <span className="clinic-module-label"><strong>{currentModuleLabel}</strong></span>
+                                    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+                                </button>
+                            </Dropdown.Trigger>
 
+                            <Dropdown.Content align="left" width="48">
+                                    <Dropdown.Link href={route('dashboard')}>Portal Home</Dropdown.Link>
+                                    {/* Open the Task Module prototype through the existing portal module selector. */}
+                                    <Dropdown.Link href={route('tasks.index')}>Task Module</Dropdown.Link>
+                                    {hasAnyAdminPermission() && (
+                                        <Dropdown.Link href={getFirstAdminRoute()}>
+                                            Admin Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                    {/* HR Module: show only when user has HR-related permissions or is Admin */}
+                                    { hasHRModuleAccess(auth) && (
+                                        <Dropdown.Link href={route('hr.index')}>HR Module</Dropdown.Link>
+                                    ) }
+
+                                    { moduleHasAccess(usePage().props.auth, 'prpo_') && (
+                                        <Dropdown.Link href={getFirstPrpoRoute()}>
+                                            PR/PO Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                    {/* 🟢 FIXED: Properly routes users dynamically to the first Duty Meal module they have access to */}
+                                    { canAccessDutyMealModule && routeToDutyMeal && (
+                                        <Dropdown.Link href={routeToDutyMeal}>
+                                            Duty Meal Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                    {moduleHasAccess(auth, 'attendance') && (
+                                        <Dropdown.Link href={getFirstAttendanceRoute(auth)}>
+                                            Attendance Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                </Dropdown.Content>
+                        </Dropdown></div>
+                <div className="clinic-sidebar-navigation overflow-y-auto px-4 py-6 text-sm font-medium">
                     {priorityLink && (
                         <div className="mb-4">
                             <Link
@@ -606,6 +642,7 @@ export default function SidebarLayout({
                             <li key={index}>
                                 <Link
                                     href={link.href}
+                                    aria-current={link.active?'page':undefined}
                                     className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 ${
                                         link.active ? 'bg-gray-100 font-bold text-gray-900' : ''
                                     }`}
@@ -675,7 +712,7 @@ export default function SidebarLayout({
                 `}</style>
 
                 {/* ✅ FIXED: Lowered Header to z-30 so the sidebar and overlay cover it when open */}
-                <header className="relative z-30 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-3 sm:px-6">
+                <header className="clinic-topbar relative z-30 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-3 sm:px-6">
                     {/* Mobile Hamburger Menu */}
                     <button
                         onClick={() => setIsMobileSidebarOpen(true)}
@@ -686,9 +723,11 @@ export default function SidebarLayout({
                         </svg>
                     </button>
 
+                    <div className="clinic-workspace-label"><span>The Cat Clinic</span><strong>{activeModule==='General'?'Staff portal':activeModule}</strong></div>
                     {/* Right Side Header Items - Reduced gap on mobile */}
                     <div className="flex flex-1 items-center justify-end gap-1.5 sm:gap-3">
 
+                        <AppearanceSwitch />
                         {/* 🔽 Wrapped Notifications Dropdown 🔽 */}
                         <div className="mobile-notification-fix">
                             {notificationSlot ? cloneElement(notificationSlot, {
@@ -778,68 +817,13 @@ export default function SidebarLayout({
                             </Dropdown>}
                         </div>
 
-                        {/* Module Selection Dropdown */}
-                        <Dropdown>
-                            <Dropdown.Trigger>
-                                <button className="inline-flex min-h-[36px] sm:min-h-[42px] items-center gap-1 sm:gap-2 rounded-full border border-slate-200 bg-white/90 px-2.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus:outline-none">
-
-                                    {/* Hide text on mobile */}
-                                    <span className="hidden sm:block">{currentModuleLabel}</span>
-
-                                    {/* Show grid icon on mobile instead */}
-                                    <svg className="h-4 w-4 sm:hidden text-slate-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-                                    </svg>
-
-                                    <svg className="h-3 w-3 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                                    </svg>
-                                </button>
-                            </Dropdown.Trigger>
-
-                            <Dropdown.Content>
-                                    {/* Open the Task Module prototype through the existing portal module selector. */}
-                                    <Dropdown.Link href={route('tasks.index')}>Task Module · UI Preview</Dropdown.Link>
-                                    {hasAnyAdminPermission() && (
-                                        <Dropdown.Link href={getFirstAdminRoute()}>
-                                            Admin Module
-                                        </Dropdown.Link>
-                                    )}
-
-                                    {/* HR Module: show only when user has HR-related permissions or is Admin */}
-                                    { hasHRModuleAccess(auth) && (
-                                        <Dropdown.Link href={route('hr.index')}>HR Module</Dropdown.Link>
-                                    ) }
-
-                                    { moduleHasAccess(usePage().props.auth, 'prpo_') && (
-                                        <Dropdown.Link href={getFirstPrpoRoute()}>
-                                            PR/PO Module
-                                        </Dropdown.Link>
-                                    )}
-
-                                    {/* 🟢 FIXED: Properly routes users dynamically to the first Duty Meal module they have access to */}
-                                    { canAccessDutyMealModule && routeToDutyMeal && (
-                                        <Dropdown.Link href={routeToDutyMeal}>
-                                            Duty Meal Module
-                                        </Dropdown.Link>
-                                    )}
-
-                                    {moduleHasAccess(auth, 'attendance') && (
-                                        <Dropdown.Link href={getFirstAttendanceRoute(auth)}>
-                                            Attendance Module
-                                        </Dropdown.Link>
-                                    )}
-
-                                </Dropdown.Content>
-                        </Dropdown>
-
                         {/* User Dropdown */}
                         <Dropdown>
                             <Dropdown.Trigger>
                                 <button className="inline-flex min-h-[36px] sm:min-h-[42px] items-center gap-1 sm:gap-2 rounded-full border border-slate-200 bg-white/90 px-2.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus:outline-none">
 
                                     {/* Hide text on mobile, truncate if it gets too long on desktop */}
-                                    <span className="hidden sm:block max-w-[100px] lg:max-w-[150px] truncate">{user?.name}</span>
+                                    <span className="hidden sm:block max-w-[100px] lg:max-w-[150px] truncate">{previewProfile?.name || user?.name}</span>
 
                                     {/* Show simple user icon on mobile instead */}
                                     <svg className="h-4 w-4 sm:hidden text-slate-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
@@ -854,19 +838,20 @@ export default function SidebarLayout({
 
                             <Dropdown.Content>
                                 <Dropdown.Link href={route('profile.edit')}>Profile</Dropdown.Link>
+                                <button type="button" className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100" onClick={()=>setSettingsOpen(true)}>Settings</button>
                                 <Dropdown.Link href={route('logout')} method="post" as="button">Log Out</Dropdown.Link>
                             </Dropdown.Content>
                         </Dropdown>
                     </div>
                 </header>
 
-                <main className="flex-1 overflow-y-auto bg-gray-100 p-4 sm:p-6 lg:p-8">
+                <main className="clinic-content flex-1 overflow-y-auto bg-gray-100 p-4 sm:p-6 lg:p-8">
                     {header && (
-                        <div className={`mb-3 rounded-lg bg-white p-4 shadow-sm sm:mb-6 ${headerClassName}`.trim()}>
+                        <div className={`clinic-page-heading mb-3 rounded-lg bg-white p-4 shadow-sm sm:mb-6 ${headerClassName}`.trim()}>
                             {header}
                         </div>
                     )}
-                    {children}
+                    <div className="clinic-page-body">{children}</div>
                 </main>
             </div>
         </div>

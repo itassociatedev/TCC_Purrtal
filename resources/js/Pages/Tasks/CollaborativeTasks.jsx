@@ -1,3 +1,5 @@
+import HelpHint from '../../Components/HelpHint.jsx';
+import SubmissionStamp from './SubmissionStamp.jsx';
 import ChildTaskForm from './ChildTaskForm.jsx';
 import { useState } from 'react';
 import { canDelegate, childTasks, dependencyBlockers, isCollaborativeTask, taskHierarchy, canCompleteMainTask } from './collaborativeTasks.mjs';
@@ -24,10 +26,11 @@ export default function CollaborativeTasks({ task, tasks, config, context, onCre
     const statusClass = status => status === 'Completed' ? 'approved' : status === 'Denied' ? 'denied' : status === 'Pending Review' ? 'review' : 'pending';
     return <section className="tm-collaboration">
         <header className="tm-collab-header">
-            <div><span className="tm-collab-eyebrow">Collaborative workflow</span><h3>{isCollaborativeTask(task) ? task.parentId ? 'Monitoring assignment' : 'Main deliverable' : 'Execution assignment'}</h3></div>
+            <div><span className="tm-collab-eyebrow">Collaborative workflow</span><HelpHint label="Workflow help">Submit your work in your own assignment. If it depends on another task, wait for that task to be approved before starting. The main task can be completed after all its assignments are approved.</HelpHint><h3>{isCollaborativeTask(task) ? task.parentId ? task.taskType==='both'?'Work & coordination assignment':'Monitoring assignment' : 'Main deliverable' : 'Execution assignment'}</h3></div>
             <span className={`tm-collab-status ${statusClass(task.status)}`}>{task.status === 'Completed' ? '✓ Approved' : task.status}</span>
         </header>
         {ancestors.length > 0 && <nav className="tm-workflow-breadcrumb" aria-label="Task path">{ancestors.map(item => <span key={item.id}><button type="button" onClick={() => onOpen(item)}>{item.title}</button><span aria-hidden="true">›</span></span>)}<strong aria-current="page">Current task</strong></nav>}
+        <SubmissionStamp task={task}/>
         <div className="tm-collab-context">
             {task.requestedBy && <div><span>Requested by</span><strong>{task.requestedBy}</strong></div>}
             {parent && <div><span>Parent task</span><button type="button" onClick={() => onOpen(parent)}>{parent.title}</button><small>Coordinator: {parent.assignee}</small></div>}
@@ -38,14 +41,14 @@ export default function CollaborativeTasks({ task, tasks, config, context, onCre
                 <div className="tm-collab-track" role="progressbar" aria-label="Child task approvals" aria-valuemin={0} aria-valuemax={Math.max(1, hierarchy.length)} aria-valuenow={approved}><span style={{ width: `${hierarchy.length ? approved / hierarchy.length * 100 : 0}%` }} /></div>
             </div>
             <div className="tm-collab-section-title"><h4>Tasks under this assignment</h4><span>{children.length} direct · {hierarchy.length} total</span></div>
-            {hierarchy.length > children.length && <div className="tm-workflow-list-toggle" role="group" aria-label="Task hierarchy detail"><button type="button" className={!showAll ? 'active' : ''} aria-pressed={!showAll} onClick={() => setShowAll(false)}>Direct tasks</button><button type="button" className={showAll ? 'active' : ''} aria-pressed={showAll} onClick={() => setShowAll(true)}>All levels</button></div>}
+            {hierarchy.length > children.length && <label className="tm-navigation-select">Show<select value={showAll?'all':'direct'} onChange={event=>setShowAll(event.target.value==='all')}><option value="direct">Direct tasks</option><option value="all">All levels</option></select></label>}
             {/* Separate block elements prevent titles, names and deadlines from running together. */}
             <PagedList items={assignments} resetKey={String(showAll)} label="child tasks" initialSize={5}>{items => <div className="tm-child-list">
                 {!items.length && <div className="tm-workflow-empty"><strong>Split the work into smaller assignments</strong><p>Add a task for each person. Choose who does the work and who coordinates another level.</p></div>}
                 {items.map(({ task: child, depth }) => <div className="tm-child-row" key={child.id} style={{ '--task-depth': Math.min(depth, 3) }}>
                     <button type="button" className="tm-child-card" onClick={() => onOpen(child)} aria-label={`Open ${child.title}`}>
-                        <span className="tm-child-card-top"><span className="tm-hierarchy-level">Level {ancestors.length + depth + 2} · {child.template === 'collaborative' ? 'Coordinates others' : 'Does the work'}</span><span className={`tm-collab-status ${statusClass(child.status)}`}>{child.status === 'Completed' ? '✓ Approved' : child.status}</span></span>
-                        <strong className="tm-child-title">{child.title}</strong>
+                        <span className="tm-child-card-top"><span className="tm-hierarchy-level">Level {ancestors.length + depth + 2} · {child.taskType==='both'?'Does work & coordinates':child.template === 'collaborative' ? 'Coordinates others' : 'Does the work'}</span><span className={`tm-collab-status ${statusClass(child.status)}`}>{child.status === 'Completed' ? '✓ Approved' : child.status}</span></span>
+                        <strong className="tm-child-title">{child.title}</strong><SubmissionStamp task={child}/>
                         <span className="tm-child-owner">{child.assignee} · {child.assigneeRole || child.department}</span><span className="tm-child-parent-label">Reports to {tasks.find(item => item.id === child.parentId)?.assignee || task.assignee}</span>
                         <span className="tm-child-card-footer"><span>{child.department} · {child.branch}</span><span>Due {formatDate(child.due)}</span></span>
                         {dependencyBlockers(child, tasks).length > 0 && <span className="tm-child-blocked">Waiting for required work</span>}

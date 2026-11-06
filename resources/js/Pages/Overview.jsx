@@ -229,6 +229,7 @@ export default function Overview({ auth, announcements, contents }) {
             }
         >
             <Head title="Dashboard" />
+            <div className="clinic-preserved-home">
 
             <style>{`
                 .hide-scroll::-webkit-scrollbar { display: none; }
@@ -633,6 +634,7 @@ export default function Overview({ auth, announcements, contents }) {
             </div>
 
             {/* ✅ FIXED MODAL STRUCTURE */}
+            </div>
             <Modal show={isModalOpen} onClose={closeModal} maxWidth="2xl">
                 {selectedAnnouncement && (
                     <div className="flex flex-col bg-white overflow-hidden max-h-[85vh]">

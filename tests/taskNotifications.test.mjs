@@ -68,3 +68,18 @@ test('switching from TL to employee presents new recipient alerts once, without 
     // A TL's delivery state does not consume the employee's push notification.
     assert.equal(pendingPreviewNotifications(relevant, baseline, new Set(), identity).length, 1);
 });
+
+test('submission still notifies its reviewer when it cancels a pending handover',()=>{
+ const handover={status:'pending',from:task.assignee,to:'Receiving employee',requestedBy:task.assignee,requestedAt:'2026-10-31T01:00:00Z'};
+ const previous={...task,status:'In Progress',handover};
+ const submitted={...previous,status:'Pending Review',submission:'Finished',handover:{...handover,status:'cancelled',resolvedAt:'2026-10-31T02:00:00Z'}};
+ const events=taskNotificationChanges([previous],[submitted]);
+ assert.deepEqual(events.map(event=>event.action),['Handover cancelled','Submitted for review']);
+ assert.ok(events[0].recipientNames.includes(handover.to));
+ assert.equal(events[1].recipientNames,undefined);
+});
+test('handover acceptance does not produce a false task-approved notification',()=>{
+ const previous={...task,status:'In Progress',handover:{status:'pending',from:task.assignee,to:'Recipient',requestedAt:'2026-10-31T01:00:00Z'}};
+ const accepted={...previous,status:'Not Started',assignee:'Recipient',handover:{...previous.handover,status:'accepted'}};
+ assert.deepEqual(taskNotificationChanges([previous],[accepted]).map(event=>event.action),['Handover accepted']);
+});

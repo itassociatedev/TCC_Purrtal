@@ -14,7 +14,7 @@ export function weeklySummary(task, accomplishments) {
 }
 export function accomplishedThisWeek(tasks, employee, start, end) {
     return tasks.filter(task => {
-        if (task.assignee !== employee || task.status !== 'Completed' || isWeeklyReport(task)) return false;
+        if (task.assignee !== employee || task.status !== 'Completed' || isWeeklyReport(task)||task.sample||task.sampleKey||task.title?.startsWith('[Sample]')||['narrative-report','it-opening-rounds','daily-operations'].includes(task.template)||task.template?.startsWith('daily-custom-')) return false;
         const timestamp = task.completedAt || task.history?.find(event => /approved|completed/i.test(event.text))?.at;
         if (!timestamp) return false; // A deadline alone does not establish when work was completed.
         const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(timestamp));
@@ -44,5 +44,5 @@ export function ensureWeeklyTasks(tasks, config, day) {
 }
 export const canEditWeeklyReport = (task, employee, config, role) => role === 'Employee' && isIntern(employee, config) && task.assignee === employee.name && ['Not Started', 'In Progress', 'Revision Needed'].includes(task.status);
 export function formatWeeklyReport(task, report) {
-    return `INTERN WEEKLY REPORT\n${task.weekStart} to ${task.weekEnd}\nReported by: ${task.assignee}\nDepartment: ${task.department}\n\nSUMMARY OF TASKS\n${report.summary}\n\nPROBLEMS / ISSUES\n${report.problems || report.challenges || 'None'}\n\nSOLUTIONS\n${report.solutions || 'None'}`;
+    return `INTERN WEEKLY REPORT\n${task.weekStart} to ${task.weekEnd}\nReported by: ${task.assignee}\nDepartment: ${task.department}\n\nSUMMARY OF TASKS\n${report.summary}\n\nPROBLEMS / ISSUES\n${report.problems || report.challenges || 'None'}\n\nSOLUTIONS\n${report.solutions || 'None'}\n\nFOLLOW-UPS\n${report.followUps||'None'}`;
 }

@@ -19,7 +19,7 @@ export const corporatePositions = {
 export const additionalTeamLeaderPositions = [
     { department: 'Veterinary', role: 'Team Leader', position: 'Junior Veterinarian Team Leader', branch: 'Alabang' },
     { department: 'Vet Tech', role: 'Team Leader', position: 'Veterinary Technician Assistant Team Leader', branch: 'Makati' },
-    { department: 'IT', role: 'Team Leader', position: 'IT Team Leader', branch: 'Makati' },
+    { department: 'IT', role: 'Team Leader', position: 'IT Supervisor', branch: 'Makati' },
 ];
 
 // Upgrade saved sample identities once; tasks continue pointing to the same people.

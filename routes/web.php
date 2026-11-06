@@ -45,6 +45,15 @@ Route::post('/forgot-password-notify', [AuthenticatedSessionController::class, '
     ->name('password.request.admin');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::post('/spreadsheet-import/export', [\App\Http\Controllers\SpreadsheetImportController::class, 'export'])->middleware('throttle:20,1');
+    Route::post('/spreadsheet-import/read', [\App\Http\Controllers\SpreadsheetImportController::class, 'read'])->middleware('throttle:20,1');
+    Route::post('/spreadsheet-import/template', [\App\Http\Controllers\SpreadsheetImportController::class, 'template'])->middleware('throttle:20,1');
+
+    Route::get('/task-module/records', [\App\Http\Controllers\TaskModuleController::class, 'index'])->name('tasks.records.index');
+    Route::get('/task-module/leaderboard', [\App\Http\Controllers\TaskModuleController::class, 'leaderboard'])->middleware('throttle:30,1')->name('tasks.records.leaderboard');
+    Route::post('/task-module/records', [\App\Http\Controllers\TaskModuleController::class, 'store'])->middleware('throttle:60,1')->name('tasks.records.store');
+    Route::post('/task-module/turnover', [\App\Http\Controllers\TaskModuleController::class, 'turnover'])->middleware('throttle:60,1')->name('tasks.turnover');
+    Route::delete('/task-module/records', [\App\Http\Controllers\TaskModuleController::class, 'destroy'])->name('tasks.records.destroy');
 
     // Serve the Task Module UI with account identities matched to the confirmed staff roster.
     Route::get('/task-module', function (Request $request) {
@@ -53,6 +62,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         abort_if($request->query('view') === 'Workspace Setup' && !$isTaskAdmin, 403);
         return Inertia::render('Tasks/Index', [
             'taskAdmin' => $isTaskAdmin,
+            'taskServerEnabled' => config('task_module.server_enabled') && \Illuminate\Support\Facades\Schema::hasTable('task_module_records'),
+            'taskEmailMode' => config('task_module.email_mode'),
             // Serialize directory fields only; never send account credentials or device data.
             'taskDirectory' => [
                 'users' => \App\Models\User::with(['department:id,name', 'position:id,name', 'branch:id,name', 'branches:id,name'])
@@ -224,7 +235,6 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
 
     Route::get('/logs', [SystemLogController::class, 'index'])->name('.logs.index');
     Route::get('/logs/export', [SystemLogController::class, 'export'])->name('.logs.export');
-    Route::delete('/logs/{log}', [SystemLogController::class, 'destroy'])->name('.logs.destroy');
     
     Route::get('/dashboard', function(){
         $totalActiveEmployees = \App\Models\User::whereIn('status', ['Active', 'Password reset'])->count();
@@ -347,7 +357,6 @@ Route::middleware(['guest'])->group(function () {
 Route::middleware(['auth', CheckDutyMealAccess::class])->group(function () {
     Route::get('/duty-meals/logs', [SystemLogController::class, 'index'])->name('admin.duty-meals.logs.index');
     Route::get('/duty-meals/logs/export', [SystemLogController::class, 'export'])->name('admin.duty-meals.logs.export');
-    Route::delete('/duty-meals/logs/{log}', [SystemLogController::class, 'destroy'])->name('admin.duty-meals.logs.destroy');
     Route::get('/duty-meals/overview', [DutyMealController::class, 'index'])->name('admin.duty-meals.index');
     Route::get('/duty-meals/set-up', [DutyMealController::class, 'create'])->name('admin.duty-meals.create');
     Route::post('/admin/duty-meals', [DutyMealController::class, 'store'])->name('admin.duty-meals.store');

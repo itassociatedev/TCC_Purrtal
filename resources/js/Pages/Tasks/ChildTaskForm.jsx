@@ -17,7 +17,8 @@ export default function ChildTaskForm({ task, children, config, onCreate, onClos
     const titleInput = useRef(null);
     const directory = assignmentDirectory(config);
     const person = directory.find(item => item.name === name);
-    const monitoring = mode === null ? canMonitorCollaborative(person) : mode === 'monitoring';
+    const responsibility=mode || (canMonitorCollaborative(person)?'monitoring':'execution');
+    const monitoring=responsibility!=='execution';
     const candidates = directory.filter(item => item.department === department && item.name !== task.assignee);
     const allowedBranches = person?.availableBranches || (person ? [person.branch] : [task.branch]);
     const formatDate = value => new Date(`${value}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -31,7 +32,7 @@ export default function ChildTaskForm({ task, children, config, onCreate, onClos
         const another = event.nativeEvent.submitter?.value === 'more';
         try {
             if (!person) throw new Error('Choose the person who will receive this task.');
-            onCreate({ title, description, assignee: person.name, branch, due, dependsOn: dependencies, taskType: monitoring ? 'monitoring' : 'execution' });
+            onCreate({ title, description, assignee: person.name, branch, due, dependsOn: dependencies, taskType: responsibility });
             if (!another) { onClose(); return; }
             setSaved(`Assigned “${title}” to ${person.name}. You can add another task below the same parent.`);
             setTitle(''); setDescription(''); setDependencies([]); setError(''); setName(''); setMode(null);
@@ -50,9 +51,9 @@ export default function ChildTaskForm({ task, children, config, onCreate, onClos
             <label>Assign to<select value={name} required onChange={event => choosePerson(event.target.value)}><option value="">Choose a person</option>{candidates.map(item => <option key={item.name} value={item.name}>{item.name} · {item.position || item.role}</option>)}</select></label>
             {!candidates.length && <p className="tm-daily-caption">No people are available in this department. Choose another department.</p>}
             {person && <><span className="tm-child-choice-label">What will {person.name} do?</span><div className="tm-child-mode" role="radiogroup" aria-label="Assignment responsibility">
-                <button type="button" role="radio" aria-checked={!monitoring} className={!monitoring ? 'selected' : ''} onClick={() => setMode('execution')}><strong>Do the work</strong><span>Complete this task and submit the result.</span></button>
-                <button type="button" role="radio" aria-checked={monitoring} className={monitoring ? 'selected' : ''} onClick={() => setMode('monitoring')}><strong>Coordinate others</strong><span>Assign tasks below this one and review their work.</span></button>
-            </div><p className="tm-daily-caption">{monitoring ? 'This person can add multiple tasks beneath their assignment.' : 'This is the final work assignment at this level.'}</p></>}
+                <button type="button" role="radio" aria-checked={responsibility==='execution'} className={responsibility==='execution' ? 'selected' : ''} onClick={() => setMode('execution')}><strong>Do the work</strong><span>Complete this task and submit the result.</span></button>
+                <button type="button" role="radio" aria-checked={responsibility==='monitoring'} className={responsibility==='monitoring' ? 'selected' : ''} onClick={() => setMode('monitoring')}><strong>Coordinate others</strong><span>Assign tasks below this one and review their work.</span></button>
+            <button type="button" role="radio" aria-checked={responsibility==='both'} className={responsibility==='both' ? 'selected' : ''} onClick={()=>setMode('both')}><strong>Both</strong><span>Do part of the work and coordinate other people.</span></button></div><p className="tm-daily-caption">{responsibility==='both'?'This person submits their own work after reviewing the assignments they give to others.':monitoring ? 'This person can add multiple tasks beneath their assignment.' : 'This is the final work assignment at this level.'}</p></>}
         </fieldset>
         <fieldset className="tm-child-step"><legend>3. Where and when?</legend><div className="tm-form-grid">
             <label>Work branch<select value={branch} onChange={event => setBranch(event.target.value)} required>{allowedBranches.map(item => <option key={item}>{item}</option>)}</select></label>

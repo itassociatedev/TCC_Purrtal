@@ -22,8 +22,21 @@ export function parseCsv(text) {
  if(new Set(headings).size!==headings.length||headings.some(value=>!value))throw new Error('CSV headings must be unique and non-empty.');
  return rows.map((values,index)=>{if(values.length!==headings.length)throw new Error(`Row ${index+2} has the wrong number of columns.`);return Object.fromEntries(headings.map((key,i)=>[key,values[i].trim()]));});
 }
-export function downloadCsv(name,columns,rows){
- const escape=value=>'"'+String(value??'').replace(/^[=+@-]/,"'$&").replaceAll('"','""')+'"';
- const content='\uFEFF'+[columns,...rows].map(row=>row.map(escape).join(',')).join('\r\n');
- const url=URL.createObjectURL(new Blob([content],{type:'text/csv;charset=utf-8'})),anchor=document.createElement('a');anchor.href=url;anchor.download=name;anchor.click();URL.revokeObjectURL(url);
+// Retain the existing export helper name for callers; downloads are XLSX workbooks.
+export async function downloadCsv(name, columns, rows) {
+ const { default: axios } = await import('axios');
+ try {
+  const response = await axios.post('/spreadsheet-import/export', {
+   columns,
+   rows: rows.map(row => row.map(value => String(value ?? '')))
+  }, { responseType: 'blob' });
+  const url = URL.createObjectURL(response.data);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = name.replace(/\.csv$/i, '').replace(/\.xlsx$/i, '') + '.xlsx';
+  anchor.click();
+  URL.revokeObjectURL(url);
+ } catch (error) {
+  window.alert('The XLSX export could not be downloaded. Please try again.');
+ }
 }

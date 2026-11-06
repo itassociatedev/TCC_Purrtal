@@ -223,7 +223,7 @@ class AccessControlController extends Controller
     }
 
     /**
-     * Export ACL as JSON/CSV.
+     * Export ACL as an XLSX workbook.
      */
     public function export()
     {
@@ -246,9 +246,19 @@ class AccessControlController extends Controller
             $data[] = $rowData;
         }
 
-        // Return as JSON download
-        return response()->json($data, 200, [
-            'Content-Disposition' => 'attachment; filename="admin-acl-' . now()->format('Y-m-d') . '.json"',
-        ]);
+        return response()->streamDownload(function () use ($data, $modules) {
+            $book = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            try {
+                $rows = [['Role', ...array_values($modules)], ...array_map('array_values', $data)];
+                foreach ($rows as $row => $values) {
+                    foreach ($values as $column => $value) {
+                        $book->getActiveSheet()->setCellValueExplicitByColumnAndRow($column + 1, $row + 1, (string) $value, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                    }
+                }
+                (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save('php://output');
+            } finally {
+                $book->disconnectWorksheets();
+            }
+        }, 'admin-acl-' . now()->format('Y-m-d') . '.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
 }

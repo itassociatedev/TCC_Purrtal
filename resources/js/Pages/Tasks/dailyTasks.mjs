@@ -1,3 +1,5 @@
+import {ensureRecurringTasks} from './recurringTasks.mjs';
+import {ensurePeriodicNarratives} from './narrativePeriods.mjs';
 import { consolidateOpeningReports } from './sharedOpeningReports.mjs';
 import { ensureWeeklyTasks } from './weeklyReports.mjs';
 import { scheduledBranch } from './workSchedule.mjs';
@@ -11,13 +13,13 @@ export const isDailyTemplate = task => (['it-opening-rounds', 'narrative-report'
 const dailyKey = task => `${task.template}:${encodeURIComponent(task.template === 'it-opening-rounds' ? task.branch : task.assignee)}:${task.scheduledDate || task.due}`;
 // Dashboard totals and cards use the same active templates; historical/paused reports stay in task history.
 export const dashboardDailyTasks = (tasks, day, templateIds) => tasks.filter(task => isDailyTemplate(task)
-    && (task.scheduledDate || task.due) === day && templateIds.includes(task.template));
+    && (!task.recurrence||task.recurrence==='daily') && (task.scheduledDate || task.due) === day && templateIds.includes(task.template));
 
 // Generate only today's work when opened; preserve all previous instances, drafts, photos, and review states.
 export function ensureDailyTasks(tasks, config, day) {
     let changed = false;
     // Remove only untouched automatic reports assigned to the wrong department by the old schedule.
-    const activeNames = new Set(config.employees.map(person => person.name));
+    const activeNames = new Set([...config.employees,...(config.teamLeaders||[]),...(config.roleHolders||[]),...(config.operationsManagers||[])].map(person => person.name));
     const retained = tasks.filter(task => {
         const wrongDepartment = ['it-opening-rounds', 'narrative-report'].includes(task.template) && task.department !== config.itDepartment;
         const untouched = task.recurrence === 'daily' && task.status === 'Not Started' && !task.submission && !task.rounds && !task.narrative && !task.history?.length;
@@ -26,7 +28,7 @@ export function ensureDailyTasks(tasks, config, day) {
     });
     changed = retained.length !== tasks.length;
     const result = retained.map(task => {
-        if (!isDailyTemplate(task)) return task;
+        if (!isDailyTemplate(task)||['weekly','monthly'].includes(task.recurrence)) return task;
         const retired = task.template !== 'it-opening-rounds' && !activeNames.has(task.assignee);
         if (Boolean(task.retiredDailyAssignment) !== retired) { task = {...task, retiredDailyAssignment:retired}; changed=true; }
         const key = dailyKey(task);
@@ -57,11 +59,12 @@ export function ensureDailyTasks(tasks, config, day) {
         if (!keys.has(key)) { result.push({id:++id,template:opening.id,title:opening.name,description:opening.description,reportDefinition:structuredClone(opening),assignee:'IT team',sharedBranchReport:true,branch,department:config.itDepartment,due:day,scheduledDate:day,recurrence:'daily',dailyKey:key,status:'Not Started',kind:'Daily task',priority:config.priorities[0],submission:'',link:'',remarks:''}); keys.add(key); }
     }
     const shared = consolidateOpeningReports(result);
-    return ensureWeeklyTasks(JSON.stringify(shared) === JSON.stringify(tasks) ? tasks : shared, config, day);
+    return ensureRecurringTasks(ensurePeriodicNarratives(ensureWeeklyTasks(JSON.stringify(shared) === JSON.stringify(tasks) ? tasks : shared, config, day),config,day),day);
 }
 
-export function formatNarrative(report) {
-    return `Daily Narrative Report\n\nDate : ${report.date}\nBranch : ${report.branch}\nDepartment : ${report.department}\n\nSUMMARY OF THE DAY\n${report.summary || ''}\n\nACCOMPLISHMENTS\n${report.accomplishments?.trim() || 'None'}\n\nISSUES / CHALLENGES\n${report.issues?.trim() || 'None'}\n\nFOLLOW-UP / NEXT STEPS\n${report.nextSteps?.trim() || 'None'}\n\nHELP NEEDED\n${report.helpNeeded?.trim() || 'None'}`;
+export function formatNarrative(report,task={}) {
+ const frequency=task.recurrence==='weekly'?'Weekly':task.recurrence==='monthly'?'Monthly':'Daily';
+ return frequency+' Narrative Report\n'+(task.periodStart?task.periodStart+' to '+task.periodEnd:'Date: '+report.date)+'\nBranch: '+report.branch+'\nDepartment: '+report.department+'\n\nSUMMARY\n(Tasks Completed)\n'+(report.summary||'No completed tasks recorded.')+'\n\nISSUES / PROBLEMS\n'+(report.issues?.trim()||'None')+'\n\nSOLUTIONS\n'+(report.solutions?.trim()||'None')+'\n\nFOLLOW-UPS\n'+(report.followUps?.trim()||report.nextSteps?.trim()||'None');
 }
 export function validateNarrative(report, branches, scheduledDate) {
     if (!branches.includes(report.branch)) return 'Choose an allowed work branch.';

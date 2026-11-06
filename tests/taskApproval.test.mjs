@@ -6,7 +6,7 @@ import {assignmentDirectory} from '../resources/js/Pages/Tasks/assignmentDirecto
 import {canSubmitAssignedTask} from '../resources/js/Pages/Tasks/taskPolicy.mjs';
 import {tasksForPreview} from '../resources/js/Pages/Tasks/taskDirectory.mjs';
 const config=defaultSettings();const directory=assignmentDirectory(config);const leader=directory.find(p=>p.baseRole==='Team Leader');const context={role:'Team Leader',actor:leader.name,department:leader.department};
-test('a TL-created assignment is a pending request routed to its branch OM',()=>{
+test('a TL self-assignment is a pending request routed to its branch OM',()=>{
  const task=routeTaskApproval({id:1,template:'standard',kind:'Assigned task',status:'Not Started',assignee:leader.name,branch:'Makati',department:leader.department},config,context);
  const reviewer=directory.find(p=>p.name===task.approvalReviewer);assert.equal(task.status,'Pending Approval');assert.equal(reviewer.baseRole,'Operations Manager');assert.equal(reviewer.branch,'Makati');
  assert.equal(canApproveTaskRequest(task,context),false);assert.equal(canSubmitAssignedTask(task,{role:'Team Leader',actor:leader}),false);
@@ -32,5 +32,10 @@ test('OM self-requests route to EVP and direct EVP assignments remain available 
  const assignment={...draft,kind:'Assigned task',status:'Not Started'};assert.equal(routeTaskApproval(assignment,config,{role:'EVP'}),assignment);
 });
 test('missing higher-up prevents silently creating an approved task',()=>{
- const empty={...config,operationsManagers:[],roleHolders:[]};assert.throws(()=>routeTaskApproval({template:'standard',branch:'Makati'},empty,context),/No higher-up/);
+ const empty={...config,operationsManagers:[],roleHolders:[]};assert.throws(()=>routeTaskApproval({template:'standard',kind:'Self-created request',assignee:leader.name,branch:'Makati'},empty,context),/No higher-up/);
+});
+
+test('a TL assignment to another person does not require pre-start approval',()=>{
+ const assigned={template:'standard',kind:'Assigned task',status:'Not Started',assignee:'Another employee',branch:'Makati'};
+ assert.equal(routeTaskApproval(assigned,config,context),assigned);
 });

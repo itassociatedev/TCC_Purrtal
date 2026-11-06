@@ -168,3 +168,12 @@ test('an existing Inventory supervisor execution child can delegate multiple emp
     const autoLeader = createChildTask(parent, [parent], config, coordinator, { ...draft, assignee: tl.name, branch: tl.branch, taskType: 'auto' });
     assert.equal(autoLeader.template, 'collaborative');
 });
+
+
+test('both responsibility retains own submission and permits further delegation',()=>{
+ const person=assignmentDirectory(config).find(person=>person.name===value.assignee);
+ const child=createChildTask(parent,[parent],config,coordinator,{...value,taskType:'both'});
+ assert.equal(child.taskType,'both');assert.equal(child.template,'collaborative');assert.equal(child.kind,'Work & coordination task');
+ assert.equal(canDelegate(child,{role:person.baseRole,actor:person.name,employee:person.name}),true);
+ assert.equal(child.submission,'');assert.ok(dependencyBlockers(child,[parent,child]).length>0);
+});

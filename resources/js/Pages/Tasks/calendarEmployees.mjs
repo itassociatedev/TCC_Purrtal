@@ -1,5 +1,7 @@
 import { isOverdue } from './taskFilters.mjs';
 
+const employeeColors = ['#496681', '#95595d', '#4d7565'];
+
 // Count across the viewer's entire permitted scope, including overdue work from earlier months.
 export function employeeOverdueCounts(tasks, today) {
     const counts = {};
@@ -13,7 +15,7 @@ export function employeeOverdueCounts(tasks, today) {
 export function employeeColor(name) {
     let hash = 0;
     for (const character of name) hash = (Math.imul(hash, 31) + character.charCodeAt(0)) >>> 0;
-    return `hsl(${(hash * 137.508) % 360} 60% 32%)`;
+    return employeeColors[hash % 3];
 }
 export function employeeTaskGroups(tasks) {
     const groups = new Map();
@@ -22,7 +24,7 @@ export function employeeTaskGroups(tasks) {
         groups.set(name, (groups.get(name) || 0) + 1);
     }
     return [...groups].sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
-        .map(([name, count]) => ({ name, count, color: employeeColor(name) }));
+        .map(([name, count], index) => ({ name, count, color: employeeColors[index % 3] }));
 }
 export function calendarDayPreview(tasks, limit = 3) {
     const employees = employeeTaskGroups(tasks);

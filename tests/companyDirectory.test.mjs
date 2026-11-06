@@ -18,7 +18,7 @@ test('disabled and removed employees disappear while other statuses remain avail
 test('employee positions and branches override stale organization chart data without mutating either',()=>{
  const data={users:[{...user(1,'Example Person','Inventory Supervisor','Inventory'),branch:'Alabang',branches:['Alabang','Makati']}],members:[{id:1,name:'Example Person',position:'IT Team Leader',branch:'Makati'}]};
  const original=structuredClone(data);const config=companySettings(defaultSettings(),data);
- assert.equal(config.employees[0].department,'Inventory');assert.equal(config.employees[0].employeeType,'Supervisor');assert.equal(config.employees[0].branch,'Alabang');assert.deepEqual(data,original);
+ assert.equal(config.teamLeaders[0].department,'Inventory');assert.equal(config.teamLeaders[0].employeeType,'Supervisor');assert.equal(config.teamLeaders[0].branch,'Alabang');assert.deepEqual(data,original);
 });
 test('roles come from employee positions, including TL abbreviations and corporate positions',()=>{
  const config=companySettings(defaultSettings(),{users:[user(1,'Example TL','Clinic Assistant TL','Clinic Assistants'),user(2,'Example OM','Operations Manager','Operations'),user(3,'Example HR','Human Resources Business Partner','Human Resources'),user(4,'Example EVP','Executive Vice President','Executive'),user(5,'Example Auditor','Internal Auditor','Audit')]});

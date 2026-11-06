@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\SystemLog;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
 class SystemLogController extends Controller
@@ -13,8 +15,7 @@ class SystemLogController extends Controller
     {
         $duty = $request->routeIs('admin.duty-meals.logs.*');
         if ($duty) abort_unless($request->user()->canEditModule('duty_meal_setup_roster'), 403);
-        $query = SystemLog::with('user')->latest();
-        if ($duty) $query->where('module', 'like', 'Duty Meal%');
+        $query = $this->logQuery($duty);
 
         $this->applyFilters($query, $request);
 
@@ -23,7 +24,7 @@ class SystemLogController extends Controller
         return Inertia::render('Admin/SystemLogs/Index', [
             'logs' => $logs,
             'dutyLogs' => $duty,
-            'canDeleteLogs' => $request->user()->canDeleteModule($duty ? 'duty_meal_setup_roster' : 'system_logs'),
+            'modules' => $this->logQuery($duty)->reorder()->distinct()->orderBy('module')->pluck('module'),
             'filters' => $request->only(['search', 'module', 'action', 'status', 'start_date', 'end_date']),
         ]);
     }
@@ -32,50 +33,53 @@ class SystemLogController extends Controller
     {
         $duty = $request->routeIs('admin.duty-meals.logs.*');
         if ($duty) abort_unless($request->user()->canEditModule('duty_meal_setup_roster'), 403);
-        $query = SystemLog::with('user')->latest();
-        if ($duty) $query->where('module', 'like', 'Duty Meal%');
+        $query = $this->logQuery($duty);
 
         // Apply the exact same filters as the index method
         $this->applyFilters($query, $request);
 
         $logs = $query->get(); // Get all filtered logs instead of paginating
 
-        $fileName = 'system_logs_' . date('Y-m-d_H-i-s') . '.csv';
-
-        // Prepare the CSV headers
-        $headers = [
-            "Content-type"        => "text/csv",
-            "Content-Disposition" => "attachment; filename=$fileName",
-            "Pragma"              => "no-cache",
-            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
-            "Expires"             => "0"
-        ];
-
-        // Prepare the Columns
-        $columns = ['Timestamp', 'User', 'Module', 'Action', 'Description', 'IP Address', 'Status'];
-
-        $callback = function() use($logs, $columns) {
-            $file = fopen('php://output', 'w');
-            fputcsv($file, $columns); // Write column headers
-
-            foreach ($logs as $log) {
-                // Format data for the CSV row
-                fputcsv($file, [
-                    $log->created_at->format('Y-m-d H:i:s'),
-                    $log->user ? $log->user->name : 'System',
-                    $log->module,
-                    $log->action,
-                    $log->description,
-                    $log->ip_address,
-                    $log->status
-                ]);
+        return response()->streamDownload(function () use ($logs) {
+            $book = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            try {
+                $sheet = $book->getActiveSheet();
+                $rows = [['Timestamp', 'User', 'Module', 'Action', 'Description', 'IP Address', 'Status']];
+                foreach ($logs as $log) {
+                    $rows[] = [$log->created_at->format('Y-m-d H:i:s'), $log->user?->name ?? 'System', $log->module, $log->action, $log->description, $log->ip_address, $log->status];
+                }
+                foreach ($rows as $row => $values) {
+                    foreach ($values as $column => $value) {
+                        $sheet->setCellValueExplicitByColumnAndRow($column + 1, $row + 1, (string) $value, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                    }
+                }
+                $sheet->freezePane('A2');
+                (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save('php://output');
+            } finally {
+                $book->disconnectWorksheets();
             }
+        }, 'system_logs_' . date('Y-m-d_H-i-s') . '.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
+    }
 
-            fclose($file);
-        };
+    private function logQuery(bool $duty)
+    {
+        $query = SystemLog::with('user')->latest()->orderByDesc('id');
+        if ($duty) return $query->where('module', 'like', 'Duty Meal%');
 
-        // Stream the download response back to the browser
-        return response()->stream($callback, 200, $headers);
+        if (Schema::hasTable('task_module_events')) {
+            $logs = DB::table('system_logs')->select(
+                'id', 'user_id', 'module', 'action', 'description', 'ip_address', 'status', 'created_at'
+            );
+            $title = DB::connection()->getQueryGrammar()->wrap('task.payload->title');
+            $taskEvents = DB::table('task_module_events as event')
+                ->leftJoin('task_module_records as task', 'task.id', '=', 'event.task_record_id')
+                ->selectRaw("-event.id, event.actor_id, 'Task Module', event.event,
+                    COALESCE({$title}, event.event),
+                    NULL, 'success', event.created_at");
+            $query->fromSub($logs->unionAll($taskEvents), 'system_logs');
+        }
+
+        return $query;
     }
 
     /**
@@ -104,6 +108,8 @@ class SystemLogController extends Controller
                       ->orWhere('module', 'Auth') 
                       ->orWhereIn('action', ['Login', 'Failed Login', 'Logout']);
                 });
+            } elseif ($request->module === 'Duty Meal Module') {
+                $query->where('module', 'like', 'Duty Meal%');
             } else {
                 $query->where('module', $request->module);
             }
@@ -131,12 +137,6 @@ class SystemLogController extends Controller
 
     public function destroy(Request $request, SystemLog $log)
     {
-        if ($request->routeIs('admin.duty-meals.logs.*')) {
-            abort_unless($request->user()->canDeleteModule('duty_meal_setup_roster') && str_starts_with($log->module, 'Duty Meal'), 403);
-        } else {
-            abort_unless($request->user()->canDeleteModule('system_logs'), 403);
-        }
-        $log->delete();
-        return back()->with('success', 'Log entry deleted.');
+        abort(403, 'Audit logs cannot be deleted.');
     }
 }
