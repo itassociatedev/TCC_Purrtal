@@ -13,17 +13,48 @@ use Inertia\Inertia;
 
 class TicketController extends Controller
 {
-    // Resolve the ticket identity without replacing the logged-in administrator.
-    // Only authorized preview routes can select a registered test account.
+    // Resolve a ticket identity without replacing the signed-in account.
+    // Preview-role routes use isolated data and an in-memory role identity.
     private function context(Request $request): array
     {
         $preview = $request->routeIs('tickets.preview.*');
         if (!$preview) return [$request->user(), false];
         abort_unless(TicketAccess::canPreview($request->user()), 403);
-        $data = $request->validate(['preview_user' => ['nullable', 'integer', Rule::exists('ticket_preview_users', 'user_id')]]);
-        $id = $data['preview_user'] ?? DB::table('ticket_preview_users')->orderBy('role_id')->value('user_id');
+        $data = $request->validate([
+            'preview_user' => ['nullable', 'integer', Rule::exists('ticket_preview_users', 'user_id')],
+            'preview_role' => ['nullable', Rule::in(['employee', 'member', 'leader'])],
+        ]);
+        // Role-only UI previews use a temporary in-memory identity. Preview
+        // tickets remain isolated; no extra login or seeded account is needed.
+        if (!empty($data['preview_role'])) {
+            return [$this->rolePreviewActor($request->user(), $data['preview_role']), true];
+        }
+        $id = $data['preview_user'] ?? null;
+        $id ??= DB::table('ticket_preview_users')->orderBy('role_id')->value('user_id');
         abort_unless($id, 422, 'Run the TicketPreviewSeeder to create test employees.');
         return [User::findOrFail($id), true];
+    }
+
+    private function rolePreviewActor(User $signedInUser, string $ticketRole): User
+    {
+        $roleName = match ($ticketRole) {
+            'leader' => config('ticketing.leader_roles.0', 'IT Team Leader'),
+            'member' => config('ticketing.member_roles.0', 'IT Member'),
+            default => 'Employee',
+        };
+        $role = new \App\Models\Role();
+        $role->name = $roleName;
+        $actor = clone $signedInUser;
+        $actor->setRelation('role', $role);
+        return $actor;
+    }
+
+    private function previewRouteParams(Request $request, User $actor): array
+    {
+        if ($request->filled('preview_role')) {
+            return ['preview_role' => $request->input('preview_role')];
+        }
+        return ['preview_user' => $actor->id];
     }
 
     private function feedbackResolverId(Ticket $ticket): ?int
@@ -81,7 +112,7 @@ class TicketController extends Controller
             $parameters = $filters;
             unset($parameters['view']);
             $parameters['status_filter'] = $view;
-            if ($preview) $parameters['preview_user'] = $actor->id;
+            if ($preview) $parameters = array_merge($parameters, $this->previewRouteParams($request, $actor));
             return redirect()->route($preview ? 'tickets.preview.all' : 'tickets.all', $parameters);
         }
         // Remember the chosen size across views and refreshes. All still uses
@@ -435,7 +466,7 @@ class TicketController extends Controller
             $team = User::whereNotIn('id', DB::table('ticket_preview_users')->select('user_id'))->with('role')->get()->filter(fn ($user) => TicketAccess::role($user) !== 'employee');
             Notification::send($team, new TicketNotification($ticket->id, "New ticket #{$ticket->ticket_code}: {$ticket->subject}"));
         });
-        return redirect()->route($preview ? 'tickets.preview.dashboard' : 'tickets.dashboard', $preview ? ['preview_user' => $actor->id] : [])
+        return redirect()->route($preview ? 'tickets.preview.dashboard' : 'tickets.dashboard', $preview ? $this->previewRouteParams($request, $actor) : [])
             ->with('success', $preview ? 'Test ticket submitted. Live notifications were not sent.' : 'Ticket submitted. The IT team has been notified.');
     }
 

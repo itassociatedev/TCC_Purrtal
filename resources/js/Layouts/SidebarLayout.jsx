@@ -1,8 +1,8 @@
 import DisplaySettings from '@/Components/DisplaySettings';
-import AppearanceSwitch from '@/Components/AppearanceSwitch';
 import ApplicationLogo from '@/Components/ApplicationLogo';
 import Dropdown from '@/Components/Dropdown';
 import FlashMessage from '@/Components/FlashMessage';
+import { readRolePreview, rolePreviewStorageKey } from '@/Components/rolePreview.mjs';
 import { Link, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { cloneElement, useEffect, useState } from 'react';
@@ -37,6 +37,22 @@ export default function SidebarLayout({
 
     const { auth } = usePage().props;
     const [settingsOpen,setSettingsOpen]=useState(false);
+    const [globalRolePreview, setGlobalRolePreview] = useState(() => readRolePreview(auth.user?.id));
+    const previewKey = rolePreviewStorageKey(auth.user?.id);
+    useEffect(() => {
+        const syncPreview = event => setGlobalRolePreview(event?.detail ?? readRolePreview(auth.user?.id));
+        window.addEventListener('tcc-role-preview-change', syncPreview);
+        window.addEventListener('storage', syncPreview);
+        return () => {
+            window.removeEventListener('tcc-role-preview-change', syncPreview);
+            window.removeEventListener('storage', syncPreview);
+        };
+    }, [previewKey, auth.user?.id]);
+    const displayedProfile = globalRolePreview?.active ? globalRolePreview : previewProfile;
+    const moduleDepartment = displayedProfile?.department?.name || displayedProfile?.department || auth.user?.department?.name;
+    const isItUser = String(moduleDepartment || '').trim().toLowerCase() === 'it'
+        || (!globalRolePreview?.active && String(auth.user?.role?.name || '').trim().toLowerCase().startsWith('it '));
+
 
     const safeSidebarLinks = Array.isArray(sidebarLinks) ? sidebarLinks : [];
     const safeNotifications = Array.isArray(auth?.notifications) ? auth.notifications : [];
@@ -53,7 +69,8 @@ export default function SidebarLayout({
     const isAudit = roleAndPosition.includes('audit') || roleAndPosition.includes('accountability') || roleAndPosition.includes('view only');
     
     // 🟢 NEW: Unified condition to toggle Accountability/Assets module visibility globally
-    const hasAccountabilities = auth?.has_department_assets || (auth?.user?.assets && auth.user.assets.length > 0) || isSuperAdmin || isAudit;
+    const hasAccountabilities = auth?.has_assets_schema !== false
+        && (auth?.has_department_assets || (auth?.user?.assets && auth.user.assets.length > 0) || isSuperAdmin || isAudit);
 
     const hasAnyAdminPermission = () => [
         'admin_overview',
@@ -194,11 +211,29 @@ export default function SidebarLayout({
     };
 
     const routeToDutyMeal = getFirstDutyMealRoute();
+    const canShowAdminModule = hasAnyAdminPermission()
+        && (!globalRolePreview?.active || globalRolePreview.showAdminAccess === true);
+    const hasHrModule = hasHRModuleAccess(auth);
+    const hasPrpoModule = moduleHasAccess(auth, 'prpo_');
+    const hasAttendanceModule = moduleHasAccess(auth, 'attendance');
+    const isAccountabilityAdmin = isSuperAdmin || isAudit;
+    const administrationModuleCount = [
+        canShowAdminModule,
+        hasHrModule,
+        hasPrpoModule,
+        hasAccountabilities && isAccountabilityAdmin,
+    ].filter(Boolean).length;
+    const staffModuleCount = [
+        canAccessDutyMealModule,
+        hasAttendanceModule,
+        hasAccountabilities && !isAccountabilityAdmin,
+    ].filter(Boolean).length;
+    const moduleGroupCount = administrationModuleCount + staffModuleCount;
 
     const currentModuleLabel =
-        // Use the shared module selector label when a Task Module screen is active.
+        // IT staff get a department-specific task module name; everyone else sees the shared module name.
         activeModule === 'Tasks'
-            ? 'Task Module'
+            ? (isItUser ? 'IT Task Module' : 'Task Module')
             : activeModule === 'Admin'
             ? 'Admin Module'
                         : activeModule === 'Assets'
@@ -216,7 +251,7 @@ export default function SidebarLayout({
                   : activeModule === 'PR/PO Module'
                     ? 'PR/PO Module'
                     : activeModule === 'IT Ticketing Module'
-                      ? 'IT Ticketing Module'
+                      ? (isItUser ? 'IT Task Module' : 'IT Support')
                       : 'Select Module';
 
     // Determines if we are on the main overview/dashboard to conditionally render Quick Links and Resources
@@ -411,34 +446,56 @@ export default function SidebarLayout({
 
                             <Dropdown.Content align="left" width="48">
                                     <Dropdown.Link href={route('dashboard')}>Portal Home</Dropdown.Link>
-                                    {/* Open the Task Module prototype through the existing portal module selector. */}
-                                    <Dropdown.Link href={route('tasks.index')}>Task Module</Dropdown.Link>
-                                    <Dropdown.Link href={route('tickets.dashboard')}>Ticketing Module</Dropdown.Link>
-                                    {hasAnyAdminPermission() && (
+                                    <div className="mx-4 my-1 border-t border-slate-100" aria-hidden="true" />
+                                    {!isItUser && <div className="clinic-module-section-label" role="heading" aria-level="3">Work &amp; support</div>}
+                                    <Dropdown.Link href={route('tasks.index')}>{isItUser ? 'IT Task Module' : 'Task Module'}</Dropdown.Link>
+                                    {!isItUser && <Dropdown.Link href={route('tickets.dashboard')}>IT Support</Dropdown.Link>}
+                                    {moduleGroupCount > 0 && <>
+                                        <div className="mx-4 my-1 border-t border-slate-100" aria-hidden="true" />
+                                        {moduleGroupCount > 1 && <div className="clinic-module-section-label" role="heading" aria-level="3">Administration</div>}
+                                    </>}
+                                    {canShowAdminModule && (
                                         <Dropdown.Link href={getFirstAdminRoute()}>
                                             Admin Module
                                         </Dropdown.Link>
                                     )}
 
-                                    {/* HR Module: show only when user has HR-related permissions or is Admin */}
-                                    { hasHRModuleAccess(auth) && (
+                                    {/* HR and PR/PO stay grouped with authorized administration modules. */}
+                                    { hasHrModule && (
                                         <Dropdown.Link href={route('hr.index')}>HR Module</Dropdown.Link>
                                     ) }
 
-                                    { moduleHasAccess(usePage().props.auth, 'prpo_') && (
+                                    { hasPrpoModule && (
                                         <Dropdown.Link href={getFirstPrpoRoute()}>
                                             PR/PO Module
                                         </Dropdown.Link>
                                     )}
 
-                                    {/* 🟢 FIXED: Properly routes users dynamically to the first Duty Meal module they have access to */}
+                                    {hasAccountabilities && isAccountabilityAdmin && (
+                                        <Dropdown.Link href={isAudit ? route('admin.asset-masterlist') : route('admin.assets.index')}>
+                                            {isAudit ? 'Asset Masterlist' : 'Asset Management'}
+                                        </Dropdown.Link>
+                                    )}
+
+                                    {!isItUser && staffModuleCount > 0 && <>
+                                        <div className="mx-4 my-1 border-t border-slate-100" aria-hidden="true" />
+                                        {staffModuleCount > 1 && <div className="clinic-module-section-label" role="heading" aria-level="3">Staff tools</div>}
+                                    </>}
+
+                                    {/* Routes users to their first available Duty Meal page. */}
                                     { canAccessDutyMealModule && routeToDutyMeal && (
                                         <Dropdown.Link href={routeToDutyMeal}>
                                             Duty Meal Module
                                         </Dropdown.Link>
                                     )}
 
-                                    {moduleHasAccess(auth, 'attendance') && (
+                                    {hasAccountabilities && !isAccountabilityAdmin && (
+                                        <Dropdown.Link href={route('staff.assets.index')}>
+                                            My Accountability
+                                        </Dropdown.Link>
+                                    )}
+
+                                    {hasAttendanceModule && (
                                         <Dropdown.Link href={getFirstAttendanceRoute(auth)}>
                                             Attendance Module
                                         </Dropdown.Link>
@@ -548,23 +605,6 @@ export default function SidebarLayout({
                         </>
                     )}
 
-                    <ul className="space-y-2">
-                        {regularSidebarLinks.map((link, index) => (
-                            <li key={index}>
-                                <Link
-                                    href={link.href}
-                                    aria-current={link.active?'page':undefined}
-                                    className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 ${
-                                        link.active ? 'bg-gray-100 font-bold text-gray-900' : ''
-                                    }`}
-                                >
-                                    {renderSidebarIcon(link)}
-                                    <span>{link.label}</span>
-                                </Link>
-                            </li>
-                        ))}
-                    </ul>
-
                     {/* 🟢 RESOURCES SECTION */}
                     {['General', 'Profile'].includes(activeModule) && (
                         <div className="mt-8 mb-4">
@@ -621,7 +661,6 @@ export default function SidebarLayout({
                     {/* Right Side Header Items - Reduced gap on mobile */}
                     <div className="flex flex-1 items-center justify-end gap-1.5 sm:gap-3">
 
-                        <AppearanceSwitch />
                         {/* 🔽 Wrapped Notifications Dropdown 🔽 */}
                         <div className="mobile-notification-fix">
                             {notificationSlot ? cloneElement(notificationSlot, {
@@ -645,8 +684,8 @@ export default function SidebarLayout({
                                         </svg>
 
                                         {localUnreadCount > 0 && (
-                                            <span className="absolute right-0 top-0 sm:right-1 sm:top-1 flex h-3.5 w-3.5 sm:h-4 sm:w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] sm:text-[10px] font-bold text-white ring-2 ring-white">
-                                                {localUnreadCount}
+                                            <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
+                                                {localUnreadCount > 99 ? '99+' : localUnreadCount}
                                             </span>
                                         )}
                                     </button>
@@ -711,13 +750,26 @@ export default function SidebarLayout({
                             </Dropdown>}
                         </div>
 
+                        <Link
+                            href={route('tickets.dashboard')}
+                            aria-label="IT Support"
+                            title="IT Support"
+                            className="relative inline-flex h-[36px] w-[36px] sm:h-[42px] sm:w-[42px] items-center justify-center rounded-full border border-slate-200 bg-white/90 text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                        >
+                            <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 13v-2a9 9 0 0118 0v2" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13h2v6H5a2 2 0 01-2-2v-2a2 2 0 012-2zm12 0h2a2 2 0 012 2v2a2 2 0 01-2 2h-2v-6zM17 19a4 4 0 01-4 3h-2" />
+                            </svg>
+                            <span aria-hidden="true" className="absolute -right-1 -top-1 inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-indigo-600 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-white">IT</span>
+                        </Link>
+
                         {/* User Dropdown */}
                         <Dropdown>
                             <Dropdown.Trigger>
                                 <button className="inline-flex min-h-[36px] sm:min-h-[42px] items-center gap-1 sm:gap-2 rounded-full border border-slate-200 bg-white/90 px-2.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus:outline-none">
 
                                     {/* Hide text on mobile, truncate if it gets too long on desktop */}
-                                    <span className="hidden sm:block max-w-[100px] lg:max-w-[150px] truncate">{previewProfile?.name || user?.name}</span>
+                                    <span className="hidden sm:block max-w-[100px] lg:max-w-[150px] truncate">{displayedProfile?.name || user?.name}</span>
 
                                     {/* Show simple user icon on mobile instead */}
                                     <svg className="h-4 w-4 sm:hidden text-slate-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">

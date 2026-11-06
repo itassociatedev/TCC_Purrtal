@@ -90,7 +90,7 @@ export default function TaskNotifications({ storageKey, scope, onOpen, taskLooku
     }, [open]);
     const items = useMemo(() => relevant(notifications), [notifications, identity, taskLookup, roleName, itDepartment]);
     const taskUnread = items.filter(item => !item.readBy?.includes(identity)).length;
-    const unread = taskUnread + portalUnreadCount;
+    const unread = taskUnread + (Number(portalUnreadCount) || 0);
     const displayed = tab === 'Tasks' ? items : portalNotifications.map(item => ({ id: item.id, action: 'Portal notification', title: item.data?.message || 'Notification', description: item.data?.user_email || item.data?.details || '', createdAt: item.created_at, portal: true, isRead: Boolean(item.read_at), url: item.data?.action_url }));
     const markRead = ids => {
         const next = load().map(item => ids.includes(item.id) ? { ...item, readBy: [...new Set([...(item.readBy || []), identity])] } : item);
@@ -113,7 +113,7 @@ export default function TaskNotifications({ storageKey, scope, onOpen, taskLooku
     };
     const show = event => { if (event.portal) { setOpen(false); onPortalRead?.(event.id, event.url); return; } markRead([event.id]); setOpen(false); setAlerts(previous => previous.filter(item => item.id !== event.id)); if (event.action !== 'Task deleted') onOpen(event.taskId); };
     const dismiss = useCallback(id => setAlerts(previous => previous.filter(item => item.id !== id)), []);
-    return <div className="tm-notification-root" ref={root}><button type="button" className="tm-notification-bell" aria-label={`Notifications: ${taskUnread} tasks and ${portalUnreadCount} others unread`} aria-expanded={open} onClick={() => setOpen(!open)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg></button>
+    return <div className="tm-notification-root" ref={root}><button type="button" className="tm-notification-bell" aria-label={`Notifications: ${taskUnread} tasks and ${portalUnreadCount} others unread`} aria-expanded={open} onClick={() => setOpen(!open)}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>{unread > 0 && <span aria-hidden="true">{unread > 99 ? '99+' : unread}</span>}</button>
         {open && <section className="tm-notification-panel" aria-label="Notifications"><header><div><h2>Notifications</h2><small>{unread} unread</small></div><button type="button" onClick={() => setOpen(false)} aria-label="Close notifications">×</button></header>
             <div className="tm-notification-tabs" role="tablist" aria-label="Notification categories">{['Tasks', 'Others'].map(name => <button type="button" role="tab" aria-selected={tab === name} key={name} onClick={() => { setTab(name); setConfirmClear(false); setClearError(''); }}>{name}<span>{name === 'Tasks' ? taskUnread : portalUnreadCount}</span></button>)}</div>
             {(tab === 'Tasks' ? taskUnread : portalUnreadCount) > 0 && <button type="button" className="tm-notification-read-all" onClick={event => { if (tab === 'Tasks') markRead(items.map(item => item.id)); else onPortalReadAll?.(event); }}>Mark {tab.toLowerCase()} as read</button>}

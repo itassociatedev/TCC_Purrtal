@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Inertia\Middleware;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -35,23 +36,32 @@ class HandleInertiaRequests extends Middleware
         $user = $request->user();
 
         $hasDepartmentAssets = false;
+        $assetsSchemaReady = false;
 
-        // If the user is logged in, load their relationships from the database!
+        // Load shared account relationships. Asset data is optional until the
+        // accountability migrations have been applied to this database.
         if ($user) {
-            // Eager-load relationships used in shared Inertia props.
-            $user->load(['role', 'role.adminAcls', 'position', 'department', 'branch', 'branches', 'assets']);
+            $user->load(['role', 'role.adminAcls', 'position', 'department', 'branch', 'branches']);
 
-            // 🟢 Determine if user or department has any assigned assets to toggle module visibility
             try {
-                $deptName = is_object($user->department) ? ($user->department->name ?? '') : (is_string($user->department) ? $user->department : '');
+                $assetsSchemaReady = Schema::hasTable('assets') && Schema::hasColumn('assets', 'user_id');
+            } catch (\Throwable $e) {
+                $assetsSchemaReady = false;
+            }
 
-                $hasDepartmentAssets = DB::table('assets')
-                    ->where('department', $deptName)
-                    ->orWhere('user_id', $user->id)
-                    ->exists();
-            } catch (\Exception $e) {
-                // Failsafe in case table is migrating or doesn't exist yet
-                $hasDepartmentAssets = false;
+            if ($assetsSchemaReady) {
+                $user->load('assets');
+
+                try {
+                    $deptName = is_object($user->department) ? ($user->department->name ?? '') : (is_string($user->department) ? $user->department : '');
+
+                    $hasDepartmentAssets = DB::table('assets')
+                        ->where('department', $deptName)
+                        ->orWhere('user_id', $user->id)
+                        ->exists();
+                } catch (\Throwable $e) {
+                    $hasDepartmentAssets = false;
+                }
             }
         }
 
@@ -75,7 +85,7 @@ class HandleInertiaRequests extends Middleware
                     'branches' => $user->branches,
 
                     // 🟢 ADDED: Send the user's assigned assets to React!
-                    'assets' => $user->assets,
+                    'assets' => $assetsSchemaReady ? $user->assets : [],
 
                     'is_rotating' => $user->is_rotating,
                     'image_path' => $user->image_path,
@@ -102,6 +112,7 @@ class HandleInertiaRequests extends Middleware
 
                 // 🟢 NEW: Global visibility flag for the Accountability Module
                 'has_department_assets' => $hasDepartmentAssets,
+                'has_assets_schema' => $assetsSchemaReady,
             ],
 
             'flash' => [
