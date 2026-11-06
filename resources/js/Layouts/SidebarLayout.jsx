@@ -200,7 +200,9 @@ export default function SidebarLayout({
                   ? 'Select Module'
                   : activeModule === 'PR/PO Module'
                     ? 'PR/PO Module'
-                    : 'Select Module';
+                    : activeModule === 'IT Ticketing Module'
+                      ? 'IT Ticketing Module'
+                      : 'Select Module';
 
     const priorityLinkLabel =
         activeModule === 'HR'
@@ -783,6 +785,11 @@ export default function SidebarLayout({
                                             Admin Module
                                         </Dropdown.Link>
                                     )}
+
+                                    {/* Every role can enter ticketing; Laravel determines its permitted view. */}
+                                    <Dropdown.Link href={route('tickets.dashboard')}>
+                                        IT Ticketing Module
+                                    </Dropdown.Link>
 
                                     {/* HR Module: show only when user has HR-related permissions or is Admin */}
                                     { hasHRModuleAccess(auth) && (
