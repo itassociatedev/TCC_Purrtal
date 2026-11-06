@@ -209,7 +209,9 @@ export default function SidebarLayout({
                   ? 'Select Module'
                   : activeModule === 'PR/PO Module'
                     ? 'PR/PO Module'
-                    : 'Select Module';
+                    : activeModule === 'IT Ticketing Module'
+                      ? 'IT Ticketing Module'
+                      : 'Select Module';
 
     const priorityLinkLabel =
         activeModule === 'HR'
@@ -816,6 +818,64 @@ export default function SidebarLayout({
                                 </Dropdown.Content>
                             </Dropdown>}
                         </div>
+
+                        {/* Module Selection Dropdown */}
+                        <Dropdown>
+                            <Dropdown.Trigger>
+                                <button className="inline-flex min-h-[36px] sm:min-h-[42px] items-center gap-1 sm:gap-2 rounded-full border border-slate-200 bg-white/90 px-2.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus:outline-none">
+
+                                    {/* Hide text on mobile */}
+                                    <span className="hidden sm:block">{currentModuleLabel}</span>
+
+                                    {/* Show grid icon on mobile instead */}
+                                    <svg className="h-4 w-4 sm:hidden text-slate-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                                    </svg>
+
+                                    <svg className="h-3 w-3 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                                    </svg>
+                                </button>
+                            </Dropdown.Trigger>
+
+                            <Dropdown.Content>
+                                    {hasAnyAdminPermission() && (
+                                        <Dropdown.Link href={getFirstAdminRoute()}>
+                                            Admin Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                    {/* Every role can enter ticketing; Laravel determines its permitted view. */}
+                                    <Dropdown.Link href={route('tickets.dashboard')}>
+                                        IT Ticketing Module
+                                    </Dropdown.Link>
+
+                                    {/* HR Module: show only when user has HR-related permissions or is Admin */}
+                                    { hasHRModuleAccess(auth) && (
+                                        <Dropdown.Link href={route('hr.index')}>HR Module</Dropdown.Link>
+                                    ) }
+
+                                    { moduleHasAccess(usePage().props.auth, 'prpo_') && (
+                                        <Dropdown.Link href={getFirstPrpoRoute()}>
+                                            PR/PO Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                    {/* 🟢 FIXED: Properly routes users dynamically to the first Duty Meal module they have access to */}
+                                    { canAccessDutyMealModule && routeToDutyMeal && (
+                                        <Dropdown.Link href={routeToDutyMeal}>
+                                            Duty Meal Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                    {moduleHasAccess(auth, 'attendance') && (
+                                        <Dropdown.Link href={getFirstAttendanceRoute(auth)}>
+                                            Attendance Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                </Dropdown.Content>
+                        </Dropdown>
 
                         {/* User Dropdown */}
                         <Dropdown>

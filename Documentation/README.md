@@ -1,3 +1,18 @@
+# TCC Purrtal
+
+## Ticketing system documentation
+
+Current implementation reference, audited 3 November 2026:
+
+- [Ticketing guide](TICKETING.md): screens, permissions, lifecycle, fields, filters, XLSX, schema and operations.
+- [SLA reference](SLA_IMPLEMENTATION.md): targets, timing, priority changes, pauses, alerts and compliance.
+- [Frontend/backend code map](TICKETING_CODE_MAP.md): source files, entry points, migrations and tests.
+- [Change history](TICKETING_CHANGELOG.md): implemented changes and superseded behavior.
+
+Keep these documents updated with ticketing code changes; the guide includes the maintenance checklist. The original framework information follows.
+
+---
+
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">

@@ -77,6 +77,30 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ]);
     })->name('tasks.index');
 
+    // Live and preview endpoints share workflow logic. The controller authorizes
+    // preview access and rejects tickets belonging to the opposite environment.
+    // Keep the literal preview paths before routes containing {ticket}.
+    // Separate creation URLs reuse the authorized ticket screen in form-only mode.
+    // Literal workbook endpoints precede the dynamic ticket update routes.
+    foreach (['tickets' => '/tickets', 'tickets.preview' => '/tickets/preview'] as $name => $path) {
+        // Named screen paths share the existing role and filter checks.
+        foreach (['dashboard', 'all', 'open', 'closed', 'assigned', 'leaderboard'] as $view) {
+            Route::get($path.'/'.$view, [\App\Http\Controllers\TicketController::class, 'index'])
+                ->defaults('ticket_view', $view)->name($name.'.'.$view);
+        }
+        Route::get($path.'/export', [\App\Http\Controllers\TicketController::class, 'index'])->name($name.'.export');
+        Route::get($path.'/import-template', [\App\Http\Controllers\TicketController::class, 'workbookTemplate'])->name($name.'.template');
+        Route::post($path.'/import', [\App\Http\Controllers\TicketController::class, 'workbookImport'])->name($name.'.import')->block(30, 30);
+    }
+    Route::get('/tickets/create', [\App\Http\Controllers\TicketController::class, 'index'])->name('tickets.create');
+    Route::get('/tickets/preview/create', [\App\Http\Controllers\TicketController::class, 'index'])->name('tickets.preview.create');
+    Route::get('/tickets', [\App\Http\Controllers\TicketController::class, 'index'])->name('tickets.index');
+    Route::get('/tickets/preview', [\App\Http\Controllers\TicketController::class, 'index'])->name('tickets.preview.index');
+    Route::post('/tickets/preview', [\App\Http\Controllers\TicketController::class, 'store'])->name('tickets.preview.store');
+    Route::patch('/tickets/preview/{ticket}', [\App\Http\Controllers\TicketController::class, 'update'])->name('tickets.preview.update');
+    Route::post('/tickets', [\App\Http\Controllers\TicketController::class, 'store'])->name('tickets.store');
+    Route::patch('/tickets/{ticket}', [\App\Http\Controllers\TicketController::class, 'update'])->name('tickets.update');
+
     // --- HR MODULE (User Requests) ---
     Route::get('/hr-module', [HrRequestController::class, 'index'])->name('hr.index');
     Route::post('/hr-module/request', [HrRequestController::class, 'store'])->name('hr.store');
