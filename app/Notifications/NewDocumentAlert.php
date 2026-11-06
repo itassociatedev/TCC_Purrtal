@@ -11,12 +11,14 @@ class NewDocumentAlert extends Notification
 
     public $documentName;
     public $uploaderName;
+    public $documentId;
 
     // We pass the name of the file and who uploaded it
-    public function __construct($documentName, $uploaderName = 'Admin')
+    public function __construct($documentName, $uploaderName = 'Admin', $documentId = null)
     {
         $this->documentName = $documentName;
         $this->uploaderName = $uploaderName;
+        $this->documentId = $documentId;
     }
 
     // 🟢 Strictly In-App Notification
@@ -32,8 +34,8 @@ class NewDocumentAlert extends Notification
             'message' => '📁 New Document: ' . $this->documentName,
             'user_email' => 'Uploaded by ' . $this->uploaderName,
             
-            // 🟢 Change this to your actual document repository route!
-            'action_url' => route('admin.documents.index') 
+            // Opens the uploaded document directly (DocumentRepo reads ?open=)
+            'action_url' => route('admin.documents.index', $this->documentId ? ['open' => $this->documentId] : [])
         ];
     }
 }

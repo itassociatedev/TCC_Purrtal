@@ -81,6 +81,29 @@ class AuditObserver
      */
     public function updated(Model $model): void
     {
+        // 🟢 THE FIX: Ignore background authentication changes for Users!
+        if ($model instanceof \App\Models\User) {
+            // Get an array of columns that actually changed during this update
+            $changedColumns = array_keys($model->getChanges());
+            
+            // Define the background columns that should NOT trigger a system log
+            $ignoredColumns = [
+                'remember_token', 
+                'updated_at', 
+                'last_login_at', 
+                'failed_login_attempts'
+            ];
+            
+            // Remove the ignored columns from the list of changed columns
+            $actualChanges = array_diff($changedColumns, $ignoredColumns);
+            
+            // If the array is empty, it means ONLY background columns were changed.
+            // We stop the observer right here so no false log is created.
+            if (empty($actualChanges)) {
+                return;
+            }
+        }
+
         // Check if the record is being "Updated" or if it's specifically a "Status Change"
         $module = $this->getModuleName($model);
         $identifier = $model->name ?? $model->title ?? $model->label ?? "record";

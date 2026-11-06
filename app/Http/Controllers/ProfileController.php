@@ -18,9 +18,15 @@ class ProfileController extends Controller
      */
     public function edit(Request $request): Response
     {
+        // 🟢 Safely load the assets and pass them directly to the page
+        $userWithAssets = $request->user()->load('assets');
+
         return Inertia::render('Profile/Edit', [
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
             'status' => session('status'),
+            'auth' => [
+                'user' => $userWithAssets // 🟢 This guarantees the assets make it to React
+            ]
         ]);
     }
 

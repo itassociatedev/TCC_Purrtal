@@ -11,12 +11,14 @@ class AnnouncementAlert extends Notification
 
     public $title;
     public $authorName;
+    public $announcementId;
 
     // We pass the title of the announcement and who posted it
-    public function __construct($title, $authorName = 'Admin')
+    public function __construct($title, $authorName = 'Admin', $announcementId = null)
     {
         $this->title = $title;
         $this->authorName = $authorName;
+        $this->announcementId = $announcementId;
     }
 
     // 🟢 Strictly In-App Notification
@@ -32,8 +34,8 @@ class AnnouncementAlert extends Notification
             'message' => '📢 New Announcement: ' . $this->title,
             'user_email' => 'Posted by ' . $this->authorName,
             
-            // NOTE: Update this route to wherever standard users go to read announcements!
-            'action_url' => route('dashboard.announcements')
+            // Opens the announcement directly (Dashboard page reads ?open=)
+            'action_url' => route('dashboard.announcements', $this->announcementId ? ['open' => $this->announcementId] : [])
         ];
     }
 }

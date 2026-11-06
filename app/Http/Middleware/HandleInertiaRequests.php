@@ -6,6 +6,7 @@ namespace App\Http\Middleware;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -33,10 +34,25 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
 
-        // If the user is logged in, load their role and position names from the database!
+        $hasDepartmentAssets = false;
+
+        // If the user is logged in, load their relationships from the database!
         if ($user) {
-            // 🟢 ADDED: 'branch' and 'branches' to the eager load
-            $user->load(['role', 'role.adminAcls', 'position', 'department', 'branch', 'branches']);
+            // Eager-load relationships used in shared Inertia props.
+            $user->load(['role', 'role.adminAcls', 'position', 'department', 'branch', 'branches', 'assets']);
+
+            // 🟢 Determine if user or department has any assigned assets to toggle module visibility
+            try {
+                $deptName = is_object($user->department) ? ($user->department->name ?? '') : (is_string($user->department) ? $user->department : '');
+
+                $hasDepartmentAssets = DB::table('assets')
+                    ->where('department', $deptName)
+                    ->orWhere('user_id', $user->id)
+                    ->exists();
+            } catch (\Exception $e) {
+                // Failsafe in case table is migrating or doesn't exist yet
+                $hasDepartmentAssets = false;
+            }
         }
 
         $permissions = $this->getPermissionStrings($user);
@@ -48,21 +64,24 @@ class HandleInertiaRequests extends Middleware
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    
+
                     // Now we send the FULL role, position, and department objects to React!
-                    'role' => $user->role, 
+                    'role' => $user->role,
                     'position' => $user->position,
                     'department' => $user->department,
-                    
-                    // 🟢 ADDED: Send the branch data to React
+
+                    // Send the branch data to React
                     'branch' => $user->branch,
                     'branches' => $user->branches,
-                    
+
+                    // 🟢 ADDED: Send the user's assigned assets to React!
+                    'assets' => $user->assets,
+
                     'is_rotating' => $user->is_rotating,
                     'image_path' => $user->image_path,
                     'is_comment_banned' => $user->is_comment_banned,
-                    
-                    // 🟢 PROTECT OUR PREVIOUS WORK: Ensure the global access helper makes it to React!
+
+                    // Ensure the global access helper makes it to React.
                     'has_global_access' => $user->has_global_access,
 
                     // 🟢 NEW: Share permission strings from the role-based ACL
@@ -71,15 +90,18 @@ class HandleInertiaRequests extends Middleware
                     'acl_permissions' => $this->getAclPermissionLevels($user),
                     'has_admin_acl_access' => $this->userHasAdminModuleAccess($user),
                 ] : null,
-                
-                // 🟢 FIX: Only attempt to fetch notifications if $user is NOT null!
+
+                // FIX: Only attempt to fetch notifications if $user is NOT null!
                 'notifications' => $user ? $user->notifications()->latest()->take(20)->get() : [],
-                
-                // 🟢 FIX: Matched the key to your React code
+
+                // FIX: Matched the key to your React code
                 'unreadNotificationsCount' => $user ? $user->unreadNotifications()->count() : 0,
 
-                // 🟢 NEW: Tell React exactly how many notifications exist in total
+                // NEW: Tell React exactly how many notifications exist in total
                 'totalNotificationsCount' => $user ? $user->notifications()->count() : 0,
+
+                // 🟢 NEW: Global visibility flag for the Accountability Module
+                'has_department_assets' => $hasDepartmentAssets,
             ],
 
             'flash' => [

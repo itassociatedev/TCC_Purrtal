@@ -767,6 +767,38 @@ export const getPRPOLinks = (auth) => {
     return links;
 };
 
+// 🟢 SECURE ROLE-BASED ASSET LINKS
+export const getAssetLinks = (auth) => {
+    const userRole = auth?.user?.role?.name?.toLowerCase().trim() || '';
+
+    // Define who is allowed
+    const isSuperAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'director of corporate services and operations';
+    const isAudit = userRole === 'audit';
+
+    const links = [];
+
+    // Both Admin and Audit can see the overview page
+    if (isSuperAdmin || isAudit) {
+        links.push({
+            label: 'Asset Overview',
+            href: route('admin.assets.index'),
+            active: route().current('admin.assets.*'),
+        });
+    }
+
+    // ONLY Super Admins/Directors get the Add Asset button
+    if (isSuperAdmin) {
+        links.push({
+            label: 'Add Asset',
+            href: '#',
+            active: false,
+            isAction: true, 
+        });
+    }
+
+    return links;
+};
+
 // 🟢 FIXED: Changed schedule_view to canViewModule so standard staff can route to it
 export const getFirstAttendanceRoute = (auth) => {
     if (canViewModule(auth, 'attendance_overview')) return route('attendance.overview');

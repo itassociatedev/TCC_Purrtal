@@ -48,6 +48,13 @@ class AdminMiddleware
             return true;
         }
 
+        // Accountability (assets) is not an ACL module; it uses the same asset admin roles as AssetController
+        if ($module === 'assets') {
+            $roleName = strtolower(trim($user->role?->name ?? ''));
+
+            return in_array($roleName, ['admin', 'super admin', 'director of corporate services and operations'], true);
+        }
+
         if ($module === 'admin_overview') {
             $fallbackModules = [
                 'announcements',

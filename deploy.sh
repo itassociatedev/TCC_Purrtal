@@ -44,6 +44,7 @@ php artisan migrate --force
 
 # 9. Clear and rebuild all Laravel caches
 php artisan optimize:clear
+php artisan optimize
 
 # 10. Bring the site back online
 php artisan up

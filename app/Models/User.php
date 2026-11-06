@@ -122,6 +122,11 @@ class User extends Authenticatable
         return $this->belongsTo(Role::class);
     }
 
+    public function assets()
+    {
+        return $this->hasMany(Asset::class, 'user_id');
+    }
+
     public function getAllowedModulesForUser(): array
     {
         if (!$this->role) {

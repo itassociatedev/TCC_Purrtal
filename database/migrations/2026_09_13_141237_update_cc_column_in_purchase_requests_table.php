@@ -8,8 +8,14 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('purchase_requests', function (Blueprint $table) {
-            // 1. Skip dropping the foreign key because it does not exist in this database state
+        $hasCcForeignKey = collect(Schema::getForeignKeys('purchase_requests'))
+            ->contains(fn ($fk) => $fk['columns'] === ['cc_user_id']);
+
+        Schema::table('purchase_requests', function (Blueprint $table) use ($hasCcForeignKey) {
+            // 1. Drop the foreign key first when this database still has it
+            if ($hasCcForeignKey) {
+                $table->dropForeign(['cc_user_id']);
+            }
 
             // 2. Safely drop the old column directly
             if (Schema::hasColumn('purchase_requests', 'cc_user_id')) {

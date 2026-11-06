@@ -1,3 +1,5 @@
+import MemberAvatar from '@/Components/MemberAvatar';
+import MemberPhotoAdjuster from '@/Components/MemberPhotoAdjuster';
 import Modal from '@/Components/Modal';
 import { getAdminLinks, canEditModule, canDeleteModule, canViewModule } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
@@ -54,7 +56,20 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
         data, setData, post, put, processing, errors, reset, clearErrors,
     } = useForm({
         name: '', position: '', branch: dynamicBranches[0] || '', image: null,
+        image_position_x: 50, image_position_y: 50, image_zoom: 1,
     });
+
+    // Preview of a newly chosen photo in the member form
+    const [newPhotoUrl, setNewPhotoUrl] = useState(null);
+    useEffect(() => {
+        if (!data.image) {
+            setNewPhotoUrl(null);
+            return undefined;
+        }
+        const url = URL.createObjectURL(data.image);
+        setNewPhotoUrl(url);
+        return () => URL.revokeObjectURL(url);
+    }, [data.image]);
 
     const {
         data: orgChartData, setData: setOrgChartData, post: postOrgChart, processing: orgChartProcessing, errors: orgChartErrors, reset: resetOrgChart, clearErrors: clearOrgChartErrors,
@@ -413,6 +428,9 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
                 position: member.position || '',
                 branch: member.branch || dynamicBranches[0] || '',
                 image: null,
+                image_position_x: member.image_position_x ?? 50,
+                image_position_y: member.image_position_y ?? 50,
+                image_zoom: member.image_zoom ?? 1,
             });
         } else {
             setEditingMember(null);
@@ -421,6 +439,9 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
                 position: '',
                 branch: dynamicBranches[0] || '', 
                 image: null,
+                image_position_x: 50,
+                image_position_y: 50,
+                image_zoom: 1,
             });
         }
         setIsModalOpen(true);
@@ -813,15 +834,7 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
                                                                 )}
                                                             </div>
 
-                                                            <div className="relative z-10 mb-4 h-28 w-28 shrink-0 overflow-hidden rounded-full border-4 border-white bg-gray-100 shadow-md transition-colors group-hover:border-indigo-100">
-                                                                {member.image_path ? (
-                                                                    <img src={`/storage/${member.image_path}`} alt={member.name} className="h-full w-full object-cover pointer-events-none" />
-                                                                ) : (
-                                                                    <svg className="h-full w-full bg-gray-50 p-6 text-black pointer-events-none" fill="currentColor" viewBox="0 0 24 24">
-                                                                        <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
-                                                                    </svg>
-                                                                )}
-                                                            </div>
+                                                            <MemberAvatar member={member} className="relative z-10 mb-4 h-32 w-32" initialsClassName="text-3xl" />
 
                                                             <div className="relative z-10 w-full text-center pointer-events-none">
                                                                 <h4 className="px-2 text-lg font-bold text-gray-900 transition-colors group-hover:text-indigo-900">{member.name}</h4>
@@ -855,10 +868,17 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
                     </div>
 
                     <form onSubmit={submit} className="space-y-4">
-                        {editingMember && editingMember.image_path && (
-                            <div className="mb-3 flex flex-col items-center justify-center rounded-lg border border-gray-100 bg-gray-50 p-3">
-                                <span className="mb-2 text-xs font-semibold text-gray-500">Current Photo</span>
-                                <img src={`/storage/${editingMember.image_path}`} alt="Current member" className="h-20 w-20 rounded-full border-4 border-white object-cover shadow-md" />
+                        {(newPhotoUrl || editingMember?.image_path) && (
+                            <div className="mb-3 flex flex-col items-center justify-center rounded-lg border border-gray-100 bg-gray-50 p-4">
+                                <span className="mb-3 text-xs font-semibold text-gray-500">{newPhotoUrl ? 'New Photo' : 'Current Photo'}</span>
+                                <MemberPhotoAdjuster
+                                    name={data.name}
+                                    src={newPhotoUrl || `/storage/${editingMember.image_path}`}
+                                    x={Number(data.image_position_x)}
+                                    y={Number(data.image_position_y)}
+                                    zoom={Number(data.image_zoom)}
+                                    onChange={({ x, y, zoom }) => setData((current) => ({ ...current, image_position_x: Math.round(x * 100) / 100, image_position_y: Math.round(y * 100) / 100, image_zoom: zoom }))}
+                                />
                             </div>
                         )}
 
@@ -904,7 +924,7 @@ export default function OrgChartAdmin({ auth, members, orgChartSvg = null, struc
 
                         <div>
                             <label className="mb-1 block text-sm font-bold text-gray-700">{editingMember ? 'Replace Photo (Optional)' : 'Upload Photo (Optional)'}</label>
-                            <input type="file" onChange={(e) => setData('image', e.target.files[0] || null)} className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-indigo-700 transition-colors hover:file:bg-indigo-100" accept="image/*" />
+                            <input type="file" onChange={(e) => setData((current) => ({ ...current, image: e.target.files[0] || null, image_position_x: 50, image_position_y: 50, image_zoom: 1 }))} className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-indigo-700 transition-colors hover:file:bg-indigo-100" accept="image/*" />
                             {errors.image && <p className="mt-1 text-xs text-red-500">{errors.image}</p>}
                         </div>
 

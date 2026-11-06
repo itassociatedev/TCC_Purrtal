@@ -20,7 +20,20 @@ export default function Documents({ auth, documents = [], categories = [], depar
     const sidebarLinks = getDocumentSidebarLinks(categories, activeCategory);
     const { system } = usePage().props;
 
-    const [viewingDoc, setViewingDoc] = useState(null);
+    // Notification links pass ?open=<document id> so that document opens straight away
+    const [viewingDoc, setViewingDoc] = useState(() => {
+        const openId = new URLSearchParams(window.location.search).get('open');
+        return openId ? documents.find((doc) => String(doc.id) === openId) ?? null : null;
+    });
+
+    const closeViewer = () => {
+        setViewingDoc(null);
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('open')) {
+            url.searchParams.delete('open');
+            window.history.replaceState(window.history.state, '', url);
+        }
+    };
     const [searchQuery, setSearchQuery] = useState('');
     const [filterDepartment, setFilterDepartment] = useState('');
 
@@ -520,7 +533,7 @@ export default function Documents({ auth, documents = [], categories = [], depar
             <ConfirmModal show={isConfirmModalOpen} onClose={closeConfirmModal} onConfirm={executeDelete} title="Delete Document" message={`Are you sure you want to delete the document "${documentToDelete?.title}"?\n\nThis will permanently remove the file from the server.`} confirmText="Delete Document" />
 
             {/* --- VIEWER MODAL (WITH ANTI-DOWNLOAD & HIDDEN TOOLBAR) --- */}
-            <Modal show={!!viewingDoc} onClose={() => setViewingDoc(null)} maxWidth="7xl">
+            <Modal show={!!viewingDoc} onClose={closeViewer} maxWidth="7xl">
                 {viewingDoc && (
                     <div className="flex flex-col bg-white overflow-hidden h-[95vh] sm:h-[90vh]">
                         <div className="flex justify-between items-center p-3 sm:p-4 border-b border-gray-200 bg-gray-50 shrink-0 gap-3 sm:gap-4 relative z-20 shadow-sm">
@@ -532,7 +545,7 @@ export default function Documents({ auth, documents = [], categories = [], depar
                             </h2>
 
                             <button 
-                                onClick={() => setViewingDoc(null)} 
+                                onClick={closeViewer}
                                 className="flex items-center gap-1.5 rounded-lg bg-gray-200/80 px-3.5 py-2 text-sm font-bold text-gray-600 transition-colors hover:bg-red-100 hover:text-red-700 shrink-0"
                             >
                                 ✕ <span className="hidden sm:inline">Close</span>

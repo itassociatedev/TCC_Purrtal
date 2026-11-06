@@ -6,27 +6,41 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    // Column => column it is placed after
+    private array $columns = [
+        'prepared_by_name' => 'user_id',
+        'prepared_by_role' => 'prepared_by_name',
+        'reviewed_by_name' => 'reviewed_by_id',
+        'reviewed_by_role' => 'reviewed_by_name',
+        'approved_by_name' => 'approved_by_id',
+        'approved_by_role' => 'approved_by_name',
+    ];
+
     public function up(): void
     {
-        Schema::table('purchase_requests', function (Blueprint $table) {
-            $table->string('prepared_by_name')->nullable()->after('user_id');
-            $table->string('prepared_by_role')->nullable()->after('prepared_by_name');
-            $table->string('reviewed_by_name')->nullable()->after('reviewed_by_id');
-            $table->string('reviewed_by_role')->nullable()->after('reviewed_by_name');
-            $table->string('approved_by_role')->nullable()->after('approved_by_name');
-        });
+        // Added one at a time so a partially applied run can be resumed safely
+        foreach ($this->columns as $column => $after) {
+            if (Schema::hasColumn('purchase_requests', $column)) {
+                continue;
+            }
+
+            Schema::table('purchase_requests', function (Blueprint $table) use ($column, $after) {
+                $table->string($column)->nullable()->after($after);
+            });
+        }
     }
 
     public function down(): void
     {
-        Schema::table('purchase_requests', function (Blueprint $table) {
-            $table->dropColumn([
-                'prepared_by_name',
-                'prepared_by_role',
-                'reviewed_by_name',
-                'reviewed_by_role',
-                'approved_by_role'
-            ]);
-        });
+        $existing = array_values(array_filter(
+            array_keys($this->columns),
+            fn ($column) => Schema::hasColumn('purchase_requests', $column)
+        ));
+
+        if ($existing) {
+            Schema::table('purchase_requests', function (Blueprint $table) use ($existing) {
+                $table->dropColumn($existing);
+            });
+        }
     }
 };
