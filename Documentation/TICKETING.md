@@ -1,6 +1,6 @@
 # TCC Purrtal ticketing — current system guide
 
-Last audited against repository code: **3 November 2026 (Asia/Manila)**.
+Last audited against repository code: **6 November 2026**.
 This guide describes the current implementation, rather than earlier designs. Changes in this documentation update do not deploy code or change data.
 
 ## Documentation index
@@ -29,13 +29,16 @@ Names are matched exactly after trimming and lowercasing, using [config/ticketin
 | Employee | Any role outside the configured member/leader lists | Create tickets; dashboard and lists for own creator ID only; reply; confirm resolved service; optional feedback after closure |
 | IT member | IT Member, IT Staff | Dashboard for current assignments; Assigned to me and All tickets; manage only own assignments; create an IT-reported ticket |
 | IT leader | IT TL, IT Team Leader, IT Supervisor | Team dashboard, all/open/closed/own-assignment tables, reports, staff workload, leaderboard; priority changes, assignment/reassignment, management, closure, Critical workaround approval, XLSX import |
-| Preview administrator | Admin, IT Admin, or an IT leader | Can enter UI preview; this permission alone does not grant live leader workflow access |
 
 IT leaders are valid ticket assignees. On an unassigned ticket, substantive IT action can establish the acting worker as owner; changing priority alone can leave it unassigned. Members cannot claim arbitrary unassigned tickets through a crafted update, because current assignment is checked under a row lock.
 
 Employees can choose their primary or linked branches. Executive Vice President, Executive Assistant, IT, IT Admin and configured IT members/leaders can choose any existing branch. Employees whose account department is Information Technology may also select any existing branch, regardless of workflow role. Branch exceptions do not grant management rights. Locations come from the branches table; no preview clinic or hardcoded two-location list is used.
 
 **All tickets** means all tickets authorized for that role and environment: an employee still sees only their own tickets. Admin/IT/other unlisted role names do not implicitly become IT staff workflow roles.
+
+### Local role testing
+
+Sign in with a local test account to exercise that account’s ticket permissions. Run `php artisan db:seed --class=LocalRoleAccountsSeeder` in the local `tcc_purrtal_local` database, then run `php artisan db:seed --class=LocalRoleTicketsSeeder` to create one sample in each ticket status per role. Legacy preview records stay outside the normal ticket views.
 
 ## Frontend screens and navigation
 
@@ -82,11 +85,11 @@ Leader-only `/tickets/leaderboard`, implemented by `TicketLeaderboard.php` and `
 - Top cats podium: second left/silver, first center/gold, third right/bronze, with cat medals. Only positive-resolution members occupy podium slots; missing places show an empty state.
 - Pie chart and legend: member names, resolved counts and contribution percentages, using exact counts for segment sizes.
 - Ranking table: rank, employee name/role/branches, tickets resolved, contribution share, average resolver rating out of five with rated-ticket count, and attention/overdue work. Top-three cards also show average rating. Members without feedback show Not rated yet (0 rated tickets).
-- Current **IT member** roster only; IT leaders are assignable and appear in workload reporting, but are excluded from this leaderboard.
+- The leaderboard includes the current IT member and IT team leader roster, including staff with zero resolutions.
 - Selected-period resolved/closed tickets count once for `sla_state.resolved_by`, falling back to the latest resolved activity actor. Current assignee is never substituted for resolver.
 - Reopened tickets are excluded until resolved again. Historical events are not counted as separate resolutions.
 - Leaderboard ratings use the latest feedback per ticket in the selected live/preview environment, attributed to frozen resolved_by or the preceding resolved activity actor. Half-star values are retained in averages, displayed to one decimal. Reassignment does not move ratings. Existing feedback remains attributed even if its ticket is reopened; completion counts still exclude reopened work. Ratings do not affect ranking, podium order or pie shares.
-- Contribution = member resolutions ÷ all roster-member resolutions. Zero denominator yields 0%.
+- Contribution = each person's resolutions ÷ all ranked staff resolutions. Zero denominator yields 0%.
 - Equal totals share competition rank; names then IDs break display ties. The podium displays at most three members, even if more tie.
 - Overdue = current open assignments with an enabled, incomplete, breached resolution SLA. Accepted workarounds are not outstanding overdue work. Historical breaches on completed tickets are not this column's definition.
 - Ranking explanations are expandable. The page matches the supplied white-card/pale-blue-table reference and adapts to narrow screens. A Day/Week/Month/Year/All time selector uses current calendar periods in Asia/Manila (All time is default). Resolution counts use latest resolution date; ratings use feedback-submission date; overdue counts use ticket creation date and current overdue state. Top three, ranking and pie shares recalculate. Export leaderboard XLSX downloads the same selected-period member rows with a Scope sheet.
@@ -185,7 +188,6 @@ Nine sortable data columns: Subject, Description, Category, Status, Timeline, Pr
 | `leaderboard_period` | all/day/week/month/year; leader-only leaderboard calendar range, separate from ticket-date and SLA report filters. |
 | `leaderboard_member`, `leaderboard_detail`, `leaderboard_page` | Member ID from the current roster, detail type (resolved/overdue/ratings), and optional page. Applied together on the leader-only leaderboard. |
 | `report_period` | all/day/week/month/quarter; applies to SLA received date, not ordinary ticket summaries. |
-| `preview_user` | Registered preview account ID; only authorized preview endpoints may use it. |
 
 Creation-date filters apply as soon as either date is selected or removed. An inverted range is shown as invalid and is not sent until corrected. **Clear filters** clears date bounds, search, status, priority and closure period, while retaining the current page type, sorting and page size.
 

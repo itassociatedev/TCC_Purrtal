@@ -1,6 +1,17 @@
 # Ticketing change history
 
-Last consolidated **3 November 2026 (Asia/Manila)**. This is implementation history, not a Git commit log or evidence of production deployment. The current behavior is in [TICKETING.md](TICKETING.md); detailed timing is in [SLA_IMPLEMENTATION.md](SLA_IMPLEMENTATION.md); source/test paths are in [TICKETING_CODE_MAP.md](TICKETING_CODE_MAP.md).
+Last consolidated **6 November 2026**. This is implementation history, not a Git commit log or evidence of production deployment. The current behavior is in [TICKETING.md](TICKETING.md); detailed timing is in [SLA_IMPLEMENTATION.md](SLA_IMPLEMENTATION.md); source/test paths are in [TICKETING_CODE_MAP.md](TICKETING_CODE_MAP.md).
+
+## 6 November 2026 — Local role accounts and ticket leaderboard
+
+- Replaced the ticket preview panel and routes with normal portal sign-in for local role accounts. Added seeders for local accounts and sample tickets.
+- Included IT team leaders in the ticket leaderboard roster and XLSX export.
+
+## 6 November 2026 — Task-style ticket role preview (superseded)
+
+- Replaced the ticket preview banner/one-list selector with a collapsible **View as role** panel matching the Task Module. The panel separates role selection from the matching test employee selector and can be collapsed when not in use.
+- Role-only preview routes now resolve to a registered ticket test account, so the selected employee/member/leader sees the matching isolated test data rather than an in-memory copy of the administrator identity. Subsequent preview navigation preserves that account ID.
+- Updated the ticket UI, preview identity resolution and current-system/code-map documentation. No schema, credentials, live tickets or production access rules changed. Validation: documentation and source review only; no automated tests or build were run.
 
 ## 6 November 2026 — Critical priority storage
 

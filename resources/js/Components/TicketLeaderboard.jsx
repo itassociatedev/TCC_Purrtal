@@ -20,7 +20,7 @@ function LeaderboardDetail({ detail, period, detailUrl, backUrl, onSelectTicket 
         <Link className="leaderboard-drill-link" href={backUrl}>← Back to leaderboard</Link>
         <h2>{member.name} · {detailLabels[type]}</h2>
         <p>{periods[period]} · {total} {ratings ? 'ratings' : 'tickets'}</p>
-        <nav className="leaderboard-detail-links" aria-label="Member leaderboard details">
+        <nav className="leaderboard-detail-links" aria-label="Leaderboard details">
             {Object.entries(detailLabels).map(([key, label]) => <Link key={key} className="ticket-secondary" href={href(key)} aria-current={key === type ? 'page' : undefined}>{label}</Link>)}
         </nav>
         {entries.length ? <div className="ticket-table-wrap"><table className="leaderboard-table">
@@ -60,10 +60,10 @@ export default function TicketLeaderboard({ data, onPeriodChange, exportUrl, det
             <section className="leaderboard-panel"><header><h2>Top cats <span className="leaderboard-sparkle" aria-hidden="true">✦</span></h2><p>A little spotlight for a job well done.</p></header>
                 <div className="leaderboard-podium">{podium.map((m, index) => m ? <article key={m.id} className={`leaderboard-place leaderboard-place-${[2, 1, 3][index]}`}>
                     <span className="leaderboard-place-label">{['Second place', 'Top cat', 'Third place'][index]}</span><CatMedal rank={m.rank} /><h3>{m.name}</h3><strong>{m.resolved}</strong><p>tickets resolved</p><p className="leaderboard-rating">{ratingLabel(m)}</p>
-                </article> : <div key={`empty-${index}`} className="leaderboard-place-empty"><span>{['Second place', 'Top cat', 'Third place'][index]}</span><p>No ranked member yet</p></div>)}</div>
+                </article> : <div key={`empty-${index}`} className="leaderboard-place-empty"><span>{['Second place', 'Top cat', 'Third place'][index]}</span><p>No ranked staff yet</p></div>)}</div>
             </section>
             <section className="leaderboard-panel"><header><h2>Tickets resolved</h2><p>Share of completed resolutions in the current results</p></header>
-                <div className="leaderboard-chart-row"><svg viewBox="0 0 200 200" role="img" aria-label={total ? 'Share of resolved tickets by IT member; values listed in the legend.' : 'No resolved tickets to chart'}>
+                <div className="leaderboard-chart-row"><svg viewBox="0 0 200 200" role="img" aria-label={total ? 'Share of resolved tickets by IT staff; values listed in the legend.' : 'No resolved tickets to chart'}>
                     <circle cx="100" cy="100" r="80" fill="#eef0f6" />
                     {/* Exact counts define segments; displayed percentages are rounded independently. */}
                     {total > 0 && members.filter(m => m.resolved > 0).map(m => {
@@ -74,8 +74,8 @@ export default function TicketLeaderboard({ data, onPeriodChange, exportUrl, det
                 </svg><div className="leaderboard-legend"><ul>{members.map((m, i) => <li key={m.id}><span className="leaderboard-color" style={{ background: colors[i % colors.length] }} aria-hidden="true" /><span>{m.name}</span><strong>{m.resolved}</strong><small>{percent(m.percentage)}%</small></li>)}<li className="leaderboard-legend-total"><span>Total resolved</span><strong>{total}</strong></li></ul></div></div>
             </section>
         </div>
-        <details className="leaderboard-rules"><summary>How rankings work</summary><p>Selected calendar period · current IT member roster. Resolution counts use resolution date; ratings use feedback submission date; overdue assignments use ticket creation date. All time removes these date limits. Resolved and closed tickets count once, credited to the recorded resolver. Reopened tickets are excluded until resolved again. Share is each member’s resolutions divided by all member resolutions. Tied totals share rank; names break display ties. Ratings average the latest feedback per ticket credited to its actual resolver, including half stars. Ratings do not change rank. Attention counts currently assigned open tickets with a breached resolution SLA.</p></details>
+        <details className="leaderboard-rules"><summary>How rankings work</summary><p>Selected calendar period · current IT member and team leader roster. Resolution counts use resolution date; ratings use feedback submission date; overdue assignments use ticket creation date. All time removes these date limits. Resolved and closed tickets count once, credited to the recorded resolver. Reopened tickets are excluded until resolved again. Share is each person’s resolutions divided by all ranked staff resolutions. Tied totals share rank; names break display ties. Ratings average the latest feedback per ticket credited to its actual resolver, including half stars. Ratings do not change rank. Attention counts currently assigned open tickets with a breached resolution SLA.</p></details>
         <div className="ticket-table-wrap"><table className="leaderboard-table"><thead><tr><th scope="col">Rank</th><th scope="col">Employee</th><th scope="col">Tickets resolved</th><th scope="col">Share</th><th scope="col">Rating</th><th scope="col">Attention</th></tr></thead><tbody>{members.map(m => <tr key={m.id}><td><span className={`leaderboard-rank ${m.rank <= 3 ? 'leaderboard-rank-top' : ''}`}>{m.rank}</span></td><td><strong>{m.name}</strong><small>{m.role || 'IT member'}{m.branches ? ` · ${m.branches}` : ''}</small></td><td><Link className="leaderboard-drill-link" href={detailUrl(m.id, 'resolved')} aria-label={`View ${m.resolved} resolved tickets for ${m.name}`}>{m.resolved}</Link></td><td>{percent(m.percentage)}%</td><td><Link className="leaderboard-drill-link leaderboard-rating" href={detailUrl(m.id, 'ratings')} aria-label={`View ratings and comments for ${m.name}`}>{ratingLabel(m)}</Link><small>{m.rating_count || 0} rated ticket{m.rating_count === 1 ? '' : 's'}</small></td><td className={m.overdue ? 'leaderboard-overdue' : 'leaderboard-clear'}><Link className="leaderboard-drill-link" href={detailUrl(m.id, 'overdue')} aria-label={`View overdue tickets for ${m.name}`}>{m.overdue ? `${m.overdue} overdue ticket${m.overdue === 1 ? '' : 's'}` : 'No overdue work'}</Link></td></tr>)}</tbody></table></div>
-        {!members.length && <p className="ticket-empty">No IT members configured.</p>}
+        {!members.length && <p className="ticket-empty">No IT staff configured.</p>}
     </div>;
 }

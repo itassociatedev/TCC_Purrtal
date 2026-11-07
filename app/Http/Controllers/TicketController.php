@@ -13,48 +13,10 @@ use Inertia\Inertia;
 
 class TicketController extends Controller
 {
-    // Resolve a ticket identity without replacing the signed-in account.
-    // Preview-role routes use isolated data and an in-memory role identity.
+    // The ticket module uses the authenticated account. Keep legacy preview data isolated.
     private function context(Request $request): array
     {
-        $preview = $request->routeIs('tickets.preview.*');
-        if (!$preview) return [$request->user(), false];
-        abort_unless(TicketAccess::canPreview($request->user()), 403);
-        $data = $request->validate([
-            'preview_user' => ['nullable', 'integer', Rule::exists('ticket_preview_users', 'user_id')],
-            'preview_role' => ['nullable', Rule::in(['employee', 'member', 'leader'])],
-        ]);
-        // Role-only UI previews use a temporary in-memory identity. Preview
-        // tickets remain isolated; no extra login or seeded account is needed.
-        if (!empty($data['preview_role'])) {
-            return [$this->rolePreviewActor($request->user(), $data['preview_role']), true];
-        }
-        $id = $data['preview_user'] ?? null;
-        $id ??= DB::table('ticket_preview_users')->orderBy('role_id')->value('user_id');
-        abort_unless($id, 422, 'Run the TicketPreviewSeeder to create test employees.');
-        return [User::findOrFail($id), true];
-    }
-
-    private function rolePreviewActor(User $signedInUser, string $ticketRole): User
-    {
-        $roleName = match ($ticketRole) {
-            'leader' => config('ticketing.leader_roles.0', 'IT Team Leader'),
-            'member' => config('ticketing.member_roles.0', 'IT Member'),
-            default => 'Employee',
-        };
-        $role = new \App\Models\Role();
-        $role->name = $roleName;
-        $actor = clone $signedInUser;
-        $actor->setRelation('role', $role);
-        return $actor;
-    }
-
-    private function previewRouteParams(Request $request, User $actor): array
-    {
-        if ($request->filled('preview_role')) {
-            return ['preview_role' => $request->input('preview_role')];
-        }
-        return ['preview_user' => $actor->id];
+        return [$request->user(), false];
     }
 
     private function feedbackResolverId(Ticket $ticket): ?int
@@ -71,7 +33,7 @@ class TicketController extends Controller
         [$actor, $preview] = $this->context($request);
         $role = TicketAccess::role($actor);
         // Export is an IT workflow permission, including when using a preview identity.
-        abort_if($role === 'employee' && $request->routeIs('tickets.export', 'tickets.preview.export'), 403, 'Only IT members and leaders may export tickets.');
+        abort_if($role === 'employee' && $request->routeIs('tickets.export'), 403, 'Only IT members and leaders may export tickets.');
         // Older bookmarks still select Critical.
         if ($request->input('priority_filter') === 'urgent') $request->merge(['priority_filter' => 'critical']);
         $filters = $request->validate([
@@ -108,12 +70,11 @@ class TicketController extends Controller
         if ($role === 'leader' && $view === 'reports') $view = 'open';
         // Keep old screen paths as bookmarks, but show status in the list filter.
         $legacyStatusView = in_array($view, ['open', 'closed'], true);
-        if ($legacyStatusView && $request->routeIs('tickets.open', 'tickets.closed', 'tickets.preview.open', 'tickets.preview.closed')) {
+        if ($legacyStatusView && $request->routeIs('tickets.open', 'tickets.closed')) {
             $parameters = $filters;
             unset($parameters['view']);
             $parameters['status_filter'] = $view;
-            if ($preview) $parameters = array_merge($parameters, $this->previewRouteParams($request, $actor));
-            return redirect()->route($preview ? 'tickets.preview.all' : 'tickets.all', $parameters);
+            return redirect()->route('tickets.all', $parameters);
         }
         // Remember the chosen size across views and refreshes. All still uses
         // the authorized, searched query rather than exposing other tickets.
@@ -313,7 +274,7 @@ class TicketController extends Controller
             $query->orderByRaw("CASE priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END ".$direction);
         } else $query->orderBy($sortColumn, $direction);
         $query->orderBy('id', $direction); // Stable pagination when column values match.
-        $exporting = $request->routeIs('tickets.export', 'tickets.preview.export');
+        $exporting = $request->routeIs('tickets.export');
         $leaderboardData = $role === 'leader' && $view === 'leaderboard'
             ? app(\App\Services\TicketLeaderboard::class)->summary($preview, $filters['leaderboard_period'] ?? 'all',
                 !$exporting && isset($filters['leaderboard_member']) ? (int) $filters['leaderboard_member'] : null,
@@ -321,7 +282,7 @@ class TicketController extends Controller
         if ($leaderboardData && $exporting) {
             return app(\App\Services\TicketLeaderboard::class)->export($leaderboardData, $preview);
         }
-        if ($request->routeIs('tickets.export', 'tickets.preview.export')) {
+        if ($request->routeIs('tickets.export')) {
             return app(\App\Services\TicketWorkbook::class)->export(clone $query, $reports ?? [], $slaReport ?? [], $memberWorkloads,
                 ($leaderSummary ?? $memberSummary ?? $employeeSummary ?? []) + ($role === 'member' ? ['resolver_rating' => $memberRating['average'] ?? 'Not rated', 'rated_tickets' => $memberRating['count'] ?? 0] : []), $filters + ['view' => $view, 'status_filter' => $statusFilter], $role);
         }
@@ -346,7 +307,7 @@ class TicketController extends Controller
             'memberRating' => $memberRating,
             'memberSummary' => $memberSummary,
             'employeeSummary' => $employeeSummary,
-            'creationPage' => $request->routeIs('tickets.create', 'tickets.preview.create'),
+            'creationPage' => $request->routeIs('tickets.create'),
             'ticketRole' => $role, 'tickets' => $query->paginate($pageSize, ['*'], 'page', $perPage === 'all' ? 1 : null)->withQueryString()->through(function ($ticket) use ($sla) {
                 $ticket->setAttribute('sla', $sla->snapshot($ticket));
                 return $ticket;
@@ -363,13 +324,6 @@ class TicketController extends Controller
             'slaPolicy' => config('ticket-sla'),
             // The module uses this identity while the surrounding layout keeps auth.user.
             'ticketUser' => $actor->only(['id', 'name', 'branch_id']) + ['department' => $actor->department?->name],
-            'preview' => $preview,
-            'canPreview' => TicketAccess::canPreview($request->user()),
-            'previewUsers' => $preview ? User::whereIn('id', DB::table('ticket_preview_users')->select('user_id'))
-                ->orderBy('name')->get(['id', 'name', 'role_id'])->map(fn ($user) => [
-                    'id' => $user->id, 'name' => $user->name, 'role' => $user->role?->name,
-                    'ticket_role' => TicketAccess::role($user),
-                ]) : [],
         ]);
     }
 
@@ -466,7 +420,7 @@ class TicketController extends Controller
             $team = User::whereNotIn('id', DB::table('ticket_preview_users')->select('user_id'))->with('role')->get()->filter(fn ($user) => TicketAccess::role($user) !== 'employee');
             Notification::send($team, new TicketNotification($ticket->id, "New ticket #{$ticket->ticket_code}: {$ticket->subject}"));
         });
-        return redirect()->route($preview ? 'tickets.preview.dashboard' : 'tickets.dashboard', $preview ? $this->previewRouteParams($request, $actor) : [])
+        return redirect()->route('tickets.dashboard')
             ->with('success', $preview ? 'Test ticket submitted. Live notifications were not sent.' : 'Ticket submitted. The IT team has been notified.');
     }
 

@@ -6,7 +6,6 @@ import TicketLeaderboard from '@/Components/TicketLeaderboard';
 import TicketWorkbookControls from '@/Components/TicketWorkbookControls';
 import TicketSlaPerformance from '@/Components/TicketSlaPerformance';
 import ITWorkspaceSwitcher from '@/Components/ITWorkspaceSwitcher';
-import { readRolePreview } from '@/Components/rolePreview.mjs';
 import '../../../css/ticketing.css';
 
 const ticketColumns = [
@@ -238,42 +237,18 @@ export function TicketEditor({ ticket, role, members, onClose, ticketRoute, acto
 // Changing identity or view remounts TicketScreen so drafts and edit dialogs
 // cannot carry over into another test employee.
 export default function Index(props) {
-    return <TicketScreen key={`${props.preview ? props.ticketUser.id : 'live'}:${props.filters.view}`} {...props} />;
+    return <TicketScreen key={`${props.ticketUser?.id}:${props.filters.view}`} {...props} />;
 }
 
-export function TicketScreen({ prioritySummary = null, pendingFeedback = [], leaderboard = null, pendingImport = null, leaderSummary = null, memberRating = null, memberSummary = null, employeeSummary = null, creationPage = false, departments = [], ticketRole, tickets, filters, categories, branches, members, reports, memberWorkloads = [], slaReport, slaPolicy, ticketUser, preview, canPreview, previewUsers }) {
+export function TicketScreen({ prioritySummary = null, pendingFeedback = [], leaderboard = null, pendingImport = null, leaderSummary = null, memberRating = null, memberSummary = null, employeeSummary = null, creationPage = false, departments = [], ticketRole, tickets, filters, categories, branches, members, reports, memberWorkloads = [], slaReport, slaPolicy, ticketUser }) {
     const { auth } = usePage().props;
-    const rolePreview = readRolePreview(auth.user?.id);
     // Module content uses the test identity; SidebarLayout keeps the real admin session.
     const actor = ticketUser || auth.user;
-    // Keep the Task Module's preview selection in step with the IT ticket preview.
-    // Its role/person controls are stored per signed-in account, so sidebar navigation
-    // back to Tasks should continue showing the same IT Supervisor/employee view.
-    useEffect(() => {
-        if (!preview || !rolePreview?.active || !actor?.name || !auth.user?.id) return;
-        try {
-            const baseKey = `purrtal-task-ui-v2-${auth.user.id}`;
-            const keys = [baseKey, `${baseKey}-company-v1`];
-            for (const key of keys) {
-                if (ticketRole === 'leader') {
-                    sessionStorage.setItem(`${key}-role`, 'Team Leader');
-                    sessionStorage.setItem(`${key}-tl-department`, 'IT');
-                    sessionStorage.setItem(`${key}-tl-person`, actor.name);
-                } else {
-                    sessionStorage.setItem(`${key}-role`, 'Employee');
-                    sessionStorage.setItem(`${key}-employee`, actor.name);
-                }
-            }
-        } catch {
-            // Cross-module preview continuity is best-effort when session storage is unavailable.
-        }
-    }, [preview, rolePreview?.active, ticketRole, actor?.name, auth.user?.id]);
-    // Preserve preview_user on tab navigation, searches, submissions, and updates.
     const ticketRoute = (action, params = {}) => {
         const { view, ...query } = params;
         // Screen identity belongs in the path. Export still takes a view filter.
         const page = action === 'index' ? (view || 'dashboard') : action;
-        return route(`${preview ? 'tickets.preview' : 'tickets'}.${page}`, { leaderboard_period: filters.leaderboard_period || 'all', priority_filter: filters.priority_filter || 'all', closed_period: filters.closed_period || '', date_from: filters.date_from || '', date_to: filters.date_to || '', status_filter: filters.status_filter || 'all', sort: filters.sort || 'created_at', direction: filters.direction || 'desc', report_period: filters.report_period || 'all', per_page: filters.per_page || '10', ...(action === 'index' ? query : params), ...(preview ? (rolePreview?.active ? { preview_role: ticketRole } : { preview_user: actor.id }) : {}) });
+        return route(`tickets.${page}`, { leaderboard_period: filters.leaderboard_period || 'all', priority_filter: filters.priority_filter || 'all', closed_period: filters.closed_period || '', date_from: filters.date_from || '', date_to: filters.date_to || '', status_filter: filters.status_filter || 'all', sort: filters.sort || 'created_at', direction: filters.direction || 'desc', report_period: filters.report_period || 'all', per_page: filters.per_page || '10', ...(action === 'index' ? query : params) });
     };
     const employee = ticketRole === 'employee';
     const member = ticketRole === 'member';
@@ -325,7 +300,7 @@ export function TicketScreen({ prioritySummary = null, pendingFeedback = [], lea
     };
     // Show only the views allowed by the flowchart; backend checks enforce the same boundary.
     const views = employee ? [['dashboard', 'Dashboard'], ['all', 'All my tickets']] : ticketRole === 'leader' ? [['dashboard', 'Dashboard'], ['leaderboard', 'Leaderboard'], ['all', 'All tickets'], ['assigned', 'Assigned to me']] : [['dashboard', 'Dashboard'], ['assigned', 'Assigned to me'], ['all', 'All tickets']];
-    // Creation links to its own page and keeps the selected preview identity.
+    // Creation links to its own page.
     const sidebarLinks = views.map(([view, label]) => {
         const active = !creationPage && filters.view === view;
         return { label, href: ticketRoute('index', { view, status_filter: 'all', closed_period: '' }), active, icon: () => <TicketSidebarIcon kind={view} active={active} /> };
@@ -347,9 +322,7 @@ export function TicketScreen({ prioritySummary = null, pendingFeedback = [], lea
     return <SidebarLayout activeModule="IT Ticketing Module" sidebarLinks={sidebarLinks}>
         <Head title="IT Ticketing Module · TCC Purrtal" />
         <main className="ticketing">
-            {canPreview && !preview && <div className="ticket-preview-banner"><div><strong>Test the ticketing module</strong><p>Preview each role using dedicated test employees.</p></div><Link className="ticket-primary" href={route('tickets.preview.dashboard')}>Open UI preview</Link></div>}
-            {preview && <section className="ticket-preview-banner"><div><strong>{rolePreview?.active ? `${rolePreview.role} · IT ticket preview` : 'IT Admin · UI preview'}</strong><p>{rolePreview?.active ? `Showing ${rolePreview.name}'s ${rolePreview.role} view with test ticket data. Your signed-in account stays active.` : 'Test data only. Your admin session stays active; live notifications are disabled.'}</p>{!rolePreview?.active && <label>Preview as test employee<select aria-label="Preview as test employee" value={actor.id} onChange={e => router.get(route('tickets.preview.dashboard'), { preview_user: e.target.value })}>{previewUsers.map(user => <option key={user.id} value={user.id}>{user.name} ({user.ticket_role})</option>)}</select></label>}</div><Link className="ticket-secondary" href={route('tickets.dashboard')}>Exit preview</Link></section>}
-            <header className="ticket-page-heading"><div><span className="ticket-eyebrow">TCC PURRTAL / IT SUPPORT</span><h1>IT Ticketing Module</h1><p>{employee ? 'Let us know how we can help. Submit a ticket to the IT team.' : 'Keep every request moving, from first report to resolution.'}</p></div><span className={`ticket-role ${ticketRole}`}>{employee ? 'Employee' : ticketRole === 'leader' ? (rolePreview?.role === 'IT Supervisor' ? 'IT Supervisor' : 'IT Team Leader') : 'IT Member'}</span></header>
+            <header className="ticket-page-heading"><div><span className="ticket-eyebrow">TCC PURRTAL / IT SUPPORT</span><h1>IT Ticketing Module</h1><p>{employee ? 'Let us know how we can help. Submit a ticket to the IT team.' : 'Keep every request moving, from first report to resolution.'}</p></div><span className={`ticket-role ${ticketRole}`}>{employee ? 'Employee' : ticketRole === 'leader' ? 'IT Team Leader' : 'IT Member'}</span></header>
             {(member || leader || String(actor?.department?.name || actor?.department || auth.user?.department?.name || auth.user?.department || '').trim().toLowerCase() === 'it') && <ITWorkspaceSwitcher current="tickets" />}
             {ranking && <TicketLeaderboard
                 data={leaderboard}
@@ -498,7 +471,7 @@ export function TicketScreen({ prioritySummary = null, pendingFeedback = [], lea
                 </section>}
             </div>
         </main>
-        {!selected && !creationPage && <TicketFeedbackQueue key={`${preview ? 'preview' : 'live'}:${actor.id}`} tickets={pendingFeedback} ticketRoute={ticketRoute} />}
+        {!selected && !creationPage && <TicketFeedbackQueue key={`${actor.id}`} tickets={pendingFeedback} ticketRoute={ticketRoute} />}
         {selected && <TicketEditor key={selected.id} ticket={selected} role={ticketRole} members={members} actor={actor} ticketRoute={ticketRoute} onClose={() => setSelected(null)} />}
     </SidebarLayout>;
 }

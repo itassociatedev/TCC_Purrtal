@@ -17,8 +17,8 @@ class TicketLeaderboard
         // Resolution instants in SLA JSON are UTC; Eloquent activity/creation dates
         // carry the application timezone. Compare actual instants in Manila.
         $within = fn ($date) => !$start || ($date && \Carbon\CarbonImmutable::parse($date)->betweenIncluded($start, $end));
-        // Start from the roster so members with zero resolutions still appear.
-        $members = TicketAccess::members($preview)->with(['role', 'branches', 'branch'])->get()->filter(fn ($u) => TicketAccess::role($u) === 'member');
+        // Start from the roster so IT staff with zero resolutions still appear.
+        $members = TicketAccess::members($preview)->with(['role', 'branches', 'branch'])->get();
         $rows = $members->mapWithKeys(fn ($u) => [$u->id => ['id' => $u->id, 'name' => $u->name, 'role' => $u->role?->name, 'branches' => $u->branches->pluck('name')->push($u->branch?->name)->filter()->unique()->sort()->implode(', '), 'resolved' => 0, 'overdue' => 0, 'rating_count' => 0, 'rating_average' => null]])->all();
         abort_if($memberId !== null && !isset($rows[$memberId]), 404);
         $detailMember = $memberId !== null ? $rows[$memberId] : null;

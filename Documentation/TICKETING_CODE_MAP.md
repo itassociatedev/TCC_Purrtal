@@ -1,6 +1,6 @@
 # Ticketing code map
 
-Audited **3 November 2026**. This inventory covers dedicated ticketing code plus shared files directly integrated with the module. File links are repository-relative; do not rename a file without updating this map.
+Audited **6 November 2026**. This inventory covers dedicated ticketing code plus shared files directly integrated with the module. File links are repository-relative; do not rename a file without updating this map.
 
 See [current system guide](TICKETING.md), [SLA reference](SLA_IMPLEMENTATION.md), and [change history](TICKETING_CHANGELOG.md).
 
@@ -8,13 +8,13 @@ See [current system guide](TICKETING.md), [SLA reference](SLA_IMPLEMENTATION.md)
 
 | File | Responsibility / entry points |
 | --- | --- |
-| [app/Http/Controllers/TicketController.php](app/Http/Controllers/TicketController.php) | HTTP orchestration: context/role scoping, query filters/sort/pagination, dashboards/reports, creation, atomic management, requester feedback and XLSX staging/confirmation. Methods: `context`, `index`, `workbookTemplate`, `workbookImport`, `store`, `update`. |
+| [app/Http/Controllers/TicketController.php](app/Http/Controllers/TicketController.php) | HTTP orchestration: live/preview identity resolution from registered test users, role scoping, query filters/sort/pagination, dashboards/reports, creation, atomic management, requester feedback and XLSX staging/confirmation. Methods: `context`, `index`, `workbookTemplate`, `workbookImport`, `store`, `update`. |
 | [app/Models/Ticket.php](app/Models/Ticket.php) | Ticket fillable fields, JSON/date casts and creator/branch/assignee/activity relationships. Activity relationship is newest-ID-first; UI separately sorts history oldest-first. Methods: `casts`, `creator`, `branch`, `assignee`, `activities`. |
 | [app/Models/TicketActivity.php](app/Models/TicketActivity.php) | Audit event model, details JSON, created_at cast and actor relationship. Methods: `casts`, `actor`. |
 | [app/Services/TicketAccess.php](app/Services/TicketAccess.php) | Exact configured workflow-role resolution, branch permission scope with IT-department and role exceptions, preview authorization, shared self/peer rating eligibility, assignable roster including leaders. Methods: `branches`, `canPreview`, `role`, `members`. |
 | [app/Services/SupportClock.php](app/Services/SupportClock.php) | Support-window seconds and deadline calculations, independent of browser time. Methods: `__construct`, `date`, `seconds`, `deadline`. |
 | [app/Services/TicketSla.php](app/Services/TicketSla.php) | Enrollment, snapshots, action transitions, actual responder/resolver, pauses, priority allowance, workaround approval, reopening, activity and alert deduplication. Methods: `stamp`, `need`, `activity`, `notify`, `enroll`, `snapshot`, `stop`, `apply`, `check`. |
-| [app/Services/TicketLeaderboard.php](app/Services/TicketLeaderboard.php) | Member-only roster ranking, actual resolver counts, contribution shares, current overdue ownership, role/branch labels, resolver-attributed half-star rating averages/counts, calendar period boundaries, selected-range XLSX export, tie handling and paginated member ticket/rating details. Methods: `summary`, `export`. |
+| [app/Services/TicketLeaderboard.php](app/Services/TicketLeaderboard.php) | IT member and team leader roster ranking, actual resolver counts, contribution shares, current overdue ownership, role/branch labels, resolver-attributed half-star rating averages/counts, calendar period boundaries, selected-range XLSX export, tie handling and paginated member ticket/rating details. Methods: `summary`, `export`. |
 | [app/Services/TicketWorkbook.php](app/Services/TicketWorkbook.php) | Explicit-string XLSX downloads, filtered tickets/report sheets, constrained XLSX parser and row-level validation. Methods: `download`, `export`, `read`, `validateRows`. |
 | [app/Services/TicketDemoFactory.php](app/Services/TicketDemoFactory.php) | Support-calendar-aware demonstration scenarios and restoration of temporary frozen clock. Methods: `earlier`, `freeze`, `make`, `seedPreview`. |
 | [app/Casts/UtcDateTime.php](app/Casts/UtcDateTime.php) | Explicit UTC persistence for SQL timestamps without timezone metadata. Methods: `get`, `set`. |
