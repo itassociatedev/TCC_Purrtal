@@ -773,17 +773,17 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
 
                             {canManageAssets && (
                                 <>
-                                    <a href="/asset_template.xlsx" download="Asset_Template.xlsx" className="inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-md font-bold text-[10px] text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none transition ease-in-out duration-150 justify-center gap-2 whitespace-nowrap">
+                                    <a href="/asset_template.xlsx" download="Asset_Template.xlsx" className="clinic-file-action inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-md font-bold text-[10px] text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none transition ease-in-out duration-150 justify-center gap-2 whitespace-nowrap">
                                         <svg className="w-4 h-4 text-indigo-300" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 110 2H7z" clipRule="evenodd" /></svg>
                                         Download Template
                                     </a>
-                                    <button onClick={openImportModal} className="inline-flex items-center px-4 py-2 bg-white border border-emerald-300 rounded-md font-bold text-[10px] text-emerald-700 uppercase tracking-widest shadow-sm hover:bg-emerald-50 focus:outline-none transition ease-in-out duration-150 justify-center gap-2 whitespace-nowrap">
+                                    <button onClick={openImportModal} className="clinic-file-action clinic-file-import inline-flex items-center px-4 py-2 bg-white border border-emerald-300 rounded-md font-bold text-[10px] text-emerald-700 uppercase tracking-widest shadow-sm hover:bg-emerald-50 focus:outline-none transition ease-in-out duration-150 justify-center gap-2 whitespace-nowrap">
                                         <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
                                         Import Assets
                                     </button>
                                 </>
                             )}
-                            <SecondaryButton onClick={handleExport} className="!border-gray-300 text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 shadow-sm py-2 justify-center gap-2 whitespace-nowrap">
+                            <SecondaryButton onClick={handleExport} className="clinic-file-action !border-gray-300 text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 shadow-sm py-2 justify-center gap-2 whitespace-nowrap">
                                 <svg className="w-4 h-4 text-indigo-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
                                 Export
                             </SecondaryButton>

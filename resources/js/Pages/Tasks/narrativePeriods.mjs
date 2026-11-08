@@ -10,7 +10,8 @@ export function narrativeDateMatches(task,day){const period=narrativePeriod(task
 export function narrativeSummary(task,tasks){
  const {start,end}=narrativePeriod(task),seen=new Set();
  const completed=tasks.filter(item=>{
-  if(item.id===task.id||seen.has(item.id)||item.assignee!==task.assignee||item.status!=='Completed'||item.sample||item.sampleKey||item.title?.startsWith('[Sample]')||item.template==='narrative-report'||item.template==='intern-weekly-report'||item.template==='it-opening-rounds'||item.template==='daily-operations'||item.template?.startsWith('daily-custom-'))return false;
+  const rolePreviewSample=/^role-sample-v[12]:/.test(item.sampleKey||'');
+  if(item.id===task.id||seen.has(item.id)||item.assignee!==task.assignee||item.status!=='Completed'||(item.sample||item.sampleKey||item.title?.startsWith('[Sample]'))&&!rolePreviewSample||item.template==='narrative-report'||item.template==='intern-weekly-report'||item.template==='it-opening-rounds'||item.template==='daily-operations'||item.template?.startsWith('daily-custom-'))return false;
   const timestamp=item.completedAt||item.approvedAt||item.history?.find(event=>/approved|task completed|main task completed/i.test(event.text||''))?.at;
   if(!timestamp||Number.isNaN(new Date(timestamp).getTime()))return false;
   const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(timestamp)).map(part=>[part.type,part.value]));

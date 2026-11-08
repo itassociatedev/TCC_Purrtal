@@ -18,12 +18,21 @@ const work = {
 const offset={EVP:7,'Operations Manager':5,'Chief Vet':4,'Team Leader':3,Employee:2};
 function dueDate(day,days){const [y,m,d]=day.split('-').map(Number);return new Date(Date.UTC(y,m-1,d+days)).toISOString().slice(0,10);}
 export function addRoleSampleTasks(tasks,config,day){
- const keys=new Set(tasks.map(task=>task.sampleKey).filter(Boolean));
  const result=[...tasks];let id=Math.max(1000,...tasks.map(task=>Number(task.id)||0));
- const seen=new Set();
- for(const person of assignmentDirectory(config)){
-  const key=`role-sample-v1:${person.id||person.name}`;
-  if(keys.has(key)||seen.has(key))continue;seen.add(key);
+ const people=[...new Map(assignmentDirectory(config).filter(person=>person.active!==false&&!person.disabled).map(person=>[person.name,person])).values()];
+ const statuses=['Not Started','In Progress','Pending Review','Completed','Revision Needed'];
+ for(const [index,person] of people.entries()){
+  const key=`role-sample-v2:${person.id||person.name}`;
+  const priorIndex=result.findIndex(task=>task.sampleKey===key||task.sampleKey===`role-sample-v1:${person.id||person.name}`);
+  const status=statuses[index%statuses.length];
+  const startedAt=['In Progress','Pending Review','Completed','Revision Needed'].includes(status)?`${day}T09:00:00+08:00`:undefined;
+  const submittedAt=['Pending Review','Completed','Revision Needed'].includes(status)?`${day}T10:00:00+08:00`:undefined;
+  const completedAt=status==='Completed'?`${day}T10:05:00+08:00`:undefined;
+  const submission=submittedAt?'Sample completion note for preview; replace this with the actual work when testing.':'';
+  const remarks=status==='Revision Needed'?'Sample reviewer feedback: add the missing verification details.':'';
+  // Seed demo statuses once. Never rewrite an existing practice task after a user
+  // has changed its status or output, and never alter real work.
+  if(priorIndex>=0)continue;
   const role=person.baseRole;
   let [title,description]=work[person.department]||['Review the department action list','Review the assigned action list, record progress and submit the outstanding follow-ups.'];
   if(role==='EVP') [title,description]=person.role==='Corporate Services'
@@ -33,8 +42,8 @@ export function addRoleSampleTasks(tasks,config,day){
   else if(role==='Chief Vet') [title,description]=[`Review ${person.branch} clinical-team readiness`,'Review the clinical team readiness checklists and incomplete administrative records. Submit the follow-up summary.'];
   else if(role==='Team Leader') [title,description]=[`Review ${person.department} team progress`,'Review the team action list, confirm completed work and list overdue or blocked items. Submit a short progress summary.'];
   result.push({id:++id,title:`[Sample] ${title}`,description:`Practice task for ${person.name} (${person.position||person.role}) at ${person.branch}. ${description}`,assignee:person.name,assigneeRole:person.role,
-   department:person.department,branch:person.branch,template:'standard',kind:'Assigned task',status:'Not Started',priority:config.priorities[role==='EVP'?0:Math.min(1,config.priorities.length-1)],
-   due:dueDate(day,offset[role]||2),submission:'',remarks:'',link:'',sample:true,sampleKey:key});
+   department:person.department,branch:person.branch,template:'standard',kind:'Assigned task',status,priority:config.priorities[role==='EVP'?0:Math.min(1,config.priorities.length-1)],
+   due:dueDate(day,offset[role]||2),startedAt,submittedAt,completedAt,submission,remarks,link:'',sample:true,sampleKey:key});
  }
  return result.length===tasks.length?tasks:result;
 }

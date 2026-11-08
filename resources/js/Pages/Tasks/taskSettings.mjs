@@ -7,11 +7,19 @@ import { systemChecks } from './openingRounds.mjs';
 export const baseRoles = ['Employee', 'Team Leader', 'Operations Manager', 'Chief Vet', 'EVP'];
 // Corporate Services shares the EVP workflow across all departments and branches.
 export const corporateServicesRole = { name: 'Corporate Services', baseRole: 'EVP', departments: ['Operations & Finance', 'Internal Audit', 'HR', 'Sales & Marketing'] };
+export const taskFrequencyOptions = [
+    { value: 'once', label: 'One-time' },
+    { value: 'daily', label: 'Daily' },
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'monthly', label: 'Monthly' },
+];
 export function defaultSettings() {
     const config = structuredClone({
         branches, departments, itDepartment: 'IT', cashierDepartment: 'Cashier',
+        taskIdPrefixSource: 'department',
         roles: [...baseRoles.map(name => ({ name, baseRole: name })), corporateServicesRole],
         corporateServicesVersion: 1, internRoleVersion: 2,
+        taskTemplates: [],
         dailyReports: defaultReportTemplates({}),
         employees: employees.map(employee => ({ ...employee, role: 'Employee', employeeType: 'Regular', availableBranches: [...branches] })),
         operationsManagers, teamLeaders: legacyDepartmentLeaders, priorities: ['High', 'Medium', 'Low', 'Critical'], checks: systemChecks,
@@ -29,7 +37,7 @@ export function loadSettings(raw) {
     const upgradedRoles = roles.filter(role => role.name !== 'Intern').map(({ weeklyReport, ...role }) => role);
     if (!upgradedRoles.some(role => role.baseRole === 'Employee')) upgradedRoles.unshift({ name: employeeRole, baseRole: 'Employee' });
     const employees = raw.employees.map(person => ({ ...person, role: person.role === 'Intern' ? employeeRole : person.role, employeeType: person.role === 'Intern' || raw.roles.find(role => role.name === person.role)?.weeklyReport ? 'Intern' : person.employeeType || 'Regular' }));
-    return applyOrganizationStructure({ ...defaults, ...raw, priorities:[...raw.priorities.filter(name=>name!=='Critical'),'Critical'], organizationStructureVersion: raw.organizationStructureVersion || 0, internRoleVersion: 2, roles: upgradedRoles, employees, roleHolders: raw.roleHolders || defaultRoleHolders({ ...defaults, ...raw, roles: upgradedRoles, employees }), corporateServicesVersion: 1, dailyReports: raw.dailyReports || defaultReportTemplates(raw) });
+    return applyOrganizationStructure({ ...defaults, ...raw, taskTemplates: Array.isArray(raw.taskTemplates) ? raw.taskTemplates : defaults.taskTemplates, priorities:[...raw.priorities.filter(name=>name!=='Critical'),'Critical'], organizationStructureVersion: raw.organizationStructureVersion || 0, internRoleVersion: 2, roles: upgradedRoles, employees, roleHolders: raw.roleHolders || defaultRoleHolders({ ...defaults, ...raw, roles: upgradedRoles, employees }), corporateServicesVersion: 1, dailyReports: raw.dailyReports || defaultReportTemplates(raw) });
 }
 export const canWorkAt = (employee, branch) => (employee?.availableBranches || [employee?.branch]).includes(branch);
 export function eligibleEmployees(config, { role, branch, department, employee }) {
@@ -56,7 +64,7 @@ export function changeSetting(config, tasks, { entity, action, original, value }
     if (entity === 'operationsManagers' && action !== 'edit') throw new Error('Add or remove the corresponding branch or department to change leadership coverage.');
     if (action === 'remove') {
         if (entity === 'teamLeaders' && tasks.some(task => task.assignee === next[entity][index].name || task.coordinator === next[entity][index].name || task.coordinators?.includes(next[entity][index].name))) throw new Error('Reassign this leader’s tasks before removing the position.');
-        if (next[entity].length <= 1) throw new Error('Keep at least one entry.');
+        if (next[entity].length <= 1 && entity !== 'taskTemplates') throw new Error('Keep at least one entry.');
         if (entity === 'departments' && next.dailyReports?.some(report => report.department === original)) throw new Error('Reassign or remove this department’s daily report templates first.');
         if (entity === 'departments' && original === next.itDepartment) throw new Error('This department is used by Opening Rounds.');
         if (entity === 'departments' && (next.employees.some(person => person.department === original) || tasks.some(task => task.department === original))) throw new Error('Reassign employees and tasks before removing this department.');
@@ -78,6 +86,14 @@ export function changeSetting(config, tasks, { entity, action, original, value }
             if (!baseRoles.includes(value.baseRole)) throw new Error('Choose a supported role workflow.');
             if (action === 'edit' && value.baseRole !== 'Employee' && next.employees.some(person => person.role === original)) throw new Error('A role used by employees must keep the Employee workflow. Reassign those employees first.');
             record = { ...next[entity][index], name: label, baseRole: value.baseRole };
+        }
+        if (entity === 'taskTemplates') {
+            const frequency = taskFrequencyOptions.some(option => option.value === value.frequency) ? value.frequency : 'once';
+            if (!next.priorities.includes(value.priority)) throw new Error('Choose a priority from Workspace Setup.');
+            if (!String(value.title || '').trim()) throw new Error('Enter a task title.');
+            if (String(value.title).trim().length > 40) throw new Error('Task titles can be up to 40 characters.');
+            record = { name: label, title: String(value.title).trim(), description: String(value.description || '').trim(), priority: value.priority, frequency, link: String(value.link || '').trim() };
+            if (record.link && !/^https?:\/\//i.test(record.link)) throw new Error('Reference links must start with http:// or https://.');
         }
         if (['employees', 'roleHolders'].includes(entity)) {
             const otherPeople = ['employees', 'roleHolders', 'teamLeaders', 'operationsManagers'].flatMap(key => (next[key] || []).filter((_, i) => key !== entity || i !== index));

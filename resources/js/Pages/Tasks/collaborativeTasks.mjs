@@ -16,11 +16,9 @@ export const monitorMatchesAssignment = (person, assignment) => canMonitorCollab
     && (person.baseRole !== 'Team Leader' && person.employeeType !== 'Supervisor' || person.department === assignment.department)
     && (person.availableBranches || [person.branch]).includes(assignment.branch);
 export const childTasks = (task, tasks) => tasks.filter(item => item.parentId === task.id);
-// Reserve at least one full calendar day for each higher level to review and consolidate the work.
+// Child and parent deadlines may match; child work must not run past the parent deadline.
 export function childDeadline(parentDeadline) {
-    const date = new Date(`${parentDeadline}T00:00:00Z`);
-    date.setUTCDate(date.getUTCDate() - 1);
-    return date.toISOString().slice(0, 10);
+    return parentDeadline;
 }
 export function taskHierarchy(task, tasks, depth = 0, visited = new Set()) {
     if (visited.has(task.id)) return [];
@@ -48,7 +46,7 @@ export function createChildTask(parent, tasks, config, context, value) {
     const monitoring = ['monitoring','both'].includes(value.taskType) || value.taskType === 'auto' && canMonitorCollaborative(employee);
     if (!employee || !monitoring && employee.name === parent.assignee || !(employee.availableBranches || [employee.branch]).includes(value.branch)) throw new Error('Choose another employee and one of their allowed branches.');
     if (!value.title?.trim() || !value.description?.trim()) throw new Error('Enter a title and clear instructions for this child task.');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value.due) || value.due >= parent.due) throw new Error('The child deadline must be earlier than its parent deadline. Each higher level needs time to review.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value.due) || value.due > parent.due) throw new Error('The child deadline must be on or before its parent deadline.');
     const siblings = childTasks(parent, tasks);
     const dependsOn = [...new Set(value.dependsOn || [])];
     if (dependsOn.some(id => !siblings.some(item => item.id === id))) throw new Error('Choose prerequisites from this main task’s existing child tasks.');

@@ -3,6 +3,7 @@ export default function TaskOverview({ task, badges, assignee, schedule, deadlin
     return <section className="tm-task-overview tm-task-overview-compact">
         <div className="tm-task-overview-heading"><div className="tm-detail-badges">{badges}</div>{actions}</div>
         <dl className="tm-task-meta-grid tm-task-key-facts">
+            {task.taskCode && <div><dt>Task ID</dt><dd><code>{task.taskCode}</code></dd></div>}
             <div><dt>Assigned to</dt><dd>{assignee}</dd></div>
             {task.startDate && <div><dt>Starting date</dt><dd><time dateTime={task.startDate}>{new Date(task.startDate+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</time></dd></div>}<div><dt>Deadline</dt><dd><time dateTime={task.due}>{deadline}</time></dd></div>
         </dl>

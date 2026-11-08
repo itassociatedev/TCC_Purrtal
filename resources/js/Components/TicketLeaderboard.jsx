@@ -55,7 +55,7 @@ export default function TicketLeaderboard({ data, onPeriodChange, exportUrl, det
     return <div className="ticket-leaderboard">
         <div className="leaderboard-period-toolbar"><label>Date range<select value={data?.period || 'all'} onChange={e => onPeriodChange(e.target.value)}>
             {Object.entries(periods).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select></label><p>Current calendar period</p><a className="ticket-secondary" href={exportUrl}>Export leaderboard XLSX</a></div>
+        </select></label><p>Current calendar period</p><a className="ticket-secondary clinic-file-action" href={exportUrl}>Export leaderboard XLSX</a></div>
         <div className="leaderboard-overview">
             <section className="leaderboard-panel"><header><h2>Top cats <span className="leaderboard-sparkle" aria-hidden="true">✦</span></h2><p>A little spotlight for a job well done.</p></header>
                 <div className="leaderboard-podium">{podium.map((m, index) => m ? <article key={m.id} className={`leaderboard-place leaderboard-place-${[2, 1, 3][index]}`}>

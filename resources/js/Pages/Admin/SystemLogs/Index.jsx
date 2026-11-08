@@ -253,7 +253,7 @@ export default function SystemLogsIndex({ auth, logs, filters, dutyLogs=false, m
                         <button 
                             type="button" 
                             onClick={handleExport}
-                            className="border border-gray-300 bg-white hover:bg-gray-50 transition duration-150 text-gray-700 px-4 py-2 rounded-md shadow-sm font-medium flex items-center gap-2 text-sm"
+                            className="clinic-file-action border border-gray-300 bg-white hover:bg-gray-50 transition duration-150 text-gray-700 px-4 py-2 rounded-md shadow-sm font-medium flex items-center gap-2 text-sm"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />

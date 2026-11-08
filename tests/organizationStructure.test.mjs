@@ -69,7 +69,7 @@ test('a saved Supervisor role upgrades to an employee subtype while tasks keep t
 
 test('the staff directory includes separate medical leaders, an IT TL and employee supervisors', () => {
     const config = defaultSettings();
-    for (const position of ['Senior Veterinarian Assistant Team Leader', 'Junior Veterinarian Team Leader', 'Veterinary Technician Team Leader', 'Veterinary Technician Assistant Team Leader', 'Clinic Assistant Team Leader', 'Cashier Team Leader', 'IT Team Leader']) assert.ok(config.teamLeaders.some(person => person.position === position), position);
+    for (const position of ['Senior Veterinarian Assistant Team Leader', 'Junior Veterinarian Team Leader', 'Veterinary Technician Team Leader', 'Veterinary Technician Assistant Team Leader', 'Clinic Assistant Team Leader', 'Cashier Team Leader', 'IT Supervisor']) assert.ok(config.teamLeaders.some(person => person.position === position), position);
     assert.equal(config.teamLeaders.filter(person => person.department === 'Vet Tech').length, 2);
     assert.equal(config.teamLeaders.filter(person => person.department === 'Veterinary').length, 2);
     assert.ok(!config.teamLeaders.some(person => person.department === 'Reception'));

@@ -11,7 +11,7 @@ test('bulk task import preserves approval policy, rejects duplicates and never i
  const scope={role:'Team Leader',actor:leader.name,department:leader.department};
  const row={title:'Imported work',description:'Do the work',assignee:person.name,department:person.department,branch:person.branch,priority:'Medium',starting_date:'2026-10-25',deadline:'2026-10-26',status:'Completed',submission:'Claimed approval'};
  const imported=prepareTaskImport([row],[],config,scope,'2026-10-25');
- assert.equal(imported[0].status,'Pending Approval');assert.equal(imported[0].submission,'');assert.ok(imported[0].approvalReviewer);
+ assert.equal(imported[0].status,'Not Started');assert.equal(imported[0].submission,'');assert.equal(imported[0].approvalReviewer,undefined);
  assert.throws(()=>prepareTaskImport([row,row],[],config,scope,'2026-10-25'));
  assert.throws(()=>prepareTaskImport([row],imported,config,scope,'2026-10-25'));
  assert.throws(()=>prepareTaskImport([{...row,deadline:'2026-02-30'}],[],config,scope,'2026-10-25'));

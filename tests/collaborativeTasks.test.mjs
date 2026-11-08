@@ -99,14 +99,14 @@ test('requested cleanup removes only the two incorrect roots and their linked de
     assert.deepEqual(cleaned.map(task => task.id), [3, 4]);
     assert.equal(removeIncorrectCollaborations(cleaned), cleaned);
 });
-test('four levels enforce Oct 30, 29, 28, 27 and reject equal or later child dates', () => {
+test('child deadlines may match but cannot be later than the parent deadline', () => {
     const second = createChildTask(parent, [parent], config, coordinator, { ...value, taskType: 'monitoring', due: childDeadline(parent.due) });
     const secondActor = { role: 'Employee', employee: second.assignee };
     const third = createChildTask(second, [parent, second], config, secondActor, { ...value, assignee: 'John Doe 4', taskType: 'monitoring', due: childDeadline(second.due) });
     const fourth = createChildTask(third, [parent, second, third], config, { role: 'Employee', employee: third.assignee }, { ...value, due: childDeadline(third.due) });
-    assert.deepEqual([parent.due, second.due, third.due, fourth.due], ['2026-10-30', '2026-10-29', '2026-10-28', '2026-10-27']);
-    assert.throws(() => createChildTask(parent, [parent], config, coordinator, { ...value, due: parent.due }), /earlier/);
-    assert.throws(() => createChildTask(third, [parent, second, third], config, { role: 'Employee', employee: third.assignee }, { ...value, due: '2026-10-30' }), /earlier/);
+    assert.deepEqual([parent.due, second.due, third.due, fourth.due], ['2026-10-30', '2026-10-30', '2026-10-30', '2026-10-30']);
+    assert.doesNotThrow(() => createChildTask(parent, [parent], config, coordinator, { ...value, due: parent.due }));
+    assert.throws(() => createChildTask(parent, [parent], config, coordinator, { ...value, due: '2026-10-31' }), /on or before/);
 });
 test('explicit EVP ownership is separate from the creator and only that owner closes a ready main task', () => {
     const directory = assignmentDirectory(config);

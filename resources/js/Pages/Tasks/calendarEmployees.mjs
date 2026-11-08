@@ -23,8 +23,18 @@ export function employeeTaskGroups(tasks) {
         const name = task.assignee || 'Unassigned';
         groups.set(name, (groups.get(name) || 0) + 1);
     }
+    const usedColors = new Set();
     return [...groups].sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
-        .map(([name, count], index) => ({ name, count, color: employeeColors[index % 3] }));
+        .map(([name, count]) => {
+            const preferred = employeeColors.indexOf(employeeColor(name));
+            let colorIndex = preferred;
+            for (let offset = 0; offset < employeeColors.length; offset += 1) {
+                const candidate = (preferred + offset) % employeeColors.length;
+                if (!usedColors.has(candidate)) { colorIndex = candidate; break; }
+            }
+            usedColors.add(colorIndex);
+            return { name, count, color: employeeColors[colorIndex] };
+        });
 }
 export function calendarDayPreview(tasks, limit = 3) {
     const employees = employeeTaskGroups(tasks);

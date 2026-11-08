@@ -12,7 +12,7 @@ test('one people list contains all roles, field overrides and hidden employees w
 test('reset removes only the selected override and restores current Employee Management data',()=>{
  const base=defaultSettings();base.taskPeopleOverrides={10:{changes:{position:'Custom position'}},11:{hidden:true}};
  const config=companySettings(base,directory);const reset=resetTaskPerson(config,directory,10);
- assert.equal(reset.teamLeaders[0].position,'IT Team Leader');assert.equal(reset.employees.length,0);assert.equal(config.teamLeaders[0].position,'Custom position');
+ assert.equal(reset.teamLeaders[0].position,'IT Supervisor');assert.equal(reset.employees.length,0);assert.equal(config.teamLeaders[0].position,'Custom position');
 });
 test('hidden local people remain discoverable for restoration',()=>{
  const config=companySettings(defaultSettings(),directory);config.taskPeopleOverrides={'local:Person':{hidden:true,changes:{id:'local:Person',name:'Local Person',role:'Employee',department:'IT',branch:'Makati'}}};

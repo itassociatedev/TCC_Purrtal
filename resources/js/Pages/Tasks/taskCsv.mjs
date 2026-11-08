@@ -8,6 +8,7 @@ export function prepareTaskImport(rows,tasks,config,scope,today,stamp=Date.now()
   const person=people.find(person=>person.name===row.assignee),line=`Row ${index+2}: `;
   if(!person||person.department!==row.department||!(person.availableBranches||[person.branch]).includes(row.branch))throw new Error(line+'choose an eligible assignee and their department/branch.');
   if(!row.title||!row.description||!config.priorities.includes(row.priority))throw new Error(line+'title, description and a valid priority are required.');
+  if(row.title.length>40)throw new Error(line+'task titles can be up to 40 characters.');
   const startDate=row.starting_date||today;
   if(!validCsvDate(row.deadline)||!validCsvDate(startDate)||startDate>row.deadline)throw new Error(line+'use valid starting dates and deadlines.');
   if(row.reference_link&&!/^https?:\/\//i.test(row.reference_link))throw new Error(line+'use an HTTP or HTTPS reference link.');

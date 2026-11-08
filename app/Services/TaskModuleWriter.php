@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\TaskModuleRecord;
 use App\Models\User;
 use App\Notifications\TaskModuleEmail;
+use App\Support\TaskIdFormatter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\ValidationException;
@@ -49,7 +50,7 @@ class TaskModuleWriter
         $reportBranchEditable=in_array($task['template'],['narrative-report','daily-operations']) || str_starts_with($task['template'],'daily-custom-');
         if($previous)abort_if($task['assignee']!==$previous['assignee'] || $task['department']!==$previous['department'] || !$reportBranchEditable && $task['branch']!==$previous['branch'],422,'Use Hand over task to transfer responsibility.');
         if ($previous) {
-            foreach (['repeatSeriesId','occurrenceStart','template','parentId','recurrence','scheduledDate','weekStart','periodStart','periodEnd','sharedBranchReport','kind','approvalRequired','approvalReviewer','approvalReviewerRole','requestedBy'] as $field) {
+            foreach (['repeatSeriesId','occurrenceStart','template','parentId','recurrence','scheduledDate','weekStart','periodStart','periodEnd','sharedBranchReport','kind','approvalRequired','approvalReviewer','approvalReviewerRole','requestedBy','taskIdPrefixSource'] as $field) {
                 abort_if(($task[$field] ?? null) !== ($previous[$field] ?? null),422,'Task identity and approval routing cannot be changed after creation.');
             }
             // Client timestamps and audit fields are display data, never trusted write inputs.
@@ -58,6 +59,7 @@ class TaskModuleWriter
                 else unset($task[$field]);
             }
         } else {
+            unset($task['taskCode']);
             foreach (['startedAt','elapsedSeconds','submittedAt','submittedBy','completedAt','approvalGrantedAt','approvalGrantedBy','dismissedAt','dismissedBy','history'] as $field) unset($task[$field]);
         }
         if(isset($previous['frequencyChangedAt']))$task['frequencyChangedAt']=$previous['frequencyChangedAt'];else unset($task['frequencyChangedAt']);
@@ -203,6 +205,25 @@ class TaskModuleWriter
         $record ??= new TaskModuleRecord(['client_key'=>$key,'creator_id'=>$actor->id]);
         $newRecord=!$record->exists;
         $record->fill(['assignee_id'=>$assignee?->id,'reviewer_id'=>$reviewer?->id,'department'=>$task['department'],'branch'=>$task['branch'],'payload'=>$task,'version'=>$version])->save();
+        if ($newRecord) {
+            $task['taskCode'] = TaskIdFormatter::make(
+                $task['taskIdPrefixSource'] ?? 'department',
+                $task['department'],
+                $task['assigneeRole'] ?? ($assignee ? $this->access->role($assignee) : ''),
+                $record->created_at?->timezone('Asia/Manila')->format('Ymd') ?? now('Asia/Manila')->format('Ymd'),
+                (int) $record->id,
+            );
+            $record->forceFill(['payload' => $task])->save();
+        } else {
+            $task['taskCode'] = $previous['taskCode'] ?? TaskIdFormatter::make(
+                $task['taskIdPrefixSource'] ?? 'department',
+                $task['department'],
+                $task['assigneeRole'] ?? ($assignee ? $this->access->role($assignee) : ''),
+                $record->created_at?->timezone('Asia/Manila')->format('Ymd') ?? now('Asia/Manila')->format('Ymd'),
+                (int) $record->id,
+            );
+            if (($record->payload['taskCode'] ?? null) !== $task['taskCode']) $record->forceFill(['payload' => $task])->save();
+        }
         if($newRecord)$createdInBatch[$record->id]=true;
         if ($previous && $task['status'] === $previous['status'] && ($previous['assignee'] ?? '') === $task['assignee']) {
             LoggerService::log('Task Module', 'Update', 'Updated task: '.$task['title'], userId: $actor->id);

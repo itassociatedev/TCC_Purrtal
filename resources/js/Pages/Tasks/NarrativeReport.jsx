@@ -6,7 +6,8 @@ export default function NarrativeReport({canEdit=false,task,tasks=[],branches,on
  const period=narrativePeriod(task),heading=period.frequency==='weekly'?'Weekly':period.frequency==='monthly'?'Monthly':'Daily';
  const [report,setReport]=useState(()=>({...task.narrative,date:task.scheduledDate||task.due,branch:task.narrative?.branch||task.branch,department:task.department,issues:task.narrative?.issues||'',solutions:task.narrative?.solutions||'',followUps:task.narrative?.followUps||task.narrative?.nextSteps||''}));
  const [error,setError]=useState('');
- const summary=editable||!task.narrative?narrativeSummary(task,tasks):task.narrative.summary;
+ // Keep the generated list live while this report is open, including after a draft or submission exists.
+ const summary=narrativeSummary(task,tasks);
  const snapshot=()=>({...report,summary,automaticSummary:true});
  const field=(key,value)=>{setError('');setReport(previous=>({...previous,[key]:value}));};
  return <section className="tm-rounds"><h3>{heading} Narrative Report</h3><p className="tm-daily-caption">{period.start===period.end?period.start:period.start+' – '+period.end}</p><form onSubmit={event=>{event.preventDefault();if(!editable)return;const message=validateNarrative(snapshot(),branches,task.scheduledDate||task.due);if(message){setError(message);return;}onSubmit(snapshot());}}>

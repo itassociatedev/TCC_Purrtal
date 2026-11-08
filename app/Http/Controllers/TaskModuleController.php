@@ -28,25 +28,43 @@ class TaskModuleController extends Controller
     {
         $this->available();
         abort_unless($access->active($request->user()), 403);
+        abort_unless($access->role($request->user()) !== 'Employee', 403, 'The leaderboard is available to management roles only.');
         $today = $request->validate(['today' => 'required|date_format:Y-m-d'])['today'];
-        $activeAssignees = \App\Models\User::query()->get()->filter(fn ($person) => $access->active($person))->modelKeys();
-        $records = TaskModuleRecord::query()->whereIn('assignee_id', $activeAssignees)->get(['id', 'payload']);
-        $rows = $records->filter(function ($record) {
+        $activePeople = \App\Models\User::query()->get()->filter(fn ($person) => $access->active($person));
+        $activeAssignees = $activePeople->modelKeys();
+        $activeNames = $activePeople->pluck('name')->filter()->mapWithKeys(fn ($name) => [mb_strtolower(trim($name)) => true])->all();
+        $activeNamesById = $activePeople->mapWithKeys(fn ($person) => [(int) $person->id => $person->name])->all();
+        // Older task records may have an assignee name in their payload but no
+        // assignee_id. Include those rows, then validate ownership by active name.
+        $records = TaskModuleRecord::query()->where(function ($query) use ($activeAssignees) {
+            $query->whereIn('assignee_id', $activeAssignees)->orWhereNull('assignee_id');
+        })->get(['id', 'assignee_id', 'payload']);
+        $rows = $records->filter(function ($record) use ($today, $activeNames, $activeAssignees) {
             $task = $record->payload;
-            return !str_starts_with($task['title'] ?? '', '[Sample]')
+            $hasActiveOwner = $record->assignee_id !== null
+                ? in_array((int) $record->assignee_id, $activeAssignees, true)
+                : isset($activeNames[mb_strtolower(trim($task['assignee'] ?? ''))]);
+            $due = substr((string) ($task['due'] ?? ''), 0, 10);
+            return $hasActiveOwner
+                && !str_starts_with($task['title'] ?? '', '[Sample]')
                 && !in_array($task['template'] ?? '', ['it-opening-rounds', 'narrative-report', 'daily-operations', 'intern-weekly-report'], true)
                 && !str_starts_with($task['template'] ?? '', 'daily-custom-')
                 && (($task['status'] ?? '') === 'Completed'
-                    || in_array($task['status'] ?? '', ['Not Started', 'In Progress', 'Revision Needed'], true)
-                        && !empty($task['due']) && $task['due'] < $today);
-        })->map(function ($record) {
+                    || !in_array($task['status'] ?? '', ['Completed', 'Denied', 'Dismissed', 'Pending Approval', 'Pending Review'], true)
+                        && preg_match('/^\d{4}-\d{2}-\d{2}$/', $due) === 1 && $due < $today);
+        })->map(function ($record) use ($activeNamesById) {
             $task = $record->payload;
+            $approvalGrantedAt = $task['approvalGrantedAt'] ?? collect($task['history'] ?? [])->first(fn ($event) => preg_match('/^.*: approved\.$|request approved|task approved/i', $event['text'] ?? '') === 1)['at'] ?? null;
             return [
                 'id' => $task['id'] ?? $record->id,
-                'assignee' => $task['assignee'] ?? '',
+                'assignee' => $activeNamesById[(int) $record->assignee_id] ?? $task['assignee'] ?? '',
                 'department' => $task['department'] ?? '',
                 'branch' => $task['branch'] ?? '',
                 'status' => $task['status'] ?? '',
+                'title' => $task['title'] ?? 'Untitled task',
+                'kind' => $task['kind'] ?? '',
+                'approvalRequired' => (bool) ($task['approvalRequired'] ?? false),
+                'approvalGrantedAt' => $approvalGrantedAt,
                 'due' => $task['due'] ?? '',
                 'completedAt' => $task['completedAt'] ?? '',
                 'submittedAt' => $task['submittedAt'] ?? '',
@@ -66,6 +84,7 @@ class TaskModuleController extends Controller
             'tasks.*.template'=>'required|string|max:100','tasks.*.due'=>'required|date_format:Y-m-d',
             'tasks.*.priority'=>'nullable|string|max:100','tasks.*.kind'=>'nullable|string|max:100','tasks.*.taskType'=>'nullable|in:execution,monitoring,both',
             'tasks.*.assigneeRole'=>'nullable|string|max:255','tasks.*.requestedBy'=>'nullable|string|max:255',
+            'tasks.*.taskIdPrefixSource'=>'nullable|in:department,role','tasks.*.taskCode'=>'nullable|string|max:40',
             'tasks.*.approvalRequired'=>'sometimes|boolean','tasks.*.approvalReviewer'=>'nullable|string|max:255',
             'tasks.*.approvalReviewerRole'=>'nullable|string|max:100',
             'tasks.*.approvalGrantedAt'=>'nullable|string|max:100','tasks.*.approvalGrantedBy'=>'nullable|string|max:255',
@@ -94,6 +113,11 @@ class TaskModuleController extends Controller
             'tasks.*.link'=>'nullable|url:http,https|max:4000',
             'tasks.*._serverVersion'=>'nullable|integer|min:1',
         ]);
+        foreach ($validated['tasks'] as $task) {
+            if (mb_strlen($task['title']) <= 40) continue;
+            $existing = TaskModuleRecord::where('client_key', $writer->key($task))->first();
+            abort_unless($existing && ($existing->payload['title'] ?? null) === $task['title'], 422, 'Task titles can be up to 40 characters.');
+        }
         foreach ($validated['tasks'] as $task) abort_if(!empty($task['startDate']) && $task['startDate'] > $task['due'],422,'The starting date must be on or before the deadline.');
         return response()->json(['records'=>$writer->saveMany($request->user(),$validated['tasks'])]);
     }

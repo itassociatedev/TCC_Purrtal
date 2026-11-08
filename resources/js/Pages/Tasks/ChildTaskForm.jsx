@@ -43,7 +43,7 @@ export default function ChildTaskForm({ task, children, config, onCreate, onClos
         <div><h4>Add a task</h4><p className="tm-daily-caption">Under <strong>{task.title}</strong> · reviewed by {task.assignee}</p></div>
         {saved && <p className="tm-child-saved" role="status">✓ {saved}</p>}
         <fieldset className="tm-child-step"><legend>1. What needs to be done?</legend>
-            <label>Task title<input ref={titleInput} value={title} onChange={event => setTitle(event.target.value)} required maxLength={140} placeholder="e.g. Verify the product prices" /></label>
+            <label>Task title<input ref={titleInput} value={title} onChange={event => setTitle(event.target.value)} required maxLength={40} placeholder="e.g. Check inventory" /><small>{title.length}/40 characters</small></label>
             <label>Instructions<textarea value={description} onChange={event => setDescription(event.target.value)} required rows={3} placeholder="Describe the work and what the person should submit." /></label>
         </fieldset>
         <fieldset className="tm-child-step"><legend>2. Who is responsible?</legend>
@@ -58,7 +58,7 @@ export default function ChildTaskForm({ task, children, config, onCreate, onClos
         <fieldset className="tm-child-step"><legend>3. Where and when?</legend><div className="tm-form-grid">
             <label>Work branch<select value={branch} onChange={event => setBranch(event.target.value)} required>{allowedBranches.map(item => <option key={item}>{item}</option>)}</select></label>
             <label>Due date<input type="date" value={due} onChange={event => setDue(event.target.value)} max={childDeadline(task.due)} required /></label>
-        </div><p className="tm-deadline-hint">Due by <strong>{formatDate(childDeadline(task.due))}</strong> or earlier, so {task.assignee} can review before {formatDate(task.due)}.</p></fieldset>
+        </div><p className="tm-deadline-hint">Due on or before <strong>{formatDate(childDeadline(task.due))}</strong>, the main task’s deadline.</p></fieldset>
         {children.length > 0 && <details className="tm-child-dependencies"><summary>Wait for another task first? <span>Optional</span></summary><p className="tm-daily-caption">Select only work that must be approved before this task can begin.</p><div className="tm-child-dependency-list">{children.map(child => <label key={child.id}><input type="checkbox" checked={dependencies.includes(child.id)} onChange={event => setDependencies(event.target.checked ? [...dependencies, child.id] : dependencies.filter(id => id !== child.id))} /><span><strong>{child.title}</strong><small>{child.assignee} · Due {formatDate(child.due)}</small></span></label>)}</div></details>}
         {error && <p role="alert" className="tm-rounds-error">{error}</p>}
         <div className="tm-modal-actions"><button type="button" className="tm-secondary" onClick={onClose}>Cancel</button><button type="submit" value="more" className="tm-secondary">Assign & add another</button><button type="submit" value="close" className="tm-primary">Assign task</button></div>

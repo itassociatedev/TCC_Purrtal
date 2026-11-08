@@ -1708,8 +1708,10 @@
 .tm-setup-intro { color: var(--clinic-dark-muted, #6b7280); font-size: 14px; line-height: 1.7; margin: 12px 0 24px; }
 .tm-setup-toolbar { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px; margin: 20px 0; }
 .tm-setup label { display: block; font-size: 14px; font-weight: 500; color: var(--clinic-dark-ink, #374151); }
-.tm-setup input:not([type=checkbox]), .tm-setup select { display: block; border: 1px solid #d1d5db; background-color: var(--clinic-dark-surface, #fff); border-radius: 6px; padding: 9px 12px; margin-top: 7px; width: 100%; font-size: 14px; color: var(--clinic-dark-ink, #111827); }
+.tm-setup input:not([type=checkbox]), .tm-setup select, .tm-setup textarea { display: block; box-sizing: border-box; border: 1px solid #d1d5db; background-color: var(--clinic-dark-surface, #fff); border-radius: 6px; padding: 9px 12px; margin-top: 7px; width: 100%; font-size: 14px; color: var(--clinic-dark-ink, #111827); }
 .tm-setup select { padding-right: 32px; }
+.tm-setup-form .tm-setup-description { grid-column: 1 / -1; }
+.tm-setup-form .tm-setup-description textarea { min-height: 96px; resize: vertical; }
 /* Keep growing lists inside their panels; pagination remains outside the scrolling table. */
 .tm-paged-list { min-width: 0; }
 .tm-app .tm-table-scroll { max-height: 560px; overflow: auto; scrollbar-gutter: stable; }
@@ -2247,3 +2249,25 @@
 .tm-transfer-tools{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:16px}.tm-transfer-tools>div{flex:1;min-width:220px}
 
 .tm-log-filters{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px}.tm-log-filters label{font-size:13px}.tm-log-filters input{display:block;padding:8px;border:1px solid #d1d5db;border-radius:7px;margin-top:5px}
+
+/* Personal task template manager, opened from task creator pages. */
+.tm-template-manager { width: min(760px, calc(100vw - 32px)); }
+.tm-template-manager > header p { margin: 6px 0 0; color: var(--clinic-dark-muted, #64748b); font-size: 13px; }
+.tm-template-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0 12px; color: var(--clinic-dark-muted, #64748b); font-size: 13px; }
+.tm-template-list { display: grid; gap: 10px; max-height: 48vh; overflow: auto; }
+.tm-template-list article { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 1px solid var(--clinic-border, #dbe1ea); border-radius: 8px; }
+.tm-template-list article p { margin: 4px 0; }
+.tm-template-list article small { color: var(--clinic-dark-muted, #64748b); }
+.tm-template-actions { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
+.tm-template-remove { color: #b42318; }
+.tm-template-empty { padding: 20px; margin: 0; color: var(--clinic-dark-muted, #64748b); text-align: center; border: 1px dashed var(--clinic-border, #dbe1ea); border-radius: 8px; }
+.tm-template-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; margin-top: 16px; }
+.tm-template-form label { display: grid; align-content: start; gap: 6px; min-width: 0; }
+.tm-template-form input, .tm-template-form select, .tm-template-form textarea { width: 100%; box-sizing: border-box; }
+.tm-template-form .tm-template-description, .tm-template-form .tm-template-reference, .tm-template-form .tm-modal-actions { grid-column: 1 / -1; }
+.tm-template-form .tm-modal-actions { margin-top: 4px; }
+@media (max-width: 640px) {
+  .tm-template-form { grid-template-columns: 1fr; }
+  .tm-template-form .tm-template-description, .tm-template-form .tm-template-reference, .tm-template-form .tm-modal-actions { grid-column: auto; }
+  .tm-template-list article { align-items: flex-start; flex-direction: column; }
+}

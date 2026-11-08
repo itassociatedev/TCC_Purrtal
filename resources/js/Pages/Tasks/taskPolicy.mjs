@@ -10,6 +10,9 @@ export const canSubmitAssignedTask = (task, { role, employee, actor }) => Boolea
 export function dailyReportTypes({ role, department, config }) {
     if (role === 'Operations Manager') return [];
     const reports = reportTemplates(config).filter(report => report.enabled).map(report => [report.id, report.name, report.description, report.department]);
+    if (String(department || '').trim().toLowerCase() === String(config.itDepartment || 'IT').trim().toLowerCase()) {
+        return reports.filter(report => ['it-opening-rounds', 'narrative-report'].includes(report[0]));
+    }
     return ['Employee', 'Team Leader'].includes(role) ? reports.filter(report => report[3] === department) : reports;
 }
 // Report authorship belongs to the assigned department employee; management reviews without rewriting it.

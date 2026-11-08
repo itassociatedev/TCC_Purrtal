@@ -20,6 +20,8 @@
 .tm-report-toolbar .tm-report-list-controls input{padding:7px 9px;font-size:13px;min-height:36px}
 .tm-report-toolbar .tm-report-list-controls>button{padding:6px 0;font-size:12px}
 .tm-collection-toolbar-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.tm-report-toolbar .tm-collection-controls{margin-left:auto}
+.tm-report-toolbar>.tm-filter-strip{flex:1 0 100%;width:100%;margin:0}
 .tm-collection-filters{position:relative}
 .tm-collection-filters>summary{display:flex;align-items:center;gap:7px;cursor:pointer;border:1px solid #d1d5db;border-radius:8px;background:var(--clinic-dark-surface, #fff);padding:8px 11px;min-height:38px;list-style:none;color:var(--clinic-dark-ink, #374151);font-size:13px;font-weight:600}
 .tm-collection-filters>summary::after{content:'⌄';color:var(--clinic-dark-muted, #6b7280)}

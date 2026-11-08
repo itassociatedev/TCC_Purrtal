@@ -37,6 +37,48 @@ export default function SidebarLayout({
 
     const { auth } = usePage().props;
     const [settingsOpen,setSettingsOpen]=useState(false);
+    const [installPrompt, setInstallPrompt] = useState(null);
+    const [supportsHomeScreenInstall, setSupportsHomeScreenInstall] = useState(false);
+    const [isAppInstalled, setIsAppInstalled] = useState(false);
+    useEffect(() => {
+        const standalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        const isAppleMobile = /iPhone|iPad|iPod/.test(window.navigator.userAgent)
+            || (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
+        setIsAppInstalled(Boolean(standalone));
+        setSupportsHomeScreenInstall(isAppleMobile);
+
+        const captureInstallPrompt = (event) => {
+            event.preventDefault();
+            setInstallPrompt(event);
+        };
+        const markInstalled = () => {
+            setIsAppInstalled(true);
+            setInstallPrompt(null);
+        };
+
+        window.addEventListener('beforeinstallprompt', captureInstallPrompt);
+        window.addEventListener('appinstalled', markInstalled);
+        if (window.isSecureContext && 'serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+        }
+
+        return () => {
+            window.removeEventListener('beforeinstallprompt', captureInstallPrompt);
+            window.removeEventListener('appinstalled', markInstalled);
+        };
+    }, []);
+    const handleInstallApp = async () => {
+        if (installPrompt) {
+            await installPrompt.prompt();
+            const choice = await installPrompt.userChoice;
+            if (choice?.outcome === 'accepted' || choice?.outcome === 'dismissed') setInstallPrompt(null);
+            return;
+        }
+
+        if (supportsHomeScreenInstall && window.confirm('Would you like to add The Cat Clinic Purrtal to your Home Screen?')) {
+            window.alert('In the Share menu, choose “Add to Home Screen,” then confirm.');
+        }
+    };
     const [globalRolePreview, setGlobalRolePreview] = useState(() => readRolePreview(auth.user?.id));
     const previewKey = rolePreviewStorageKey(auth.user?.id);
     useEffect(() => {
@@ -140,6 +182,12 @@ export default function SidebarLayout({
     const [localNotifications, setLocalNotifications] = useState(safeNotifications);
     const [localUnreadCount, setLocalUnreadCount] = useState(auth?.unreadNotificationsCount || 0);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const itNotifications = localNotifications.filter(item => {
+        const data = item?.data || {};
+        const message = `${data.message || ''} ${data.user_email || ''} ${data.details || ''} ${data.type || ''}`;
+        return data.ticket_id != null || /password reset|reset request|locked out|security_alert|account activation|account reset/i.test(message);
+    });
+    const itUnreadCount = itNotifications.filter(item => !item.read_at).length;
 
     // 🟢 Calculate hasMore dynamically
     const [totalNotificationsCount, setTotalNotificationsCount] = useState(auth.totalNotificationsCount || 0);
@@ -190,8 +238,11 @@ export default function SidebarLayout({
     const showDocumentQuickLink = canViewModuleCard(auth, 'documents');
     const showCalendarQuickLink = canViewModuleCard(auth, 'attendance_calendar');
     const showPersonalMealsQuickLink = canViewModuleCard(auth, 'duty_meal_personal');
+    // Non-IT staff can reach IT Support below Asset Management. IT staff use
+    // their dedicated support notifications in the top bar instead.
+    const showITSupportQuickLink = !isItUser;
 
-    const hasAnyQuickLinks = showDocumentQuickLink || showCalendarQuickLink || showPersonalMealsQuickLink;
+    const hasAnyQuickLinks = showDocumentQuickLink || showCalendarQuickLink || showPersonalMealsQuickLink || showITSupportQuickLink;
 
     // 🟢 NEW: Check if the user is currently on the Dashboard
     const isDashboard = route().current('dashboard');
@@ -447,9 +498,8 @@ export default function SidebarLayout({
                             <Dropdown.Content align="left" width="48">
                                     <Dropdown.Link href={route('dashboard')}>Portal Home</Dropdown.Link>
                                     <div className="mx-4 my-1 border-t border-slate-100" aria-hidden="true" />
-                                    {!isItUser && <div className="clinic-module-section-label" role="heading" aria-level="3">Work &amp; support</div>}
+                                    {!isItUser && <div className="clinic-module-section-label" role="heading" aria-level="3">Work</div>}
                                     <Dropdown.Link href={route('tasks.index')}>{isItUser ? 'IT Task Module' : 'Task Module'}</Dropdown.Link>
-                                    {!isItUser && <Dropdown.Link href={route('tickets.dashboard')}>IT Support</Dropdown.Link>}
                                     {moduleGroupCount > 0 && <>
                                         <div className="mx-4 my-1 border-t border-slate-100" aria-hidden="true" />
                                         {moduleGroupCount > 1 && <div className="clinic-module-section-label" role="heading" aria-level="3">Administration</div>}
@@ -574,6 +624,22 @@ export default function SidebarLayout({
                                         >
                                             {iconSvg['Asset Management']}
                                             <span>{isSuperAdmin ? 'Asset Management' : (isAudit ? 'Asset Masterlist' : 'My Accountability')}</span>
+                                        </Link>
+                                    </li>
+                                )}
+                                {showITSupportQuickLink && (
+                                    <li>
+                                        <Link prefetch cacheFor="5s"
+                                            href={route('tickets.dashboard')}
+                                            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition ${
+                                                route().current('tickets.*') ? 'bg-indigo-50 font-bold text-indigo-700' : ''
+                                            }`}
+                                        >
+                                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 13v-2a9 9 0 0118 0v2" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13h2v6H5a2 2 0 01-2-2v-2a2 2 0 012-2zm12 0h2a2 2 0 012 2v2a2 2 0 01-2 2h-2v-6zM17 19a4 4 0 01-4 3h-2" />
+                                            </svg>
+                                            <span>IT Support</span>
                                         </Link>
                                     </li>
                                 )}
@@ -750,18 +816,22 @@ export default function SidebarLayout({
                             </Dropdown>}
                         </div>
 
-                        <Link
-                            href={route('tickets.dashboard')}
-                            aria-label="IT Support"
-                            title="IT Support"
-                            className="relative inline-flex h-[36px] w-[36px] sm:h-[42px] sm:w-[42px] items-center justify-center rounded-full border border-slate-200 bg-white/90 text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
-                        >
-                            <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 13v-2a9 9 0 0118 0v2" />
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13h2v6H5a2 2 0 01-2-2v-2a2 2 0 012-2zm12 0h2a2 2 0 012 2v2a2 2 0 01-2 2h-2v-6zM17 19a4 4 0 01-4 3h-2" />
-                            </svg>
-                            <span aria-hidden="true" className="absolute -right-1 -top-1 inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-indigo-600 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-white">IT</span>
-                        </Link>
+                        {isItUser && <Dropdown>
+                            <Dropdown.Trigger>
+                                <button type="button" aria-label="IT support notifications" title="IT support notifications" className="relative inline-flex h-[36px] w-[36px] sm:h-[42px] sm:w-[42px] items-center justify-center rounded-full border border-slate-200 bg-white/90 text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300">
+                                    <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 13v-2a9 9 0 0118 0v2" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13h2v6H5a2 2 0 01-2-2v-2a2 2 0 012-2zm12 0h2a2 2 0 012 2v2a2 2 0 01-2 2h-2v-6zM17 19a4 4 0 01-4 3h-2" />
+                                    </svg>
+                                    <span aria-hidden="true" className="absolute -right-1 -top-1 inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-indigo-600 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-white">{itUnreadCount > 99 ? '99+' : itUnreadCount || 'IT'}</span>
+                                </button>
+                            </Dropdown.Trigger>
+                            <Dropdown.Content align="right" width="80">
+                                <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-between gap-3"><strong className="text-sm text-gray-800">IT notifications</strong>{itUnreadCount > 0 && <button type="button" className="text-xs text-indigo-600" onClick={() => itNotifications.filter(item => !item.read_at).forEach(item => markAsRead(item.id))}>Mark all read</button>}</div>
+                                {itNotifications.length ? itNotifications.slice(0, 8).map(item => <button key={item.id} type="button" onClick={() => markAsRead(item.id, item.data?.action_url || route('tickets.dashboard'))} className={`block w-full px-4 py-3 text-left border-b border-gray-50 hover:bg-gray-50 ${item.read_at ? '' : 'bg-indigo-50/60'}`}><span className="block text-sm font-medium text-gray-800">{item.data?.message || 'IT support update'}</span><span className="mt-1 block text-xs text-gray-500">{item.data?.user_email || item.data?.details || 'Open IT support to review this request.'}</span></button>) : <p className="px-4 py-5 text-sm text-gray-500">No IT support notifications yet.</p>}
+                                <Link href={route('tickets.dashboard')} className="block px-4 py-3 text-sm font-medium text-indigo-600 hover:bg-gray-50">Open IT Support</Link>
+                            </Dropdown.Content>
+                        </Dropdown>}
 
                         {/* User Dropdown */}
                         <Dropdown>
@@ -784,6 +854,11 @@ export default function SidebarLayout({
                             <Dropdown.Content>
                                 <Dropdown.Link href={route('profile.edit')}>Profile</Dropdown.Link>
                                 <button type="button" className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100" onClick={()=>setSettingsOpen(true)}>Settings</button>
+                                {!isAppInstalled && (installPrompt || supportsHomeScreenInstall) && (
+                                    <button type="button" className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100" onClick={handleInstallApp}>
+                                        Add app to device
+                                    </button>
+                                )}
                                 <Dropdown.Link href={route('logout')} method="post" as="button">Log Out</Dropdown.Link>
                             </Dropdown.Content>
                         </Dropdown>

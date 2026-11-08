@@ -4,15 +4,15 @@ export default function TicketWorkbookControls({ leader, pending, ticketRoute, v
     const upload = useForm({ mode: 'preview', file: null });
     const confirm = useForm({ mode: 'confirm', token: pending?.token || '' });
     const cancel = useForm({ mode: 'cancel' });
-    return <section className="ticket-workbook-controls" aria-label="XLSX import and export">
+    return <section className="ticket-workbook-controls clinic-file-actions" aria-label="XLSX import and export">
         {/* Native links download binary workbooks without an Inertia navigation. */}
-        <a className="ticket-secondary" href={ticketRoute('export', { view, search })}>Export XLSX</a>
+        <a className="ticket-secondary clinic-file-action" href={ticketRoute('export', { view, search })}>Export XLSX</a>
         {leader && <details><summary>Import new tickets (XLSX)</summary>
             <p>Creates new tickets only, using import time for creation and SLA receipt. Maximum 100 tickets / 5 MB. Validate and review before saving.</p>
-            <a href={ticketRoute('template')} className="ticket-secondary">Download XLSX template</a>
+            <a href={ticketRoute('template')} className="ticket-secondary clinic-file-action">Download XLSX template</a>
             <form onSubmit={e => { e.preventDefault(); upload.post(ticketRoute('import'), { forceFormData: true, preserveScroll: true }); }}>
                 <label>Completed workbook<input type="file" accept=".xlsx" required onChange={e => upload.setData('file', e.target.files[0] || null)} /></label>
-                <button className="ticket-secondary" disabled={upload.processing}>{upload.processing ? 'Validating…' : 'Validate and preview'}</button>
+                <button className="ticket-secondary clinic-file-action" disabled={upload.processing}>{upload.processing ? 'Validating…' : 'Validate and preview'}</button>
                 {Object.entries(upload.errors).map(([key, error]) => <p className="ticket-error" role="alert" key={key}>{error}</p>)}
             </form>
             {pending && <div className="ticket-import-preview"><h3>Review {pending.tickets.length} new tickets</h3>

@@ -29,7 +29,7 @@ test('calendar groups all due tasks by employee rather than truncating task titl
     const groups = employeeTaskGroups([{ assignee: 'John Doe 2' }, { assignee: 'John Doe' }, { assignee: 'John Doe' }, { assignee: 'John Doe 2' }, { assignee: 'John Doe 3' }]);
     assert.deepEqual(groups.map(({ name, count }) => [name, count]), [['John Doe', 2], ['John Doe 2', 2], ['John Doe 3', 1]]);
     assert.equal(groups[0].color, employeeColor('John Doe'));
-    assert.equal(employeeTaskGroups([{ assignee: 'John Doe 2' }])[0].color, groups[1].color);
     assert.notEqual(groups[0].color, groups[1].color);
+    assert.notEqual(groups[1].color, groups[2].color);
     assert.deepEqual(employeeTaskGroups([]), []);
 });

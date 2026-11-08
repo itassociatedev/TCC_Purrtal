@@ -6,6 +6,9 @@
 
         <title inertia>{{ config('app.name', 'The Cat Clinic Purrtal') }}</title>
         <link rel="icon" href="{{ asset('favicon.png') }}" type="image/x-icon">
+        <link rel="manifest" href="{{ asset('manifest.webmanifest') }}">
+        <meta name="theme-color" content="#ffffff">
+        <link rel="apple-touch-icon" href="{{ asset('icons/pwa-192.png') }}">
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">

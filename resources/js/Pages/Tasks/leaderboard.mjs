@@ -1,5 +1,4 @@
 import {matchesSearch} from './search.mjs';
-import {approvalBlocksWork} from './taskApproval.mjs';
 import {isDailyTemplate} from './dailyTasks.mjs';
 import {isWeeklyReport} from './weeklyReports.mjs';
 import {isEmailSample} from './serverTasks.mjs';
@@ -16,6 +15,13 @@ export function leaderboardPeople(employees){
  return [...new Map(employees.filter(person=>person.name&&person.active!==false&&!person.disabled&&!['inactive','disabled','terminated'].includes(String(person.status||'').toLowerCase())).map(person=>[person.name,person])).values()];
 }
 export function leaderboardBranches(person){return [...new Set([person.branch,...(person.availableBranches||[])].filter(Boolean))];}
+export function leaderboardTaskIsOverdue(task,today){
+ const waiting=['Pending Approval','Pending Review'].includes(task.status);
+ const closed=['Completed','Denied','Dismissed'].includes(task.status);
+ // Status is authoritative here. Old approved tasks may retain approvalRequired
+ // without an approval timestamp, which must not hide active overdue work.
+ return Boolean(today&&task.due&&task.due.slice(0,10)<today&&!waiting&&!closed);
+}
 export function leaderboardTeams(employees,{fixedBranch='',fixedDepartment=''}={}){
  return [...new Map(leaderboardPeople(employees).filter(person=>!fixedDepartment||person.department===fixedDepartment).flatMap(person=>(person.department==='IT'&&!fixedBranch?['All']:leaderboardBranches(person).filter(branch=>!fixedBranch||branch===fixedBranch)).map(branch=>[JSON.stringify([person.department,branch]),{department:person.department,branch}]))).entries()].sort((a,b)=>(a[1].department+' '+a[1].branch).localeCompare(b[1].department+' '+b[1].branch));
 }
@@ -27,7 +33,7 @@ export function buildLeaderboard(tasks,{group='people',department='All',branch='
   const memberships=group==='branches'||group==='teams'?leaderboardBranches(person).filter(value=>branch==='All'||value===branch):[branch==='All'?person.branch:branch];
   for(const memberBranch of memberships){
   const name=groupName(person.department,memberBranch,person.name);
-  const row=rows.get(name)||{name,completed:0,onTime:0,overdue:0,stableKey:name,departments:new Set(),branches:new Set(),members:new Set()};
+  const row=rows.get(name)||{name,completed:0,onTime:0,overdue:0,overdueTasks:[],completedTasks:[],stableKey:name,departments:new Set(),branches:new Set(),members:new Set()};
   if(group==='people'||group==='teams')row.stableKey=String(person.id??person.employeeId??person.name);
   row.departments.add(person.department);row.branches.add(memberBranch);row.members.add(person.name);rows.set(name,row);
   }
@@ -38,26 +44,30 @@ export function buildLeaderboard(tasks,{group='people',department='All',branch='
 
   if(department!=='All'&&task.department!==department||branch!=='All'&&task.branch!==branch)continue;
   const date=task.status==='Completed'?completionDate(task):task.due;
-  const overdue=Boolean(today&&!approvalBlocksWork(task)&&task.due<today&&['Not Started','In Progress','Revision Needed'].includes(task.status));
+  const overdue=leaderboardTaskIsOverdue(task,today);
   if(task.status==='Completed'&&!date)undated++;
   if(task.status!=='Completed'&&!overdue)continue;
   if((from||to)&&!date||from&&date<from||to&&date>to)continue;
   const name=group==='departments'?task.department:group==='teams'?`${task.department} · ${task.branch}`:group==='branches'?task.branch:task.assignee;
-  const row=rows.get(name)||{name,completed:0,onTime:0,overdue:0,stableKey:name,departments:new Set(),branches:new Set(),members:new Set()};
+  const row=rows.get(name)||{name,completed:0,onTime:0,overdue:0,overdueTasks:[],completedTasks:[],stableKey:name,departments:new Set(),branches:new Set(),members:new Set()};
   if(task.status==='Completed'){
    row.completed++;
+   row.completedTasks.push({id:task.id,title:task.title||'Untitled task',completedAt:date,due:task.due||'',department:task.department||'',branch:task.branch||'',assignee:task.assignee||''});
    const submittedDate=task.submittedAt?completionDate({completedAt:task.submittedAt}):date;
    if(submittedDate&&task.due&&submittedDate<=task.due)row.onTime++;
-  }else row.overdue++;
+  }else {
+   row.overdue++;
+   row.overdueTasks.push({id:task.id,title:task.title||'Untitled task',due:task.due,status:task.status});
+  }
   row.departments.add(task.department);row.branches.add(task.branch);row.members.add(task.assignee);rows.set(name,row);
  }
- const compare=(a,b)=>b.completed-a.completed||b.onTime-a.onTime||a.overdue-b.overdue||a.stableKey.localeCompare(b.stableKey,'en',{numeric:true})||a.name.localeCompare(b.name);
+ const compare=(a,b)=>b.completed-a.completed||b.onTime-a.onTime||a.overdue-b.overdue||a.name.localeCompare(b.name,'en',{numeric:true,sensitivity:'base'});
  const ordered=[...rows.values()].filter(row=>!attentionOnly||row.overdue>0)
   .sort(attentionOnly?(a,b)=>b.overdue-a.overdue||compare(a,b):compare);
  let result=ordered.map((row,index)=>{
   const next=ordered[index+1],previous=ordered[index-1];
   const peer=next?.completed===row.completed?next:previous?.completed===row.completed?previous:null;
-  const tieBreak=attentionOnly?'Overdue unfinished tasks':!peer?'Completed tasks':row.onTime!==peer.onTime?'On-time completions':row.overdue!==peer.overdue?'Overdue unfinished tasks':'Stable identifier (administrative order)';
+  const tieBreak=attentionOnly?'Overdue unfinished tasks':!peer?'Completed tasks':row.onTime!==peer.onTime?'On-time completions':row.overdue!==peer.overdue?'Overdue unfinished tasks':'Name A–Z';
   return {...row,rank:index+1,tieBreak,departments:[...row.departments].sort(),branches:[...row.branches].sort(),memberNames:[...row.members],members:row.members.size};
  });
  result=result.filter(row=>matchesSearch(search,row.name,row.departments,row.branches,row.memberNames));
