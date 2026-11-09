@@ -327,17 +327,18 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Priority <span className="text-red-500">*</span></label>
-                                <select value={data.priority} onChange={e => setData('priority', e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <select value={data.priority} onChange={e => setData('priority', e.target.value)} className={`block w-full rounded-md shadow-sm sm:text-sm ${errors.priority ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300 focus:border-indigo-500 focus:ring-indigo-500'}`} required>
                                     <option value="">Select Priority...</option>
                                     <option value="Low">Low</option>
                                     <option value="Normal">Normal</option>
                                     <option value="High">High</option>
                                 </select>
+                                {errors.priority && <p className="mt-2 text-sm text-red-600">{errors.priority}</p>}
                             </div>
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Date Needed <span className="text-red-500">*</span></label>
-                                <input type="date" value={data.date_needed} onChange={e => setData('date_needed', e.target.value)} min={today} className={`block w-full rounded-md shadow-sm sm:text-sm ${errors.date_needed ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-indigo-500'}`} />
+                                <input type="date" value={data.date_needed} onChange={e => setData('date_needed', e.target.value)} min={today} className={`block w-full rounded-md shadow-sm sm:text-sm ${errors.date_needed ? 'border-red-300 focus:border-red-500' : 'border-gray-300 focus:border-indigo-500'}`} required />
                                 {errors.date_needed && <p className="mt-2 text-sm text-red-600">{errors.date_needed}</p>}
                             </div>
 
