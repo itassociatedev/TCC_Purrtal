@@ -165,7 +165,7 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
         const mapped = statusMap[status] || { label: status, color: 'bg-gray-100 font-bold text-gray-800' };
 
         return (
-            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${mapped.color}`}>
+            <span className={`inline-flex min-w-[10rem] max-w-[13rem] items-center justify-center rounded-lg px-3 py-1 text-center text-xs font-medium leading-snug ${mapped.color}`}>
                 {mapped.label}
             </span>
         );
@@ -198,7 +198,7 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
     const filteredRequests = useMemo(() => {
         const currentUserId = String(auth.user.id);
 
-        return requests.data.filter(pr => {
+        const filtered = requests.data.filter(pr => {
             // 🔒 VISIBILITY CHECK: Hide PRs unless the user created them OR is CC'd on them
             const isCreator = String(pr.user_id) === currentUserId || (pr.user && String(pr.user.id) === currentUserId);
 

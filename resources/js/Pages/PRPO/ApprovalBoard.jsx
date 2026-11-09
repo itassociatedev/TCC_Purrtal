@@ -34,23 +34,6 @@ const SearchableDropdown = ({ options, value, onChange, placeholder }) => {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [selectedOption]);
 
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            const pendingDelete = params.get('pending_delete');
-
-            if (pendingDelete) {
-                const idsToSelect = pendingDelete.split(',').map(id => Number(id));
-                setSelectedPRIds(idsToSelect);
-                setIsDeleteModalOpen(true);
-
-                const newUrl = new URL(window.location);
-                newUrl.searchParams.delete('pending_delete');
-                window.history.replaceState({}, '', newUrl);
-            }
-        }
-    }, []);
-
     const filteredOptions = options.filter((opt) =>
         opt.name.toLowerCase().includes(searchTerm.toLowerCase()),
     );
@@ -209,6 +192,9 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
     const [filterBranch, setFilterBranch] = useState("");
     const [filterPriority, setFilterPriority] = useState("");
     const [filterStatus, setFilterStatus] = useState("");
+    // Phones: the filter panel is collapsed behind a "Filters" button
+    const [showMobileFilters, setShowMobileFilters] = useState(false);
+    const activeFilterCount = [searchQuery, filterBranch, filterPriority, filterStatus].filter(Boolean).length;
 
     const uniqueBranches = useMemo(() => [...new Set(requestList.map((req) => req.branch).filter(Boolean))].sort(), [requestList]);
     const uniquePriorities = useMemo(() => [...new Set(requestList.map((req) => req.priority).filter(Boolean))].sort(), [requestList]);
@@ -423,7 +409,7 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
         const mapped = statusMap[status] || { label: status, color: "bg-gray-100 font-bold text-gray-800" };
 
         return (
-            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${mapped.color}`}>
+            <span className={`inline-flex min-w-[10rem] max-w-[13rem] items-center justify-center rounded-lg px-3 py-1 text-center text-xs font-medium leading-snug ${mapped.color}`}>
                 {mapped.label}
             </span>
         );
@@ -592,17 +578,26 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                     </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1">
-                    <Link href={route("prpo.approval-board", { view: "my_requests" })} className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${currentView === "my_requests" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"}`}>My Requests</Link>
+                <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1">
+                    <Link href={route("prpo.approval-board", { view: "my_requests" })} className={`flex-1 sm:flex-none text-center px-2 sm:px-4 py-2 text-sm font-semibold rounded-md transition-all ${currentView === "my_requests" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"}`}>My Requests</Link>
                     {(canApprove({}) || isUnrestricted || isEVP || isOpsManager || isInvTL) && (
-                        <Link href={route("prpo.approval-board", { view: "for_approval" })} className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${currentView === "for_approval" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"}`}>For Approval</Link>
+                        <Link href={route("prpo.approval-board", { view: "for_approval" })} className={`flex-1 sm:flex-none text-center px-2 sm:px-4 py-2 text-sm font-semibold rounded-md transition-all ${currentView === "for_approval" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"}`}>For Approval</Link>
                     )}
 
 
-                    <Link href={route("prpo.approval-board", { view: "history" })} className={`px-4 py-2 text-sm font-semibold rounded-md transition-all ${currentView === "history" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"}`}>All Purchase Requests</Link>
+                    <Link href={route("prpo.approval-board", { view: "history" })} className={`flex-1 sm:flex-none text-center px-2 sm:px-4 py-2 text-sm font-semibold rounded-md transition-all ${currentView === "history" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-600 hover:text-gray-900 hover:bg-gray-200"}`}><span className="sm:hidden">All</span><span className="hidden sm:inline">All Purchase Requests</span></Link>
                 </div>
 
-                <div className="mb-6 bg-white p-5 rounded-xl shadow-sm border border-gray-200 mt-4">
+                <button
+                    type="button"
+                    onClick={() => setShowMobileFilters((open) => !open)}
+                    className="md:hidden mt-4 flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm"
+                >
+                    <span>Filters{activeFilterCount > 0 && <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-xs text-indigo-700">{activeFilterCount} active</span>}</span>
+                    <svg className={`h-4 w-4 text-gray-500 transition-transform ${showMobileFilters ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                </button>
+
+                <div className={`${showMobileFilters ? 'block' : 'hidden'} md:block mb-6 bg-white p-5 rounded-xl shadow-sm border border-gray-200 mt-4`}>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="relative">
                             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Search Request</label>
@@ -723,7 +718,8 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                     </div>
                 </div>
 
-                <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl overflow-hidden">
+                <div className="bg-white shadow-sm ring-1 ring-gray-900/5 rounded-xl overflow-hidden">
+                    <div className="hidden md:block overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
                         <thead className="bg-gray-50">
                             <tr>
@@ -735,29 +731,29 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                         className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 h-4 w-4 cursor-pointer"
                                     />
                                 </th>
-                                <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handleSort('id')}>
+                                <th className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handleSort('id')}>
                                     <div className="flex items-center justify-center gap-1">
                                         Purchase Request ID
                                         <SortIcon active={sortConfig.key === 'id'} direction={sortConfig.direction} />
                                     </div>
                                 </th>
-                                <th className="px-6 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Prepared By</th>
-                                <th className="px-6 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Branch & Department</th>
-                                <th className="px-6 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Priority</th>
-                                <th className="px-6 py-3 font-semibold text-gray-900 whitespace-nowrap cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handleSort('date')}>
+                                <th className="px-3 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Prepared By</th>
+                                <th className="px-3 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Branch & Department</th>
+                                <th className="px-3 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Priority</th>
+                                <th className="px-3 py-3 font-semibold text-gray-900 whitespace-nowrap cursor-pointer hover:bg-gray-200 transition-colors select-none" onClick={() => handleSort('date')}>
                                     <div className="flex items-center justify-center gap-1">
                                         Date Needed
                                         <SortIcon active={sortConfig.key === 'date'} direction={sortConfig.direction} />
                                     </div>
                                 </th>
-                                <th className="px-6 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Items Count</th>
-                                <th className="px-6 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Status</th>
-                                <th className="px-6 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Action</th>
+                                <th className="px-3 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Items Count</th>
+                                <th className="px-3 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Status</th>
+                                <th className="px-3 py-3 text-center font-semibold text-gray-900 whitespace-nowrap">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 bg-white">
                             {paginatedRequests.length === 0 ? (
-                                <tr><td colSpan="9" className="px-6 py-8 text-center text-gray-500">No requests found for this view.</td></tr>
+                                <tr><td colSpan="9" className="px-3 py-8 text-center text-gray-500">No requests found for this view.</td></tr>
                             ) : (
                                 paginatedRequests.map((pr) => (
                                     <tr key={pr.id} onClick={() => openModal(pr)} className={`transition-all duration-300 cursor-pointer ${selectedPRIds.includes(pr.id) ? 'bg-indigo-50 ring-2 ring-indigo-400 relative z-10 shadow-md' : (selectedPRIds.length > 0 ? 'opacity-30 grayscale hover:opacity-100 hover:grayscale-0 hover:bg-gray-50' : 'hover:bg-gray-50')}`}>
@@ -769,18 +765,18 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                                                 className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 h-4 w-4 cursor-pointer"
                                             />
                                         </td>
-                                        <td className="px-6 py-2 text-center font-medium text-indigo-600 hover:text-indigo-900">{pr.pr_number || `PR-${pr.id}`}</td>
-                                        <td className="px-6 py-2 text-center">{pr.user?.name || "Unknown"}</td>
-                                        <td className="px-6 py-2 text-center">{pr.branch} <br /><span className="text-xs text-center text-gray-500">{pr.department}</span></td>
-                                        <td className="text-center px-6 py-4">
+                                        <td className="px-3 py-2 text-center font-medium text-indigo-600 hover:text-indigo-900">{pr.pr_number || `PR-${pr.id}`}</td>
+                                        <td className="px-3 py-2 text-center">{pr.user?.name || "Unknown"}</td>
+                                        <td className="px-3 py-2 text-center">{pr.branch} <br /><span className="text-xs text-center text-gray-500">{pr.department}</span></td>
+                                        <td className="text-center px-3 py-4">
                                             {pr.priority ? (
                                                 <span className={`inline-flex items-center rounded-md px-2 py-1 text-center text-xs font-bold ring-1 ring-inset ${pr.priority === "High" ? "bg-red-100 text-red-800 ring-red-500/30" : pr.priority === "Normal" ? "bg-blue-100 text-blue-800 ring-blue-500/30" : "bg-green-100 text-green-800 ring-green-500/30"}`}>{pr.priority}</span>
                                             ) : (<span className="text-gray-400 text-center text-xs italic">N/A</span>)}
                                         </td>
-                                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{pr.date_needed ? new Date(pr.date_needed).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "N/A"}</td>
-                                        <td className="px-6 py-2 text-center font-medium">{pr.items?.length || 0} Items</td>
-                                        <td className="px-6 py-2 text-center">{formatStatus(pr.status)}</td>
-                                        <td className="whitespace-nowrap px-6 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">{pr.date_needed ? new Date(pr.date_needed).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "N/A"}</td>
+                                        <td className="px-3 py-2 text-center font-medium">{pr.items?.length || 0} Items</td>
+                                        <td className="px-3 py-2 text-center">{formatStatus(pr.status)}</td>
+                                        <td className="whitespace-nowrap px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-center gap-2">
                                                 <button onClick={() => openModal(pr)} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100 hover:text-indigo-800 border border-indigo-200">
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> View Purchase Request
@@ -792,6 +788,51 @@ export default function ApprovalBoard({ auth, requests, currentView, userBranche
                             )}
                         </tbody>
                     </table>
+                    </div>
+
+                    {/* Phones: one card per request */}
+                    <div className="md:hidden divide-y divide-gray-200">
+                        {paginatedRequests.length === 0 ? (
+                            <p className="px-4 py-8 text-center text-sm text-gray-500">No requests found for this view.</p>
+                        ) : (
+                            paginatedRequests.map((pr) => (
+                                <div key={pr.id} onClick={() => openModal(pr)} className={`p-4 cursor-pointer transition-colors ${selectedPRIds.includes(pr.id) ? 'bg-indigo-50' : 'active:bg-gray-50'}`}>
+                                    <div className="flex items-start gap-3">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedPRIds.includes(pr.id)}
+                                            onClick={(e) => e.stopPropagation()}
+                                            onChange={(e) => handleToggleRow(pr.id, e)}
+                                            className="mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="font-semibold text-indigo-600">{pr.pr_number || `PR-${pr.id}`}</span>
+                                                {pr.priority ? (
+                                                    <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-bold ring-1 ring-inset ${pr.priority === "High" ? "bg-red-100 text-red-800 ring-red-500/30" : pr.priority === "Normal" ? "bg-blue-100 text-blue-800 ring-blue-500/30" : "bg-green-100 text-green-800 ring-green-500/30"}`}>{pr.priority}</span>
+                                                ) : (<span className="text-gray-400 text-xs italic">N/A</span>)}
+                                            </div>
+                                            <p className="mt-1 text-sm font-medium text-gray-900">{pr.user?.name || "Unknown"}</p>
+                                            <p className="text-xs text-gray-500">{pr.branch}{pr.department ? ` · ${pr.department}` : ''}</p>
+                                            <p className="mt-2 text-xs text-gray-600">
+                                                Needed: <span className="font-medium text-gray-900">{pr.date_needed ? new Date(pr.date_needed).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "N/A"}</span>
+                                                <span className="mx-1.5 text-gray-300">·</span>
+                                                {pr.items?.length || 0} {(pr.items?.length || 0) === 1 ? 'item' : 'items'}
+                                            </p>
+                                            <div className="mt-3">{formatStatus(pr.status)}</div>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => { e.stopPropagation(); openModal(pr); }}
+                                                className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> View Purchase Request
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
 
                     {totalPages > 1 && (
                         <div className="flex flex-col sm:flex-row justify-between items-center border-t border-gray-200 bg-gray-50 px-6 py-4">
