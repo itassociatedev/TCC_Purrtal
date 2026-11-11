@@ -47,6 +47,16 @@ class User extends Authenticatable
         return !is_null($this->password);
     }
 
+    /**
+     * Users whose account has not been disabled (for picking staff in rosters and similar lists).
+     */
+    public function scopeNotDisabled($query)
+    {
+        return $query->where(function ($q) {
+            $q->whereNull('status')->orWhere('status', '!=', 'Disabled');
+        });
+    }
+
     public function getHasGlobalAccessAttribute()
     {
         if (!$this->role) {
