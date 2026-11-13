@@ -1,9 +1,8 @@
 
-const priorities = [
-    ['P1 Critical', 'critical'], ['P2 High', 'high'], ['P3 Medium', 'medium'], ['P4 Low', 'low'],
-];
+import { usePage } from '@inertiajs/react';
 
 export default function TicketSlaPerformance({ report, period = 'all', onPeriodChange }) {
+    const priorities = Object.entries(usePage().props.priorityLabels || {}).map(([key, label]) => [label, key]);
     const backlog = Object.entries(report).filter(([label]) => label.endsWith(' open backlog'));
     const value = label => report[label] ?? 'N/A';
     // Keep the original report values and calculations; only group their display.
@@ -16,7 +15,7 @@ export default function TicketSlaPerformance({ report, period = 'all', onPeriodC
         </header>
 
         <dl className="sla-summary-strip">
-            {[['Tracked tickets', 'neutral'], ['Awaiting priority', 'violet'], ['At risk', 'amber'], ['Overdue open', 'red']].map(([label, tone]) =>
+            {[['Tracked tickets', 'neutral'], ['At risk', 'amber'], ['Overdue open', 'red']].map(([label, tone]) =>
                 <div className={`sla-summary-item sla-tone-${tone}`} key={label}><dt>{label}</dt><dd>{value(label)}</dd></div>
             )}
         </dl>
@@ -46,6 +45,6 @@ export default function TicketSlaPerformance({ report, period = 'all', onPeriodC
             <div><dt>Reopened</dt><dd>{value('Reopened tickets')} <span>({value('Reopened (%)')})</span></dd></div>
             <div><dt>Linked follow-ups</dt><dd>{value('Linked follow-up tickets')}</dd></div>
         </dl>
-        <details className="sla-measurement-note"><summary>How these metrics are measured</summary><p>Includes tickets received in the selected period. Existing tickets are excluded. Compliance includes completed targets and outstanding recorded breaches; Not Set tickets are excluded. All days, including holidays, count as support days. Breach totals include recorded previous breaches.</p></details>
+        <details className="sla-measurement-note"><summary>How these metrics are measured</summary><p>Includes tickets received in the selected period. Existing tickets are excluded. Compliance includes completed targets and outstanding recorded breaches. All days, including holidays, count as support days. Breach totals include recorded previous breaches.</p></details>
     </section>;
 }

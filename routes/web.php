@@ -81,11 +81,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::prefix('tickets')->name('tickets.')->group(function () {
         // Named screen paths share the existing role and filter checks.
-        foreach (['dashboard', 'all', 'open', 'closed', 'assigned', 'leaderboard'] as $view) {
+        foreach (['dashboard', 'all', 'open', 'closed', 'assigned', 'leaderboard', 'locations', 'revisions', 'handover', 'admin'] as $view) {
             Route::get('/'.$view, [\App\Http\Controllers\TicketController::class, 'index'])
                 ->defaults('ticket_view', $view)->name($view);
         }
+        Route::get('/admin/sla', [\App\Http\Controllers\TicketController::class, 'index'])->defaults('ticket_view', 'sla_settings')->name('admin.sla');
+        Route::post('/admin/priorities', [\App\Http\Controllers\TicketPriorityController::class, 'store'])->name('priorities.store');
+        Route::patch('/admin/priorities/{priority}', [\App\Http\Controllers\TicketPriorityController::class, 'update'])->name('priorities.update');
+        Route::get('/admin/handover', [\App\Http\Controllers\TicketController::class, 'index'])
+            ->defaults('ticket_view', 'handover')->name('admin.handover');
         Route::get('/export', [\App\Http\Controllers\TicketController::class, 'index'])->name('export');
+        Route::post('/handover', [\App\Http\Controllers\TicketController::class, 'storeHandover'])->name('handover.store');
+        Route::delete('/handover/{handover}', [\App\Http\Controllers\TicketController::class, 'revokeHandover'])->name('handover.revoke');
+        Route::patch('/{ticket}/handover-assignment', [\App\Http\Controllers\TicketController::class, 'assignDuringHandover'])->name('handover.assign');
+        Route::patch('/revisions/{ticket}', [\App\Http\Controllers\TicketController::class, 'resubmitRevision'])->name('revisions.update');
+        Route::post('/locations', [\App\Http\Controllers\TicketController::class, 'storeLocation'])->name('locations.store');
+        Route::delete('/locations/{ticketLocation}', [\App\Http\Controllers\TicketController::class, 'destroyLocation'])->name('locations.destroy');
         Route::get('/import-template', [\App\Http\Controllers\TicketController::class, 'workbookTemplate'])->name('template');
         Route::post('/import', [\App\Http\Controllers\TicketController::class, 'workbookImport'])->name('import')->block(30, 30);
     });

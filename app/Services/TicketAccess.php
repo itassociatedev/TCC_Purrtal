@@ -52,11 +52,12 @@ class TicketAccess
     }
 
     // An assignee may be an IT member or team leader and belong to the selected environment.
-    public static function members(bool $preview = false)
+    public static function members(bool $preview = false, bool $membersOnly = false)
     {
+        $roles = $membersOnly ? config('ticketing.member_roles') : array_merge(config('ticketing.member_roles'), config('ticketing.leader_roles'));
         return User::whereHas('role', fn ($query) => $query->whereIn(
             \Illuminate\Support\Facades\DB::raw('LOWER(TRIM(name))'),
-            array_map(fn ($name) => strtolower(trim($name)), array_merge(config('ticketing.member_roles'), config('ticketing.leader_roles')))
+            array_map(fn ($name) => strtolower(trim($name)), $roles)
         ))->whereIn('id', $preview
             ? \Illuminate\Support\Facades\DB::table('ticket_preview_users')->select('user_id')
             : User::select('id')->whereNotIn('id', \Illuminate\Support\Facades\DB::table('ticket_preview_users')->select('user_id')));

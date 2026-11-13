@@ -83,9 +83,21 @@ try {
     $sla->apply($t, $member, 'member', ['action' => 'acknowledge', 'assessment' => 'Printer unavailable', 'next_steps' => 'Check connection']);
     $assert($sla->snapshot($t)['response_status'] === 'Breached', 'Late acknowledgment is recorded as a response breach');
     $time('2026-10-27 09:30:00');
-    $sla->apply($t, $member, 'member', ['action' => 'pause', 'pause_reason' => 'vendor', 'note' => 'Waiting for vendor diagnosis']);
+    try {
+        $sla->apply($t, $member, 'member', ['action' => 'pause', 'pause_reason' => 'vendor', 'note' => 'Must be rejected']);
+        throw new RuntimeException('Pause was accepted');
+    } catch (Illuminate\Validation\ValidationException $e) {
+        $assert(isset($e->errors()['action']), 'New pauses are rejected');
+    }
+    // Legacy stored pauses still support resumption; do not create them through the removed action.
+    $legacyPause = $t->sla_state;
+    $legacyPause['elapsed'] = 5400;
+    $legacyPause['running_since'] = null;
+    $legacyPause['paused_at'] = now()->utc()->toIso8601String();
+    $legacyPause['pause_reason'] = 'vendor';
+    $t->sla_state = $legacyPause; $t->save();
     $time('2026-10-27 11:00:00');
-    $assert($sla->snapshot($t)['resolution_elapsed'] === 5400, 'Documented pause excludes waiting time');
+    $assert($sla->snapshot($t)['resolution_elapsed'] === 5400, 'Historical stored pause excludes waiting time');
     $sla->apply($t, $leader, 'leader', ['priority' => 'medium', 'priority_reason' => 'Review during vendor wait']);
     $assert($sla->snapshot($t)['resolution_target'] === 124200 && $sla->snapshot($t)['resolution_elapsed'] === 5400 && $sla->snapshot($t)['paused'], 'Paused ticket follows newest priority without resuming or resetting elapsed time');
     $sla->apply($t, $leader, 'leader', ['priority' => 'critical', 'priority_reason' => 'Restore Critical classification']);
