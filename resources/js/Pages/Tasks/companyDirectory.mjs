@@ -1,45 +1,81 @@
+import rosterReference from './companyRosterReference.json';
+const excludedPerson = person => /^(cris araya|sheryl segovia|sherry segovia)$/.test(normalized(person.name));
 const normalized = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 const departmentRules = [
- [/^it$|information technology/,'IT'], [/procurement/,'Procurement'], [/inventory/,'Inventory'],
+ [/^it\b|information technology/,'IT'], [/procurement/,'Procurement'], [/inventory/,'Inventory'],
  [/audit/,'Internal Audit'], [/operations.*finance|coordination lead/,'Operations & Finance'],
- [/finance|accounting/,'Accounting'], [/human resources|^hr$/,'HR'], [/marketing|sales/,'Sales & Marketing'],
+ [/finance|accounting/,'Accounting'], [/human resources|^hr\b/,'HR'], [/marketing|sales/,'Sales & Marketing'],
  [/technician|vet tech/,'Vet Tech'], [/veterinar/,'Veterinary'], [/clinic assistant|groomer/,'Clinic Assistant'],
  [/front desk|reception/,'Reception'], [/cashier|billing/,'Cashier'], [/security/,'Security'],
- [/driver|housekeeping|facilities/,'Facilities'],
+ [/driver|housekeeping|facilities|utility/,'Facilities'],
+ [/operations? manager|executive assistant|^operations$/,'Clinic Operations Manager'],
 ];
 function departmentFor(user) {
-    for (const text of [normalized(user.department),normalized(user.position)]) {
+    for (const text of [normalized(user.position),normalized(user.department)]) {
         const match=departmentRules.find(([pattern])=>pattern.test(text));
         if(match)return match[1];
     }
     return user.department || 'Operations & Finance';
 }
+function referenceFor(user) {
+    const name = normalized(user.name).replace(/\b(dr|chrp|rpm)\b/g, '').trim();
+    const candidates = rosterReference.filter(person => {
+        const reference = normalized(person.name).replace(/\b(dr|chrp|rpm)\b/g, '').trim();
+        if (reference === name) return true;
+        const tokens = reference.split(' ').filter(token => token.length > 2);
+        const userTokens = name.split(' ');
+        return tokens.length >= 2 && tokens.every(token => userTokens.includes(token));
+    });
+    return candidates.length === 1 ? candidates[0] : null;
+}
+
 export function companySettings(config,directory) {
     if(!directory)return config;
     const savedPeople=['employees','teamLeaders','operationsManagers','roleHolders'].flatMap(key=>config[key]||[]);
     const overrides={380:{hidden:true},...(config.taskPeopleOverrides||{})};
-    let people=(directory.users||[]).filter(user=>user.name && !overrides[user.id]?.hidden && !/disabled|inactive|terminated/i.test(user.status||'') && !/^(the cat clinic|admin|test|john doe)(\b|$)/i.test(user.name)).map(user=>{
+    // Restore the active marketing manager requested for the task directory.
+    if (overrides[225]) overrides[225] = { ...overrides[225], hidden: false };
+    let people=(directory.users||[]).filter(user=>user.name && !excludedPerson(user) && !overrides[user.id]?.hidden && !/disabled|inactive|terminated/i.test(user.status||'') && !/^(the cat clinic|admin|test|john doe)(\b|$)/i.test(user.name)).map(user=>{
         const saved=savedPeople.find(person=>person.id===user.id || person.accountName===user.name || person.name===user.name);
-        const title=normalized(user.position);
+        const reference = referenceFor(user);
+        const currentUser = reference ? {
+            ...user,
+            position: reference.position,
+            department: '',
+            branch: reference.branch || user.branch,
+        } : user;
+        const title=normalized(currentUser.position);
         const role=/executive vice president|^evp$/.test(title)?'EVP'
             : /chief veterinar/.test(title)?'Chief Vet'
             : /operations? manager/.test(title)?'Operations Manager'
             : /hr manager|human resources business partner|internal auditor|coordination lead|marketing manager/.test(title)?'Corporate Services'
             : /team leader|\btl\b|\bsupervisor\b/.test(title)?'Team Leader':'Employee';
-        const availableBranches=[...new Set([user.branch,...(user.branches||[])].filter(Boolean))];
-        const branch=user.branch||availableBranches[0]||config.branches[0];
-        return {id:user.id,name:user.name,position:departmentFor(user)==='IT'&&role==='Team Leader'?'IT Supervisor':user.position||'Team member',department:departmentFor(user),branch,
+        const organizationWide = role === 'EVP' || role === 'Corporate Services'
+            || departmentFor(currentUser) === 'IT' && role === 'Team Leader'
+            || /procurement supervisor|company driver|reliever/.test(title);
+        const availableBranches = organizationWide
+            ? [...new Set([...(directory.branches || []).map(branch => typeof branch === 'string' ? branch : branch.name), ...config.branches])]
+            : [...new Set([currentUser.branch, ...(user.branches || [])].filter(Boolean))];
+        const branch=currentUser.branch||availableBranches[0]||config.branches[0];
+        return {id:user.id,name:user.id === 225 ? 'Ma. Sharlhyn Tolentino' : user.name,position:departmentFor(currentUser)==='IT'&&role==='Team Leader'?'IT Supervisor':currentUser.position||'Team member',department:departmentFor(currentUser),branch,team:reference?.team,
             role,accountName:user.name,accountLinked:true,
-            previousNames:[...new Set([...(saved?.previousNames||[]),saved?.name,saved?.accountName].filter(Boolean))],
+            previousNames:[...new Set([...(saved?.previousNames||[]),user.name,saved?.name,saved?.accountName].filter(Boolean))],
             ...(saved?.branchSchedule?{branchSchedule:saved.branchSchedule}:{}),
             availableBranches:availableBranches.length?availableBranches:[branch],
             employeeType:/\bintern\b/.test(title)?'Intern':/supervisor/.test(title)?'Supervisor':'Regular',
             ...(overrides[user.id]?.changes||{})};
     });
     people.push(...Object.entries(overrides).filter(([key,value])=>key.startsWith('local:')&&!value.hidden).map(([,value])=>value.changes));
+    people = people.filter(person => !excludedPerson(person)).map(person => {
+        const department = departmentFor(person);
+        if (person.id === 225) return { ...person, name: 'Ma. Sharlhyn Tolentino',
+            position: 'Sales & Marketing Manager', department: 'Sales & Marketing',
+            role: 'Corporate Services', availableBranches: [...config.branches] };
+        return { ...person, department };
+    });
     return {...config,companyDirectory:true,rosterVersion:'employee-management',organizationStructureVersion:5,
-        departments:[...new Set([...config.departments,...people.map(person=>person.department)])],
-        branches:[...new Set([...config.branches,...people.flatMap(person=>person.availableBranches)])],
+        departments:[...new Set(people.map(person=>person.department))],
+        branches:[...new Set(people.flatMap(person=>person.availableBranches))],
         employees:people.filter(person=>person.role==='Employee'),
         operationsManagers:people.filter(person=>person.role==='Operations Manager'),
         teamLeaders:people.filter(person=>person.role==='Team Leader'),

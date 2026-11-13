@@ -19,11 +19,39 @@ export const isEvpDirectReport=person=>['Operations Manager','Team Leader'].incl
 export const canAssignAcrossRoles = role => ['EVP', 'Operations Manager', 'Corporate Services'].includes(role);
 export function eligibleAssignees(config, scope) {
     const people = assignmentDirectory(config);
-    if(scope.role==='EVP'&&(!scope.roleName||scope.roleName==='EVP'))return people.filter(person=>isEvpDirectReport(person)||person.name===scope.actor);
-    if (canAssignAcrossRoles(scope.role)) return people;
-    if (scope.role === 'Employee') return people.filter(person => person.name === scope.employee);
-    if (scope.role === 'Team Leader') return people.filter(person => ['Employee','Team Leader','Operations Manager'].includes(person.baseRole) || person.role === 'Corporate Services' || person.roleGroup === 'Corporate Services' || person.name === scope.actor);
-    return config.employees.filter(person => (person.availableBranches || [person.branch]).includes(scope.branch));
+    const actor = people.find(person => person.name === scope.actor)
+        || (scope.role === 'Employee' ? people.find(person => person.name === scope.employee) : undefined);
+    const branches = actor?.availableBranches || [actor?.branch || scope.branch];
+    const sameBranch = person => (person.availableBranches || [person.branch]).some(branch => branches.includes(branch));
+    const corporateDepartments = actor?.department === 'Operations & Finance'
+        ? ['Accounting', 'Procurement', 'Internal Audit', 'IT', 'Operations & Finance'] : [actor?.department];
+    return people.filter(person => {
+        if (person.name === actor?.name) return true;
+        if (scope.role === 'Admin') return true;
+        if (person.baseRole === 'Team Leader') {
+            if (scope.role === 'Operations Manager') return true;
+            if (scope.collaborative && ['Team Leader','Chief Vet'].includes(scope.role)) return true;
+            if ((actor?.role === 'Corporate Services' || scope.roleName === 'Corporate Services')
+                && (scope.collaborative || ['Internal Audit','Operations & Finance'].includes(actor?.department))) return true;
+        }
+        if (actor?.department === 'Operations & Finance' && actor?.role === 'Corporate Services'
+            && person.department === (config.itDepartment || 'IT') && person.baseRole === 'Employee') return false;
+        if (actor?.role === 'Corporate Services' || scope.roleName === 'Corporate Services')
+            return ['Team Leader','Employee'].includes(person.baseRole) && corporateDepartments.includes(person.department);
+        if (scope.role === 'EVP') return ['Operations Manager','Chief Vet','Team Leader'].includes(person.baseRole) || person.role === 'Corporate Services';
+        if (scope.role === 'Operations Manager' && scope.collaborative && person.baseRole === 'Operations Manager') return true;
+        if (scope.role === 'Operations Manager')
+            return ['Team Leader','Employee'].includes(person.baseRole) && sameBranch(person);
+        if (scope.role === 'Chief Vet')
+            return ['Team Leader','Employee'].includes(person.baseRole) && ['Veterinary','Vet Tech','Clinic Assistant'].includes(person.department) && sameBranch(person);
+        if (scope.role === 'Team Leader' && actor?.department === (config.itDepartment || 'IT')
+            && person.role === 'Corporate Services') return true;
+        if (scope.role === 'Team Leader')
+            return (person.baseRole === 'Team Leader'
+                && (actor?.department === (config.itDepartment || 'IT') || person.department === (config.itDepartment || 'IT')))
+                || (person.baseRole === 'Employee' && person.department === actor?.department && sameBranch(person));
+        return false;
+    });
 }
 
 // Editing preserves the saved owner even when that role cannot be assigned from a new-task form.

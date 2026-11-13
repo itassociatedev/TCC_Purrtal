@@ -1,10 +1,14 @@
+import {completionDay} from './completionDate.mjs';
 import {reportTemplates} from './reportTemplates.mjs';
 import {weekRange} from './weeklyReports.mjs';
 import {assignmentDirectory} from './assignmentDirectory.mjs';
 export function narrativePeriod(task){
  const frequency=task.recurrence||'daily';
- const start=task.periodStart||task.weekStart||task.scheduledDate||task.due;
- return {frequency,start,end:task.periodEnd||task.weekEnd||task.scheduledDate||task.due};
+ const day=task.scheduledDate||task.due;
+ const inferred=frequency==='weekly'?weekRange(day):frequency==='monthly'
+  ?{start:day.slice(0,7)+'-01',end:new Date(Date.UTC(Number(day.slice(0,4)),Number(day.slice(5,7)),0)).toISOString().slice(0,10)}
+  :{start:day,end:day};
+ return {frequency,start:task.periodStart||task.weekStart||inferred.start,end:task.periodEnd||task.weekEnd||inferred.end};
 }
 export function narrativeDateMatches(task,day){const period=narrativePeriod(task);return !day||period.start<=day&&period.end>=day;}
 export function narrativeSummary(task,tasks){
@@ -12,10 +16,8 @@ export function narrativeSummary(task,tasks){
  const completed=tasks.filter(item=>{
   const rolePreviewSample=/^role-sample-v[12]:/.test(item.sampleKey||'');
   if(item.id===task.id||seen.has(item.id)||item.assignee!==task.assignee||item.status!=='Completed'||(item.sample||item.sampleKey||item.title?.startsWith('[Sample]'))&&!rolePreviewSample||item.template==='narrative-report'||item.template==='intern-weekly-report'||item.template==='it-opening-rounds'||item.template==='daily-operations'||item.template?.startsWith('daily-custom-'))return false;
-  const timestamp=item.completedAt||item.approvedAt||item.history?.find(event=>/approved|task completed|main task completed/i.test(event.text||''))?.at;
-  if(!timestamp||Number.isNaN(new Date(timestamp).getTime()))return false;
-  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(timestamp)).map(part=>[part.type,part.value]));
-  const day=parts.year+'-'+parts.month+'-'+parts.day;
+  const day=completionDay(item);
+  if(!day)return false;
   if(day<start||day>end)return false;
   seen.add(item.id);return true;
  }).sort((a,b)=>a.title.localeCompare(b.title));

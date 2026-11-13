@@ -46,6 +46,11 @@ class TaskModuleWriter
             abort_if(($task['_serverVersion'] ?? null) !== $record->version, 409, 'This task changed in another session. Refresh before saving.');
         }
         $previous = $record?->payload;
+        $deadlineChanged = !$previous || ($task['due'] ?? null) !== ($previous['due'] ?? null);
+        $manualTask = empty($task['recurrence']) && empty($task['repeatSeriesId']);
+        if ($deadlineChanged && $manualTask && ($task['due'] ?? '') < now('Asia/Manila')->toDateString()) {
+            throw ValidationException::withMessages(['due' => 'Choose today or a future date for the deadline.']);
+        }
         // Report authors may select an allowed work branch; task ownership still requires handover.
         $reportBranchEditable=in_array($task['template'],['narrative-report','daily-operations']) || str_starts_with($task['template'],'daily-custom-');
         if($previous)abort_if($task['assignee']!==$previous['assignee'] || $task['department']!==$previous['department'] || !$reportBranchEditable && $task['branch']!==$previous['branch'],422,'Use Hand over task to transfer responsibility.');
@@ -94,6 +99,10 @@ class TaskModuleWriter
         $reviewer = $record?->reviewer_id ? User::find($record->reviewer_id) : $this->access->reviewer($actor, $task, $parent);
         if (!$record) {
             abort_if(!empty($task['repeatSeriesId']),422,'Refresh the workspace to load the scheduled task occurrence.');
+            if (!$daily && !$parent && $task['template'] === 'standard' && $assignee?->id === $actor->id) {
+                abort_unless(in_array($task['kind'] ?? '', ['Self-created request','Turnover request']), 422,
+                    'Choose Self-created request for your own work.');
+            }
             // A leader assigning someone else reviews their output, without OM permission to begin.
             if (!$daily && !$parent && $task['template']!=='collaborative' && $role==='Team Leader' && $assignee?->id!==$actor->id && !in_array($task['kind'] ?? '',['Self-created request','Turnover request'])) {
                 $reviewer=$actor;
@@ -106,14 +115,19 @@ class TaskModuleWriter
                 abort_unless(($parent->assignee_id === $actor->id || $initialMonitor) && in_array($parent->payload['status'],['Not Started','In Progress','Revision Needed']),403,'Only the active parent task coordinator may delegate work.');
             }
             abort_if($role === 'Employee' && str_starts_with($task['template'],'daily-custom-'),422,'A custom daily report must be saved by its manager before employee submissions.');
-            $canCreate = in_array($role, ['Admin','EVP','Corporate Services','Operations Manager','Team Leader','Chief Vet']) || $daily && $performer || $parent && $parent->assignee_id === $actor->id;
+            $canCreate = $role === 'Employee' && $this->access->utility($actor) && $performer && ($task['kind'] ?? '') === 'Self-created request' || in_array($role, ['Admin','EVP','Corporate Services','Operations Manager','Team Leader','Chief Vet']) || $daily && $performer || $parent && $parent->assignee_id === $actor->id;
             abort_unless($canCreate, 403, 'This account cannot create this task.');
-            if (!$daily && $task['template'] !== 'collaborative' && $role === 'Team Leader' && $assignee && !in_array($this->access->role($assignee), ['Employee','Team Leader','Corporate Services','Operations Manager']) && $assignee->id !== $actor->id && !$parent) abort(403, 'Team Leaders and Supervisors can assign employees, other leaders, Operations Managers, or Corporate Services members.');
+            if (!$daily && $assignee) abort_unless($this->access->canAssign($actor, $assignee, $task['template'] === 'collaborative' || $parent !== null, $task['workCategory'] ?? ''),403,'Choose a person below you in your department and branch hierarchy.');
             if ($role === 'Chief Vet') abort_unless($task['branch'] === $actor->branch?->name,403);
             if ($task['template'] === 'collaborative' && !$parent) abort_unless($assignee && in_array($this->access->role($assignee), ['Admin','EVP','Corporate Services','Operations Manager','Team Leader']),422,'Choose an eligible final approver.');
-            if (!$daily && !$parent && $task['template'] !== 'collaborative' && ($role === 'Team Leader' && $assignee?->id === $actor->id || in_array($task['kind'] ?? '', ['Self-created request','Turnover request']))) {
+            if ($role !== 'EVP' && !($role === 'Team Leader' && $this->access->department($actor) === 'IT') && !$daily && !$parent && $task['template'] !== 'collaborative' && ($role === 'Team Leader' && $assignee?->id === $actor->id || in_array($task['kind'] ?? '', ['Self-created request','Turnover request']))) {
                 abort_unless($reviewer, 422, 'No higher-up is available to approve this task.');
                 $task = [...$task, 'status'=>'Pending Approval','approvalRequired'=>true,'approvalReviewer'=>$reviewer->name,'approvalReviewerRole'=>$this->access->role($reviewer)];
+            }
+            if (!$daily && !$parent && ($role === 'EVP' || $role === 'Team Leader' && $this->access->department($actor) === 'IT') && $assignee?->id === $actor->id) {
+                $task['status'] = 'Not Started';
+                $task['approvalRequired'] = false;
+                unset($task['approvalReviewer'], $task['approvalReviewerRole']);
             }
             abort_unless(in_array($task['status'], $daily ? ['Not Started','In Progress','Pending Review','Dismissed',...($directOpeningSubmission?['Completed']:[])] : ['Not Started','Pending Approval']), 422, 'New tasks cannot import approval or completion.');
             $task['requestedBy'] = $actor->name;

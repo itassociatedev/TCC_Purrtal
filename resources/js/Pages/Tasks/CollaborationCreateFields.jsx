@@ -1,14 +1,77 @@
-import HelpHint from '../../Components/HelpHint.jsx';
-import { childDeadline, monitorMatchesAssignment, canOwnCollaborative } from './collaborativeTasks.mjs';
+import PersonPicker from './PersonPicker.jsx';
+import { childDeadline, canMonitorCollaborative, canOwnCollaborative } from './collaborativeTasks.mjs';
 
-// One ordered workflow replaces the generic assignment fields and duplicated monitoring fieldset.
-export default function CollaborationCreateFields({ config, people, actor, assignment, onAssignment, today, departments, branches }) {
+export default function CollaborationCreateFields({ config, people, assignment, onAssignment, today, branches }) {
     const owners = people.filter(canOwnCollaborative);
-    const leaders = people.filter(person => monitorMatchesAssignment(person, assignment));
+    const coordinators = people.filter(canMonitorCollaborative);
+    const step = assignment.collabStep || 1;
     const due = assignment.due || today;
-    return <div className="tm-collab-create"><div className="tm-workflow-intro"><strong>One goal, shared across your team</strong><p>Create the final outcome and give one person responsibility for coordinating the work.</p><ol><li><span>1</span>Final outcome</li><li><span>2</span>Coordinator</li><li><span>3</span>Team assignments</li></ol></div><input type="hidden" name="kind" value="Assigned task" />
-        <section className="tm-workflow-step"><h3><span>1</span>Define the final outcome <HelpHint label="Final owner help">The final owner checks the overall result and closes the main task. The coordinator assigns smaller tasks to the team. Each assignment needs its own submission.</HelpHint></h3><p className="tm-daily-caption">The final approver closes this task after all assignments below it are approved.</p><div className="tm-form-grid"><label>Final owner / approver<select name="mainOwner" defaultValue={canOwnCollaborative(actor) ? actor.name : owners[0]?.name || ''} required>{owners.map(person => <option key={person.name} value={person.name}>{person.name} · {person.role}</option>)}</select></label><label>Final deadline<input type="date" name="due" required value={due} onChange={event => onAssignment({ due: event.target.value })} /></label></div><label>Overall task title<input name="title" required maxLength={40} placeholder="e.g. Product masterlist" onInput={event => { const count = event.currentTarget.nextElementSibling; if (count) count.textContent = `${event.currentTarget.value.length}/40 characters`; }} /><small>0/40 characters</small></label><label>What needs to be delivered?<textarea name="description" required rows={3} placeholder="Describe the final result and checks needed." /></label><div className="tm-form-grid"><label>Branch<select value={assignment.branch} onChange={event => onAssignment({ branch: event.target.value })}>{branches.map(branch => <option key={branch}>{branch}</option>)}</select></label><label>Priority<select name="priority" defaultValue={config.priorities[0]}>{[...config.priorities].sort((a,b)=>a==='Critical'?-1:b==='Critical'?1:0).map(priority => <option key={priority}>{priority}</option>)}</select></label></div></section>
-        <section className="tm-workflow-step"><h3><span>2</span>Choose who coordinates the work</h3><p className="tm-daily-caption">This person receives their own assignment and can delegate work to multiple people.</p><div className="tm-form-grid"><label>Department<select value={assignment.department} onChange={event => onAssignment({ department: event.target.value })}>{departments.map(department => <option key={department}>{department}</option>)}</select></label><label>Coordinator<select required value={assignment.name} onChange={event => onAssignment({ name: event.target.value })}><option value="">Choose a TL, OM, or Corporate member</option>{leaders.map(person => <option key={person.name} value={person.name}>{person.name} · {person.position || person.role}{person.baseRole === 'Operations Manager' ? ` · ${person.branch}` : ''}</option>)}</select></label></div><label>Coordinator’s task title<input name="monitoringTitle" required maxLength={40} placeholder="e.g. Check inventory" onInput={event => { const count = event.currentTarget.nextElementSibling; if (count) count.textContent = `${event.currentTarget.value.length}/40 characters`; }} /><small>0/40 characters</small></label><label>What should the coordinator do?<textarea name="monitoringDescription" required rows={3} placeholder="Describe what this person must coordinate, check, and submit." /></label><label>Coordinator’s deadline<input key={due} name="monitoringDue" type="date" required max={childDeadline(due)} defaultValue={childDeadline(due)} /></label><p className="tm-daily-caption">After creation, the coordinator opens My Tasks → this assignment → Add a task. Child tasks may share the final deadline, but cannot be due later.</p></section>
-        <label>Reference link (optional)<input name="link" type="url" placeholder="https://…" /></label>
-    </div>;
+    const countTitle = event => {
+        event.currentTarget.setCustomValidity('');
+        event.currentTarget.nextElementSibling.textContent = `${event.currentTarget.value.length}/40 characters`;
+    };
+
+    return <>
+        <input type="hidden" name="kind" value="Assigned task" />
+        <input type="hidden" name="mainOwner" value={assignment.mainOwner || ''} />
+        <div className="tm-collab-page" hidden={step !== 1}>
+        <fieldset className="tm-create-section tm-create-assignment">
+            <legend>Who & where</legend>
+            <PersonPicker label="Final owner / approver" people={owners}
+                value={assignment.mainOwner || ''} branches={branches} showTaskBranch={false}
+                onChoose={person => onAssignment({ mainOwner: person.name })} />
+            <p className="tm-collab-person-help">Reviews the final result and closes the workflow.</p>
+
+        </fieldset>
+        <fieldset className="tm-create-section tm-create-details">
+            <legend>What needs doing</legend>
+            <label>Overall task title<input name="title" required maxLength={40}
+                placeholder="What needs to be done?" onInput={countTitle} /><small>0/40 characters</small></label>
+            <label>Description<textarea name="description" required rows={3} onInput={event => event.currentTarget.setCustomValidity('')}
+                placeholder="Describe the final result and expected output." /></label>
+            <div className="tm-create-reference">
+                <label>Reference / attachment link <span>(optional)</span>
+                    <input name="link" type="url" placeholder="https://…" /></label>
+            </div>
+
+        </fieldset>
+        <fieldset className="tm-create-section tm-create-schedule">
+            <legend>When & priority</legend>
+            <div className="tm-form-grid">
+                <label>Priority<select name="priority" defaultValue={config.priorities.includes('Medium') ? 'Medium' : config.priorities[0]}>
+                    {config.priorities.map(priority => <option key={priority}>{priority}</option>)}
+                </select></label>
+                <label>Final deadline<input type="date" name="due" required min={today} value={due}
+                    onChange={event => onAssignment({ due: event.target.value })} /></label>
+
+            </div>
+        </fieldset>
+        </div>
+        <div className="tm-collab-page" hidden={step !== 2}>
+            <fieldset className="tm-create-section tm-create-assignment">
+                <legend>Coordinator</legend>
+            <PersonPicker label="Coordinator" people={coordinators} value={assignment.name}
+                branches={branches} branch={assignment.branch}
+                onBranch={branch => onAssignment({ branch })}
+                onChoose={person => onAssignment({
+                    name: person.name, department: person.department,
+                    branch: (person.availableBranches || [person.branch]).includes(assignment.branch)
+                        ? assignment.branch : person.branch,
+                })} />
+            <p className="tm-collab-person-help">Coordinates the work and delegates child assignments.</p>
+            </fieldset>
+            <fieldset className="tm-create-section tm-create-details">
+                <legend>Coordinator’s assignment</legend>
+            <div className="tm-collab-coordinator-details">
+                <label>Coordinator’s task title<input name="monitoringTitle" required maxLength={40}
+                    placeholder="What should the coordinator do?" onInput={countTitle} /><small>0/40 characters</small></label>
+                <label>Coordinator’s instructions<textarea name="monitoringDescription" required rows={3}
+                    placeholder="Describe what to coordinate, check and submit." /></label>
+            </div>                <label>Coordinator’s deadline<input key={due} name="monitoringDue" type="date"
+                    required min={today} max={childDeadline(due)} defaultValue={childDeadline(due)} /></label>
+            </fieldset>
+        </div>
+
+
+    </>;
 }

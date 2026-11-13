@@ -1,15 +1,11 @@
+import {completionDay} from './completionDate.mjs';
 import {matchesSearch} from './search.mjs';
 import {isDailyTemplate} from './dailyTasks.mjs';
 import {isWeeklyReport} from './weeklyReports.mjs';
 import {isEmailSample} from './serverTasks.mjs';
 
 export function completionDate(task) {
- const value=task.completedAt||task.approvedAt||task.history?.find(event=>/: approved\.$|task approved|main task completed|task completed/i.test(event.text||''))?.at;
- if(!value)return '';
- if(/^\d{4}-\d{2}-\d{2}$/.test(value))return value;
- const date=new Date(value);if(Number.isNaN(date.getTime()))return '';
- const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date).map(part=>[part.type,part.value]));
- return `${parts.year}-${parts.month}-${parts.day}`;
+ return completionDay(task) || '';
 }
 export function leaderboardPeople(employees){
  return [...new Map(employees.filter(person=>person.name&&person.active!==false&&!person.disabled&&!['inactive','disabled','terminated'].includes(String(person.status||'').toLowerCase())).map(person=>[person.name,person])).values()];
@@ -27,6 +23,8 @@ export function leaderboardTeams(employees,{fixedBranch='',fixedDepartment=''}={
 }
 export function buildLeaderboard(tasks,{group='people',department='All',branch='All',from='',to='',search='',sort='completed',today='',attentionOnly=false,employees=[]}={}) {
  const rows=new Map(),seen=new Set();let undated=0;
+ const identities = new Map(leaderboardPeople(employees).flatMap(person =>
+  [person.name, person.accountName, ...(person.previousNames || [])].filter(Boolean).map(name => [name, person.name])));
  const groupName=(department,branch,name)=>group==='departments'?department:group==='teams'?`${department} · ${branch}`:group==='branches'?branch:name;
  for(const person of leaderboardPeople(employees)){
   if(!person.name||person.active===false||person.disabled||department!=='All'&&person.department!==department||branch!=='All'&&!leaderboardBranches(person).includes(branch))continue;
@@ -38,9 +36,10 @@ export function buildLeaderboard(tasks,{group='people',department='All',branch='
   row.departments.add(person.department);row.branches.add(memberBranch);row.members.add(person.name);rows.set(name,row);
   }
  }
- for(const task of tasks){
-  if(seen.has(task.id)||isEmailSample(task)||isDailyTemplate(task)||isWeeklyReport(task)||!task.assignee)continue;
-  seen.add(task.id);
+ for(const savedTask of tasks){
+  const task = {...savedTask, assignee: identities.get(savedTask.assignee) || savedTask.assignee};
+  if(seen.has(String(task.id))||isEmailSample(task)||isDailyTemplate(task)||isWeeklyReport(task)||!task.assignee)continue;
+  seen.add(String(task.id));
 
   if(department!=='All'&&task.department!==department||branch!=='All'&&task.branch!==branch)continue;
   const date=task.status==='Completed'?completionDate(task):task.due;

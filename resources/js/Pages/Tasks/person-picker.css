@@ -1,0 +1,44 @@
+
+.tm-person-picker { grid-column: 1 / -1; min-width: 0; }
+.tm-person-picker-label { display: block; margin-bottom: 8px; }
+.tm-person-picker-selected { display: grid; gap: 4px; padding: 12px; border: 1px solid #dce1eb; border-radius: 8px; background: #f7f8fb; overflow-wrap: anywhere; }
+.tm-person-picker-selected small, .tm-person-picker-results small { color: #66758b; }
+.tm-person-picker details { margin-top: 10px; }
+.tm-person-picker summary { cursor: pointer; padding: 8px 0; font-weight: 600; }
+.tm-person-picker-results { max-height: 240px; overflow-y: auto; margin-top: 8px; }
+.tm-person-picker-results button { display: grid; width: 100%; gap: 3px; text-align: left; padding: 10px; background: transparent; border: 0; border-bottom: 1px solid #e3e7ee; white-space: normal; }
+.tm-person-picker-results button:hover, .tm-person-picker-results button[aria-pressed=true] { background: #eef0f6; }
+html[data-clinic-theme=dark] .tm-person-picker-selected { background: #263243; border-color: #455268; }
+html[data-clinic-theme=dark] .tm-person-picker-results button { color: #e6edf7; border-color: #455268; }
+html[data-clinic-theme=dark] .tm-person-picker-results button:hover, html[data-clinic-theme=dark] .tm-person-picker-results button[aria-pressed=true] { background: #344258; }
+html[data-clinic-theme=dark] .tm-person-picker small { color: #b9c7db; }
+
+.tm-person-picker-selected { padding: 10px 12px; gap: 2px; background: transparent; }
+.tm-person-picker-selected > span { font-size: 13px; }
+.tm-person-picker-selected > small { font-size: 12px; }
+.tm-person-picker summary { font-size: 13px; padding: 5px 0; }
+.tm-person-picker details { margin-top: 4px; }
+.tm-person-picker-results button { padding: 8px 10px; gap: 2px; }
+.tm-person-picker-results button strong { font-size: 13px; }
+.tm-person-picker-results button small { font-size: 12px; }
+.tm-assignment-location { grid-column: 1 / -1; border-top: 1px solid #dce1eb; padding-top: 8px; }
+.tm-assignment-location > summary { cursor: pointer; font-size: 13px; color: #66758b; }
+.tm-assignment-location > .tm-form-grid { margin-top: 10px; }
+html[data-clinic-theme=dark] .tm-assignment-location { border-color: #455268; }
+html[data-clinic-theme=dark] .tm-assignment-location > summary { color: #b9c7db; }
+
+.tm-person-picker-selected { margin-top: 10px; }
+.tm-person-branches { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 12px; }
+.tm-person-branches > span { font-size: 12px; margin-right: 4px; }
+.tm-person-branches button { padding: 6px 10px; border: 1px solid #dce1eb; border-radius: 6px; background: transparent; color: inherit; font-size: 12px; }
+.tm-person-branches button[aria-pressed=true] { background: #171717; color: white; border-color: #171717; }
+html[data-clinic-theme=dark] .tm-person-branches button { border-color: #455268; }
+html[data-clinic-theme=dark] .tm-person-branches button[aria-pressed=true] { background: #e6edf7; color: #18202b; }
+
+.tm-person-browse { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+.tm-person-browse label { font-size: 12px; }
+.tm-person-browse select { width: 100%; min-width: 0; }
+.tm-person-result-count { display: block; margin-top: 8px; }
+.tm-person-picker-results { max-height: 200px; border: 1px solid #dce1eb; border-radius: 6px; }
+html[data-clinic-theme=dark] .tm-person-picker-results { border-color: #455268; }
+@media(max-width: 480px) { .tm-person-browse { grid-template-columns: 1fr; } }

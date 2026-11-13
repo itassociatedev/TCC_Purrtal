@@ -1,3 +1,4 @@
+import {completionDay} from './completionDate.mjs';
 // Fixed Saturday–Friday periods include every workday regardless of individual days off.
 export function weekRange(day) {
     const date = new Date(`${day}T00:00:00Z`);
@@ -15,9 +16,8 @@ export function weeklySummary(task, accomplishments) {
 export function accomplishedThisWeek(tasks, employee, start, end) {
     return tasks.filter(task => {
         if (task.assignee !== employee || task.status !== 'Completed' || isWeeklyReport(task)||task.sample||task.sampleKey||task.title?.startsWith('[Sample]')||['narrative-report','it-opening-rounds','daily-operations'].includes(task.template)||task.template?.startsWith('daily-custom-')) return false;
-        const timestamp = task.completedAt || task.history?.find(event => /approved|completed/i.test(event.text))?.at;
-        if (!timestamp) return false; // A deadline alone does not establish when work was completed.
-        const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(timestamp));
+        const date = completionDay(task);
+        if (!date) return false;
         return date >= start && date <= end;
     });
 }

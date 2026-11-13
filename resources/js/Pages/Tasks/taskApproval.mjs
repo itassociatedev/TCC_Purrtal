@@ -1,13 +1,22 @@
 import {assignmentDirectory} from './assignmentDirectory.mjs';
 export const isSelfCreatedRequest=task=>['Self-created request','Turnover request'].includes(task.kind);
-export const approvalBlocksWork=task=>(task.approvalRequired||isSelfCreatedRequest(task))&&!task.approvalGrantedAt&&!task.history?.some(event=>/: approved\.$|request approved|task approved/i.test(event.text||''));
+export const approvalBlocksWork=task=>(task.approvalRequired||isSelfCreatedRequest(task)&&task.approvalRequired!==false)&&!task.approvalGrantedAt&&!task.history?.some(event=>/: approved\.$|request approved|task approved/i.test(event.text||''));
 export function routeTaskApproval(task,config,scope){
  if(task.template==='collaborative')return task;
  const required=isSelfCreatedRequest(task)||scope.role==='Team Leader'&&task.assignee===scope.actor;
  if(!required)return task;
  const people=assignmentDirectory(config).filter(person=>person.name!==scope.actor);
- const reviewer=(scope.role==='Team Leader'?people.find(person=>person.baseRole==='Operations Manager'&&person.branch===task.branch):null)
-  ||people.find(person=>person.role==='EVP')||people.find(person=>person.baseRole==='EVP');
+ const creator=assignmentDirectory(config).find(person=>person.name===scope.actor);
+ if(scope.role==='Team Leader'&&creator?.department===(config.itDepartment||'IT'))return {...task,status:'Not Started',approvalRequired:false};
+ if(scope.role==='EVP'&&creator?.role!=='Corporate Services')return {...task,status:'Not Started',approvalRequired:false};
+ const dept=creator?.department||task.department;
+ const branchMatch=person=>(person.availableBranches||[person.branch]).includes(task.branch);
+ let reviewer;
+ if(scope.role==='Employee')reviewer=people.find(person=>person.baseRole==='Team Leader'&&person.department===dept&&branchMatch(person));
+ else if(scope.role==='Team Leader'){
+  reviewer=people.find(person=>person.baseRole==='Operations Manager'&&person.branch===task.branch);
+ }else reviewer=people.find(person=>person.role==='EVP');
+
  if(!reviewer)throw new Error('No higher-up is available to approve this task. Ask an administrator to configure the branch Operations Manager or EVP in the Task Module.');
  return {...task,status:'Pending Approval',approvalReviewer:reviewer.name,approvalReviewerRole:reviewer.role,requestedBy:scope.actor,approvalRequired:true};
 }

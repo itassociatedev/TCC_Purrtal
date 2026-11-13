@@ -52,7 +52,11 @@ export const leaderForDepartment = department => teamLeaders.find(leader => lead
 // These are prototype visibility rules, not a replacement for server authorization during backend integration.
 export function tasksForPreview(tasks, scope) {
     const { role, branch, department, employee, actor } = scope;
-    return tasks.filter(task => (!scope.directAssigneeNames||scope.directAssigneeNames.includes(task.assignee)||task.handover?.to===actor||task.handover?.from===actor) && !task.supersededOpeningReport && (task.template !== 'intern-weekly-report' || canViewWeeklyReport(task, scope)) && (actor && (task.handover?.to===actor || task.handover?.from===actor || task.assignee === actor || task.requestedBy === actor || task.approvalReviewer === actor || task.coordinator === actor || task.coordinators?.includes(actor)) || (role === 'Employee' ? task.sharedBranchReport && task.department === (scope.employeeDepartment || department) || task.assignee === employee || task.coordinator === employee || task.coordinators?.includes(employee)
+    const scopedTasks = scope.corporateAssigneeNames
+        ? tasks.filter(task => scope.corporateAssigneeNames.includes(task.assignee)
+            || task.approvalReviewer === actor || task.handover?.to === actor || task.handover?.from === actor)
+        : tasks;
+    return scopedTasks.filter(task => (!scope.directAssigneeNames||scope.directAssigneeNames.includes(task.assignee)||task.handover?.to===actor||task.handover?.from===actor) && !task.supersededOpeningReport && (task.template !== 'intern-weekly-report' || canViewWeeklyReport(task, scope)) && (actor && (task.handover?.to===actor || task.handover?.from===actor || task.assignee === actor || task.requestedBy === actor || task.approvalReviewer === actor || task.coordinator === actor || task.coordinators?.includes(actor)) || (role === 'Employee' ? task.sharedBranchReport && task.department === (scope.employeeDepartment || department) || task.assignee === employee || task.coordinator === employee || task.coordinators?.includes(employee)
         : ['Operations Manager', 'Chief Vet'].includes(role) ? task.branch === branch || task.originBranch === branch
         : role === 'Team Leader' ? task.department === department || task.originDepartment === department : true)));
 }

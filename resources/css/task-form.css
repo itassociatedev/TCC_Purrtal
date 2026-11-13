@@ -30,9 +30,9 @@
 .tm-task-create-form .tm-create-permissions{grid-column:2;font-size:12px;line-height:1.6;padding:10px 12px;margin:0;background:var(--clinic-dark-subtle, #eef2ff);border:1px solid #e0e7ff;color:#4338ca;border-radius:9px}
 .tm-task-create-form>.tm-modal-actions{position:sticky;bottom:0;z-index:2;grid-column:1/-1;display:flex;justify-content:flex-end;gap:10px;background:var(--clinic-dark-surface, #fff);border-top:1px solid #e5e7eb;margin:0 -24px;padding:14px 24px;box-shadow:0 -4px 12px #11182705}
 .tm-task-create-form>.tm-modal-actions button{min-height:42px;padding:10px 18px;border-radius:8px;text-transform:none;letter-spacing:0;font-size:14px}
-.tm-task-create-form.tm-task-create-collaborative{display:block}
-.tm-task-create-collaborative .tm-task-template-choice{margin-bottom:18px}
-.tm-task-create-collaborative>.tm-modal-actions{margin-top:16px}
+.tm-task-create-form.tm-task-create-collaborative{display:grid}
+.tm-task-create-collaborative .tm-task-template-choice{margin-bottom:0}
+.tm-task-create-collaborative>.tm-modal-actions{margin-top:0}
 @media(max-width:740px){.tm-modal.tm-task-form-dialog{max-height:94dvh;width:96vw}.tm-task-form-dialog>header{padding:16px 18px}.tm-task-form-dialog>.tm-task-create-form{grid-template-columns:minmax(0,1fr);padding:16px 18px 0;gap:14px}.tm-task-create-form .tm-task-template-choice{display:block}.tm-task-create-form .tm-create-intro{margin-bottom:12px}.tm-task-create-form .tm-task-template-choice>label{width:100%}.tm-task-create-form .tm-create-assignment,.tm-task-create-form .tm-create-details,.tm-task-create-form .tm-create-schedule,.tm-task-create-form .tm-create-reference,.tm-task-create-form .tm-create-permissions{grid-column:1;grid-row:auto}.tm-task-create-form>.tm-modal-actions{margin:0 -18px;padding:12px 18px}.tm-task-create-form .tm-create-section{padding:12px 14px 14px}}
 @media(max-width:420px){.tm-task-create-form .tm-create-schedule .tm-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tm-task-create-form .tm-create-schedule label:last-child{grid-column:1/-1}.tm-task-create-form .tm-form-grid{grid-template-columns:minmax(0,1fr)}}
 
@@ -74,3 +74,41 @@
 .tm-task-create-form>.tm-modal-actions .tm-create-reference-shortcut{margin-right:auto;padding:6px 0;min-height:36px;border:0;background:transparent;color:#4338ca;font-size:13px;text-align:left;cursor:pointer}
 .tm-create-reference-shortcut span{color:var(--clinic-dark-muted, #6b7280)}
 @media(max-width:740px){.tm-task-form-dialog>.tm-task-create-form{padding:12px 16px 0}.tm-task-form-dialog>header{padding:14px 16px}.tm-task-create-form .tm-task-template-choice>label{display:block}.tm-task-create-form .tm-task-template-choice select{width:100%;margin-top:6px}.tm-task-create-form>.tm-modal-actions{margin:0 -16px;padding:10px 16px;gap:8px}.tm-create-reference-shortcut span{display:none}}
+
+.tm-collab-person-help { font-size: 12px; color: #66758b; margin: 6px 0 18px; }
+.tm-collab-coordinator-details { display: grid; gap: 14px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #e5e7eb; }
+html[data-clinic-theme=dark] .tm-collab-person-help { color: #b9c7db; }
+html[data-clinic-theme=dark] .tm-collab-coordinator-details { border-color: #455268; }
+
+.tm-collab-page { display: contents; }
+.tm-collab-page[hidden], .tm-task-create-form button[hidden] { display: none !important; }
+.tm-collab-step-actions { grid-column: 1 / -1; display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.tm-collab-step-actions > span { margin-right: auto; font-size: 13px; }
+
+.tm-collab-footer-step { margin-right: auto; align-self: center; font-size: 13px; }
+
+.tm-self-approver { display: grid; gap: 4px; margin-top: 14px; padding: 12px; border: 1px solid #dce2eb; border-left: 3px solid #8799b5; border-radius: 6px; }
+.tm-self-approver small, .tm-self-approver span { font-size: 12px; color: #66758b; }
+html[data-clinic-theme=dark] .tm-self-approver { border-color: #455268; }
+html[data-clinic-theme=dark] .tm-self-approver small, html[data-clinic-theme=dark] .tm-self-approver span { color: #b9c7db; }
+
+.tm-it-work-choice { margin-top: 16px; padding: 14px; border: 2px solid #8799b5; border-radius: 8px; background: #f2f5fa; }
+.tm-it-work-choice h4 { margin: 0 0 4px; font-size: 14px; }
+.tm-it-work-choice > p { margin: 0 0 10px; font-size: 12px; }
+.tm-it-work-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tm-it-work-options button { display: grid; gap: 6px; padding: 12px; text-align: left; border: 1px solid #ccd5e2; border-radius: 7px; background: #fff; color: #25364e; white-space: normal; }
+.tm-it-work-options button span, .tm-it-work-options button small { font-size: 12px; font-weight: 400; }
+.tm-it-work-options button[aria-pressed=true] { border: 2px solid #25364e; background: #e5ecf5; }
+html[data-clinic-theme=dark] .tm-it-work-choice { background: #293649; }
+html[data-clinic-theme=dark] .tm-it-work-options button { background: #202b3a; color: #e0e9f5; border-color: #64758e; }
+html[data-clinic-theme=dark] .tm-it-work-options button[aria-pressed=true] { background: #394b64; border-color: #c4d4ec; }
+@media(max-width: 480px) { .tm-it-work-options { grid-template-columns: 1fr; } }
+
+/* Keep the details and schedule compact beside a taller person picker. */
+@media(min-width: 741px) {
+ .tm-task-form-dialog > .tm-task-create-form:not(.tm-task-create-collaborative) { align-items: start; }
+ .tm-task-create-form:not(.tm-task-create-collaborative) .tm-create-assignment { grid-column: 1; grid-row: 2 / 4; align-self: start; }
+ .tm-task-create-form:not(.tm-task-create-collaborative) .tm-create-details { grid-column: 2; grid-row: 2; align-self: start; }
+ .tm-task-create-form:not(.tm-task-create-collaborative) .tm-create-schedule { grid-column: 2; grid-row: 3; align-self: start; }
+ .tm-task-create-form:not(.tm-task-create-collaborative) .tm-create-permissions { grid-column: 1 / -1; }
+}

@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
-import { assignmentDirectory } from './assignmentDirectory.mjs';
+import { assignmentDirectory, eligibleAssignees } from './assignmentDirectory.mjs';
 import { canMonitorCollaborative, childDeadline } from './collaborativeTasks.mjs';
 
 // Keep assignment intent visible: someone either does the work or coordinates another level.
 export default function ChildTaskForm({ task, children, config, onCreate, onClose }) {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
     const [department, setDepartment] = useState(task.department);
     const [name, setName] = useState('');
     const [mode, setMode] = useState(null);
@@ -15,7 +16,10 @@ export default function ChildTaskForm({ task, children, config, onCreate, onClos
     const [error, setError] = useState('');
     const [saved, setSaved] = useState('');
     const titleInput = useRef(null);
-    const directory = assignmentDirectory(config);
+    const owner = assignmentDirectory(config).find(person => person.name === task.assignee);
+    const directory = eligibleAssignees(config, {
+        role: owner?.baseRole, roleName: owner?.role, actor: task.assignee, collaborative: true,
+    });
     const person = directory.find(item => item.name === name);
     const responsibility=mode || (canMonitorCollaborative(person)?'monitoring':'execution');
     const monitoring=responsibility!=='execution';
@@ -57,7 +61,7 @@ export default function ChildTaskForm({ task, children, config, onCreate, onClos
         </fieldset>
         <fieldset className="tm-child-step"><legend>3. Where and when?</legend><div className="tm-form-grid">
             <label>Work branch<select value={branch} onChange={event => setBranch(event.target.value)} required>{allowedBranches.map(item => <option key={item}>{item}</option>)}</select></label>
-            <label>Due date<input type="date" value={due} onChange={event => setDue(event.target.value)} max={childDeadline(task.due)} required /></label>
+            <label>Due date<input type="date" min={today} value={due} onChange={event => setDue(event.target.value)} max={childDeadline(task.due)} required /></label>
         </div><p className="tm-deadline-hint">Due on or before <strong>{formatDate(childDeadline(task.due))}</strong>, the main task’s deadline.</p></fieldset>
         {children.length > 0 && <details className="tm-child-dependencies"><summary>Wait for another task first? <span>Optional</span></summary><p className="tm-daily-caption">Select only work that must be approved before this task can begin.</p><div className="tm-child-dependency-list">{children.map(child => <label key={child.id}><input type="checkbox" checked={dependencies.includes(child.id)} onChange={event => setDependencies(event.target.checked ? [...dependencies, child.id] : dependencies.filter(id => id !== child.id))} /><span><strong>{child.title}</strong><small>{child.assignee} · Due {formatDate(child.due)}</small></span></label>)}</div></details>}
         {error && <p role="alert" className="tm-rounds-error">{error}</p>}

@@ -49,11 +49,16 @@ export default function TaskLeaderboard({tasks,today,employees=[],fixedBranch=''
  const period=!from&&!to?'all':from===today.slice(0,7)+'-01'&&to===today?'month':from===leaderboardPeriod(today,'week').from&&to===today?'week':'custom';
  const options={employees,group:group==='teams'?'people':group,department:group==='teams'?(team?.department||'__none__'):scopeDepartment||department,branch:group==='teams'?(team?.branch||'__none__'):scopeBranch||branch,from,to,search,sort,today,attentionOnly};
  // Keep locally available task data visible while server sync catches up. The
- // server copy wins for matching IDs, while unsynced local records are retained.
+ // A stale polling response must not replace a newer locally saved completion.
  const sourceTasks=useMemo(()=>{
   if(!serverEnabled||serverRecords===null)return tasks;
   const merged=new Map((tasks||[]).map(task=>[String(task.id),task]));
-  for(const task of serverRecords)merged.set(String(task.id),task);
+  for (const task of serverRecords) {
+   const local = merged.get(String(task.id));
+   const localVersion = Number(local?._serverVersion || 0);
+   const serverVersion = Number(task._serverVersion || 0);
+   if (!local || serverVersion > localVersion) merged.set(String(task.id), task);
+  }
   return [...merged.values()];
  },[serverEnabled,serverRecords,tasks]);
  const board=useMemo(()=>buildLeaderboard(demo?[...demoTasks,...demoCompletions]:sourceTasks,options),[sourceTasks,demo,demoTasks,demoCompletions,employees,team,group,department,branch,from,to,search,sort,fixedBranch,fixedDepartment,today,attentionOnly]);

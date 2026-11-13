@@ -7,10 +7,10 @@ export function validateCollaborativeSubmission(task, changes) {
         ? 'Every collaborative assignment needs a text or link submission before it can be submitted or completed.' : '';
 }
 // Corporate Services uses the EVP base workflow, so it shares the same creation capability.
-export const canCreateCollaborative = role => ['EVP', 'Operations Manager', 'Team Leader', 'Corporate Services'].includes(role);
+export const canCreateCollaborative = role => ['EVP', 'Operations Manager', 'Team Leader', 'Corporate Services', 'Chief Vet'].includes(role);
 export const canOwnCollaborative = person => canCreateCollaborative(person?.baseRole) || person?.role === 'Corporate Services' || person?.roleGroup === 'Corporate Services';
 // Monitoring can be owned by department leaders, branch managers, or Corporate Services.
-export const canMonitorCollaborative = person => ['Team Leader', 'Operations Manager'].includes(person?.baseRole) || person?.employeeType === 'Supervisor' || (person?.role === 'Corporate Services' || person?.roleGroup === 'Corporate Services');
+export const canMonitorCollaborative = person => ['Team Leader', 'Operations Manager', 'Chief Vet'].includes(person?.baseRole) || person?.employeeType === 'Supervisor' || (person?.role === 'Corporate Services' || person?.roleGroup === 'Corporate Services');
 // Department filters apply to TLs; OM and Corporate monitoring spans departments.
 export const monitorMatchesAssignment = (person, assignment) => canMonitorCollaborative(person)
     && (person.baseRole !== 'Team Leader' && person.employeeType !== 'Supervisor' || person.department === assignment.department)

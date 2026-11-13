@@ -1,5 +1,13 @@
 // Show essential facts first; secondary scheduling details can be expanded when needed.
 export default function TaskOverview({ task, badges, assignee, schedule, deadline, actions }) {
+    if (task.template === 'it-opening-rounds') return <details className="tm-rounds-task-summary">
+        <summary>{task.branch} · {deadline} · Task details</summary>
+        <div className="tm-detail-badges">{badges}</div>
+        <p>Assigned to {assignee}</p>
+        {task.taskCode && <small>{task.taskCode}</small>}
+        <p>{task.description}</p>
+        {actions}
+    </details>;
     return <section className="tm-task-overview tm-task-overview-compact">
         <div className="tm-task-overview-heading"><div className="tm-detail-badges">{badges}</div>{actions}</div>
         <dl className="tm-task-meta-grid tm-task-key-facts">
