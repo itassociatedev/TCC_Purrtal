@@ -1,4 +1,4 @@
-import { assignmentDirectory } from './assignmentDirectory.mjs';
+import { assignmentDirectory, eligibleAssignees } from './assignmentDirectory.mjs';
 const actorName = context => context.role === 'Employee' ? context.employee : context.actor;
 export const isCollaborativeTask = task => task.template === 'collaborative';
 export function validateCollaborativeSubmission(task, changes) {
@@ -62,6 +62,9 @@ export function createCollaborativeMain(draft, tasks, config, context, monitorin
     const owner = people.find(person => person.name === (monitoring.mainOwner || context.actor) && canOwnCollaborative(person));
     const leader = people.find(person => person.name === monitoring.assignee && canMonitorCollaborative(person));
     if (!owner) throw new Error('Choose an EVP, Operations Manager, Corporate Services member, or Team Leader as the final approver.');
+    if (owner && leader && !eligibleAssignees(config, {
+        role: owner.baseRole, roleName: owner.role, actor: owner.name, collaborative: true,
+    }).some(person => person.name === leader.name)) throw new Error('Choose a coordinator within the final approver’s assignment scope.');
     if (!leader) throw new Error('Choose a Team Leader, Operations Manager, or Corporate Services member for monitoring.');
     const main = { ...draft, assignee: owner.name, assigneeRole: owner.role, department: owner.department, kind: 'Main / final deliverable', requestedBy: requester.name, template: 'collaborative', status: 'Not Started' };
     const child = createChildTask(main, [...tasks, main], config, { ...context, actor: owner.name, employee: owner.name }, { ...monitoring, taskType: 'monitoring', due: monitoring.due || childDeadline(draft.due), branch: draft.branch, dependsOn: [] });
@@ -72,10 +75,7 @@ export const canCompleteMainTask = (task, tasks, context) => isCollaborativeTask
     && dependencyBlockers(task, tasks).length === 0;
 // User-requested cleanup targets only the two incorrect root tasks and their descendants.
 export function removeIncorrectCollaborations(tasks) {
-    const names = new Set(['product masterlist', 'prepare the clinic product masterlist']);
-    const roots = tasks.filter(task => !task.parentId && isCollaborativeTask(task) && names.has(task.title?.trim().toLowerCase()));
-    const removed = new Set(roots.flatMap(task => [task.id, ...taskHierarchy(task, tasks).map(row => row.task.id)]));
-    return removed.size ? tasks.filter(task => !removed.has(task.id)) : tasks;
+    return tasks;
 }
 
 // Adding a child turns a legacy execution assignment into a monitoring task atomically.

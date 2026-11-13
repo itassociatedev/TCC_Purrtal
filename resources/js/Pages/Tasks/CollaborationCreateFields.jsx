@@ -1,11 +1,17 @@
+import { eligibleAssignees } from './assignmentDirectory.mjs';
 import PersonPicker from './PersonPicker.jsx';
 import { childDeadline, canMonitorCollaborative, canOwnCollaborative } from './collaborativeTasks.mjs';
 
 export default function CollaborationCreateFields({ config, people, assignment, onAssignment, today, branches }) {
     const owners = people.filter(canOwnCollaborative);
-    const coordinators = people.filter(canMonitorCollaborative);
+    const owner = people.find(person => person.name === assignment.mainOwner);
+    const coordinators = owner ? eligibleAssignees(config, {
+        role: owner.baseRole, roleName: owner.role, actor: owner.name, collaborative: true,
+    }).filter(person => canMonitorCollaborative(person) && person.name !== owner.name
+        && (person.availableBranches || [person.branch]).some(branch => (owner.availableBranches || [owner.branch]).includes(branch))) : [];
     const step = assignment.collabStep || 1;
     const due = assignment.due || today;
+    const ownerBranches = branches.filter(branch => (owner?.availableBranches || [owner?.branch]).includes(branch));
     const countTitle = event => {
         event.currentTarget.setCustomValidity('');
         event.currentTarget.nextElementSibling.textContent = `${event.currentTarget.value.length}/40 characters`;
@@ -19,7 +25,7 @@ export default function CollaborationCreateFields({ config, people, assignment, 
             <legend>Who & where</legend>
             <PersonPicker label="Final owner / approver" people={owners}
                 value={assignment.mainOwner || ''} branches={branches} showTaskBranch={false}
-                onChoose={person => onAssignment({ mainOwner: person.name })} />
+                onChoose={person => onAssignment({ mainOwner: person.name, name: '' })} />
             <p className="tm-collab-person-help">Reviews the final result and closes the workflow.</p>
 
         </fieldset>
@@ -51,12 +57,12 @@ export default function CollaborationCreateFields({ config, people, assignment, 
             <fieldset className="tm-create-section tm-create-assignment">
                 <legend>Coordinator</legend>
             <PersonPicker label="Coordinator" people={coordinators} value={assignment.name}
-                branches={branches} branch={assignment.branch}
+                branches={ownerBranches} branch={assignment.branch}
                 onBranch={branch => onAssignment({ branch })}
                 onChoose={person => onAssignment({
                     name: person.name, department: person.department,
-                    branch: (person.availableBranches || [person.branch]).includes(assignment.branch)
-                        ? assignment.branch : person.branch,
+                    branch: ownerBranches.filter(branch => (person.availableBranches || [person.branch]).includes(branch)).includes(assignment.branch)
+                        ? assignment.branch : ownerBranches.find(branch => (person.availableBranches || [person.branch]).includes(branch)),
                 })} />
             <p className="tm-collab-person-help">Coordinates the work and delegates child assignments.</p>
             </fieldset>

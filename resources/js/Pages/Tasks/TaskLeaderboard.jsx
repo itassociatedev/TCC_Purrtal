@@ -57,7 +57,7 @@ export default function TaskLeaderboard({tasks,today,employees=[],fixedBranch=''
    const local = merged.get(String(task.id));
    const localVersion = Number(local?._serverVersion || 0);
    const serverVersion = Number(task._serverVersion || 0);
-   if (!local || serverVersion > localVersion) merged.set(String(task.id), task);
+   if (!local || serverVersion >= localVersion) merged.set(String(task.id), task);
   }
   return [...merged.values()];
  },[serverEnabled,serverRecords,tasks]);

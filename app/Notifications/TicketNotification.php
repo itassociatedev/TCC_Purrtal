@@ -16,6 +16,7 @@ class TicketNotification extends Notification
     {
         // action_url matches the link field consumed by SidebarLayout.
         return [
+            'module' => 'ticketing',
             'ticket_id' => $this->ticketId,
             'message' => $this->message,
             'action_url' => route($this->actionRoute ?? 'tickets.dashboard'),

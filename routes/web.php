@@ -68,12 +68,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'taskEmailMode' => config('task_module.email_mode'),
             // Serialize directory fields only; never send account credentials or device data.
             'taskDirectory' => [
+                'authoritative' => (bool) config('task_module.server_enabled'),
                 'users' => \App\Models\User::with(['department:id,name', 'position:id,name', 'branch:id,name', 'branches:id,name'])
                     ->orderBy('name')->get()->map(fn ($user) => [
                         'id' => $user->id, 'name' => $user->name,
                         'department' => $user->department?->name, 'position' => $user->position?->name,
                         'branch' => $user->branch?->name, 'branches' => $user->branches->pluck('name')->values(),
                         'status' => $user->status,
+                        'taskAccess' => [
+                            'role' => app(\App\Services\TaskModuleAccess::class)->role($user),
+                            'position' => app(\App\Services\TaskModuleAccess::class)->position($user),
+                            'department' => app(\App\Services\TaskModuleAccess::class)->department($user),
+                            'branches' => app(\App\Services\TaskModuleAccess::class)->branches($user),
+                        ],
                     ]),
             ],
         ]);

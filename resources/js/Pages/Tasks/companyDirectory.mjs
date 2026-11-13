@@ -73,6 +73,15 @@ export function companySettings(config,directory) {
             role: 'Corporate Services', availableBranches: [...config.branches] };
         return { ...person, department };
     });
+    if (directory.authoritative) {
+        people = people.map(person => {
+            const access = directory.users.find(user => user.id === person.id)?.taskAccess;
+            if (!access || access.role === 'Admin') return person;
+            return { ...person, role: access.role, position: access.position,
+                department: access.department, availableBranches: access.branches,
+                branch: access.branches.includes(person.branch) ? person.branch : access.branches[0] };
+        });
+    }
     return {...config,companyDirectory:true,rosterVersion:'employee-management',organizationStructureVersion:5,
         departments:[...new Set(people.map(person=>person.department))],
         branches:[...new Set(people.flatMap(person=>person.availableBranches))],

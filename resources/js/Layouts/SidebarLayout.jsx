@@ -182,11 +182,11 @@ export default function SidebarLayout({
     const [localNotifications, setLocalNotifications] = useState(safeNotifications);
     const [localUnreadCount, setLocalUnreadCount] = useState(auth?.unreadNotificationsCount || 0);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
-    const itNotifications = localNotifications.filter(item => {
-        const data = item?.data || {};
-        const message = `${data.message || ''} ${data.user_email || ''} ${data.details || ''} ${data.type || ''}`;
-        return data.ticket_id != null || /password reset|reset request|locked out|security_alert|account activation|account reset/i.test(message);
-    });
+    const itNotifications = localNotifications.filter(item =>
+        item?.type === 'App\\Notifications\\TicketNotification'
+        || item?.data?.module === 'ticketing'
+        || item?.data?.ticket_id != null
+    );
     const itUnreadCount = itNotifications.filter(item => !item.read_at).length;
 
     // 🟢 Calculate hasMore dynamically

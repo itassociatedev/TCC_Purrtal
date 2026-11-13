@@ -8,9 +8,31 @@ use Illuminate\Database\Eloquent\Builder;
 
 class TaskModuleAccess
 {
+    private array $rosterMatches = [];
+
+    private function rosterReference(User $user): ?array
+    {
+        if (array_key_exists($user->id, $this->rosterMatches)) return $this->rosterMatches[$user->id];
+        $normalize = fn ($value) => trim(preg_replace('/[^a-z0-9]+/', ' ', strtolower(\Illuminate\Support\Str::ascii($value))));
+        $name = $normalize($user->name);
+        $rows = json_decode(file_get_contents(resource_path('js/Pages/Tasks/companyRosterReference.json')), true);
+        $matches = array_values(array_filter($rows, function ($row) use ($normalize, $name) {
+            $reference = $normalize($row['name']);
+            if ($reference === $name) return true;
+            $tokens = array_filter(explode(' ', $reference), fn ($token) => strlen($token) > 2 && !in_array($token, ['chrp','rpm']));
+            return count($tokens) >= 2 && !array_diff($tokens, explode(' ', $name));
+        }));
+        return $this->rosterMatches[$user->id] = count($matches) === 1 ? $matches[0] : null;
+    }
+
+    public function position(User $user): string
+    {
+        return $this->rosterReference($user)['position'] ?? $user->position?->name ?? '';
+    }
+
     public function role(User $user): string
     {
-        $title = strtolower(trim($user->position?->name ?? ''));
+        $title = strtolower(trim($this->position($user)));
         if (strtolower(trim($user->role?->name ?? '')) === 'admin') return 'Admin';
         return match (true) {
             (bool) preg_match('/executive vice president|^evp$/', $title) => 'EVP',
@@ -24,8 +46,8 @@ class TaskModuleAccess
     public function department(User $user): string
     {
         $name = $user->department?->name ?? '';
-        $rules = ['/^it$|information technology/i'=>'IT','/procurement/i'=>'Procurement','/inventory/i'=>'Inventory','/audit/i'=>'Internal Audit','/operations.*finance/i'=>'Operations & Finance','/finance|accounting/i'=>'Accounting','/human resources|^hr$/i'=>'HR','/marketing|sales/i'=>'Sales & Marketing','/technician|vet tech/i'=>'Vet Tech','/veterinar/i'=>'Veterinary','/clinic assistant|groomer/i'=>'Clinic Assistant','/front desk|reception/i'=>'Reception','/cashier|billing/i'=>'Cashier','/security/i'=>'Security','/driver|housekeeping|facilities|utility/i'=>'Facilities','/operations? manager|executive assistant|^operations$/i'=>'Clinic Operations Manager'];
-        foreach ([$user->position?->name ?? '', $name] as $source) { foreach ($rules as $pattern => $department) if (preg_match($pattern, $source)) return $department; }
+        $rules = ['/^it\b|information technology/i'=>'IT','/procurement/i'=>'Procurement','/inventory/i'=>'Inventory','/audit/i'=>'Internal Audit','/operations.*finance/i'=>'Operations & Finance','/finance|accounting/i'=>'Accounting','/human resources|^hr\b/i'=>'HR','/marketing|sales/i'=>'Sales & Marketing','/technician|vet tech/i'=>'Vet Tech','/veterinar/i'=>'Veterinary','/clinic assistant|groomer/i'=>'Clinic Assistant','/front desk|reception/i'=>'Reception','/cashier|billing/i'=>'Cashier','/security/i'=>'Security','/driver|housekeeping|facilities|utility/i'=>'Facilities','/operations? manager|executive assistant|^operations$/i'=>'Clinic Operations Manager'];
+        foreach ([$this->position($user), $name] as $source) { foreach ($rules as $pattern => $department) if (preg_match($pattern, $source)) return $department; }
         return $name;
     }
     public function active(User $user): bool
@@ -34,7 +56,16 @@ class TaskModuleAccess
     }
     public function branches(User $user): array
     {
-        return array_values(array_unique(array_filter([$user->branch?->name, ...$user->branches->pluck('name')->all()])));
+        $role = $this->role($user);
+        $title = strtolower($this->position($user));
+        if (in_array($role, ['EVP','Corporate Services']) || $role === 'Team Leader' && $this->department($user) === 'IT'
+            || preg_match('/procurement supervisor|company driver|reliever/', $title)) {
+            return \App\Models\Branch::pluck('name')->all();
+        }
+        return array_values(array_unique(array_filter([
+            $this->rosterReference($user)['branch'] ?? $user->branch?->name,
+            ...$user->branches->pluck('name')->all(),
+        ])));
     }
     public function visible(User $user): Builder
     {
