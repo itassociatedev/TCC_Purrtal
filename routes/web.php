@@ -47,6 +47,20 @@ Route::post('/forgot-password-notify', [AuthenticatedSessionController::class, '
     ->name('password.request.admin');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/notifications/ticketing-feed', function (Request $request) {
+        $query = NotificationController::ticketRecipient($request)->notifications()->where('type', \App\Notifications\TicketNotification::class);
+        return response()->json([
+            'notifications' => (clone $query)->latest()->limit(30)->get(),
+            'unread' => (clone $query)->whereNull('read_at')->count(),
+        ]);
+    })->middleware('throttle:30,1')->name('notifications.ticketing-feed');
+
+    Route::post('/notifications/ticketing-feed/{id}/read', function (Request $request, $id) {
+        NotificationController::ticketRecipient($request)->notifications()
+            ->where('type', \App\Notifications\TicketNotification::class)->findOrFail($id)->markAsRead();
+        return response()->json(['success' => true]);
+    })->name('notifications.ticketing-read');
+
     Route::post('/spreadsheet-import/export', [\App\Http\Controllers\SpreadsheetImportController::class, 'export'])->middleware('throttle:20,1');
     Route::post('/spreadsheet-import/read', [\App\Http\Controllers\SpreadsheetImportController::class, 'read'])->middleware('throttle:20,1');
     Route::post('/spreadsheet-import/template', [\App\Http\Controllers\SpreadsheetImportController::class, 'template'])->middleware('throttle:20,1');

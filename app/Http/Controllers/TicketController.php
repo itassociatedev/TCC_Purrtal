@@ -410,7 +410,7 @@ class TicketController extends Controller
         // Revalidate permissions and employee/branch data at confirmation time.
         $data = $workbook->validateRows($pending['rows'], $preview);
         DB::transaction(function () use ($data, $actor, $preview) {
-            $team = $preview ? collect() : User::whereNotIn('id', DB::table('ticket_preview_users')->select('user_id'))->with('role')->get()->filter(fn ($user) => TicketAccess::role($user) !== 'employee');
+            $team = $preview ? collect() : User::with(['role','position','department'])->where('status','Active')->get()->filter(fn ($user) => TicketAccess::notificationRole($user) !== 'employee');
             foreach ($data as $row) {
                 $received = now()->utc();
                 $ticket = Ticket::create($row + ['is_preview' => $preview, 'reporting_channel' => 'portal']);
@@ -547,7 +547,7 @@ class TicketController extends Controller
             app(TicketSla::class)->enroll($ticket, $actor, $received);
             // Test tickets persist for testing but must not notify real staff.
             if ($preview) return $ticket;
-            $team = User::whereNotIn('id', DB::table('ticket_preview_users')->select('user_id'))->with('role')->get()->filter(fn ($user) => TicketAccess::role($user) !== 'employee');
+            $team = User::with(['role','position','department'])->where('status','Active')->get()->filter(fn ($user) => TicketAccess::notificationRole($user) !== 'employee');
             Notification::send($team, new TicketNotification($ticket->id, "New ticket #{$ticket->ticket_code}: {$ticket->subject}"));
             return $ticket;
         });

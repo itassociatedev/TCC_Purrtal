@@ -43,6 +43,19 @@ class TicketAccess
         return 'employee';
     }
 
+    // Notification routing also recognizes an IT job title on an Admin login.
+    // This does not change ticket-management authorization.
+    public static function notificationRole(User $user): string
+    {
+        $role = self::role($user);
+        if ($role !== 'employee') return $role;
+        if (!in_array(strtolower(trim($user->department?->name ?? '')), ['it', 'information technology'], true)) return 'employee';
+        $position = strtolower(trim($user->position?->name ?? ''));
+        if (in_array($position, ['it supervisor', 'it team leader', 'it tl'], true)) return 'leader';
+        if (in_array($position, ['it associate', 'it admin', 'it intern', 'it staff', 'it member'], true)) return 'member';
+        return 'employee';
+    }
+
     public static function canRateResolver(User $requester, User $resolver): bool
     {
         // Requester ownership is checked separately. A team leader may rate an

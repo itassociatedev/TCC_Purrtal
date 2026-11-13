@@ -7,6 +7,15 @@ use Inertia\Inertia;
 
 class NotificationController extends Controller
 {
+    public static function ticketRecipient(Request $request): \App\Models\User
+    {
+        $user = $request->user();
+        if (!$request->filled('preview_person')) return $user;
+        abort_unless(strtolower(trim($user->role?->name ?? '')) === 'admin', 403);
+        return \App\Models\User::where('status', 'Active')
+            ->where('name', $request->string('preview_person')->toString())->firstOrFail();
+    }
+
     /** Clear only the signed-in user's portal notification history. */
     public function clear(Request $request)
     {
