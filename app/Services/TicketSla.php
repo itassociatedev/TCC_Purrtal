@@ -37,7 +37,7 @@ class TicketSla
 
     public function enroll(Ticket $ticket, User $actor, $received): void
     {
-        $ticket->sla_policy = config('ticket-sla');
+        $ticket->sla_policy = TicketPrioritySettings::policy();
         $ticket->sla_received_at = $received;
         $ticket->sla_state = ['elapsed' => 0, 'running_since' => CarbonImmutable::parse($received)->utc()->toIso8601String(),
             'acknowledged_at' => null, 'resolved_at' => null, 'paused_at' => null, 'reopen_count' => 0,
@@ -49,6 +49,9 @@ class TicketSla
 
     public function snapshot(Ticket $ticket, $at = null): array
     {
+        if (in_array($ticket->status, Ticket::REVIEW_HOLD_STATUSES, true)) {
+            return ['enabled' => false, 'label' => $ticket->status === 'rejected' ? 'Ticket rejected' : 'Awaiting requester revision'];
+        }
         if (!$ticket->sla_policy) return ['enabled' => false, 'label' => 'Legacy ticket — SLA excluded'];
         $state = $ticket->sla_state;
         $at = CarbonImmutable::parse($at ?? now());
@@ -60,9 +63,11 @@ class TicketSla
         // A later downgrade must not turn a late acknowledgment into an on-time one.
         $responseElapsed = $state['response_result']['elapsed'] ?? $clock->seconds($ticket->sla_received_at, $state['acknowledged_at'] ?? $at);
         $responseTarget = $state['response_result']['target'] ?? ($target['response'] ?? null);
-        // Resolution allowance always follows the newest priority, including paused
-        // and completed tickets. Elapsed support time and historical results are retained.
-        $resolutionTarget = $target['resolution'] ?? null;
+        // Active/paused timers use the selected target; completed milestones retain
+        // their recorded allowance even when global settings or priority later change.
+        $stopped = !empty($state['resolved_at']) || !empty($state['workaround_accepted_at']);
+        $resolutionTarget = $stopped ? ($state['resolution_result']['target'] ?? ($target['resolution'] ?? null)) : ($target['resolution'] ?? null);
+        if ($stopped) $elapsed = (int) ($state['resolution_result']['elapsed'] ?? $elapsed);
         $remaining = $resolutionTarget !== null ? $resolutionTarget - $elapsed : null;
         $responseRemaining = $responseTarget !== null ? $responseTarget - $responseElapsed : null;
         $stopped = !empty($state['resolved_at']) || !empty($state['workaround_accepted_at']);
@@ -95,11 +100,38 @@ class TicketSla
         }
     }
 
+    public function holdForReview(Ticket $ticket): void
+    {
+        if (!$ticket->sla_policy) return;
+
+        $state = $ticket->sla_state;
+        $this->stop($state, new SupportClock($ticket->sla_policy));
+        $ticket->sla_state = $state;
+    }
+
+    public function resumeAfterRevision(Ticket $ticket): void
+    {
+        if (!$ticket->sla_policy) return;
+
+        $state = $ticket->sla_state;
+        foreach (['resolved_at', 'resolved_by', 'resolution_result', 'resolution_documentation',
+            'confirmed_at', 'workaround_accepted_at', 'paused_at', 'pause_reason'] as $key) {
+            unset($state[$key]);
+        }
+        $state['reopen_count'] = ($state['reopen_count'] ?? 0) + 1;
+        $state['running_since'] = $state['last_update_at'] = $this->stamp();
+        $ticket->sla_state = $state;
+    }
+
     // Called inside the controller's row-lock transaction. The elapsed accumulator
     // survives reassignment, priority changes, pauses, and resolution/reopen cycles.
     public function apply(Ticket $ticket, User $actor, string $role, array $data): void
     {
         $action = $data['action'] ?? 'save';
+        // Enforce the removed capability here too, including non-HTTP callers.
+        if ($action === 'pause') {
+            throw ValidationException::withMessages(['action' => 'Pausing the SLA timer is no longer available.']);
+        }
         $oldStatus = $ticket->status;
         $oldPriority = $ticket->priority;
         $oldAssignee = $ticket->assigned_to;
@@ -119,14 +151,29 @@ class TicketSla
         }
         if (array_key_exists('priority', $data) && $data['priority'] !== $oldPriority) {
             $reason = $this->need($data, 'priority_reason');
+            // Preserve completed legacy milestones before adopting a new priority target.
+            $previousTarget = $ticket->sla_policy['targets'][$oldPriority ?? ''] ?? null;
+            if ($previousTarget && !empty($state['acknowledged_at']) && empty($state['response_result']) && $clock) {
+                $state['response_result'] = ['target' => $previousTarget['response'],
+                    'elapsed' => $clock->seconds($ticket->sla_received_at, $state['acknowledged_at'])];
+            }
+            if ($previousTarget && (!empty($state['resolved_at']) || !empty($state['workaround_accepted_at'])) && empty($state['resolution_result'])) {
+                $state['resolution_result'] = ['target' => $previousTarget['resolution'], 'elapsed' => $state['elapsed']];
+            }
             $this->activity($ticket, $actor, 'priority_changed', $reason, ['from' => $oldPriority, 'to' => $data['priority']]);
+            // A priority change adopts the latest target for that priority without resetting time.
+            if ($ticket->sla_policy) {
+                $policy = $ticket->sla_policy;
+                $policy['targets'][$data['priority']] = TicketPrioritySettings::targets()[$data['priority']];
+                $ticket->sla_policy = $policy;
+            }
             $ticket->priority = $data['priority'];
             $this->notify($ticket, 'Priority and service targets updated: '.$reason);
         }
         if (isset($data['assigned_to'])) $ticket->assigned_to = $data['assigned_to'];
         // An IT worker taking substantive action becomes the responsible owner
         // if allocation has not happened yet. Pure priority review may remain unassigned.
-        if (!$ticket->assigned_to && ($desired === 'resolved' || in_array($action, ['acknowledge', 'restore', 'approve_workaround', 'pause', 'update']))) {
+        if (!$ticket->assigned_to && ($desired === 'resolved' || in_array($action, ['acknowledge', 'restore', 'approve_workaround', 'update']))) {
             $ticket->assigned_to = $actor->id;
         }
         if ($oldAssignee !== $ticket->assigned_to) {
@@ -142,19 +189,6 @@ class TicketSla
                 $state['acknowledged_by'] = $actor->id;
                 $this->activity($ticket, $actor, 'acknowledged', $assessment, ['next_steps' => $steps]);
                 $this->notify($ticket, "Acknowledged: {$assessment}. Next steps: {$steps}");
-            }
-            if ($action === 'pause') {
-                if (!empty($state['paused_at']) || !empty($state['resolved_at']) || !empty($state['workaround_accepted_at'])) {
-                    throw ValidationException::withMessages(['action' => 'Only an active resolution timer may be paused.']);
-                }
-                $reason = $this->need($data, 'pause_reason');
-                if (!in_array($reason, $ticket->sla_policy['pause_reasons'], true)) throw ValidationException::withMessages(['pause_reason' => 'Choose an approved pause reason.']);
-                $note = $this->need($data, 'note');
-                $this->stop($state, $clock);
-                $state['paused_at'] = $this->stamp();
-                $state['pause_reason'] = $reason;
-                $this->activity($ticket, $actor, 'paused', $note, ['reason' => $reason, 'started_at' => $state['paused_at']]);
-                $this->notify($ticket, 'Resolution timer paused: '.$note);
             }
             if ($action === 'resume') {
                 if (empty($state['paused_at'])) throw ValidationException::withMessages(['action' => 'The ticket is not paused.']);
@@ -273,11 +307,12 @@ class TicketSla
 
     public function check(Ticket $ticket): void
     {
+        if (in_array($ticket->status, Ticket::REVIEW_HOLD_STATUSES, true)) return;
         if (!$ticket->sla_policy) return;
         $view = $this->snapshot($ticket);
         $state = $ticket->sla_state;
         $originalState = $state;
-        if (!$ticket->priority) return; // Accumulate time, but never invent a deadline for Not Set.
+        if (!$ticket->priority) return;
         $cycle = $ticket->priority.':'.($state['reopen_count'] ?? 0);
         $alerts = [];
         if (!$view['resolution_complete'] && $view['resolution_remaining'] <= $view['resolution_target'] * $ticket->sla_policy['warning_remaining']) {

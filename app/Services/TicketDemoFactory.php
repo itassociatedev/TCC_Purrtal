@@ -97,7 +97,8 @@ class TicketDemoFactory
                 }
                 if ($scenario === 'paused') {
                     $this->freeze($at(3600));
-                    $sla->apply($ticket, $owner, 'member', ['action' => 'pause', 'pause_reason' => 'vendor', 'note' => 'Awaiting the vendor technical assessment; requester informed.']);
+                    // Retain the legacy scenario key, but waiting on a vendor no longer pauses SLA time.
+                    $sla->apply($ticket, $owner, 'member', ['action' => 'update', 'note' => 'Awaiting the vendor technical assessment; SLA timer continues and requester is informed.']);
                 }
                 if ($scenario === 'workaround') {
                     $this->freeze($at(3600));

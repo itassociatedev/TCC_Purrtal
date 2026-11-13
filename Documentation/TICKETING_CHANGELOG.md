@@ -1,6 +1,19 @@
 # Ticketing change history
 
-Last consolidated **6 November 2026**. This is implementation history, not a Git commit log or evidence of production deployment. The current behavior is in [TICKETING.md](TICKETING.md); detailed timing is in [SLA_IMPLEMENTATION.md](SLA_IMPLEMENTATION.md); source/test paths are in [TICKETING_CODE_MAP.md](TICKETING_CODE_MAP.md).
+## 9–10 November 2026 — Ticket review, locations and leaderboard
+
+- Added leader rejection and revision requests for IT member submissions, a creator-only revision queue, activity history and notification links.
+- Added branch and priority filters, IT assignee filtering, and responsive filter sizing. Replaced the employee Closed dashboard card with Resolved.
+- Converted unset priorities to Low and made Low the database default. Added custom ticket locations and retirement without changing the branch directory.
+- Added annual location/category ticket counters and backfilled older codes. Creation and filter dropdowns display location names.
+- Added scoped XLSX drill-down exports and clickable ticket subjects across leaderboard views. Removed link underlines and the calendar caption, gave the podium fixed rank heights, and moved animation to the cat icons.
+
+## 9 November 2026 — IT Intern ticket team membership
+
+- Added the IT Intern role to the ticket member workflow so interns appear in IT Team Leader workload and leaderboard rosters and can receive assigned tickets.
+- Updated the current role guide. The existing local IT Intern test account now uses the same ticket permissions as other IT members.
+
+Last consolidated **10 November 2026**. See the [current guide](TICKETING.md), [SLA reference](SLA_IMPLEMENTATION.md), and [code map](TICKETING_CODE_MAP.md).
 
 ## 6 November 2026 — Local role accounts and ticket leaderboard
 
@@ -238,3 +251,8 @@ Last consolidated **6 November 2026**. This is implementation history, not a Git
 ## Ongoing record policy
 
 For future changes, add date, user-visible behavior, source/test paths, schema/data effects, validation actually run, and deployment status. Keep current guides internally consistent; place retired decisions here instead of appending conflicting current instructions. Do not publish private backup content, passwords, tokens or environment secrets.
+
+
+### 2026-11-13 - Remove SLA pause permission for all roles
+
+Removed the Pause resolution timer action and pause-reason form from Tickets/Index.jsx. TicketController rejects pause actions and pause_reason payloads; TicketSla::apply independently rejects pause for every role and no longer implements pausing. Existing paused tickets retain Resume resolution timer so their clocks can continue without backdating historical waiting time. Automatic resolution completion and review-hold/revision behavior are unchanged. No ticket data or elapsed time was rewritten. Tests: tests/verify-ticket-no-pause.php covers server rejection for supervisor/member/employee, unchanged state/history and legacy resume. Recent ticket feature changes are committed to taskmodule-ticketing-merge; local launcher/process files are excluded.

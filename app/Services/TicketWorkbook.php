@@ -44,8 +44,8 @@ class TicketWorkbook
             $snapshot = app(TicketSla::class)->snapshot($ticket);
             $rows[] = [$ticket->ticket_code, $ticket->subject, $ticket->description, $ticket->category, $ticket->status,
                 $ticket->created_at->timezone('Asia/Manila')->format('Y-m-d H:i:s'),
-                ['critical' => 'Critical', 'high' => 'High', 'medium' => 'Medium', 'low' => 'Low'][$ticket->priority ?? ''] ?? 'Not Set',
-                $ticket->branch?->name, $ticket->employee_name, $ticket->assignee?->name,
+                TicketPrioritySettings::labels()[$ticket->priority ?? ''] ?? 'Low',
+                $ticket->affectedLocationName(), $ticket->employee_name, $ticket->assignee?->name,
                 $snapshot['response_status'] ?? 'Excluded', $snapshot['resolution_status'] ?? 'Excluded'];
         }
         $sheets = ['Tickets' => $rows, 'Export scope' => [['Filter', 'Value'], ['Exported at', now('Asia/Manila')->format('Y-m-d H:i:s')], ['Role', $role], ['Tickets scope', 'All matching rows; pagination ignored']]];
@@ -102,7 +102,7 @@ class TicketWorkbook
             $data = array_map(fn ($v) => trim((string) $v), $raw);
             $rules = ['employee_id' => 'required|integer', 'branch_affected' => 'required|string', 'subject' => 'required|string|max:180',
                 'category' => ['required', \Illuminate\Validation\Rule::in(config('ticketing.categories'))],
-                'priority' => ['nullable', \Illuminate\Validation\Rule::in(['Critical', 'High', 'Medium', 'Low', 'Not Set', ''])],
+                'priority' => ['nullable', \Illuminate\Validation\Rule::in(array_values(TicketPrioritySettings::labels()))],
                 'department' => 'required|string|max:255', 'affected_system' => 'required|string|max:255', 'details' => 'required|string|max:10000', 'impact' => 'required|string|max:5000', 'supporting_links' => 'nullable|string|max:20000'];
             $validator = Validator::make($data, $rules);
             $messages = $validator->errors()->all();
@@ -116,7 +116,7 @@ class TicketWorkbook
             if ($messages) { $errors['row_'.($index + 2)] = 'Row '.($index + 2).': '.implode(' ', $messages); continue; }
             $valid[] = ['creator_id' => $user->id, 'employee_name' => $user->name, 'branch_id' => $branch->id,
                 'employee_department' => $user->department?->name ?: $data['department'], 'subject' => $data['subject'], 'category' => $data['category'],
-                'priority' => ['Critical' => 'critical', 'High' => 'high', 'Medium' => 'medium', 'Low' => 'low'][$data['priority']] ?? null,
+                'priority' => array_flip(TicketPrioritySettings::labels())[$data['priority'] ?? ''] ?? 'low',
                 'affected_asset' => $data['affected_system'], 'description' => $data['details'], 'operational_impact' => $data['impact'], 'supporting_links' => $links];
         }
         if ($errors) throw ValidationException::withMessages($errors);

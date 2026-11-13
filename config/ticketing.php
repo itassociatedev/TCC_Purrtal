@@ -3,7 +3,9 @@
 return [
     // Exact role names only: unrelated administrators do not inherit IT privileges.
     'leader_roles' => ['IT TL', 'IT Team Leader', 'IT Supervisor'],
-    'member_roles' => ['IT Member', 'IT Staff'],
+    // IT interns use the same assigned-ticket workflow and appear in leader
+    // workload/leaderboard rosters alongside IT members.
+    'member_roles' => ['IT Member', 'IT Staff', 'IT Intern'],
     // Branch selection exceptions do not grant IT ticket-management permissions.
     // IT department staff may report any affected location, regardless of job role.
     'all_branch_departments' => ['Information Technology'],

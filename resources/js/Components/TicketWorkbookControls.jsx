@@ -16,7 +16,7 @@ export default function TicketWorkbookControls({ leader, pending, ticketRoute, v
                 {Object.entries(upload.errors).map(([key, error]) => <p className="ticket-error" role="alert" key={key}>{error}</p>)}
             </form>
             {pending && <div className="ticket-import-preview"><h3>Review {pending.tickets.length} new tickets</h3>
-                <div className="ticket-table-wrap"><table><thead><tr><th>Employee</th><th>Branch affected</th><th>Subject</th></tr></thead><tbody>{pending.tickets.map((ticket, index) => <tr key={index}><td>{ticket.employee}</td><td>{ticket.branch}</td><td>{ticket.subject}</td></tr>)}</tbody></table></div>
+                <div className="ticket-table-wrap"><table className="ticket-import-table"><thead><tr><th>Employee</th><th>Branch affected</th><th>Subject</th></tr></thead><tbody>{pending.tickets.map((ticket, index) => <tr key={index}><td data-label="Employee">{ticket.employee}</td><td data-label="Location">{ticket.branch}</td><td data-label="Subject">{ticket.subject}</td></tr>)}</tbody></table></div>
                 <form onSubmit={e => { e.preventDefault(); confirm.transform(data => ({ ...data, token: pending.token })); confirm.post(ticketRoute('import'), { preserveScroll: true }); }}>
                     <button className="ticket-primary" disabled={confirm.processing || cancel.processing}>{confirm.processing ? 'Importing…' : 'Confirm import and notify'}</button>
                     {Object.entries(confirm.errors).map(([key, error]) => <p className="ticket-error" role="alert" key={key}>{error}</p>)}
