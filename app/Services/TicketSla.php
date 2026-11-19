@@ -241,7 +241,8 @@ class TicketSla
             }
             if ($closing) {
                 if (empty($state['resolution_documentation'])) throw ValidationException::withMessages(['status' => 'Resolution documentation is required before closure.']);
-                $this->need($data, 'note');
+                // Closure is a separate requester event, including for SLA-tracked tickets.
+                $this->notify($ticket, 'Closed: '.$this->need($data, 'note'));
             }
             if ((in_array($oldStatus, ['closed', 'resolved']) && $desired === 'in_progress')
                 || ($action === 'reopen' && !empty($state['workaround_accepted_at']))) {

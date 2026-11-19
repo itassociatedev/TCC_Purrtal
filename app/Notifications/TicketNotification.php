@@ -19,7 +19,7 @@ class TicketNotification extends Notification
             'module' => 'ticketing',
             'ticket_id' => $this->ticketId,
             'message' => $this->message,
-            'action_url' => route($this->actionRoute ?? 'tickets.dashboard'),
+            'action_url' => route('tickets.all', ['selected_ticket' => $this->ticketId]),
         ];
     }
 }

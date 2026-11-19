@@ -135,15 +135,15 @@ function TicketReports({ reports, ticketRoute, filters }) {
     </section>;
 }
 
-function MemberWorkloads({ members }) {
+function MemberWorkloads({ members, ticketRoute, filters, search }) {
     return <section className="ticket-card ticket-member-panel" aria-labelledby="ticket-member-heading">
-        <div className="ticket-card-heading"><div><h2 id="ticket-member-heading">IT staff workload</h2><p>Includes IT members, interns and leaders. Assignment counts follow the current owner; ratings belong to the recorded resolver. Resolved includes closed tickets.</p></div></div>
+        <div className="ticket-card-heading"><div><h2 id="ticket-member-heading">IT staff workload</h2><p>Includes IT members, interns and leaders. Select an assigned or resolved total to filter tickets. Assignment counts follow the current owner; resolutions and ratings belong to the recorded resolver. Resolved includes closed tickets.</p></div></div>
         <div className="ticket-member-grid">
             {members.map(member => <article className="ticket-member-card" key={member.id}>
-                <div className="ticket-member-name"><span className="ticket-member-avatar" aria-hidden="true">{member.name.split(/\s+/).slice(0, 2).map(part => part[0]).join('')}</span><h3>{member.name}</h3></div>
+                <div className="ticket-member-name"><span className="ticket-member-avatar" aria-hidden="true">{member.name.split(/\s+/).slice(0, 2).map(part => part[0]).join('')}</span><h3><Link href={ticketRoute('index', { view: 'all', search, assignee_filter: member.id, resolver_filter: '' })} preserveScroll>{member.name}</Link></h3></div>
                 <dl className="ticket-member-counts">
-                    <div className="ticket-member-assigned"><dt>Assigned tickets</dt><dd>{member.assigned_count}</dd></div>
-                    <div className="ticket-member-resolved"><dt>Resolved tickets</dt><dd>{member.resolved_count}</dd></div>
+                    <div className="ticket-member-assigned"><dt>Assigned tickets</dt><dd><Link href={ticketRoute('index', { view: 'all', search, assignee_filter: member.id, resolver_filter: '' })} aria-label={`Show tickets assigned to ${member.name}`} aria-current={Number(filters.assignee_filter) === Number(member.id) ? 'true' : undefined} preserveScroll>{member.assigned_count}</Link></dd></div>
+                    <div className="ticket-member-resolved"><dt>Resolved tickets</dt><dd><Link href={ticketRoute('index', { view: 'all', search, resolver_filter: member.id, assignee_filter: '', status_filter: 'all', closed_period: '' })} aria-label={`Show tickets resolved by ${member.name}`} aria-current={Number(filters.resolver_filter) === Number(member.id) ? 'true' : undefined} preserveScroll>{member.resolved_count}</Link></dd></div>
                     {/* Use the same resolved total (including closed tickets), and
                         avoid dividing by zero for members without assignments. */}
                     <div className="ticket-member-rate"><dt>Tickets resolved (%)</dt><dd>{(member.assigned_count > 0
@@ -452,7 +452,7 @@ function TicketHandover({ members, handovers, today }) {
     </section>;
 }
 
-export function TicketScreen({ priorityLabels = defaultPriorityLabels, selectablePriorityLabels = priorityLabels, prioritySettings = [], submissionAcknowledgement = null, prioritySummary = null, pendingFeedback = [], leaderboard = null, pendingImport = null, leaderSummary = null, memberRating = null, memberSummary = null, employeeSummary = null, creationPage = false, departments = [], filterBranches = [], ticketLocations = [], branchCodes = {}, ticketRole, tickets, filters, categories, branches, members, reports, memberWorkloads = [], slaReport, slaPolicy, ticketUser, canAssignDuringHandover = false, handoverMembers = [], handovers = [], handoverToday = null }) {
+export function TicketScreen({ selectedTicket = null, priorityLabels = defaultPriorityLabels, selectablePriorityLabels = priorityLabels, prioritySettings = [], submissionAcknowledgement = null, prioritySummary = null, pendingFeedback = [], leaderboard = null, pendingImport = null, leaderSummary = null, memberRating = null, memberSummary = null, employeeSummary = null, creationPage = false, departments = [], filterBranches = [], ticketLocations = [], branchCodes = {}, ticketRole, tickets, filters, categories, branches, members, reports, memberWorkloads = [], slaReport, slaPolicy, ticketUser, canAssignDuringHandover = false, handoverMembers = [], handovers = [], handoverToday = null }) {
     const { auth } = usePage().props;
     // Module content uses the test identity; SidebarLayout keeps the real admin session.
     const actor = ticketUser || auth.user;
@@ -460,7 +460,7 @@ export function TicketScreen({ priorityLabels = defaultPriorityLabels, selectabl
         const { view, ...query } = params;
         // Screen identity belongs in the path. Export still takes a view filter.
         const page = action === 'index' ? (view || 'dashboard') : action;
-        return route(`tickets.${page}`, { ...(view && filters.location_filter ? { location_filter: filters.location_filter } : {}), ...(view && filters.branch_filter ? { branch_filter: filters.branch_filter } : {}), ...(view === 'all' && filters.assignee_filter ? { assignee_filter: filters.assignee_filter } : {}), leaderboard_period: filters.leaderboard_period || 'all', priority_filter: filters.priority_filter || 'all', closed_period: filters.closed_period || '', date_from: filters.date_from || '', date_to: filters.date_to || '', status_filter: filters.status_filter || 'all', sort: filters.sort || 'created_at', direction: filters.direction || 'desc', report_period: filters.report_period || 'all', per_page: filters.per_page || '10', ...(action === 'index' ? query : params) });
+        return route(`tickets.${page}`, { ...(view && filters.location_filter ? { location_filter: filters.location_filter } : {}), ...(view && filters.branch_filter ? { branch_filter: filters.branch_filter } : {}), ...(view === 'all' && filters.assignee_filter ? { assignee_filter: filters.assignee_filter } : {}), resolver_filter: view && view !== 'all' ? '' : filters.resolver_filter || '', leaderboard_period: filters.leaderboard_period || 'all', priority_filter: filters.priority_filter || 'all', closed_period: filters.closed_period || '', date_from: filters.date_from || '', date_to: filters.date_to || '', status_filter: filters.status_filter || 'all', sort: filters.sort || 'created_at', direction: filters.direction || 'desc', report_period: filters.report_period || 'all', per_page: filters.per_page || '10', ...(action === 'index' ? query : params) });
     };
     const employee = ticketRole === 'employee';
     const [receipt, setReceipt] = useState(null);
@@ -484,7 +484,9 @@ export function TicketScreen({ priorityLabels = defaultPriorityLabels, selectabl
     useEffect(() => { setDateFrom(filters.date_from || ''); setDateTo(filters.date_to || ''); }, [filters.date_from, filters.date_to]);
     const dateErrors = usePage().props.errors || {};
     const [search, setSearch] = useState(filters.search);
-    const [selected, setSelected] = useState(null);
+    const [selected, setSelected] = useState(selectedTicket);
+    // Notification navigation can select a record outside the current table page.
+    useEffect(() => { setSelected(selectedTicket); }, [selectedTicket]);
     const [filtersOpen, setFiltersOpen] = useState(false);
     const filterPanelId = useId();
     const actionForTicket = ticket => {
@@ -531,7 +533,7 @@ export function TicketScreen({ priorityLabels = defaultPriorityLabels, selectabl
         setDateFrom('');
         setDateTo('');
         setSearch('');
-        router.get(ticketRoute('index', { view: filters.view, search: '', date_from: '', date_to: '', branch_filter: '', location_filter: '', status_filter: 'all', priority_filter: 'all', assignee_filter: '', closed_period: '' }), {}, { preserveState: true, preserveScroll: true });
+        router.get(ticketRoute('index', { view: filters.view, search: '', date_from: '', date_to: '', branch_filter: '', location_filter: '', status_filter: 'all', priority_filter: 'all', assignee_filter: '', resolver_filter: '', closed_period: '' }), {}, { preserveState: true, preserveScroll: true });
     };
     const sortTickets = (key, direction = filters.sort === key && filters.direction === 'asc' ? 'desc' : 'asc') => {
         router.get(ticketRoute('index', { view: filters.view, search, sort: key, direction }), {}, { preserveScroll: true });
@@ -640,7 +642,7 @@ export function TicketScreen({ priorityLabels = defaultPriorityLabels, selectabl
             {dashboard && ticketRole === 'leader' && slaReport && <TicketSlaPerformance report={slaReport} period={filters.report_period || 'all'}
                 onPeriodChange={period => router.get(ticketRoute('index', { view: filters.view, search, report_period: period }))} />}
             {/* Workload totals stay independent of ticket searches and table pagination. */}
-            {!creationPage && !ranking && ticketRole === 'leader' && <MemberWorkloads members={memberWorkloads} />}
+            {!creationPage && !ranking && ticketRole === 'leader' && <MemberWorkloads members={memberWorkloads} ticketRoute={ticketRoute} filters={filters} search={search} />}
             {!dashboard && !ranking && <Link className="ticket-primary ticket-emergency-toggle" href={ticketRoute(creationPage ? 'index' : 'create')}>{creationPage ? 'Back to tickets' : employee ? '+ Create ticket' : '+ Create ticket'}</Link>}
             <div className={creationPage ? 'ticket-creation-page' : ''}>
                 {creationPage && <section className="ticket-card ticket-create"><div className="ticket-card-heading"><h2>{employee ? 'Submit a Ticket' : 'Create ticket'}</h2></div><form onSubmit={submitTicket}>
@@ -704,7 +706,7 @@ export function TicketScreen({ priorityLabels = defaultPriorityLabels, selectabl
                                 <label className="ticket-page-size">
                                     Assigned member
                                     <select value={filters.assignee_filter ?? ''} onChange={e => router.get(
-                                        ticketRoute('index', { view: 'all', search, assignee_filter: e.target.value }),
+                                        ticketRoute('index', { view: 'all', search, assignee_filter: e.target.value, resolver_filter: '' }),
                                         {}, { preserveState: true, preserveScroll: true }
                                     )}>
                                         <option value="">All assignees</option>
@@ -717,6 +719,7 @@ export function TicketScreen({ priorityLabels = defaultPriorityLabels, selectabl
                                 {['5', '10', '15', 'all'].map(size => <option key={size} value={size}>{size === 'all' ? 'All' : size}</option>)}
                             </select></label>
                         </div>
+                        {filters.resolver_filter && <p className="ticket-active-closure-filter">Resolved by: {members.find(person => Number(person.id) === Number(filters.resolver_filter))?.name || 'Selected IT staff'} <Link href={ticketRoute('index', { view: 'all', search, resolver_filter: '' })} preserveScroll>Clear resolver filter</Link></p>}
                         {filters.closed_period && <p className="ticket-active-closure-filter">Closed · {{ day: 'Today', week: 'This week', month: 'This month', year: 'This year' }[filters.closed_period]} <Link href={ticketRoute('index', { view: filters.view, search, closed_period: '' })}>Clear closure period</Link></p>}
                         {/* Date-only inputs filter creation dates inclusively in Asia/Manila. */}
                         <div className="ticket-date-filter" aria-label="Creation date filters">

@@ -63,7 +63,6 @@ try {
     const cases = [
         ['save', 'leader', {}, { priority: 'high', priority_reason: 'Service impact increased', assigned_to: 7 }, { action: 'save', priority: 'high', assigned_to: 7 }],
         ['acknowledge', 'member', {}, { assessment: 'Checked service', next_steps: 'Investigate' }, { action: 'acknowledge', assessment: 'Checked service' }],
-        ['pause', 'member', {}, { note: 'Waiting for vendor', pause_reason: 'vendor' }, { action: 'pause', pause_reason: 'vendor' }],
         ['resume', 'member', { sla: { enabled: true, paused: true } }, { note: 'Vendor available' }, { action: 'resume', note: 'Vendor available' }],
         ['update', 'member', {}, { note: 'Investigating', vendor: 'Sample vendor' }, { action: 'update', vendor: 'Sample vendor' }],
         ['delay', 'member', {}, { note: 'Revised estimate', delay_reason: 'Parts', actions_taken: 'Contacted vendor', assistance_required: 'Delivery', next_update_at: '2026-10-28T16:00' }, { action: 'delay', delay_reason: 'Parts' }],

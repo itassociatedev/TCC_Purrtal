@@ -6,7 +6,7 @@ import FlashMessage from '@/Components/FlashMessage';
 import { readRolePreview, rolePreviewStorageKey } from '@/Components/rolePreview.mjs';
 import { Link, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
-import { cloneElement, useEffect, useState } from 'react';
+import { cloneElement, useEffect, useRef, useState } from 'react';
 import { hasHRModuleAccess, moduleHasAccess, hasPermission, canViewModuleCard, getFirstAttendanceRoute } from '@/Config/navigation';
 
 export default function SidebarLayout({
@@ -185,16 +185,21 @@ export default function SidebarLayout({
     const [localUnreadCount, setLocalUnreadCount] = useState(auth?.unreadNotificationsCount || 0);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [ticketFeed, setTicketFeed] = useState(null);
+    // Ignore polling responses started before a notification mutation.
+    const ticketFeedRevision = useRef(0);
+    const pendingNotificationReads = useRef(new Set());
     const ticketPreviewPerson = userRole === 'admin' && displayedProfile?.active ? displayedProfile.name : null;
     const ticketFeedParams = ticketPreviewPerson ? { preview_person: ticketPreviewPerson } : {};
     useEffect(() => {
-        if (!isItUser) { setTicketFeed(null); return; }
+        setTicketFeed(null);
+        if (!auth?.user?.id) return;
         let stopped = false;
         const refresh = async () => {
-            if (document.hidden) return;
+            if (document.hidden || pendingNotificationReads.current.size) return;
             try {
+                const revision = ticketFeedRevision.current;
                 const response = await axios.get(route('notifications.ticketing-feed'), { params: ticketFeedParams });
-                if (!stopped) setTicketFeed(response.data);
+                if (!stopped && revision === ticketFeedRevision.current) setTicketFeed(response.data);
             } catch (error) { console.error('Unable to refresh IT notifications', error); }
         };
         refresh();
@@ -202,12 +207,9 @@ export default function SidebarLayout({
         window.addEventListener('focus', refresh);
         return () => { stopped = true; clearInterval(timer); window.removeEventListener('focus', refresh); };
     }, [isItUser, auth?.user?.id, ticketPreviewPerson]);
-    const itNotifications = ticketFeed?.notifications || localNotifications.filter(item =>
-        item?.type === 'App\\Notifications\\TicketNotification'
-        || item?.data?.module === 'ticketing'
-        || item?.data?.ticket_id != null
-    );
-    const itUnreadCount = ticketFeed?.unread ?? itNotifications.filter(item => !item.read_at).length;
+    // Ticket notifications never enter the regular portal list or badge.
+    const itNotifications = ticketFeed?.notifications || (ticketPreviewPerson ? [] : auth.ticketNotifications) || [];
+    const itUnreadCount = ticketFeed?.unread ?? (ticketPreviewPerson ? 0 : auth.ticketUnreadNotificationsCount) ?? itNotifications.filter(item => !item.read_at).length;
 
     // 🟢 Calculate hasMore dynamically
     const [totalNotificationsCount, setTotalNotificationsCount] = useState(auth.totalNotificationsCount || 0);
@@ -243,34 +245,42 @@ export default function SidebarLayout({
     }, [auth.notifications, auth.unreadNotificationsCount, auth.totalNotificationsCount]);
 
     const markAsRead = async (notificationId, url) => {
+        // A rapid repeat click must not decrement a badge or send the same read twice.
+        if (pendingNotificationReads.current.has(notificationId)) return;
         const notification = itNotifications.find(n => n.id === notificationId) || localNotifications.find(n => n.id === notificationId);
         if (notification && !notification.read_at) {
             const isTicketNotice = itNotifications.some(item => item.id === notificationId);
-            const isLocalUnread = localNotifications.some(item => item.id === notificationId && !item.read_at);
-            const readAt = new Date().toISOString();
-            setLocalNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read_at: readAt } : n));
-            if (isLocalUnread) setLocalUnreadCount(prev => Math.max(0, prev - 1));
-            setTicketFeed(previous => previous ? {
-                ...previous,
-                notifications: previous.notifications.map(item => item.id === notificationId ? { ...item, read_at: readAt } : item),
-                unread: Math.max(0, previous.unread - (isTicketNotice ? 1 : 0)),
-            } : previous);
+            pendingNotificationReads.current.add(notificationId);
+            ticketFeedRevision.current++;
             try {
-                // Preserve the shared branch's dedicated IT feed/preview routing,
-                // and finish the read before navigation fetches unread counts.
                 await axios.post(route(isTicketNotice ? 'notifications.ticketing-read' : 'notifications.read', notificationId), isTicketNotice ? ticketFeedParams : {});
+                const readAt = new Date().toISOString();
+                if (isTicketNotice) {
+                    // Seed from shared props when the first poll has not returned yet.
+                    setTicketFeed(previous => {
+                        const feed = previous || { notifications: itNotifications, unread: itUnreadCount };
+                        const unread = feed.notifications.some(item => item.id === notificationId && !item.read_at);
+                        return { ...feed,
+                            notifications: feed.notifications.map(item => item.id === notificationId ? { ...item, read_at: readAt } : item),
+                            unread: Math.max(0, feed.unread - (unread ? 1 : 0)),
+                        };
+                    });
+                } else {
+                    setLocalNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read_at: readAt } : n));
+                    setLocalUnreadCount(prev => Math.max(0, prev - 1));
+                }
             } catch {
-                setLocalNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read_at: notification.read_at } : n));
-                if (isLocalUnread) setLocalUnreadCount(prev => prev + 1);
-                setTicketFeed(previous => previous ? {
-                    ...previous,
-                    notifications: previous.notifications.map(item => item.id === notificationId ? { ...item, read_at: notification.read_at } : item),
-                    unread: previous.unread + (isTicketNotice ? 1 : 0),
-                } : previous);
                 window.dispatchEvent(new CustomEvent('flash-toast', { detail: { message: 'Unable to mark this notification as read. Please try again.', type: 'error' } }));
+                return;
+            } finally {
+                pendingNotificationReads.current.delete(notificationId);
+                // Invalidate reads begun during this mutation as well as before it.
+                ticketFeedRevision.current++;
             }
         }
-        if (url) router.visit(url);
+        // Older stored notices also deep-link using their existing numeric ticket ID.
+        if (url) router.visit(notification?.data?.ticket_id
+            ? route('tickets.all', { selected_ticket: notification.data.ticket_id }) : url);
     };
 
     const user = auth?.user;
@@ -481,25 +491,29 @@ export default function SidebarLayout({
     };
 
     const clearPortalNotifications = async () => {
-        await axios.post(route('notifications.clear'));
-        setLocalNotifications([]);
-        setLocalUnreadCount(0);
-        setTotalNotificationsCount(0);
+        ticketFeedRevision.current++;
+        try {
+            await axios.post(route('notifications.clear'));
+            setLocalNotifications([]);
+            setLocalUnreadCount(0);
+            setTotalNotificationsCount(0);
+        } finally { ticketFeedRevision.current++; }
     };
-    const markAllAsRead = (e) => {
+    const markAllAsRead = async (e) => {
         e.preventDefault();
         e.stopPropagation();
-
         if (localUnreadCount === 0) return;
+        ticketFeedRevision.current++;
+        try {
+            // Failed requests leave notices unread so the action can be retried.
+            await axios.post(route('notifications.mark-all-read'));
+            const read_at = new Date().toISOString();
+            setLocalNotifications(prev => prev.map(n => !n.read_at ? { ...n, read_at } : n));
+            setLocalUnreadCount(0);
 
-        // 1. Instantly update UI: Mark all unread as read and reset count to 0
-        setLocalNotifications(prev => prev.map(n =>
-            !n.read_at ? { ...n, read_at: new Date().toISOString() } : n
-        ));
-        setLocalUnreadCount(0);
-
-        // 2. Silently tell the backend
-        axios.post(route('notifications.mark-all-read'));
+        } catch (error) {
+            console.error('Unable to mark notifications as read', error);
+        } finally { ticketFeedRevision.current++; }
     };
     return (
         <div className="clinic-shell flex h-screen overflow-hidden bg-gray-100">
@@ -858,7 +872,7 @@ export default function SidebarLayout({
                             </Dropdown>}
                         </div>
 
-                        {isItUser && <Dropdown>
+                        {auth?.user && <Dropdown>
                             <Dropdown.Trigger>
                                 <button type="button" aria-label="IT support notifications" title="IT support notifications" className="relative inline-flex h-[36px] w-[36px] sm:h-[42px] sm:w-[42px] items-center justify-center rounded-full border border-slate-200 bg-white/90 text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300">
                                     <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">

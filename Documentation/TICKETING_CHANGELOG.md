@@ -1,5 +1,49 @@
 # Ticketing change history
 
+## 19 November 2026 - Notification links open ticket details
+
+New ticket notification URLs point to `/tickets/all?selected_ticket=<numeric ID>`. The shared bell also upgrades older stored ticket alerts using their `ticket_id`, without rewriting historical rows. The All Tickets controller loads the selected ticket independently of table pagination/search filters and includes the same relationships, SLA snapshot and member-submission flag as ordinary table records. The React ticket screen opens its existing details/manage dialog from `selectedTicket` on navigation.
+
+Visibility is enforced server-side: employees can select only their own live tickets, and IT users retain existing team-ticket visibility. Missing, preview-only or unauthorized records return not found. Existing action permissions remain enforced when submitting changes. Reading an alert without navigating (Mark all read) does not open a ticket.
+
+Validation: notification handler regression verifies old-alert deep links; workload/controller integration covers selected details outside table filters, missing records, forbidden employee access and new notification URLs. Production build passed. Database fixtures roll back, and notifications are suppressed.
+
+## 19 November 2026 - Recent-change regression review
+
+Fixed ticket-notification reads before the initial poll: successful reads now seed the IT feed from shared ticket props and update its badge without touching regular notifications. A pending-ID guard prevents duplicate requests from rapid clicks. Polling skips pending reads and rejects responses from before/during a completed mutation. Failed reads retain unread state, show an error and do not navigate away, allowing retry. Preview identity changes reset the loaded feed and do not fall back to the real account's ticket alerts.
+
+Validation: new `tests/ticket-notification-read.test.mjs` covers initial-poll fallback, duplicate clicks, success/failure state and poll revision invalidation. Extended workload integration coverage includes legacy JSON-null resolver fields and multiple resolution events. Notification separation, shared bulk handlers, workload queries, ticket workflow regressions and the production build passed. Transactional database fixtures roll back; notifications are suppressed. No interactive browser test, push or deployment performed.
+
+## 19 November 2026 - Separate ticket and regular notifications
+
+Regular notification props, unread/total counts, list pagination, read-all and clear now exclude `TicketNotification`. Ticket alerts remain in the IT feed and its own badge. Regular bulk actions no longer mark ticket alerts read or delete them. The IT notification bell and polling are available to authenticated non-IT requesters too, so their ticket updates remain accessible after separation. Existing notification rows need no migration.
+
+Validation: `tests/verify-ticket-notification-separation.php` checks feed separation and preservation of ticket unread/history state under portal bulk actions, with all changes rolled back. The shared handler regression checks ticket-feed independence and failure retry behavior. PHP syntax and production build passed.
+
+## 19 November 2026 - Workload resolution drill-down correction
+
+Resolved workload links clear a previously selected status or closure period. The IT intern has four closed tickets plus one resolved ticket; retaining Closed showed four while the workload total correctly showed five. Other table filters remain available. Legacy resolution activity fallback now uses the latest event, matching the model relationship and workload attribution. Regression coverage reproduces the status exclusion; the production build passes.
+
+## 19 November 2026 - Clickable staff workload filters
+
+The supervisor workload panel now links each member name and Assigned tickets statistic to the current-assignee filter. Resolved tickets selects the new supervisor-only `resolver_filter`, includes resolved and closed statuses, and attributes tickets to `sla_state.resolved_by`, falling back to the latest recorded resolution activity for legacy records. Workload resolved totals use the same attribution. Reassigned tickets therefore retain credit with their resolver.
+
+Selecting a workload statistic replaces the other staff selection and retains existing date, branch/location, priority and search filters. Clicking Resolved tickets resets status and closure-period filters so both resolved and closed tickets appear; unrelated retained filters can still narrow the result. Assigned tickets retains the status filter. Resolver selection persists through sorting, pagination and filtered exports; the table shows the resolver name with a clear link. Clear filters removes both staff selections; changing the assignee dropdown clears resolver selection. Navigation away from All Tickets clears resolver scope. Statistics remain environment-wide totals independent of table filters. Statistic panels support keyboard focus and have explicit accessible link labels.
+
+Validation: `tests/verify-ticket-workload-filters.php` passed controller checks for resolver attribution after reassignment, closed-ticket inclusion, current-owner selection, combined filters and rejection of non-supervisor resolver queries. Fixtures roll back and notifications are faked. PHP syntax and Vite production build passed. No push or deployment performed.
+
+## 19 November 2026 - Ticketing and shared notification bug fixes
+
+- Related-ticket input now resolves current location/category/year codes, ignoring case and surrounding spaces. Numeric IDs remain supported; unknown IDs, self-links and preview/live isolation retain validation.
+- Supervisor assignment rejects inactive accounts. Historical roster and leaderboard membership are unchanged.
+- Closing an SLA-tracked ticket notifies its requester, after resolution documentation and closure-note validation. Supervisor-only closure and resolved-first requirements remain enforced.
+- Shared portal read-all and clear actions immediately synchronize the signed-in user's separate IT notification feed. Preview recipients remain separate. Polling responses started before these mutations are discarded; failed read-all requests leave unread state retryable.
+- Removed an obsolete successful-pause expectation from the form regression: pause remains prohibited, while historical pause resumption remains supported.
+
+Validation: production Vite build and PHP syntax passed; ticket form, half-star dialog, shared notification handlers, ticket linking/inactive assignment/closure, SLA alert replay and no-pause regression checks passed. Database integration fixtures roll back and notifications are faked. No browser interaction test or deployment was performed. Existing task-module JavaScript suite failures are outside this ticketing/shared-code pass and were not modified.
+
+Changed application code: `app/Http/Controllers/TicketController.php`, `app/Services/TicketSla.php`, `resources/js/Layouts/SidebarLayout.jsx`. Regression coverage: `tests/verify-ticket-bugfixes.php`, `tests/ticket-notification-actions.test.mjs`, `tests/ticket-form-submission.test.mjs`.
+
 ## 19 November 2026 - Priority removal with history preservation
 
 Added supervisor-only confirmed removal of unused priorities, archival of used priorities, restoration, and last-active protection. Archived priorities retain ticket display/filter/report history and saved SLA policies but are unavailable for new tickets/imports or priority assignments. Historical priority-change references prevent hard deletion even after all current tickets have moved away. Active-priority row locks protect writes against removal races. Blank imports fall back to the first active priority if Low is archived. Added archive timestamp migration and integration coverage; no existing priorities were removed during implementation and no push was performed. Build, syntax, removal/settings/handover/receipt regression checks passed with rolled-back fixtures and fake notifications.

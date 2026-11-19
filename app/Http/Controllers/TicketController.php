@@ -42,9 +42,11 @@ class TicketController extends Controller
             $request->merge(['status_filter' => 'open', 'priority_filter' => 'low']);
         }
         $filters = $request->validate([
+            'selected_ticket' => ['nullable', 'integer', 'min:1'],
             'view' => ['nullable', Rule::in(['leaderboard', 'dashboard', 'open', 'closed', 'all', 'assigned', 'reports', 'revisions'])],
             'location_filter' => ['nullable', 'integer', Rule::exists('ticket_locations', 'id')],
             'branch_filter' => ['nullable', 'integer', Rule::exists('branches', 'id')],
+            'resolver_filter' => ['nullable', 'integer', 'min:1', Rule::prohibitedIf($role !== 'leader')],
             'assignee_filter' => ['nullable', 'integer', 'min:1', Rule::prohibitedIf($role === 'employee')],
             'priority_filter' => ['nullable', Rule::in(array_merge(['all'], array_keys(TicketPrioritySettings::targets())))],
             'status_filter' => ['nullable', Rule::in(['all', 'open', 'closed', 'not_started', 'in_progress', 'resolved', 'unassigned', 'revision_requested', 'rejected'])],
@@ -140,6 +142,19 @@ class TicketController extends Controller
         } else {
             unset($filters['assignee_filter']);
         }
+        $resolverFilter = $role === 'leader' && $view === 'all' ? ($filters['resolver_filter'] ?? null) : null;
+        if ($resolverFilter !== null) {
+            // Resolution credit follows the recorded resolver even after reassignment.
+            $query->whereIn('status', ['resolved', 'closed'])->where(function ($q) use ($resolverFilter) {
+                $q->where('sla_state->resolved_by', (int) $resolverFilter)
+                    ->orWhere(function ($legacy) use ($resolverFilter) {
+                        $legacy->whereNull('sla_state->resolved_by')->whereHas('activities', function ($events) use ($resolverFilter) {
+                            $events->where('type', 'resolved')->where('actor_id', $resolverFilter)
+                                ->whereIn('id', \App\Models\TicketActivity::selectRaw('MAX(id)')->where('type', 'resolved')->groupBy('ticket_id'));
+                        });
+                    });
+            });
+        }
         // Narrow the authorized ticket query without changing creation permissions.
         $locationFilter = $filters['location_filter'] ?? null;
         if ($locationFilter !== null) $query->where('tickets.ticket_location_id', $locationFilter);
@@ -208,6 +223,9 @@ class TicketController extends Controller
                 ->select('assigned_to')->selectRaw('COUNT(*) AS assigned_count')
                 ->selectRaw("SUM(CASE WHEN status IN ('resolved', 'closed') THEN 1 ELSE 0 END) AS resolved_count")
                 ->groupBy('assigned_to')->get()->keyBy('assigned_to');
+            $resolvedCounts = Ticket::where('is_preview', $preview)->whereIn('status', ['resolved', 'closed'])
+                ->with(['activities' => fn ($q) => $q->where('type', 'resolved')])->get()
+                ->countBy(fn ($ticket) => $this->feedbackResolverId($ticket));
             // Start from the member roster so members with no tickets still appear.
             $memberWorkloads = TicketAccess::members($preview)->orderBy('name')->get(['id', 'name'])
                 ->map(fn ($member) => [
@@ -215,7 +233,7 @@ class TicketController extends Controller
                     'rating_average' => $ratings->get($member->id, collect())->avg(fn ($event) => $event->details['rating']),
                     'id' => $member->id, 'name' => $member->name,
                     'assigned_count' => (int) ($counts->get($member->id)?->assigned_count ?? 0),
-                    'resolved_count' => (int) ($counts->get($member->id)?->resolved_count ?? 0),
+                    'resolved_count' => (int) ($resolvedCounts->get($member->id) ?? 0),
                 ]);
             $now = now('Asia/Manila');
             // Aggregate current statuses once. Resolved remains distinct from manual
@@ -323,8 +341,19 @@ class TicketController extends Controller
             ->map(fn ($ticket) => ['id' => $ticket->id, 'subject' => $ticket->subject])->values();
         $canAssignDuringHandover = $role === 'member' && $actor->status === 'Active'
             && TicketAssignmentHandover::active()->where('member_id', $actor->id)->exists();
+        // Deep links load details independently of pagination while enforcing list visibility.
+        $selectedTicket = null;
+        if (!empty($filters['selected_ticket'])) {
+            $detailQuery = Ticket::where('is_preview', $preview)
+                ->with(['creator:id,name,role_id', 'branch:id,name', 'ticketLocation:id,name', 'assignee:id,name', 'activities.actor:id,name']);
+            if ($role === 'employee') $detailQuery->where('creator_id', $actor->id);
+            $selectedTicket = $detailQuery->findOrFail($filters['selected_ticket']);
+            $selectedTicket->setAttribute('member_submission', $role === 'leader' && $selectedTicket->isMemberSubmission());
+            $selectedTicket->setAttribute('sla', $sla->snapshot($selectedTicket));
+        }
         return Inertia::render('Tickets/Index', [
             // One-time receipt after a successful non-IT submission; not an SLA acknowledgement.
+            'selectedTicket' => $selectedTicket,
             'submissionAcknowledgement' => $role === 'employee' ? $request->session()->pull('tickets.submission_acknowledgement') : null,
             'canAssignDuringHandover' => $canAssignDuringHandover,
             'handoverMembers' => ($view === 'handover' || $canAssignDuringHandover)
@@ -348,7 +377,7 @@ class TicketController extends Controller
                 $ticket->setAttribute('sla', $sla->snapshot($ticket));
                 return $ticket;
             }),
-            'filters' => ['location_filter' => $locationFilter, 'branch_filter' => $branchFilter, 'assignee_filter' => $assigneeFilter, 'leaderboard_period' => $filters['leaderboard_period'] ?? 'all', 'priority_filter' => $priorityFilter, 'closed_period' => $filters['closed_period'] ?? '', 'date_from' => $filters['date_from'] ?? '', 'date_to' => $filters['date_to'] ?? '', 'status_filter' => $statusFilter, 'sort' => $sort, 'direction' => $direction, 'view' => $legacyStatusView ? 'all' : $view, 'search' => $filters['search'] ?? '', 'report_period' => $filters['report_period'] ?? 'all', 'per_page' => $perPage],
+            'filters' => ['location_filter' => $locationFilter, 'branch_filter' => $branchFilter, 'assignee_filter' => $assigneeFilter, 'resolver_filter' => $resolverFilter, 'leaderboard_period' => $filters['leaderboard_period'] ?? 'all', 'priority_filter' => $priorityFilter, 'closed_period' => $filters['closed_period'] ?? '', 'date_from' => $filters['date_from'] ?? '', 'date_to' => $filters['date_to'] ?? '', 'status_filter' => $statusFilter, 'sort' => $sort, 'direction' => $direction, 'view' => $legacyStatusView ? 'all' : $view, 'search' => $filters['search'] ?? '', 'report_period' => $filters['report_period'] ?? 'all', 'per_page' => $perPage],
             'categories' => config('ticketing.categories'),
             // The shared role/department exceptions may choose any affected branch.
             'departments' => \App\Models\Department::orderBy('name')->get(['id', 'name']),
@@ -643,7 +672,8 @@ class TicketController extends Controller
         else abort_unless(in_array($role, ['leader', 'member']), 403);
         // Resolve the displayed code to the numeric key used in activity history.
         $linkedId = $request->input('linked_ticket_id');
-        if (is_string($linkedId) && preg_match('/^[a-z]{2}[0-9]{4,20}$/iD', trim($linkedId))) {
+        // Current location/category codes contain hyphens; numeric database IDs remain supported.
+        if (is_string($linkedId) && trim($linkedId) !== '' && !ctype_digit(trim($linkedId))) {
             $related = Ticket::where('is_preview', $preview)->where('ticket_code', strtoupper(trim($linkedId)))->first();
             if (!$related) throw \Illuminate\Validation\ValidationException::withMessages(['linked_ticket_id' => 'Choose an existing related ticket ID.']);
             $request->merge(['linked_ticket_id' => $related->id]);
@@ -652,7 +682,7 @@ class TicketController extends Controller
             'action' => ['sometimes', Rule::in(['save', 'reopen', 'acknowledge', 'resume', 'update', 'delay', 'restore', 'approve_workaround', 'reply', 'confirm', 'feedback', 'dismiss_feedback'])],
             'status' => $requesterAction || !in_array($action, ['save', 'reopen']) ? ['prohibited'] : ['sometimes', 'required', Rule::in(['in_progress', 'resolved', 'closed'])],
             'priority' => !$requesterAction && $role === 'leader' ? ['sometimes', 'required', Rule::in(array_keys(TicketPrioritySettings::targets(true)))] : ['prohibited'],
-            'assigned_to' => !$requesterAction && $role === 'leader' ? ['sometimes', 'required', 'integer', Rule::exists('users', 'id')->whereIn('id', TicketAccess::members($preview)->pluck('id'))] : ['prohibited'],
+            'assigned_to' => !$requesterAction && $role === 'leader' ? ['sometimes', 'required', 'integer', Rule::exists('users', 'id')->whereIn('id', TicketAccess::members($preview)->where('status', 'Active')->pluck('id'))] : ['prohibited'],
             'priority_reason' => ['nullable', 'string', 'max:5000'],
             'note' => ['nullable', 'string', 'max:10000'],
             'assessment' => ['nullable', 'string', 'max:5000'],

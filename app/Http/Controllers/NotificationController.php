@@ -7,6 +7,12 @@ use Inertia\Inertia;
 
 class NotificationController extends Controller
 {
+    // Keep portal list/count/read-all/clear operations separate from the ticket feed.
+    public static function portalNotifications(\App\Models\User $user)
+    {
+        return $user->notifications()->where('type', '!=', \App\Notifications\TicketNotification::class);
+    }
+
     public static function ticketRecipient(Request $request): \App\Models\User
     {
         $user = $request->user();
@@ -19,7 +25,7 @@ class NotificationController extends Controller
     /** Clear only the signed-in user's portal notification history. */
     public function clear(Request $request)
     {
-        $request->user()->notifications()->delete();
+        self::portalNotifications($request->user())->delete();
 
         return response()->json(['success' => true]);
     }
@@ -30,7 +36,7 @@ class NotificationController extends Controller
     public function index(Request $request)
     {
         // Fetches 15 notifications per page
-        $notifications = $request->user()->notifications()->paginate(15);
+        $notifications = self::portalNotifications($request->user())->paginate(15);
 
         return Inertia::render('Notifications/Index', [
             'notifications' => $notifications,
@@ -62,7 +68,7 @@ class NotificationController extends Controller
      */
     public function markAllAsRead(Request $request)
     {
-        $request->user()->unreadNotifications->markAsRead();
+        self::portalNotifications($request->user())->whereNull('read_at')->update(['read_at' => now()]);
 
         // If called via Axios, return JSON. If called via normal Inertia visit, redirect back.
         if ($request->wantsJson()) {
@@ -77,7 +83,7 @@ class NotificationController extends Controller
         $offset = $request->query('offset', 20); // Default to skipping the first 20
         $limit = 20; // Fetch the next 20
 
-        $notifications = $request->user()->notifications()
+        $notifications = self::portalNotifications($request->user())
             ->latest()
             ->skip($offset)
             ->take($limit)

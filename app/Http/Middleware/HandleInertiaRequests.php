@@ -103,13 +103,16 @@ class HandleInertiaRequests extends Middleware
                 ] : null,
 
                 // FIX: Only attempt to fetch notifications if $user is NOT null!
-                'notifications' => $user ? $user->notifications()->latest()->take(20)->get() : [],
+                'notifications' => $user ? \App\Http\Controllers\NotificationController::portalNotifications($user)->latest()->take(20)->get() : [],
 
                 // FIX: Matched the key to your React code
-                'unreadNotificationsCount' => $user ? $user->unreadNotifications()->count() : 0,
+                'unreadNotificationsCount' => $user ? \App\Http\Controllers\NotificationController::portalNotifications($user)->whereNull('read_at')->count() : 0,
 
                 // NEW: Tell React exactly how many notifications exist in total
-                'totalNotificationsCount' => $user ? $user->notifications()->count() : 0,
+                // Ticket alerts have their own bell, including for non-IT requesters.
+                'ticketNotifications' => $user ? $user->notifications()->where('type', \App\Notifications\TicketNotification::class)->latest()->take(30)->get() : [],
+                'ticketUnreadNotificationsCount' => $user ? $user->notifications()->where('type', \App\Notifications\TicketNotification::class)->whereNull('read_at')->count() : 0,
+                'totalNotificationsCount' => $user ? \App\Http\Controllers\NotificationController::portalNotifications($user)->count() : 0,
 
                 // 🟢 NEW: Global visibility flag for the Accountability Module
                 'has_department_assets' => $hasDepartmentAssets,
