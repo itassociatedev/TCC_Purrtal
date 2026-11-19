@@ -9,6 +9,10 @@ export const canSubmitAssignedTask = (task, { role, employee, actor }) => Boolea
 // Department screens show only their own report types; organization and branch reviewers see all types.
 export function dailyReportTypes({ role, department, config }) {
     if (role === 'Operations Manager') return [];
+    if (role === 'Team Leader' && department !== (config.itDepartment || 'IT')) {
+        const own = reportTemplates(config).filter(report => report.enabled && report.department === department).map(report => [report.id, report.name, report.description, report.department]);
+        return [...own, ['narrative-report', 'Narrative Report', 'Daily accomplishments, issues, solutions and follow-ups', department]];
+    }
     const reports = reportTemplates(config).filter(report => report.enabled).map(report => [report.id, report.name, report.description, report.department]);
     if (String(department || '').trim().toLowerCase() === String(config.itDepartment || 'IT').trim().toLowerCase()) {
         return reports.filter(report => ['it-opening-rounds', 'narrative-report'].includes(report[0]));
@@ -17,10 +21,12 @@ export function dailyReportTypes({ role, department, config }) {
 }
 // Report authorship belongs to the assigned department employee; management reviews without rewriting it.
 export function canEditDailyReport(task, { role, employee, config, actor }) {
+    if (role === 'Team Leader' && task.template === 'narrative-report' && task.assignee === actor?.name && task.department === actor?.department && ['Not Started','In Progress','Revision Needed'].includes(task.status)) return true;
+    if (task.sharedBranchReport && ['Employee', 'Team Leader'].includes(role) && (actor?.department || employee?.department) === task.department && ((actor?.availableBranches || employee?.availableBranches || [actor?.branch || employee?.branch]).includes(task.branch)) && ['Not Started','In Progress','Revision Needed'].includes(task.status)) return true;
     if(role==='Team Leader'&&actor?.department===config.itDepartment&&task.template==='it-opening-rounds'&&task.department===config.itDepartment&&task.sharedBranchReport&&['Not Started','In Progress','Revision Needed'].includes(task.status))return true;
-    const department = reportTemplates(config).find(report => report.id === task.template)?.department || (task.reportDefinition ? task.department : null) || (task.template === 'daily-operations' ? config.cashierDepartment || 'Cashier'
+    const department = reportTemplates(config).find(report => report.id === task.template)?.department || (task.reportDefinition ? task.department : null) || (task.template === 'daily-operations' ? config.receptionDepartment || 'Reception'
         : ['it-opening-rounds', 'narrative-report'].includes(task.template) ? config.itDepartment : null);
-    return Boolean(department && role === 'Employee' && (employee?.name === task.assignee || task.template === 'it-opening-rounds' && task.sharedBranchReport && (employee?.availableBranches || [employee?.branch]).includes(task.branch))
+    return Boolean(department && role === 'Employee' && (employee?.name === task.assignee || task.sharedBranchReport && (employee?.availableBranches || [employee?.branch]).includes(task.branch))
         && employee.department === department && task.department === department
         && ['Not Started', 'In Progress', 'Revision Needed'].includes(task.status));
 }

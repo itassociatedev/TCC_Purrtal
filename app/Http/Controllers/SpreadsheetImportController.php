@@ -12,28 +12,47 @@ class SpreadsheetImportController extends Controller
 {
     public function read(Request $request)
     {
-        $request->validate(['file' => 'required|file|mimes:xlsx|max:2048']);
+        $request->validate(['file' => 'required|file|mimes:xlsx|max:2048', 'columns'=>'sometimes|array|max:100', 'columns.*'=>'string|max:100']);
         $reader = IOFactory::createReader('Xlsx');
-        $reader->setReadDataOnly(true);
-        $info = $reader->listWorksheetInfo($request->file('file')->getRealPath());
-        abort_if(empty($info) || $info[0]['totalRows'] > 501 || $info[0]['totalColumns'] > 100, 422, 'Use at most 500 data rows and 100 columns.');
-        $reader->setLoadSheetsOnly($info[0]['worksheetName']);
-        $book = $reader->load($request->file('file')->getRealPath());
+        $reader->setReadDataOnly(false);
+        $book = null;
         try {
-            $rows = $book->getSheet(0)->toArray('', false, true, false);
+            $info = $reader->listWorksheetInfo($request->file('file')->getRealPath());
+            abort_if(empty($info) || $info[0]['totalRows'] > 502 || $info[0]['totalColumns'] > 101, 422, 'Use at most 500 data rows and 100 columns.');
+            $reader->setLoadSheetsOnly($info[0]['worksheetName']);
+            $book = $reader->load($request->file('file')->getRealPath());
+            $sheet = $book->getSheet(0);
+            $errors = [];
+            foreach ($sheet->getCellCollection()->getCoordinates() as $coordinate) {
+                if ($sheet->getCell($coordinate)->getDataType() === DataType::TYPE_FORMULA) $errors[] = "Cell {$coordinate}: formulas are not allowed. Replace the formula with its value.";
+            }
+            $bounds = \App\Support\WorkbookLayout::bounds($sheet);
+            abort_unless($bounds, 422, 'The workbook is empty. Download the template and add at least one record.');
+            [$firstColumn, $headerRow] = $bounds;
+            $rows = \App\Support\WorkbookLayout::rows($sheet);
             $headings = array_map(fn ($value) => preg_replace('/\s+/', '_', strtolower(trim((string) $value))), array_shift($rows) ?? []);
-            abort_if(!$headings || in_array('', $headings, true) || count(array_unique($headings)) !== count($headings), 422, 'Headings must be unique and non-empty.');
+            foreach ($headings as $index => $heading) {
+                $cell = Coordinate::stringFromColumnIndex($firstColumn + $index).$headerRow;
+                if ($heading === '') $errors[] = "Cell {$cell}: column heading is missing.";
+                if ($heading !== '' && count(array_keys($headings, $heading)) > 1) $errors[] = "Cell {$cell}: duplicate heading '{$heading}'. Use each heading once.";
+            }
+            $missing = array_diff($request->input('columns', []), $headings);
+            foreach ($missing as $column) $errors[] = 'Missing column: '.$column.'. Download the latest template.';
+            if ($errors) throw \Illuminate\Validation\ValidationException::withMessages(['file' => $errors]);
             $result = [];
-            foreach ($rows as $row) {
+            foreach ($rows as $index => $row) {
                 $values = array_map(fn ($value) => trim((string) $value), $row);
                 if (count(array_filter($values, fn ($value) => $value !== '')) === 0) continue;
-                $result[] = array_combine($headings, $values);
+                $result[] = [...array_combine($headings, $values), '_sheet_row'=>$headerRow + $index + 1];
             }
-            abort_if(!$result, 422, 'Include a header and at least one data row.');
+            abort_if(!$result, 422, "Add at least one record below the headings in row {$headerRow}.");
+            abort_if(count($result) > 500, 422, 'Import at most 500 records at a time.');
             return response()->json(['rows' => $result]);
-        } finally {
-            $book->disconnectWorksheets();
-        }
+        } catch (\Illuminate\Validation\ValidationException $error) { throw $error; }
+        catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $error) { throw $error; }
+        catch (\Throwable $error) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['file'=>'The workbook could not be read. Save it as an unencrypted .xlsx file and try again.']);
+        } finally { $book?->disconnectWorksheets(); }
     }
 
     public function template(Request $request)
@@ -69,6 +88,7 @@ class SpreadsheetImportController extends Controller
             $sheet->getRowDimension(1)->setRowHeight(28);
             $sheet->freezePane('A2');
             $sheet->setAutoFilter("A1:{$lastColumn}1");
+            \App\Support\WorkbookLayout::prepare($book);
             (new Xlsx($book))->save('php://output');
             $book->disconnectWorksheets();
         }, 'import-template.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
@@ -130,7 +150,8 @@ class SpreadsheetImportController extends Controller
                 $sheet->getRowDimension(1)->setRowHeight(30);
                 $sheet->freezePane('A2');
                 $sheet->setAutoFilter("A1:{$lastColumn}{$lastRow}");
-                (new Xlsx($book))->save('php://output');
+                \App\Support\WorkbookLayout::prepare($book);
+            (new Xlsx($book))->save('php://output');
             } finally {
                 $book->disconnectWorksheets();
             }

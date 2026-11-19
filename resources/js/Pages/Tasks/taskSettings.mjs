@@ -1,6 +1,6 @@
 import { applyOrganizationStructure } from './organizationStructure.mjs';
 import { defaultRoleHolders } from './assignmentDirectory.mjs';
-import { defaultReportTemplates, editReportTemplates } from './reportTemplates.mjs';
+import { defaultReportTemplates, editReportTemplates, reportTemplates } from './reportTemplates.mjs';
 import { branches, departments, employees, operationsManagers, legacyDepartmentLeaders } from './taskDirectory.mjs';
 import { systemChecks } from './openingRounds.mjs';
 
@@ -15,7 +15,7 @@ export const taskFrequencyOptions = [
 ];
 export function defaultSettings() {
     const config = structuredClone({
-        branches, departments, itDepartment: 'IT', cashierDepartment: 'Cashier',
+        branches, departments, itDepartment: 'IT', receptionDepartment: 'Reception',
         taskIdPrefixSource: 'department',
         roles: [...baseRoles.map(name => ({ name, baseRole: name })), corporateServicesRole],
         corporateServicesVersion: 1, internRoleVersion: 2,
@@ -37,7 +37,7 @@ export function loadSettings(raw) {
     const upgradedRoles = roles.filter(role => role.name !== 'Intern').map(({ weeklyReport, ...role }) => role);
     if (!upgradedRoles.some(role => role.baseRole === 'Employee')) upgradedRoles.unshift({ name: employeeRole, baseRole: 'Employee' });
     const employees = raw.employees.map(person => ({ ...person, role: person.role === 'Intern' ? employeeRole : person.role, employeeType: person.role === 'Intern' || raw.roles.find(role => role.name === person.role)?.weeklyReport ? 'Intern' : person.employeeType || 'Regular' }));
-    return applyOrganizationStructure({ ...defaults, ...raw, taskTemplates: Array.isArray(raw.taskTemplates) ? raw.taskTemplates : defaults.taskTemplates, priorities:[...raw.priorities.filter(name=>name!=='Critical'),'Critical'], organizationStructureVersion: raw.organizationStructureVersion || 0, internRoleVersion: 2, roles: upgradedRoles, employees, roleHolders: raw.roleHolders || defaultRoleHolders({ ...defaults, ...raw, roles: upgradedRoles, employees }), corporateServicesVersion: 1, dailyReports: raw.dailyReports || defaultReportTemplates(raw) });
+    return applyOrganizationStructure({ ...defaults, ...raw, taskTemplates: Array.isArray(raw.taskTemplates) ? raw.taskTemplates : defaults.taskTemplates, priorities:[...raw.priorities.filter(name=>name!=='Critical'),'Critical'], organizationStructureVersion: raw.organizationStructureVersion || 0, internRoleVersion: 2, roles: upgradedRoles, employees, roleHolders: raw.roleHolders || defaultRoleHolders({ ...defaults, ...raw, roles: upgradedRoles, employees }), corporateServicesVersion: 1, dailyReports: reportTemplates(raw) });
 }
 export const canWorkAt = (employee, branch) => (employee?.availableBranches || [employee?.branch]).includes(branch);
 export function eligibleEmployees(config, { role, branch, department, employee }) {
@@ -143,7 +143,7 @@ export function changeSetting(config, tasks, { entity, action, original, value }
                 next.dailyReports = next.dailyReports?.map(report => ({ ...report, department: replace(report.department) }));
                 next.roleHolders = next.roleHolders?.map(person => ({ ...person, department: replace(person.department) }));
                 next.itDepartment = replace(next.itDepartment);
-                next.cashierDepartment = replace(next.cashierDepartment);
+                next.receptionDepartment = replace(next.receptionDepartment);
                 updatedTasks = updatedTasks.map(task => ({ ...task, department: replace(task.department), ...(task.rounds && ['Not Started', 'In Progress', 'Revision Needed'].includes(task.status) ? { rounds: { ...task.rounds, department: replace(task.rounds.department) } } : {}) }));
             }
             if (entity === 'roles') { next.teamLeaders = next.teamLeaders.map(person => ({ ...person, role: replace(person.role) })); next.employees = next.employees.map(person => ({ ...person, role: replace(person.role) })); next.roleHolders = next.roleHolders?.map(person => ({ ...person, role: replace(person.role) })); }

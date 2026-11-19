@@ -1,3 +1,4 @@
+import ModuleWorkbookTools from '@/Components/ModuleWorkbookTools';
 import Modal from '@/Components/Modal';
 import { getHRAdminLinks } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
@@ -224,6 +225,7 @@ export default function HRAdminOverview({ auth, requests }) {
     return (
         <SidebarLayout activeModule="HR ADMIN" sidebarLinks={hrLinks}>
             <Head title="HR Admin Overview" />
+<ModuleWorkbookTools name="hr-document-requests.xlsx" columns={['id','employee','type','name','reason','status','created_at']} rows={filteredRequests.map(item=>[item.id,item.user?.name,item.type,item.name,item.reason,item.status,item.created_at])} />
 
             <div className="py-12">
                 <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">

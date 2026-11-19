@@ -19,6 +19,6 @@ final class TaskIdFormatter
     public static function make(string $prefixSource, string $department, string $role, string $date, int $sequence): string
     {
         $prefix = self::prefix($prefixSource === 'role' ? $role : $department);
-        return sprintf('%s-%s-%06d', $prefix, $date, $sequence);
+        return sprintf('%s-%s-%05d', $prefix, \Carbon\CarbonImmutable::parse($date)->format('my'), $sequence);
     }
 }

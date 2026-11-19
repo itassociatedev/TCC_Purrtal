@@ -54,6 +54,7 @@ class SystemLogController extends Controller
                     }
                 }
                 $sheet->freezePane('A2');
+                \App\Support\WorkbookLayout::prepare($book);
                 (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save('php://output');
             } finally {
                 $book->disconnectWorksheets();

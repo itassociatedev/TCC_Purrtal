@@ -1,3 +1,6 @@
+import axios from 'axios';
+import { importErrorMessage } from '@/Utils/importErrors.mjs';
+import { downloadCsv } from '@/Utils/csv.mjs';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Head, useForm, router, usePage, Link } from '@inertiajs/react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
@@ -7,7 +10,7 @@ import SecondaryButton from '@/Components/SecondaryButton';
 import TextInput from '@/Components/TextInput';
 import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
-import { getAssetLinks } from '@/Config/navigation'; 
+import { getAssetLinks } from '@/Config/navigation';
 
 const getArray = (val) => {
     if (Array.isArray(val)) return val;
@@ -21,27 +24,27 @@ const getSafeStr = (val) => {
 };
 
 export default function Assets({ auth, assets, suppliers, branches, users, departments }) {
-    const assetLinks = typeof getAssetLinks === 'function' ? getAssetLinks(auth) : []; 
+    const assetLinks = typeof getAssetLinks === 'function' ? getAssetLinks(auth) : [];
     const { system } = usePage().props;
-    
+
     // SECURE ROLE CHECKING
     const userRole = getSafeStr(auth?.user?.role?.name || auth?.user?.role);
     const userPosition = getSafeStr(auth?.user?.position?.name || auth?.user?.position);
     const userDepartment = getSafeStr(auth?.user?.department?.name || auth?.user?.department);
     const userName = getSafeStr(auth?.user?.name);
     const userId = String(auth?.user?.id || '');
-    
+
     const isSuperAdmin = ['admin', 'super admin', 'director of corporate services and operations'].includes(userRole);
     const isAudit = userRole.includes('audit') || userPosition.includes('audit') || userDepartment.includes('audit') || userRole.includes('view only');
-    const canManageAssets = isSuperAdmin; 
-    const isAllowedToView = isSuperAdmin || !isAudit; 
+    const canManageAssets = isSuperAdmin;
+    const isAllowedToView = isSuperAdmin || !isAudit;
 
     // SAFE DATA ARRAYS
     const rawAssets = getArray(assets);
     const safeUsers = getArray(users);
     const safeSuppliers = getArray(suppliers);
-    const safeDepartments = getArray(departments); 
-    
+    const safeDepartments = getArray(departments);
+
     let safeBranches = getArray(branches);
     if (safeBranches.length === 0) safeBranches = getArray(system?.branches);
     if (safeBranches.length === 0) safeBranches = ['Makati', 'Greenhills', 'Alabang'];
@@ -75,15 +78,15 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     };
     const closeConfirm = () => setConfirmDialog(prev => ({ ...prev, isOpen: false }));
 
-    // CUSTOM SYSTEM ALERT MODAL STATE 
+    // CUSTOM SYSTEM ALERT MODAL STATE
     const [alertDialog, setAlertDialog] = useState({ isOpen: false, title: '', message: '', type: 'success' });
     const closeAlert = () => setAlertDialog(prev => ({ ...prev, isOpen: false }));
 
-    const safeAssets = isSuperAdmin 
-        ? rawAssets 
+    const safeAssets = isSuperAdmin
+        ? rawAssets
         : rawAssets.filter(asset => {
             if (!asset) return false;
-            
+
             const assetDept = getSafeStr(asset.department);
             const assetPersonnel = getSafeStr(asset.assigned_personnel);
             const assetUserId = String(asset.user_id || '');
@@ -120,19 +123,19 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         assetTag: true, serialNo: true, modelNo: true, color: true, category: true,
         status: true, condition: true, assignedPersonnel: true, department: true,
         branch: true, area: true, supplier: true, purchasedDate: true, warrantyExp: true,
-        depreciationMonths: true, qty: true, unitValue: true, totalValue: true, depreciation: true,  
-        currentValue: true,  
+        depreciationMonths: true, qty: true, unitValue: true, totalValue: true, depreciation: true,
+        currentValue: true,
     });
-    
+
     const [tempVisibleColumns, setTempVisibleColumns] = useState(visibleColumns);
 
     const columnLabels = {
         assetTag: 'Asset Tag', serialNo: 'Serial No.', modelNo: 'Model No.', color: 'Color',
         category: 'Category', status: 'Status', condition: 'Condition', assignedPersonnel: 'Assigned Personnel',
         department: 'Department', branch: 'Branch', area: 'Area', supplier: 'Supplier',
-        purchasedDate: 'Purchased Date', warrantyExp: 'Warranty Exp.', depreciationMonths: 'Depreciation (Months)', 
-        qty: 'Qty', unitValue: 'Unit Value', totalValue: 'Total Value', depreciation: 'Acc. Depreciation', 
-        currentValue: 'Current Book Value', 
+        purchasedDate: 'Purchased Date', warrantyExp: 'Warranty Exp.', depreciationMonths: 'Depreciation (Months)',
+        qty: 'Qty', unitValue: 'Unit Value', totalValue: 'Total Value', depreciation: 'Acc. Depreciation',
+        currentValue: 'Current Book Value',
     };
 
     const openColumnDropdown = () => {
@@ -166,14 +169,14 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     const [search, setSearch] = useState('');
     const [filterCategory, setFilterCategory] = useState('');
     const [filterDept, setFilterDept] = useState('');
-    const [filterBranch, setFilterBranch] = useState(''); 
-    const [filterCondition, setFilterCondition] = useState(''); 
-    const [filterWarranty, setFilterWarranty] = useState(''); 
+    const [filterBranch, setFilterBranch] = useState('');
+    const [filterCondition, setFilterCondition] = useState('');
+    const [filterWarranty, setFilterWarranty] = useState('');
     const [filterPersonnel, setFilterPersonnel] = useState('');
     const [dateRangeType, setDateRangeType] = useState('All Time');
     const [customStartDate, setCustomStartDate] = useState('');
     const [customEndDate, setCustomEndDate] = useState('');
-    
+
     const [selectedAssets, setSelectedAssets] = useState([]);
     const [showOnlySelected, setShowOnlySelected] = useState(false);
 
@@ -183,7 +186,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     const [viewingAsset, setViewingAsset] = useState(null);
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const [isBulkTransferModalOpen, setIsBulkTransferModalOpen] = useState(false);
-    
+
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [importFile, setImportFile] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
@@ -195,15 +198,15 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
 
     const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
-    
+
     const [isAddAreaModalOpen, setIsAddAreaModalOpen] = useState(false);
     const [newAreaName, setNewAreaName] = useState('');
-    
+
     const { data, setData, post, put, delete: destroy, processing, reset, clearErrors, errors, setError } = useForm({
         id: '', name: '', asset_tag: '', category: '', classification: '', department: '',
         branch: '', user_id: '', assigned_personnel: '', area: '', purchase_date: '', supplier_id: '', supplier_name: '',
-        warranty_expiration: '', condition: 'Good', unit_value: 0, qty: 1, asset_status: 'New', 
-        model_no: '', serial_no: '', color: '', image: null 
+        warranty_expiration: '', condition: 'Good', unit_value: 0, qty: 1, asset_status: 'New',
+        model_no: '', serial_no: '', color: '', image: null
     });
 
     const bulkTransferForm = useForm({
@@ -279,28 +282,28 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         const pDate = new Date(dateString);
         const today = new Date();
         if (isNaN(pDate.getTime())) return '-';
-        
+
         const diffDays = Math.floor((today.getTime() - pDate.getTime()) / (1000 * 3600 * 24));
         if (diffDays <=30) return '0 Months';
-        
-        const months = Math.floor(diffDays / 30); 
+
+        const months = Math.floor(diffDays / 30);
         return `${Math.max(0, months)} Months`;
     };
 
     const getDepreciationData = (asset) => {
         const originalValue = parseFloat(asset?.total_value || (asset?.unit_value * asset?.qty)) || 0;
         if (!asset?.purchase_date || originalValue === 0) return { accumulated: 0, current: originalValue };
-        
+
         const pDate = new Date(asset.purchase_date);
         const today = new Date();
         if (isNaN(pDate.getTime())) return { accumulated: 0, current: originalValue };
 
-        const usefulLifeMonths = 60; 
+        const usefulLifeMonths = 60;
         const diffDays = Math.floor((today.getTime() - pDate.getTime()) / (1000 * 3600 * 24));
-        
+
         let monthsAlive = diffDays < 30 ? 0 : Math.floor(diffDays / 30);
-        monthsAlive = Math.max(0, monthsAlive); 
-        
+        monthsAlive = Math.max(0, monthsAlive);
+
         const depreciationRatio = Math.min(monthsAlive / usefulLifeMonths, 1);
         const accumulated = originalValue * depreciationRatio;
         const current = originalValue - accumulated;
@@ -338,9 +341,9 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         if (type === 'Today') return assetDate.getTime() === today.getTime();
         if (type === 'This Week') {
             const startOfWeek = new Date(today);
-            startOfWeek.setDate(today.getDate() - today.getDay()); 
+            startOfWeek.setDate(today.getDate() - today.getDay());
             const endOfWeek = new Date(startOfWeek);
-            endOfWeek.setDate(startOfWeek.getDate() + 6); 
+            endOfWeek.setDate(startOfWeek.getDate() + 6);
             return assetDate >= startOfWeek && assetDate <= endOfWeek;
         }
         if (type === 'This Month') return assetDate.getMonth() === today.getMonth() && assetDate.getFullYear() === today.getFullYear();
@@ -351,7 +354,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
             if (s && e) return assetDate >= s && assetDate <= e;
             if (s) return assetDate >= s;
             if (e) return assetDate <= e;
-            return true; 
+            return true;
         }
         return true;
     };
@@ -368,16 +371,16 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         });
 
         safeAssets.forEach(asset => {
-            if (!asset) return; 
+            if (!asset) return;
 
             const matchesBranch = filterBranch ? getBranchValue(asset?.branch) === filterBranch : true;
             const matchesCategory = filterCategory ? asset?.category === filterCategory : true;
             const matchesDept = filterDept ? asset?.department === filterDept : true;
             const matchesCondition = filterCondition ? asset?.condition === filterCondition : true;
             const matchesDate = isDateInRange(asset, dateRangeType, customStartDate, customEndDate);
-            
+
             let matchesWarranty = true;
-            if (filterWarranty === 'Valid') { matchesWarranty = asset.warranty_expiration && !isWarrantyExpired(asset.warranty_expiration); } 
+            if (filterWarranty === 'Valid') { matchesWarranty = asset.warranty_expiration && !isWarrantyExpired(asset.warranty_expiration); }
             else if (filterWarranty === 'Expired') { matchesWarranty = isWarrantyExpired(asset.warranty_expiration); }
 
             const safeAssetPersonnel = getSafeStr(asset?.user?.name || asset?.assigned_personnel);
@@ -390,14 +393,14 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
             if (asset?.total_value) val = parseFloat(asset.total_value);
             else if (asset?.unit_value) val = parseFloat(asset.unit_value) * qty;
             if (isNaN(val)) val = 0;
-            
+
             const depData = getDepreciationData(asset);
-            
+
             totalItems += qty;
             totalValue += val;
             totalCurrentValue += depData.current;
             totalAccumulatedDepreciation += depData.accumulated;
-            
+
             if (asset?.user_id) uniquePersonnel.add(`id_${asset.user_id}`);
             else if (asset?.assigned_personnel) uniquePersonnel.add(`name_${getSafeStr(asset.assigned_personnel)}`);
 
@@ -420,8 +423,8 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
 
     const filteredAssets = useMemo(() => {
         return safeAssets.filter(asset => {
-            if (!asset) return false; 
-            
+            if (!asset) return false;
+
             const searchTerm = getSafeStr(search);
             const safeName = getSafeStr(asset?.name);
             const safeTag = getSafeStr(asset?.asset_tag);
@@ -429,21 +432,21 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
             const safeModel = getSafeStr(asset?.model_no);
             const safePersonnel = getSafeStr(asset?.user?.name || asset?.assigned_personnel);
 
-            const matchesSearch = safeName.includes(searchTerm) || 
-                                  safeTag.includes(searchTerm) || 
-                                  safeSerial.includes(searchTerm) || 
-                                  safeModel.includes(searchTerm) || 
+            const matchesSearch = safeName.includes(searchTerm) ||
+                                  safeTag.includes(searchTerm) ||
+                                  safeSerial.includes(searchTerm) ||
+                                  safeModel.includes(searchTerm) ||
                                   safePersonnel.includes(searchTerm);
-                                  
+
             const matchesCategory = filterCategory ? asset?.category === filterCategory : true;
             const matchesDept = filterDept ? asset?.department === filterDept : true;
             const matchesBranch = filterBranch ? getBranchValue(asset?.branch) === filterBranch : true;
             const matchesCondition = filterCondition ? asset?.condition === filterCondition : true;
             const matchesDate = isDateInRange(asset, dateRangeType, customStartDate, customEndDate);
             const matchesPersonnel = filterPersonnel ? safePersonnel === getSafeStr(filterPersonnel) : true;
-            
+
             let matchesWarranty = true;
-            if (filterWarranty === 'Valid') { matchesWarranty = asset.warranty_expiration && !isWarrantyExpired(asset.warranty_expiration); } 
+            if (filterWarranty === 'Valid') { matchesWarranty = asset.warranty_expiration && !isWarrantyExpired(asset.warranty_expiration); }
             else if (filterWarranty === 'Expired') { matchesWarranty = isWarrantyExpired(asset.warranty_expiration); }
 
             return matchesSearch && matchesCategory && matchesDept && matchesBranch && matchesDate && matchesCondition && matchesWarranty && matchesPersonnel;
@@ -460,7 +463,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
             const bSel = selectedAssets.includes(b.id);
             if (aSel && !bSel) return -1;
             if (!aSel && bSel) return 1;
-            return 0; 
+            return 0;
         });
         return processed;
     }, [filteredAssets, selectedAssets, showOnlySelected]);
@@ -480,16 +483,16 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
 
     const openBulkTransferModal = () => { bulkTransferForm.reset(); bulkTransferForm.clearErrors(); bulkTransferForm.setData('ids', selectedAssets); setIsBulkTransferModalOpen(true); };
     const closeBulkTransferModal = () => { setIsBulkTransferModalOpen(false); bulkTransferForm.reset(); };
-    
-    const handleBulkTransferSubmit = (e) => { 
-        e.preventDefault(); 
-        router.post(route('admin.assets.bulk-transfer'), 
-            { ids: selectedAssets, user_id: bulkTransferForm.data.user_id, branch: bulkTransferForm.data.branch, department: bulkTransferForm.data.department }, 
+
+    const handleBulkTransferSubmit = (e) => {
+        e.preventDefault();
+        router.post(route('admin.assets.bulk-transfer'),
+            { ids: selectedAssets, user_id: bulkTransferForm.data.user_id, branch: bulkTransferForm.data.branch, department: bulkTransferForm.data.department },
             { preserveScroll: true, onSuccess: () => { closeBulkTransferModal(); setSelectedAssets([]); setShowOnlySelected(false); } }
-        ); 
+        );
     };
-    
-    const handleBulkDelete = () => { 
+
+    const handleBulkDelete = () => {
         triggerConfirm(
             'Bulk Delete Asset Records',
             `Are you sure you want to delete ${selectedAssets.length} selected asset(s)?`,
@@ -508,15 +511,15 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
 
     const openEditModal = (asset) => {
         setIsEditMode(true); clearErrors();
-        setData({ 
-            ...asset, supplier_id: asset?.supplier_id || '', user_id: asset?.user_id || '', branch: getBranchValue(asset?.branch), image: null 
+        setData({
+            ...asset, supplier_id: asset?.supplier_id || '', user_id: asset?.user_id || '', branch: getBranchValue(asset?.branch), image: null
         });
         setImagePreview(asset.image_path ? `/storage/${asset.image_path}` : null);
-        
+
         if (asset.category && !allCategories.includes(asset.category)) {
             setCustomCategories(prev => [...prev, asset.category]);
         }
-        
+
         if (asset.area && !allAreas.includes(asset.area)) {
             setCustomAreas(prev => [...prev, asset.area]);
         }
@@ -531,10 +534,10 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     };
 
     const handleTransferSubmit = (e) => { e.preventDefault(); put(route('admin.assets.update', data.id), { onSuccess: () => closeTransferModal() }); };
-    
-    const handleSubmit = (e) => { 
-        e.preventDefault(); 
-        
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+
         if (data.purchase_date && data.warranty_expiration) {
             const pDate = new Date(data.purchase_date);
             const wDate = new Date(data.warranty_expiration);
@@ -548,11 +551,11 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         if (isEditMode) {
             router.post(route('admin.assets.update', data.id), { _method: 'put', ...data }, { forceFormData: true, onSuccess: () => closeModal() });
         } else {
-            post(route('admin.assets.store'), { forceFormData: true, onSuccess: () => closeModal() }); 
+            post(route('admin.assets.store'), { forceFormData: true, onSuccess: () => closeModal() });
         }
     };
-    
-    const handleDelete = (id) => { 
+
+    const handleDelete = (id) => {
         triggerConfirm(
             'Delete Asset',
             'Are you sure you want to delete this asset?',
@@ -581,72 +584,23 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
 
             router.post(route('admin.assets.import'), formData, {
                 forceFormData: true, preserveScroll: true,
-                onSuccess: () => { 
-                    clearTimeout(uploadTimeout); 
-                    closeImportModal(); 
-                    setAlertDialog({ isOpen: true, title: 'Success', message: 'Your assets have been successfully imported!', type: 'success' }); 
+                onSuccess: () => {
+                    clearTimeout(uploadTimeout);
+                    closeImportModal();
+                    setAlertDialog({ isOpen: true, title: 'Success', message: 'Your assets have been successfully imported!', type: 'success' });
                 },
                 onError: (err) => { clearTimeout(uploadTimeout); setImportError(err.file || "Import failed."); setIsUploading(false); },
                 onFinish: () => { clearTimeout(uploadTimeout); setIsUploading(false); }
             });
         };
 
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const text = event.target.result;
-                const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
-                
-                if (lines.length > 1) {
-                    const parseCSVLine = (line) => {
-                        const result = [];
-                        let cur = '';
-                        let inQuotes = false;
-                        for (let i = 0; i < line.length; i++) {
-                            if (line[i] === '"') inQuotes = !inQuotes;
-                            else if (line[i] === ',' && !inQuotes) { result.push(cur.trim()); cur = ''; }
-                            else cur += line[i];
-                        }
-                        result.push(cur.trim());
-                        return result;
-                    };
-
-                    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/^"|"$/g, ''));
-                    const tagIndex = headers.findIndex(h => h === 'asset tag' || h === 'assettag');
-                    
-                    if (tagIndex !== -1) {
-                        let duplicateCount = 0;
-                        const existingTags = safeAssets.map(a => getSafeStr(a.asset_tag)).filter(Boolean);
-                        
-                        for (let i = 1; i < lines.length; i++) {
-                            const cols = parseCSVLine(lines[i]);
-                            if (cols.length > tagIndex) {
-                                const tagVal = getSafeStr(cols[tagIndex].replace(/^"|"$/g, ''));
-                                if (tagVal && existingTags.includes(tagVal)) {
-                                    duplicateCount++;
-                                }
-                            }
-                        }
-                        
-                        if (duplicateCount > 0) {
-                            triggerConfirm(
-                                'Duplicate Assets Detected',
-                                `Warning: ${duplicateCount} duplicate asset(s) were found in your import file. Proceeding will update the existing records instead of creating new ones. Do you wish to continue?`,
-                                () => proceedWithImport(),
-                                'danger'
-                            );
-                            return; 
-                        }
-                    }
-                }
-                proceedWithImport();
-            } catch (err) {
-                // Fallback to normal upload if parsing fails
-                proceedWithImport();
-            }
-        };
-        reader.onerror = () => proceedWithImport();
-        reader.readAsText(importFile);
+        const previewData = new FormData(); previewData.append('file', importFile);
+        axios.post('/spreadsheet-import/read', previewData).then(({data}) => {
+            const existing = new Set(safeAssets.map(asset => getSafeStr(asset.asset_tag)));
+            const duplicates = data.rows.filter(row => existing.has(getSafeStr(row.asset_tag))).length;
+            if (duplicates) triggerConfirm('Duplicate Assets Detected', `${duplicates} existing asset(s) will be updated. Continue?`, proceedWithImport);
+            else proceedWithImport();
+        }).catch(error => { setImportError(importErrorMessage(error)); setIsUploading(false); });
     };
 
     const handleExport = () => {
@@ -654,34 +608,30 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
             setAlertDialog({ isOpen: true, title: 'Export Failed', message: 'No assets found for the current view.', type: 'error' });
             return;
         }
-        
+
         const headers = [
-            'Asset Name', 'Asset Tag', 'Serial No.', 'Model No.', 'Color', 'Category', 'Status', 'Condition', 'Assigned Personnel', 
+            'Asset Name', 'Asset Tag', 'Serial No.', 'Model No.', 'Color', 'Category', 'Status', 'Condition', 'Assigned Personnel',
             'Department', 'Branch', 'Area', 'Supplier', 'Purchased Date', 'Warranty Exp.', 'Depreciation (Months)', 'Qty', 'Unit Value', 'Total Value',
             'Acc. Depreciation', 'Current Book Value'
         ];
-        const csvRows = [headers.join(',')];
+        const csvRows = [];
         displayedAssets.forEach(asset => {
             if (!asset) return;
             const personnel = asset?.user?.name ? asset.user.name : (asset?.assigned_personnel || '-');
             const branch = getBranchValue(asset?.branch) || '-';
             const depData = getDepreciationData(asset);
-            const escapeCSV = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
+            const escapeCSV = (val) => String(val ?? '');
             const row = [
                 escapeCSV(asset?.name), escapeCSV(asset?.asset_tag), escapeCSV(asset?.serial_no), escapeCSV(asset?.model_no),
                 escapeCSV(asset?.color), escapeCSV(asset?.category), escapeCSV(asset?.asset_status || 'New'), escapeCSV(asset?.condition || 'Good'),
                 escapeCSV(personnel), escapeCSV(asset?.department), escapeCSV(branch), escapeCSV(asset?.area),
                 escapeCSV(asset?.supplier_name), escapeCSV(safeFormatDate(asset?.purchase_date)), escapeCSV(safeFormatDate(asset?.warranty_expiration)),
                 escapeCSV(calculateDepreciationMonths(asset?.purchase_date)), asset?.qty || 1, asset?.unit_value || 0, asset?.total_value || (asset?.unit_value * (asset?.qty || 1)) || 0,
-                depData.accumulated.toFixed(2), depData.current.toFixed(2)      
+                depData.accumulated.toFixed(2), depData.current.toFixed(2)
             ];
-            csvRows.push(row.join(','));
+            csvRows.push(row);
         });
-        const csvBlob = new Blob(["\uFEFF" + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(csvBlob);
-        link.setAttribute("download", `Filtered_Assets_Export_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        downloadCsv('Filtered_Assets_Export.xlsx', headers, csvRows);
 
         if (isSuperAdmin) {
             try {
@@ -706,17 +656,17 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     }
 
     return (
-        <SidebarLayout 
-            activeModule="Assets" 
-            sidebarLinks={assetLinks} 
-            onTriggerAddModal={canManageAssets ? openAddModal : null} 
+        <SidebarLayout
+            activeModule="Assets"
+            sidebarLinks={assetLinks}
+            onTriggerAddModal={canManageAssets ? openAddModal : null}
             header={
                 <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center w-full gap-4">
                     <h2 className="font-semibold text-xl text-gray-800 leading-tight">
-                        {isSuperAdmin ? 'Accountability Module' : 'My Accountability'} 
+                        {isSuperAdmin ? 'Accountability Module' : 'My Accountability'}
                         {!canManageAssets && <span className="text-xs ml-2 bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full uppercase tracking-wider">{userDepartment || 'Department'} View</span>}
                     </h2>
-                    
+
                     <div className="flex flex-col lg:flex-row items-center gap-3 w-full xl:w-auto">
                         <div className="flex items-center bg-white border border-gray-300 rounded-md shadow-sm px-3 py-1.5 w-full lg:w-auto">
                             <svg className="w-4 h-4 text-indigo-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
@@ -738,14 +688,14 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                     <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>
                                     Columns
                                 </SecondaryButton>
-                                
+
                                 {showColumnDropdown && (
                                     <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-md shadow-xl z-50 p-2 max-h-[32rem] flex flex-col">
                                         <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 px-2 pb-1 border-b flex justify-between items-center">
                                             <span>Display Columns</span>
-                                            <button 
-                                                type="button" 
-                                                onClick={toggleAllColumns} 
+                                            <button
+                                                type="button"
+                                                onClick={toggleAllColumns}
                                                 className={`text-[10px] uppercase tracking-wider font-bold ${allColumnsSelected ? 'text-gray-500 hover:text-gray-700' : 'text-indigo-600 hover:text-indigo-800'}`}
                                             >
                                                 {allColumnsSelected ? 'Deselect All' : 'Select All'}
@@ -754,11 +704,11 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                         <div className="overflow-y-auto flex-1">
                                             {Object.keys(tempVisibleColumns).map(col => (
                                                 <label key={col} className="flex items-center px-2 py-1.5 hover:bg-indigo-50 rounded cursor-pointer text-sm text-gray-700 font-medium transition-colors">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        className="rounded border-gray-300 text-indigo-600 shadow-sm mr-3 focus:ring-indigo-500 h-4 w-4" 
-                                                        checked={tempVisibleColumns[col]} 
-                                                        onChange={() => setTempVisibleColumns(prev => ({ ...prev, [col]: !prev[col] }))} 
+                                                    <input
+                                                        type="checkbox"
+                                                        className="rounded border-gray-300 text-indigo-600 shadow-sm mr-3 focus:ring-indigo-500 h-4 w-4"
+                                                        checked={tempVisibleColumns[col]}
+                                                        onChange={() => setTempVisibleColumns(prev => ({ ...prev, [col]: !prev[col] }))}
                                                     />
                                                     {columnLabels[col]}
                                                 </label>
@@ -773,7 +723,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
 
                             {canManageAssets && (
                                 <>
-                                    <a href="/asset_template.xlsx" download="Asset_Template.xlsx" className="clinic-file-action inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-md font-bold text-[10px] text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none transition ease-in-out duration-150 justify-center gap-2 whitespace-nowrap">
+                                    <a href={route('admin.assets.template')} className="clinic-file-action inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-md font-bold text-[10px] text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none transition ease-in-out duration-150 justify-center gap-2 whitespace-nowrap">
                                         <svg className="w-4 h-4 text-indigo-300" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 110 2H7z" clipRule="evenodd" /></svg>
                                         Download Template
                                     </a>
@@ -815,7 +765,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                 <p className="text-xl font-black text-gray-900">₱ {stats.totalAccumulatedDepreciation.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</p>
                             </div>
                         </div>
-                        
+
                         <div className="bg-white rounded-xl shadow-sm border border-emerald-300 p-6 flex items-center gap-4 relative overflow-hidden">
                             <div className="absolute -right-4 -top-4 w-16 h-16 bg-emerald-50 rounded-full opacity-50"></div>
                             <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg></div>
@@ -841,7 +791,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
                         <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                             <h3 className="text-sm font-black text-gray-400 uppercase tracking-wider mb-4 border-b border-gray-50 pb-2">
-                                {filterBranch ? `${filterBranch} Summary` : "Assets & Current Value Per Branch"} 
+                                {filterBranch ? `${filterBranch} Summary` : "Assets & Current Value Per Branch"}
                                 {dateRangeType !== 'All Time' && <span className="text-indigo-500 ml-1">({dateRangeType})</span>}
                             </h3>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -901,11 +851,11 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                 <option value="Expired">Expired</option>
                             </select>
                         </div>
-                        
+
                         <div className="w-36"><InputLabel value="Condition" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterCondition} onChange={e => setFilterCondition(e.target.value)}><option value="">All</option><option value="Good">Good</option><option value="Broken">Broken</option><option value="For Repair">For Repair</option><option value="Missing">Missing</option></select></div>
                         <div className="w-36"><InputLabel value="Branch" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterBranch} onChange={e => setFilterBranch(e.target.value)}><option value="">All Branches</option>{safeBranches.map((b, idx) => { if (!b) return null; const bn = typeof b === 'object' ? (b.name || '') : String(b); return bn ? <option key={idx} value={bn}>{bn}</option> : null; })}</select></div>
                         <div className="w-36"><InputLabel value="Category" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}><option value="">All Categories</option>{allCategories.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                        
+
                         {isSuperAdmin && (
                             <div className="w-36">
                                 <InputLabel value="Department" className="font-black tracking-tighter text-xs" />
@@ -923,14 +873,14 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                 <button type="button" onClick={handleToggleSelectAll} className="text-xs font-black uppercase tracking-wider text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-4 py-2 rounded shadow-sm border border-indigo-200">
                                     {selectedAssets.length > 0 ? 'Deselect All' : 'Select All'}
                                 </button>
-                                
+
                                 {selectedAssets.length > 0 && (
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setShowOnlySelected(!showOnlySelected)} 
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowOnlySelected(!showOnlySelected)}
                                         className={`ml-auto text-xs font-black uppercase tracking-wider px-5 py-2 rounded-lg shadow-sm border transition-all ${
-                                            showOnlySelected 
-                                            ? 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700' 
+                                            showOnlySelected
+                                            ? 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700'
                                             : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
                                         }`}
                                     >
@@ -976,7 +926,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                         {visibleColumns.qty && <th className="px-4 py-4 text-center text-xs font-black text-gray-500 uppercase tracking-tighter whitespace-nowrap">Qty</th>}
                                         {visibleColumns.unitValue && <th className="px-4 py-4 text-right text-xs font-black text-gray-500 uppercase tracking-tighter whitespace-nowrap">Unit Value</th>}
                                         {visibleColumns.totalValue && <th className="px-4 py-4 text-right text-xs font-black text-gray-500 uppercase tracking-tighter whitespace-nowrap">Total Value</th>}
-                                        
+
                                         {visibleColumns.depreciation && <th className="px-4 py-4 text-right text-xs font-black text-red-500 uppercase tracking-tighter whitespace-nowrap">Acc. Depreciation</th>}
                                         {visibleColumns.currentValue && <th className="px-4 py-4 text-right text-xs font-black text-emerald-600 uppercase tracking-tighter whitespace-nowrap bg-emerald-50 pr-4">Current Book Value</th>}
 
@@ -995,14 +945,14 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                     ) : (
                                         displayedAssets.map((asset, index) => {
                                             if (!asset) return null;
-                                            
+
                                             const depData = getDepreciationData(asset);
                                             const isExpired = isWarrantyExpired(asset?.warranty_expiration);
                                             const isSelected = selectedAssets.includes(asset.id);
 
                                             return (
                                             <tr key={asset?.id || index} className={`hover:bg-indigo-50/50 transition-colors text-sm text-gray-800 ${isSelected ? 'bg-indigo-50 border-l-4 border-l-indigo-500' : ''}`}>
-                                                
+
                                                 {canManageAssets && (
                                                     <td className="px-4 py-4 text-center whitespace-nowrap border-r border-gray-100"><input type="checkbox" className="rounded border-gray-300 text-indigo-600 shadow-sm h-4 w-4" checked={isSelected} onChange={(e) => handleSelectOne(e, asset.id)} /></td>
                                                 )}
@@ -1014,14 +964,14 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                                 {visibleColumns.color && <td className="px-4 py-4 whitespace-nowrap">{asset?.color || '-'}</td>}
                                                 {visibleColumns.category && <td className="px-4 py-4 whitespace-nowrap">{asset?.category || '-'}</td>}
                                                 {visibleColumns.status && <th className="px-4 py-4 font-black whitespace-nowrap text-gray-900">{asset?.asset_status || 'New'}</th>}
-                                                
+
                                                 {visibleColumns.condition && (
                                                     <td className="px-4 py-4 whitespace-nowrap">
                                                         <span className={`px-2.5 py-1 inline-flex text-[10px] font-black tracking-widest uppercase rounded border ${
-                                                            asset?.condition === 'Good' ? 'bg-green-50 text-green-700 border-green-200' : 
-                                                            asset?.condition === 'Broken' ? 'bg-red-50 text-red-700 border-red-200' : 
-                                                            asset?.condition === 'For Repair' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
-                                                            asset?.condition === 'Missing' ? 'bg-gray-100 text-gray-700 border-gray-300' : 
+                                                            asset?.condition === 'Good' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                            asset?.condition === 'Broken' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                            asset?.condition === 'For Repair' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                                            asset?.condition === 'Missing' ? 'bg-gray-100 text-gray-700 border-gray-300' :
                                                             'bg-gray-50 text-gray-700 border-gray-200'
                                                         }`}>
                                                             {asset?.condition || 'Unknown'}
@@ -1085,7 +1035,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                                         ₱{depData.current.toLocaleString('en-US', {minimumFractionDigits: 2})}
                                                     </td>
                                                 )}
-                                                
+
                                                 {canManageAssets && (
                                                     <td className="px-6 py-4 whitespace-nowrap text-right font-medium">
                                                         <div className="flex justify-end items-center gap-3">
@@ -1109,7 +1059,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                             </p>
                         </div>
                     </div>
-                    
+
                 </div>
             </div>
 
@@ -1126,15 +1076,15 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                             Cancel
                         </SecondaryButton>
                         {confirmDialog.actionType === 'danger' ? (
-                            <button 
-                                onClick={() => { confirmDialog.onConfirm(); closeConfirm(); }} 
+                            <button
+                                onClick={() => { confirmDialog.onConfirm(); closeConfirm(); }}
                                 className="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-black text-xs text-white uppercase tracking-wider hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition ease-in-out duration-150"
                             >
                                 Confirm
                             </button>
                         ) : (
-                            <PrimaryButton 
-                                onClick={() => { confirmDialog.onConfirm(); closeConfirm(); }} 
+                            <PrimaryButton
+                                onClick={() => { confirmDialog.onConfirm(); closeConfirm(); }}
                                 className="bg-emerald-600 hover:bg-emerald-700 font-black uppercase tracking-wider text-xs"
                             >
                                 Confirm
@@ -1149,13 +1099,13 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                     <h2 className="text-2xl font-black text-gray-900 mb-6 border-b pb-4">
                         {isEditMode ? 'Edit Asset Record' : 'Register New Asset'}
                     </h2>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
                         <div className="space-y-4">
                             <h3 className="text-xs font-black text-indigo-500 uppercase tracking-widest border-b border-indigo-100 pb-2">Basic Info</h3>
                             <div><InputLabel value="Asset Name" /><TextInput className="w-full mt-1 text-sm font-bold" value={data.name || ''} onChange={e => setData('name', e.target.value)} required /></div>
                             <div><InputLabel value="Asset Tag" /><TextInput className="w-full mt-1 text-sm font-mono font-bold bg-gray-50 text-gray-500" value={data.asset_tag || ''} onChange={e => setData('asset_tag', e.target.value)} required /></div>
-                            
+
                             <div>
                                 <InputLabel value="Category" />
                                 <div className="flex gap-2 items-center mt-1">
@@ -1164,10 +1114,10 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                         {allCategories.map((cat, idx) => <option key={idx} value={cat}>{cat}</option>)}
                                     </select>
                                     <SecondaryButton type="button" onClick={() => setIsAddCategoryModalOpen(true)} className="!px-3 !py-2 h-[38px]" title="Add New Category">➕</SecondaryButton>
-                                    <SecondaryButton 
-                                        type="button" 
-                                        onClick={() => handleDeleteCategory(data.category)} 
-                                        className="!px-3 !py-2 h-[38px] !text-red-600 hover:!bg-red-50" 
+                                    <SecondaryButton
+                                        type="button"
+                                        onClick={() => handleDeleteCategory(data.category)}
+                                        className="!px-3 !py-2 h-[38px] !text-red-600 hover:!bg-red-50"
                                         title="Delete Selected Category"
                                         disabled={!data.category}
                                     >
@@ -1175,7 +1125,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                     </SecondaryButton>
                                 </div>
                             </div>
-                            
+
                             <div><InputLabel value="Classification" /><TextInput className="w-full mt-1 text-sm font-bold" value={data.classification || ''} onChange={e => setData('classification', e.target.value)} placeholder="e.g. Laptop, Chair" /></div>
                             <div>
                                 <InputLabel value="Condition" />
@@ -1251,7 +1201,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                     {safeBranches.map((b, idx) => { if(!b) return null; const bn = typeof b === 'object' ? (b.name || '') : String(b); return bn ? <option key={idx} value={bn}>{bn}</option> : null; })}
                                 </select>
                             </div>
-                            
+
                             <div>
                                 <InputLabel value="Department" />
                                 <select className="w-full mt-1 border-gray-300 rounded-md shadow-sm text-sm font-bold py-2" value={data.department || ''} onChange={e => setData('department', e.target.value)}>
@@ -1268,10 +1218,10 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                         {allAreas.map((area, idx) => <option key={idx} value={area}>{area}</option>)}
                                     </select>
                                     <SecondaryButton type="button" onClick={() => setIsAddAreaModalOpen(true)} className="!px-3 !py-2 h-[38px]" title="Add New Area">➕</SecondaryButton>
-                                    <SecondaryButton 
-                                        type="button" 
-                                        onClick={() => handleDeleteArea(data.area)} 
-                                        className="!px-3 !py-2 h-[38px] !text-red-600 hover:!bg-red-50" 
+                                    <SecondaryButton
+                                        type="button"
+                                        onClick={() => handleDeleteArea(data.area)}
+                                        className="!px-3 !py-2 h-[38px] !text-red-600 hover:!bg-red-50"
                                         title="Delete Selected Area"
                                         disabled={!data.area}
                                     >
@@ -1292,18 +1242,18 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                             <div><InputLabel value="Depreciation (Months)" /><TextInput className="w-full mt-1 text-xs font-bold bg-gray-100 text-gray-500 cursor-not-allowed" value={calculateDepreciationMonths(data.purchase_date)} readOnly placeholder="Auto-calc" /></div>
                         </div>
                     </div>
-                    
+
                     <div className="mt-6 pt-6 border-t border-gray-100">
                         <InputLabel value="Asset Image (Optional)" className="mb-2" />
                         <div className="flex flex-col sm:flex-row gap-6 items-start">
                             <div className="w-full sm:w-1/3">
-                                <input 
+                                <input
                                     type="file" accept="image/*"
                                     onChange={e => {
                                         setData('image', e.target.files[0]);
                                         if(e.target.files[0]) setImagePreview(URL.createObjectURL(e.target.files[0]));
                                     }}
-                                    className="w-full block text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-black file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer border border-gray-200 rounded" 
+                                    className="w-full block text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-black file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer border border-gray-200 rounded"
                                 />
                                 {errors.image && <InputError message={errors.image} className="mt-2" />}
                             </div>
@@ -1321,7 +1271,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                             </div>
                         </div>
                     </div>
-                    
+
                     <div className="mt-8 flex justify-end gap-3 border-t border-gray-100 pt-6">
                         <SecondaryButton type="button" onClick={closeModal} className="font-black uppercase tracking-wider text-xs">Cancel</SecondaryButton>
                         <PrimaryButton type="submit" disabled={processing} className="font-black uppercase tracking-wider text-xs bg-indigo-600 hover:bg-indigo-700">
@@ -1343,10 +1293,10 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                             </div>
                             <div className="flex flex-col items-end gap-2">
                                 <span className={`px-4 py-1.5 inline-flex text-[10px] font-black uppercase tracking-widest rounded-full border ${
-                                    viewingAsset?.condition === 'Good' ? 'bg-green-50 text-green-700 border-green-200' : 
-                                    viewingAsset?.condition === 'Broken' ? 'bg-red-50 text-red-700 border-red-200' : 
-                                    viewingAsset?.condition === 'For Repair' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
-                                    viewingAsset?.condition === 'Missing' ? 'bg-gray-100 text-gray-700 border-gray-300' : 
+                                    viewingAsset?.condition === 'Good' ? 'bg-green-50 text-green-700 border-green-200' :
+                                    viewingAsset?.condition === 'Broken' ? 'bg-red-50 text-red-700 border-red-200' :
+                                    viewingAsset?.condition === 'For Repair' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                    viewingAsset?.condition === 'Missing' ? 'bg-gray-100 text-gray-700 border-gray-300' :
                                     'bg-gray-50 text-gray-700 border-gray-200'
                                 }`}>
                                     {viewingAsset?.condition || 'Unknown'}
@@ -1370,7 +1320,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                             <div className="space-y-4 bg-indigo-50/50 p-5 rounded-lg border border-indigo-50">
                                 <h4 className="text-[11px] font-black text-indigo-400 uppercase tracking-wider mb-2">Assignment Details</h4>
                                 <div className="flex justify-between border-b border-indigo-100 pb-2">
-                                    <span className="text-gray-500 font-bold text-xs">Assigned To:</span> 
+                                    <span className="text-gray-500 font-bold text-xs">Assigned To:</span>
                                     <span className="font-black text-indigo-700 text-xs text-right">
                                         {viewingAsset?.user ? viewingAsset?.user?.name : (viewingAsset?.assigned_personnel || '-')}
                                     </span>
@@ -1386,26 +1336,26 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                     <div className="flex justify-between border-b border-emerald-100 pb-2"><span className="text-gray-500 font-bold text-xs">Supplier:</span> <span className="font-black text-gray-900 text-xs">{viewingAsset?.supplier_name || 'N/A'}</span></div>
                                     <div className="flex justify-between border-b border-emerald-100 pb-2"><span className="text-gray-500 font-bold text-xs">Purchase Date:</span> <span className="font-black text-gray-900 text-xs">{safeFormatDate(viewingAsset?.purchase_date)}</span></div>
                                     <div className="flex justify-between border-b border-emerald-100 pb-2">
-                                        <span className="text-gray-500 font-bold text-xs">Warranty Exp:</span> 
+                                        <span className="text-gray-500 font-bold text-xs">Warranty Exp:</span>
                                         <span className={`font-black text-xs ${isWarrantyExpired(viewingAsset?.warranty_expiration) ? 'text-red-600' : 'text-gray-900'}`}>
                                             {safeFormatDate(viewingAsset?.warranty_expiration)}
                                         </span>
                                     </div>
                                     <div className="flex justify-between border-b border-emerald-100 pb-2">
-                                        <span className="text-gray-500 font-bold text-xs">Depreciation Time:</span> 
+                                        <span className="text-gray-500 font-bold text-xs">Depreciation Time:</span>
                                         <span className="font-black text-gray-900 text-xs">{calculateDepreciationMonths(viewingAsset?.purchase_date)}</span>
                                     </div>
-                                    
+
                                     <div className="flex justify-between border-b border-emerald-100 pb-2 mt-2">
-                                        <span className="text-gray-500 font-bold text-xs">Original Value (Qty {viewingAsset?.qty || 1}):</span> 
+                                        <span className="text-gray-500 font-bold text-xs">Original Value (Qty {viewingAsset?.qty || 1}):</span>
                                         <span className="font-black text-gray-900 text-xs">₱{parseFloat(viewingAsset?.total_value || (viewingAsset?.unit_value * viewingAsset?.qty) || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
                                     </div>
                                     <div className="flex justify-between border-b border-emerald-100 pb-2">
-                                        <span className="text-gray-500 font-bold text-xs">Accumulated Depreciation:</span> 
+                                        <span className="text-gray-500 font-bold text-xs">Accumulated Depreciation:</span>
                                         <span className="font-black text-red-500 text-xs">- ₱{getDepreciationData(viewingAsset).accumulated.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
                                     </div>
                                     <div className="flex justify-between pb-1 pt-2 bg-emerald-100/50 px-2 rounded -mx-2">
-                                        <span className="text-emerald-800 font-black text-xs uppercase">Current Book Value:</span> 
+                                        <span className="text-emerald-800 font-black text-xs uppercase">Current Book Value:</span>
                                         <span className="font-black text-emerald-700 text-sm">₱{getDepreciationData(viewingAsset).current.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
                                     </div>
                                 </div>
@@ -1416,12 +1366,12 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                             <div className="mt-8 pt-6 border-t border-gray-100">
                                 <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-wider mb-4">Attached Image</h4>
                                 <div className="w-full bg-gray-100 rounded-xl border border-gray-200 overflow-hidden flex items-center justify-center shadow-inner p-2">
-                                    <img 
-                                        src={viewingAsset.image_path.startsWith('http') ? viewingAsset.image_path : `/storage/${viewingAsset.image_path}`} 
-                                        alt={viewingAsset?.name} 
-                                        className="w-full h-auto max-h-[800px] object-contain rounded-lg" 
+                                    <img
+                                        src={viewingAsset.image_path.startsWith('http') ? viewingAsset.image_path : `/storage/${viewingAsset.image_path}`}
+                                        alt={viewingAsset?.name}
+                                        className="w-full h-auto max-h-[800px] object-contain rounded-lg"
                                         onError={(e) => {
-                                            e.target.onerror = null; 
+                                            e.target.onerror = null;
                                             e.target.src = "https://placehold.co/800x400/eeeeee/999999?text=Image+Not+Found+-+Run+storage:link";
                                         }}
                                     />
@@ -1441,15 +1391,15 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                     <h2 className="text-lg font-black text-gray-900 mb-4 uppercase tracking-wider">Add New Category</h2>
                     <div>
                         <InputLabel value="Category Name" className="font-black text-xs" />
-                        <TextInput 
-                            className="w-full mt-1 text-sm font-bold" 
-                            value={newCategoryName} 
-                            onChange={e => setNewCategoryName(e.target.value)} 
-                            placeholder="e.g. IT Equipment, Vehicles..." 
+                        <TextInput
+                            className="w-full mt-1 text-sm font-bold"
+                            value={newCategoryName}
+                            onChange={e => setNewCategoryName(e.target.value)}
+                            placeholder="e.g. IT Equipment, Vehicles..."
                             required autoFocus
                         />
                         <p className="text-[10px] text-gray-500 mt-2 font-bold">
-                            Typing a category here allows you to immediately assign it to an asset. 
+                            Typing a category here allows you to immediately assign it to an asset.
                         </p>
                     </div>
                     <div className="mt-6 flex justify-end gap-3">
@@ -1464,15 +1414,15 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                     <h2 className="text-lg font-black text-gray-900 mb-4 uppercase tracking-wider">Add New Area</h2>
                     <div>
                         <InputLabel value="Area Name" className="font-black text-xs" />
-                        <TextInput 
-                            className="w-full mt-1 text-sm font-bold" 
-                            value={newAreaName} 
-                            onChange={e => setNewAreaName(e.target.value)} 
-                            placeholder="e.g. IT Office, Warehouse..." 
+                        <TextInput
+                            className="w-full mt-1 text-sm font-bold"
+                            value={newAreaName}
+                            onChange={e => setNewAreaName(e.target.value)}
+                            placeholder="e.g. IT Office, Warehouse..."
                             required autoFocus
                         />
                         <p className="text-[10px] text-gray-500 mt-2 font-bold">
-                            Typing an area here allows you to immediately assign it to an asset. 
+                            Typing an area here allows you to immediately assign it to an asset.
                         </p>
                     </div>
                     <div className="mt-6 flex justify-end gap-3">
@@ -1527,7 +1477,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                 {safeBranches.map((b, idx) => { if(!b) return null; const bn = typeof b === 'object' ? (b.name || '') : String(b); return bn ? <option key={idx} value={bn}>{bn}</option> : null; })}
                             </select>
                         </div>
-                        
+
                         <div>
                             <InputLabel value="New Department" className="font-black text-xs" />
                             <select className="w-full mt-1 border-gray-300 rounded-md shadow-sm text-sm font-bold py-2" value={bulkTransferForm.data.department || ''} onChange={e => bulkTransferForm.setData('department', e.target.value)}>
@@ -1588,7 +1538,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                 {safeBranches.map((b, idx) => { if(!b) return null; const bn = typeof b === 'object' ? (b.name || '') : String(b); return bn ? <option key={idx} value={bn}>{bn}</option> : null; })}
                             </select>
                         </div>
-                        
+
                         <div>
                             <InputLabel value="New Department" className="font-black text-xs" />
                             <select className="w-full mt-1 border-gray-300 rounded-md shadow-sm text-sm font-bold py-2" value={data.department || ''} onChange={e => setData('department', e.target.value)}>
@@ -1596,7 +1546,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                 {allDepartments.map((dept, idx) => <option key={idx} value={dept}>{dept}</option>)}
                             </select>
                         </div>
-                        
+
                         <div>
                             <InputLabel value="Area" className="font-black text-xs" />
                             <div className="flex gap-2 items-center mt-1">
@@ -1605,10 +1555,10 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                     {allAreas.map((area, idx) => <option key={idx} value={area}>{area}</option>)}
                                 </select>
                                 <SecondaryButton type="button" onClick={() => setIsAddAreaModalOpen(true)} className="!px-3 !py-2 h-[38px]" title="Add New Area">➕</SecondaryButton>
-                                <SecondaryButton 
-                                    type="button" 
-                                    onClick={() => handleDeleteArea(data.area)} 
-                                    className="!px-3 !py-2 h-[38px] !text-red-600 hover:!bg-red-50" 
+                                <SecondaryButton
+                                    type="button"
+                                    onClick={() => handleDeleteArea(data.area)}
+                                    className="!px-3 !py-2 h-[38px] !text-red-600 hover:!bg-red-50"
                                     title="Delete Selected Area"
                                     disabled={!data.area}
                                 >
@@ -1629,8 +1579,8 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
             <Modal show={isImportModalOpen} onClose={closeImportModal} maxWidth="md">
                 <form onSubmit={handleImportSubmit} className="p-6">
                     <h2 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-wider">Upload Asset File</h2>
-                    <p className="text-sm font-bold text-gray-500 mb-4">Please upload your completed Asset Template in CSV format.</p>
-                    
+                    <p className="text-sm font-bold text-gray-500 mb-4">Please upload your completed Asset Template in XLSX format.</p>
+
                     {importError && (
                         <div className="mb-4 bg-red-50 text-red-700 p-3 rounded-md text-sm border border-red-200">
                             <strong>Upload Failed:</strong> {importError}
@@ -1639,17 +1589,17 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
 
                     <div className="space-y-4">
                         <div>
-                            <InputLabel value="Select CSV File" className="font-black text-xs" />
-                            <input 
-                                type="file" 
-                                className="w-full mt-2 block text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer border border-gray-300 rounded-md" 
-                                accept=".csv" 
-                                onChange={e => setImportFile(e.target.files[0])} 
-                                required 
+                            <InputLabel value="Select XLSX File" className="font-black text-xs" />
+                            <input
+                                type="file"
+                                className="w-full mt-2 block text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer border border-gray-300 rounded-md"
+                                accept=".xlsx"
+                                onChange={e => setImportFile(e.target.files[0])}
+                                required
                             />
                         </div>
                     </div>
-                    
+
                     <div className="mt-8 flex justify-end gap-3 border-t pt-4">
                         <SecondaryButton type="button" onClick={closeImportModal} className="font-black uppercase tracking-wider text-xs">Cancel</SecondaryButton>
                         <PrimaryButton type="submit" disabled={isUploading} className="bg-emerald-600 hover:bg-emerald-700 font-black uppercase tracking-wider text-xs">

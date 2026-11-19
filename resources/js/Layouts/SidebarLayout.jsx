@@ -35,7 +35,7 @@ export default function SidebarLayout({
     return date.toLocaleDateString();
     };
 
-    const { auth } = usePage().props;
+    const { auth, taskPreviewEnabled = false } = usePage().props;
     const [settingsOpen,setSettingsOpen]=useState(false);
     const [installPrompt, setInstallPrompt] = useState(null);
     const [supportsHomeScreenInstall, setSupportsHomeScreenInstall] = useState(false);
@@ -79,7 +79,8 @@ export default function SidebarLayout({
             window.alert('In the Share menu, choose “Add to Home Screen,” then confirm.');
         }
     };
-    const [globalRolePreview, setGlobalRolePreview] = useState(() => readRolePreview(auth.user?.id));
+    const [storedRolePreview, setGlobalRolePreview] = useState(() => readRolePreview(auth.user?.id));
+    const globalRolePreview = taskPreviewEnabled ? storedRolePreview : null;
     const previewKey = rolePreviewStorageKey(auth.user?.id);
     useEffect(() => {
         const syncPreview = event => setGlobalRolePreview(event?.detail ?? readRolePreview(auth.user?.id));
@@ -90,7 +91,7 @@ export default function SidebarLayout({
             window.removeEventListener('storage', syncPreview);
         };
     }, [previewKey, auth.user?.id]);
-    const displayedProfile = globalRolePreview?.active ? globalRolePreview : previewProfile;
+    const displayedProfile = globalRolePreview?.active ? globalRolePreview : taskPreviewEnabled ? previewProfile : null;
     const moduleDepartment = displayedProfile?.department?.name || displayedProfile?.department || auth.user?.department?.name;
     const isItUser = String(moduleDepartment || '').trim().toLowerCase() === 'it'
         || (!globalRolePreview?.active && String(auth.user?.role?.name || '').trim().toLowerCase().startsWith('it '));

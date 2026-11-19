@@ -31,7 +31,7 @@ class TicketWorkbook
         }
         $book->setActiveSheetIndex(0);
         return response()->streamDownload(function () use ($book) {
-            try { IOFactory::createWriter($book, 'Xlsx')->save('php://output'); }
+            try { \App\Support\WorkbookLayout::prepare($book); IOFactory::createWriter($book, 'Xlsx')->save('php://output'); }
             finally { $book->disconnectWorksheets(); }
         }, $filename, ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
@@ -75,19 +75,24 @@ class TicketWorkbook
         $reader->setReadDataOnly(false); // Inspect formulas rather than calculating them.
         try {
             $info = $reader->listWorksheetInfo($path);
-            if (count($info) > 3 || $info[0]['totalRows'] > 101 || $info[0]['totalColumns'] > count(self::HEADERS)) throw new \RuntimeException();
+            if (count($info) > 3 || $info[0]['totalRows'] > 102 || $info[0]['totalColumns'] > count(self::HEADERS)+1) throw new \RuntimeException();
             $reader->setLoadSheetsOnly($info[0]['worksheetName']);
             $book = $reader->load($path);
             try {
                 $sheet = $book->getSheet(0);
                 foreach ($sheet->getCellCollection()->getCoordinates() as $coord) {
-                    if ($sheet->getCell($coord)->getDataType() === DataType::TYPE_FORMULA) throw new \RuntimeException();
+                    if ($sheet->getCell($coord)->getDataType() === DataType::TYPE_FORMULA) throw ValidationException::withMessages(['file'=>"Cell {$coord}: formulas are not allowed. Use a plain value."]);
                 }
-                $rows = $sheet->toArray(null, false, false, false);
-                if (array_map(fn ($v) => trim((string) $v), array_shift($rows)) !== self::HEADERS) throw new \RuntimeException();
-                return array_values(array_filter($rows, fn ($row) => count(array_filter($row, fn ($v) => $v !== null && $v !== '')) > 0));
+                $headerRow = \App\Support\WorkbookLayout::bounds($sheet)[1] ?? 1;
+                $rows = \App\Support\WorkbookLayout::rows($sheet);
+                $headings = array_map(fn ($v) => trim((string) $v), array_shift($rows) ?? []);
+                $missing = array_diff(self::HEADERS, $headings);
+                if ($missing) throw ValidationException::withMessages(['file'=>'Missing ticket columns: '.implode(', ', $missing).'.']);
+                if ($headings !== self::HEADERS) throw ValidationException::withMessages(['file'=>'Ticket columns are out of order. Keep the order in the downloaded template.']);
+                $rows = array_map(fn ($row,$index) => [...$row,'_sheet_row'=>$headerRow+$index+1],$rows,array_keys($rows));
+                return array_values(array_filter($rows, fn ($row) => count(array_filter(array_slice($row,0,count(self::HEADERS)), fn ($v) => $v !== null && $v !== '')) > 0));
             } finally { $book->disconnectWorksheets(); }
-        } catch (\Throwable $e) {
+        } catch (ValidationException $e) { throw $e; } catch (\Throwable $e) {
             throw ValidationException::withMessages(['file' => 'Use the XLSX template: maximum 100 rows, exact headers, no formulas.']);
         }
     }
@@ -113,7 +118,7 @@ class TicketWorkbook
             $links = preg_split('/\r?\n/', $data['supporting_links'], -1, PREG_SPLIT_NO_EMPTY);
             $linkValidation = Validator::make(['links' => $links], ['links' => 'array|max:10', 'links.*' => 'url:http,https|max:2048']);
             $messages = array_merge($messages, $linkValidation->errors()->all());
-            if ($messages) { $errors['row_'.($index + 2)] = 'Row '.($index + 2).': '.implode(' ', $messages); continue; }
+            if ($messages) { $errors['row_'.($row['_sheet_row'] ?? $index + 2)] = 'Row '.($row['_sheet_row'] ?? $index + 2).': '.implode(' ', $messages); continue; }
             $valid[] = ['creator_id' => $user->id, 'employee_name' => $user->name, 'branch_id' => $branch->id,
                 'employee_department' => $user->department?->name ?: $data['department'], 'subject' => $data['subject'], 'category' => $data['category'],
                 'priority' => array_flip(TicketPrioritySettings::labels())[$data['priority'] ?? ''] ?? 'low',

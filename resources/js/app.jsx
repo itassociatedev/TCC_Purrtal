@@ -1,6 +1,7 @@
 import '../css/app.css';
 import '../css/clinic-design.css';
 import '../css/clinic-preferences.css';
+import '../css/clinic-dark.css';
 import './Utils/displayPreferences.mjs';
 import './bootstrap';
 

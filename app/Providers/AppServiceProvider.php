@@ -38,6 +38,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        \Maatwebsite\Excel\Writer::listen(\Maatwebsite\Excel\Events\BeforeWriting::class,
+            fn ($event) => \App\Support\WorkbookLayout::prepare($event->writer->getDelegate()));
+
         \Illuminate\Support\Facades\Vite::prefetch(concurrency: 3);
 
         // Existing Observers

@@ -1,3 +1,4 @@
+import { assignmentDirectory } from '../resources/js/Pages/Tasks/assignmentDirectory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { clinicDate, ensureDailyTasks, formatNarrative, validateNarrative, dashboardDailyTasks } from '../resources/js/Pages/Tasks/dailyTasks.mjs';
@@ -21,14 +22,14 @@ test('daily tasks roll over at Philippine midnight, independently of UTC dates',
     assert.equal(clinicDate(new Date('2026-10-22T15:59:59Z')), '2026-10-22');
     assert.equal(clinicDate(new Date('2026-10-22T16:00:00Z')), day);
 });
-test('IT receives both IT reports and Cashier receives the operations report', () => {
+test('IT receives both IT reports and Reception receives the reception report', () => {
     const config = defaultSettings();
     const tasks = ensureDailyTasks([], config, day);
-    assert.equal(tasks.filter(task => task.template === 'narrative-report' && task.recurrence==='daily').length, config.employees.filter(person => person.department === 'IT').length);
+    assert.equal(tasks.filter(task => task.template === 'narrative-report' && task.recurrence==='daily').length, new Set(assignmentDirectory(config).filter(person => person.department === 'IT' && person.baseRole === 'Employee' || person.baseRole === 'Team Leader').map(person => person.name)).size);
     assert.equal(tasks.filter(task => task.template === 'it-opening-rounds').length, config.branches.length);
     assert.ok(tasks.filter(task => task.template === 'it-opening-rounds').every(task => task.department === 'IT'));
-    assert.equal(tasks.filter(task => task.template === 'daily-operations').length, config.employees.filter(person => person.department === 'Cashier').length);
-    assert.ok(tasks.filter(task => task.template === 'daily-operations').every(task => task.department === 'Cashier'));
+    assert.equal(tasks.filter(task => task.template === 'daily-operations').length, config.employees.filter(person => person.department === 'Reception').length);
+    assert.ok(tasks.filter(task => task.template === 'daily-operations').every(task => task.department === 'Reception'));
     assert.equal(ensureDailyTasks(tasks, config, day), tasks);
 });
 test('new days create new instances without resetting completed work or issue images', () => {
@@ -66,7 +67,7 @@ test('historical daily reports can be filtered by date and type, including compl
     first.find(task => task.template === 'narrative-report').status = 'Completed';
     const tasks = ensureDailyTasks(first, config, day);
     const entries = filterTasks(tasks, { view: 'Daily Tasks', dailyDate: '2026-10-22', dailyTemplate: 'narrative-report', today: day });
-    assert.equal(entries.length, config.employees.filter(person => person.department === 'IT').length);
+    assert.equal(entries.length, new Set(assignmentDirectory(config).filter(person => person.department === 'IT' && person.baseRole === 'Employee' || person.baseRole === 'Team Leader').map(person => person.name)).size);
     assert.ok(entries.every(task => task.scheduledDate === '2026-10-22'));
     assert.ok(entries.some(task => task.status === 'Completed'));
 });
@@ -76,4 +77,28 @@ test('narrative submission requires a summary, the scheduled date, and a valid w
     assert.match(validateNarrative({ ...report, summary: '  ' }, ['Makati'], day), /summary/);
     assert.match(validateNarrative({ ...report, date: '2026-10-22' }, ['Makati'], day), /scheduled date/);
     assert.ok(formatNarrative(report).includes('SUMMARY\n(Tasks Completed)\nLorem ipsum dolor sit amet.'));
+});
+
+
+test('dashboard includes newly created visible daily report types and excludes other periods', async () => {
+    const { dashboardReportTypes } = await import('../resources/js/Pages/Tasks/dailyTasks.mjs');
+    const today = '2026-11-19';
+    const report = { template: 'daily-custom-reception', title: 'Reception checklist', department: 'Reception', scheduledDate: today, recurrence: 'daily' };
+    assert.deepEqual(dashboardReportTypes([], [report], today).map(([id]) => id), [report.template]);
+    assert.deepEqual(dashboardReportTypes([], [{ ...report, recurrence: 'weekly' }], today), []);
+    assert.deepEqual(dashboardReportTypes([], [{ ...report, scheduledDate: '2026-11-18' }], today), []);
+    assert.deepEqual(dashboardReportTypes([], [{ ...report, retiredDailyAssignment: true }], today), []);
+    assert.equal(dashboardReportTypes([[report.template, 'Configured title']], [report], today).length, 1);
+});
+
+
+test('shared custom daily report creates one branch task for multiple employees', () => {
+    const config = defaultSettings();
+    config.employees = ['One', 'Two'].map(name => ({ name, department: 'Reception', branch: 'Makati', availableBranches: ['Makati'] }));
+    config.dailyReports = [{ id: 'daily-custom-shared', name: 'Shared desk check', department: 'Reception', enabled: true, assignmentMode: 'shared-branch', fields: [{ id: 'count', label: 'Count', type: 'number' }] }];
+    const result = ensureDailyTasks([], config, '2026-11-19');
+    const shared = result.filter(task => task.template === 'daily-custom-shared');
+    assert.equal(shared.length, 1);
+    assert.equal(shared[0].sharedBranchReport, true);
+    assert.equal(ensureDailyTasks(result, config, '2026-11-19').filter(task => task.template === 'daily-custom-shared').length, 1);
 });

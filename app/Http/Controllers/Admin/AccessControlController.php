@@ -255,6 +255,7 @@ class AccessControlController extends Controller
                         $book->getActiveSheet()->setCellValueExplicitByColumnAndRow($column + 1, $row + 1, (string) $value, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
                     }
                 }
+                \App\Support\WorkbookLayout::prepare($book);
                 (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save('php://output');
             } finally {
                 $book->disconnectWorksheets();

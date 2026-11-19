@@ -279,6 +279,12 @@ class AssetController extends Controller
         return back()->with('success', 'Selected assets deleted successfully.');
     }
 
+    public function importTemplate(Request $request)
+    {
+        $request->merge(['columns'=>['asset_name','asset_tag','serial_no','model_no','color','category','status','condition','assigned_personnel','department','branch','area','supplier','purchased_date','warranty_exp','qty','unit_value'], 'sample'=>['Monitor','AST-001','','','','Equipment','New','Good','','IT','Makati','','','2026-11-15','','1','0']]);
+        return app(\App\Http\Controllers\SpreadsheetImportController::class)->template($request);
+    }
+
     public function import(Request $request)
     {
         $request->validate([
@@ -287,43 +293,18 @@ class AssetController extends Controller
 
         try {
             $file = $request->file('file');
-            $extension = strtolower($file->getClientOriginalExtension());
-
-            if (!in_array($extension, ['csv', 'txt'])) {
-                return back()->withErrors(['file' => 'ERROR: You must open your Excel file and click "Save As -> CSV (Comma delimited)" before uploading.']);
+            $response = app(\App\Http\Controllers\SpreadsheetImportController::class)->read($request);
+            $rows = $response->getData(true)['rows'];
+            foreach ($rows as $row) {
+                $line = $row['_sheet_row'];
+                $validator = \Illuminate\Support\Facades\Validator::make($row, ['asset_name'=>'required|string|max:255','asset_tag'=>'required|string|max:255','qty'=>'nullable|integer|min:1','unit_value'=>'nullable|numeric|min:0','purchased_date'=>'nullable|date_format:Y-m-d']);
+                if ($validator->fails()) throw \Illuminate\Validation\ValidationException::withMessages(['file'=>'Row '.$line.': '.implode(' ', $validator->errors()->all())]);
             }
-
-            $csvData = file_get_contents($file->getRealPath());
-            $csvData = preg_replace('/\r\n|\r/', "\n", $csvData);
-            $csvData = preg_replace('/^\xEF\xBB\xBF/', '', $csvData);
-            
-            $lines = explode("\n", $csvData);
-
-            if (count($lines) < 2) {
-                return back()->withErrors(['file' => 'The file is empty or only contains headers.']);
-            }
-
-            $headers = str_getcsv(array_shift($lines));
-            $headers = array_map(function($col) {
-                $col = preg_replace('/[^\x20-\x7E]/', '', $col);
-                return trim(strtolower($col));
-            }, $headers);
-
             $importedCount = 0;
-
-            foreach ($lines as $line) {
-                if (empty(trim($line))) continue;
-
-                $data = str_getcsv($line);
-                
-                if (count($headers) > count($data)) {
-                    $data = array_pad($data, count($headers), '');
-                } elseif (count($data) > count($headers)) {
-                    $data = array_slice($data, 0, count($headers));
-                }
-
-                $row = array_combine($headers, $data);
-
+            \Illuminate\Support\Facades\DB::beginTransaction();
+            foreach ($rows as $data) {
+                $row = [];
+                foreach ($data as $key=>$value) $row[str_replace('_',' ',$key)]=$value;
                 $assetName = trim($row['asset name'] ?? $row['asst name'] ?? '');
                 $assetTag = trim($row['asset tag'] ?? $row['assettag'] ?? $row['asset_tag'] ?? '');
 
@@ -386,6 +367,7 @@ class AssetController extends Controller
                 $importedCount++;
             }
 
+            \Illuminate\Support\Facades\DB::commit();
             if ($importedCount === 0) {
                 return back()->withErrors(['file' => 'We opened the file, but no readable data was found. Ensure your columns match the template.']);
             }
@@ -396,7 +378,7 @@ class AssetController extends Controller
                     'user_id' => Auth::id(),
                     'action' => 'Import',
                     'module' => 'Asset Management Module',
-                    'description' => "Imported {$importedCount} assets via CSV.",
+                    'description' => "Imported {$importedCount} assets via XLSX.",
                     'ip_address' => $request->ip(),
                     'user_agent' => $request->userAgent()
                 ]);
@@ -406,8 +388,8 @@ class AssetController extends Controller
 
             return back()->with('success', "Success! Imported {$importedCount} assets.");
         } catch (\Throwable $e) {
-            Log::error("CSV Import Error: " . $e->getMessage());
-            return back()->withErrors(['file' => 'Import Error: ' . $e->getMessage()]);
+            if (\Illuminate\Support\Facades\DB::transactionLevel()) \Illuminate\Support\Facades\DB::rollBack();
+            return back()->withErrors(['file' => \App\Support\ImportFeedback::message($e)]);
         }
     }
 
@@ -419,7 +401,7 @@ class AssetController extends Controller
                 'user_id' => Auth::id(),
                 'action' => 'Export',
                 'module' => 'Asset Management Module',
-                'description' => "Exported Asset records to CSV.",
+                'description' => "Exported Asset records to XLSX.",
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent()
             ]);
@@ -428,29 +410,20 @@ class AssetController extends Controller
         }
 
         $assets = Asset::with(['user', 'supplier'])->latest()->get();
-        $fileName = "assets_records_export_" . date('Y-m-d') . ".csv";
-
-        $headers = [
-            "Content-type"        => "text/csv",
-            "Content-Disposition" => "attachment; filename=$fileName",
-            "Pragma"              => "no-cache",
-            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
-            "Expires"             => "0"
-        ];
-
+        $fileName = 'assets_records_export_'.date('Y-m-d').'.xlsx';
+        $headers = ['Content-Type'=>'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
         return response()->streamDownload(function() use ($assets) {
-            $file = fopen('php://output', 'w');
+            $exportRows = [];
             // Write UTF-8 BOM so Excel opens it properly
-            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
 
             // Headers exactly matching Assets.jsx
-            fputcsv($file, [
+            $exportRows[] = [
                 'Asset Name', 'Asset Tag', 'Serial No.', 'Model No.', 'Color', 
                 'Category', 'Status', 'Condition', 'Assigned Personnel', 
                 'Department', 'Branch', 'Area', 'Supplier', 'Purchased Date', 
                 'Warranty Exp.', 'Depreciation (Months)', 'Qty', 'Unit Value', 'Total Value',
                 'Acc. Depreciation', 'Current Book Value'
-            ]);
+            ];
 
             foreach ($assets as $asset) {
                 $personnelName = $asset->user ? $asset->user->name : ($asset->assigned_personnel ?: '-');
@@ -510,7 +483,7 @@ class AssetController extends Controller
                     }
                 }
 
-                fputcsv($file, [
+                $exportRows[] = [
                     $asset->name ?? '-',
                     $asset->asset_tag ?? '-',
                     $asset->serial_no ?: '-',
@@ -532,9 +505,12 @@ class AssetController extends Controller
                     $originalValue,
                     number_format($accumulated, 2, '.', ''),
                     number_format($current, 2, '.', '')
-                ]);
+                ];
             }
-            fclose($file);
+            $book = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            foreach ($exportRows as $r=>$row) foreach ($row as $c=>$value) $book->getActiveSheet()->setCellValueExplicit([$c+1,$r+1],(string)$value,\PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            \App\Support\WorkbookLayout::prepare($book);
+            try { (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save('php://output'); } finally { $book->disconnectWorksheets(); }
         }, $fileName, $headers);
     }
 

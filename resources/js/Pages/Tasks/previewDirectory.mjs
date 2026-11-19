@@ -19,3 +19,12 @@ export function groupPreviewPeople(people) {
 export function previewMember(members,name,branch) {
     return members.find(person=>person.name===name)||members.find(person=>person.branch===branch)||members[0];
 }
+
+// Display titles follow the selected person's job, without changing workflow permissions.
+export function leadershipRoleLabel(person, fallback = 'Team Leader') {
+    const title = String(person?.position || '');
+    if (/supervisor/i.test(title)) return /^it\s/i.test(title) ? 'IT Supervisor' : 'Supervisor';
+    if (/assistant team leader|asst\.? team leader|\batl\b/i.test(title)) return 'Assistant Team Leader';
+    if (/team leader|\btl\b/i.test(title)) return 'Team Leader';
+    return person?.employeeType === 'Supervisor' ? 'Supervisor' : fallback;
+}

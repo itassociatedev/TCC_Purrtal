@@ -68,6 +68,7 @@ class HandleInertiaRequests extends Middleware
         $permissions = $this->getPermissionStrings($user);
 
         return [
+            'taskPreviewEnabled' => app()->environment(['local', 'testing']) && config('task_module.preview_enabled') && strtolower(trim($user?->role?->name ?? '')) === 'admin',
             ...parent::share($request),
             'auth' => [
                 'user' => $user ? [

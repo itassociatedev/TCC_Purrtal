@@ -73,7 +73,7 @@ class TaskModuleAccess
         $role = $this->role($user);
         if ($role==='Admin') return $query;
         if ($role==='EVP') {
-            $directReports=User::with(['position','role'])->get()->filter(fn($person)=>$this->active($person)&&in_array($this->role($person),['Operations Manager','Corporate Services','Team Leader']))->pluck('id')->push($user->id);
+            $directReports=User::with(['position','role'])->get()->filter(fn($person)=>$this->active($person)&&in_array($this->role($person),['Operations Manager','Chief Vet','Corporate Services','Team Leader']))->pluck('id')->push($user->id);
             return $query->where(fn($q)=>$q->whereIn('assignee_id',$directReports)->orWhere('payload->handover->recipientId',$user->id));
         }
         if ($role === 'Corporate Services') {
@@ -93,6 +93,7 @@ class TaskModuleAccess
             $query->where('payload->handover->recipientId',$user->id)->orWhere('payload->handover->from',$user->name)->orWhere('creator_id', $user->id)->orWhere('assignee_id', $user->id)->orWhere('reviewer_id', $user->id);
             if ($role === 'Team Leader') $query->orWhere('department', $this->department($user));
             if (in_array($role, ['Operations Manager','Chief Vet'])) $query->orWhere('branch', $user->branch?->name);
+            $query->orWhere(function ($shared) use ($user) { $shared->where('payload->sharedBranchReport', true)->where('department', $this->department($user))->whereIn('branch', $this->branches($user)); });
             if ($this->department($user) === 'IT') $query->orWhere(function ($shared) { $shared->where('department','IT')->whereNull('assignee_id'); });
         })->where(function ($query) use ($role, $user) {
             if ($role === 'Team Leader' && $this->department($user) === 'IT') return;

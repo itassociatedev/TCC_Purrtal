@@ -1,3 +1,4 @@
+import { importErrorMessage } from '@/Utils/importErrors.mjs';
 import {useState} from 'react';
 import axios from 'axios';
 
@@ -9,10 +10,10 @@ export default function CsvImportControl({columns,sample,onImport,label='Import 
    setError('');
    if(file.size>2_000_000)throw new Error('Choose an XLSX file smaller than 2 MB.');
    if(!file.name.toLowerCase().endsWith('.xlsx'))throw new Error('Choose an XLSX workbook.');
-   const data=new FormData();data.append('file',file);
+   const data=new FormData();data.append('file',file);columns.forEach((column,index)=>data.append(`columns[${index}]`,column));
    const response=await axios.post('/spreadsheet-import/read',data);
    setRows(response.data.rows);
-  }catch(error){setRows(null);setError(error.response?.data?.message||error.message);}
+  }catch(error){setRows(null);setError(importErrorMessage(error));}
  };
  const downloadTemplate=async()=>{
   try{
@@ -20,11 +21,14 @@ export default function CsvImportControl({columns,sample,onImport,label='Import 
    const response=await axios.post('/spreadsheet-import/template',{columns,sample:sample.map(value=>String(value??''))},{responseType:'blob'});
    const url=URL.createObjectURL(response.data),link=document.createElement('a');
    link.href=url;link.download='import-template.xlsx';link.click();URL.revokeObjectURL(url);
-  }catch{setError('Unable to download the XLSX template. Please try again.');}
+  }catch(error){
+   if(error.response?.data instanceof Blob){try{error.response.data=JSON.parse(await error.response.data.text());}catch{}}
+   setError(importErrorMessage(error));
+  }
  };
  const confirmImport=async()=>{
   try{setBusy(true);setError('');await onImport(rows);setRows(null);}
-  catch(error){setError(error.response?.data?.message||error.message);}
+  catch(error){setError(importErrorMessage(error));}
   finally{setBusy(false);}
  };
  return <section className="csv-import-control" aria-label={label}>
@@ -35,6 +39,6 @@ export default function CsvImportControl({columns,sample,onImport,label='Import 
    <button type="button" className="csv-import-template" disabled={disabled||busy} onClick={downloadTemplate}>Download template</button>
   </div>
   {rows&&<div className="csv-import-ready"><span>{rows.length} {rows.length===1?'row':'rows'} ready to import</span><div><button type="button" disabled={busy||disabled} onClick={confirmImport}>{busy?'Importing…':'Import records'}</button><button type="button" onClick={()=>setRows(null)}>Cancel</button></div></div>}
-  {error&&<p role="alert" className="csv-import-error">{error}</p>}
+  {error&&<p role="alert" className="csv-import-error" style={{whiteSpace:'pre-line'}}>{error}</p>}
  </section>;
 }

@@ -197,6 +197,7 @@ export default function ResourceLinks({ auth, links }) {
         <SidebarLayout activeModule="Admin" sidebarLinks={adminLinks} header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Resource Links Management</h2>}>
             <Head title="Manage Resource Links" />
 
+
             <div className="py-12">
                 <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
                     

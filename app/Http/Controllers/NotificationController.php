@@ -11,7 +11,7 @@ class NotificationController extends Controller
     {
         $user = $request->user();
         if (!$request->filled('preview_person')) return $user;
-        abort_unless(strtolower(trim($user->role?->name ?? '')) === 'admin', 403);
+        abort_unless(app()->environment(['local', 'testing']) && config('task_module.preview_enabled') && strtolower(trim($user->role?->name ?? '')) === 'admin', 403);
         return \App\Models\User::where('status', 'Active')
             ->where('name', $request->string('preview_person')->toString())->firstOrFail();
     }

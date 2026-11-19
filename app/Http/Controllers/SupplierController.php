@@ -42,8 +42,8 @@ class SupplierController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:suppliers,name',
-            'contact_person' => 'nullable|string|max:255', 
-            'contact_number' => 'nullable|string|max:255', 
+            'contact_person' => 'nullable|string|max:255',
+            'contact_number' => 'nullable|string|max:255',
             'address' => 'nullable|string|max:255',
             'tin' => 'nullable|string|max:255',
         ]);
@@ -64,8 +64,8 @@ class SupplierController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:suppliers,name,' . $supplier->id,
-            'contact_person' => 'nullable|string|max:255', 
-            'contact_number' => 'nullable|string|max:255', 
+            'contact_person' => 'nullable|string|max:255',
+            'contact_number' => 'nullable|string|max:255',
             'address' => 'nullable|string|max:255',
             'tin' => 'nullable|string|max:255',
         ]);
@@ -164,7 +164,8 @@ class SupplierController extends Controller
         return response()->streamDownload(function () {
             $book = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
             $book->getActiveSheet()->fromArray([['name', 'contact_person', 'contact_number', 'address', 'tin']]);
-            (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save('php://output');
+            \App\Support\WorkbookLayout::prepare($book);
+                (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save('php://output');
             $book->disconnectWorksheets();
         }, 'suppliers_template.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
@@ -177,8 +178,16 @@ class SupplierController extends Controller
 
         $file = $request->file('file');
         $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($file->getPathname());
-        $rows = $book->getSheet(0)->toArray('', false, true, false);
-        array_shift($rows); 
+        $rows = \App\Support\WorkbookLayout::rows($book->getSheet(0));
+        $headerRow = \App\Support\WorkbookLayout::bounds($book->getSheet(0))[1] ?? 1;
+        $headings = array_map(fn($value)=>strtolower(trim((string)$value)),array_shift($rows) ?? []);
+        $expected=['name','contact_person','contact_number','address','tin'];
+        if($headings!==$expected) { $book->disconnectWorksheets(); throw \Illuminate\Validation\ValidationException::withMessages(['file'=>'Supplier headings must be: '.implode(', ',$expected).'.']); }
+        foreach($rows as $index=>$values) {
+            if(!array_filter($values,fn($value)=>$value!==null && $value!==''))continue;
+            $validator=\Illuminate\Support\Facades\Validator::make(array_combine($expected,array_slice(array_pad($values,5,''),0,5)),['name'=>'required|string|max:255','contact_person'=>'nullable|string|max:255','contact_number'=>'nullable|string|max:100','address'=>'nullable|string|max:1000','tin'=>'nullable|string|max:100']);
+            if($validator->fails()){ $book->disconnectWorksheets(); throw \Illuminate\Validation\ValidationException::withMessages(['file'=>'Row '.($headerRow+$index+1).': '.implode(' ',$validator->errors()->all())]); }
+        }
 
         $importedCount = 0;
         $skippedCount = 0;
@@ -204,7 +213,7 @@ class SupplierController extends Controller
             ]);
             $importedCount++;
         }
-        
+
         $book->disconnectWorksheets();
 
         return back()->with('success', "Import complete: $importedCount added, $skippedCount skipped (duplicates or missing names).");

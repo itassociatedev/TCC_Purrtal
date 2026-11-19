@@ -53,7 +53,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     // ==========================================
     // FILTER STATE & LOGIC
     // ==========================================
-    const [filterSearch, setFilterSearch] = useState('');
+    const [filterSearch, updateFilterSearch] = useState(() => new URLSearchParams(window.location.search).get('search') || '');
+    const setFilterSearch = value => { const url = new URL(window.location.href); url.searchParams.delete('person'); url.searchParams.delete('search'); window.history.replaceState({}, '', url); updateFilterSearch(value); };
     const [filterDepartment, setFilterDepartment] = useState('');
     const [filterBranch, setFilterBranch] = useState('');
     const [filterPosition, setFilterPosition] = useState('');
@@ -105,6 +106,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
         .filter(employee => {
             const searchTerm = filterSearch.trim().toLowerCase();
 
+            const notificationPerson = new URLSearchParams(window.location.search).get('person');
+            const matchesPerson = !notificationPerson || String(employee.id) === notificationPerson;
             const matchesSearch = searchTerm === '' ||
                 (employee.name || '').toLowerCase().includes(searchTerm) ||
                 (employee.email || '').toLowerCase().includes(searchTerm) ||
@@ -119,7 +122,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
             const matchesPosition = filterPosition === '' || employee.position?.name === filterPosition;
             const matchesStatus = filterStatus === '' || employee.status === filterStatus;
 
-            return matchesSearch && matchesDept && matchesBranch && matchesPosition && matchesStatus;
+            return matchesPerson && matchesSearch && matchesDept && matchesBranch && matchesPosition && matchesStatus;
         })
         .sort((a, b) => {
             const aValue = getSortValue(a, sortField).toLowerCase();
@@ -1111,7 +1114,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 type="file"
                                 id="excel-upload-emp"
                                 className="hidden"
-                                accept=".xlsx, .xls, .csv"
+                                accept=".xlsx"
                                 onChange={handleFileUpload}
                                 disabled={!canManageEmployees}
                             />
