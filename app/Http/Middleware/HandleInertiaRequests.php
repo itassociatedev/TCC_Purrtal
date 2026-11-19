@@ -108,7 +108,7 @@ class HandleInertiaRequests extends Middleware
                 // FIX: Matched the key to your React code
                 'unreadNotificationsCount' => $user ? \App\Http\Controllers\NotificationController::portalNotifications($user)->whereNull('read_at')->count() : 0,
 
-                // NEW: Tell React exactly how many notifications exist in total
+                // Regular-feed totals must match its filtered rows and pagination.
                 // Ticket alerts have their own bell, including for non-IT requesters.
                 'ticketNotifications' => $user ? $user->notifications()->where('type', \App\Notifications\TicketNotification::class)->latest()->take(30)->get() : [],
                 'ticketUnreadNotificationsCount' => $user ? $user->notifications()->where('type', \App\Notifications\TicketNotification::class)->whereNull('read_at')->count() : 0,

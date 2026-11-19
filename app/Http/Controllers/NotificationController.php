@@ -31,7 +31,7 @@ class NotificationController extends Controller
     }
 
     /**
-     * Display a paginated list of all notifications.
+     * Display regular portal notifications; ticket alerts have a separate feed.
      */
     public function index(Request $request)
     {
@@ -64,7 +64,7 @@ class NotificationController extends Controller
     }
 
     /**
-     * Mark all unread notifications as read for the authenticated user.
+     * Mark regular unread notifications as read without changing ticket alerts.
      */
     public function markAllAsRead(Request $request)
     {

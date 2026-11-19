@@ -16,7 +16,7 @@ The code map links directly to repository files. The documentation must be updat
 
 ## Architecture and entry points
 
-The module uses the project's existing Laravel + React + Inertia stack. It reuses authenticated application navigation, the Select Module header, profile controls and website notification bell. XLSX support uses the already installed Laravel Excel/PhpSpreadsheet dependencies; charts, medals, sidebar icons and star controls use inline SVG without another frontend framework.
+The module uses the project's existing Laravel + React + Inertia stack. It reuses authenticated application navigation, the Select Module header, profile controls and separate regular/IT notification bells. XLSX support uses the already installed Laravel Excel/PhpSpreadsheet dependencies; charts, medals, sidebar icons and star controls use inline SVG without another frontend framework.
 
 Open **IT Ticketing Module** from the header's module selector or visit `/tickets/dashboard`. Every workflow role lands on its dashboard. Creation is a separate URL, `/tickets/create`; tables and the creation form are never shown side by side. React's `Index.jsx` renders the requested screen from server props, including `creationPage`, `filters.view` and `ticketRole`.
 
@@ -109,7 +109,7 @@ Successful non-IT submissions redirect to the dashboard with a one-time, dismiss
 - Clickable closure totals: Today, This week, This month, This year, using `closed_at` in Asia/Manila. Periods overlap.
 - Priority cards include all team tickets and open the corresponding priority-filtered All tickets table.
 - Ticket reports cards and closure totals on list pages are keyboard-accessible links that filter the destination table; matching selections are highlighted.
-- Staff workload includes assignable members **and leaders**, including zero-assignment accounts. Assignment and resolved counts follow current assignee; resolved includes closed. Completion percentage = assigned resolved/closed ÷ all assigned. Ratings follow the actual resolver, not current assignment.
+- Staff workload includes assignable members **and leaders**, including zero-assignment accounts. Assignment counts follow the current assignee; resolved counts follow the recorded resolver and include closed tickets. The displayed percentage is resolver-completed tickets ÷ current assigned tickets × 100 (zero when there are no assignments); reassignment can make this exceed 100%, so it is not a resolution success rate. Ratings also follow the recorded resolver. Click the member name or Assigned tickets to select the assignee; click Resolved tickets to select the resolver and clear status/closure-period restrictions. Other table filters remain in effect, so filtered row totals may be lower than the environment-wide panel totals.
 - The leader dashboard shows the SLA performance panel with grouped metrics, branch backlog and expandable definitions. The ticket lists, including **Assigned to me**, do not display this panel.
 - Sidebar includes Dashboard, Leaderboard, Create ticket, All tickets and Assigned to me. Open and closed tickets are status filters.
 
@@ -234,6 +234,8 @@ Nine sortable data columns: Subject, Description, Category, Status, Timeline, Pr
 | `view` | Legacy bookmark/export parameter. The screen is normally selected by its path, which takes precedence over this query parameter.  Employee: dashboard/all/open/closed. Member: dashboard/assigned/all. Leader: dashboard/leaderboard/all/open/closed/assigned; legacy reports bookmark normalizes to open. |
 | `status_filter` | all/open/closed/not_started/in_progress/resolved/unassigned/revision_requested/rejected. Unassigned means active Not started/In progress with no owner. |
 | `branch_filter`, `location_filter` | Directory branch ID or custom location ID. The selector sends one at a time. Historical custom locations remain filterable. |
+| `selected_ticket` | Numeric ticket ID to open in the details/manage dialog, independent of pagination and table filters. Employees can open only their own live tickets; unavailable or unauthorized IDs return 404. |
+| `resolver_filter` | Supervisor-only resolver ID on All Tickets; currently resolved/closed tickets only. Uses `sla_state.resolved_by`, falling back to the latest resolved activity. Combines with other filters and filtered XLSX exports. |
 | `assignee_filter` | Assigned user ID on the IT All tickets view. Combines with status, priority, location, dates, and search. |
 | `priority_filter` | `all` or any stored priority key from `ticket_priorities`. All ticket lists expose it; applies in the backend to the authorized query. |
 | `search` | Subject or description, max 180 characters; OR conditions grouped inside the role scope. |
@@ -475,3 +477,23 @@ Ticketing sidebar page labels in Tickets/Index.jsx now capitalize every word: Cr
 ### 2026-11-19 - Unknown ticket page routes return 404
 
 Added numeric route constraints to ticketing write endpoints for ticket, priority, handover and location IDs in routes/web.php. Previously GET /tickets/r matched the unconstrained PATCH /tickets/{ticket} path and returned 405. Unknown textual paths now match no record action and return Laravel's standard 404 response; /ticket/hello is also unknown. Valid named pages and numeric write routes are unchanged, including auth, binding and role checks. Genuine wrong-method requests on recognized numeric endpoints retain 405; this is not a global 405-to-404 exception conversion. tests/verify-ticket-route-404.php checks unknown paths and valid route names without database writes or controller dispatch.
+
+## Ticket notifications and selected-ticket navigation
+
+`TicketNotification` uses the database channel. The regular feed excludes this notification class in its rows, unread badge, total count, pagination, read-all and clear operations. Ticket notifications are shown only in the IT notifications bell, which is available to authenticated requesters as well as IT staff. Regular bulk actions leave ticket history/read state untouched; IT reads use their own recipient-scoped endpoint. Existing rows do not require a data migration.
+
+New ticket alert URLs are `/tickets/all?selected_ticket=<ID>`. The shared sidebar also constructs this URL from `data.ticket_id` for older alerts. The controller returns `selectedTicket` with the same relationships and SLA snapshot as table records; the React screen opens its existing dialog. Read-only viewing does not grant management permission. The selected ticket can be outside the current table page/filter. Missing, preview-only and unauthorized records return not found. Mark all read does not navigate.
+
+The IT feed polls every 10 seconds while visible and refreshes on window focus. Pending reads block polling; revision counters reject stale responses. Duplicate in-flight reads for the same notice are ignored. Successful reads seed the feed from shared props if its first poll has not completed, then update only the matching feed. Failed reads preserve unread state, display an error and allow retry without navigating. A preview-recipient change clears the loaded feed rather than displaying the real account's fallback alerts.
+
+Tracked closure sends the requester a `Closed: <closure note>` notification after supervisor-only, resolved-first and documentation checks. The rating queue remains driven by eligible closed-ticket props rather than browser push delivery.
+
+### Focused regression coverage added 19 November 2026
+
+- `tests/verify-ticket-bugfixes.php`: current/numeric related IDs, invalid/self links, inactive assignee rejection and tracked closure notification.
+- `tests/verify-ticket-workload-filters.php`: current owner versus resolver, legacy resolution history, closed inclusion, combined filters, role restrictions and selected-ticket authorization/URLs.
+- `tests/verify-ticket-notification-separation.php`: regular-feed exclusion and ticket history/unread preservation under regular bulk actions.
+- `tests/ticket-notification-actions.test.mjs`: separate-feed bulk handlers and failure retry state.
+- `tests/ticket-notification-read.test.mjs`: initial-load badge updates, duplicate clicks, failed reads and old-alert selected-ticket navigation.
+
+The PHP integration scripts use the configured local database with rolled-back fixtures and suppressed notifications. Review environment configuration before running them; they are not database initialization commands. Frontend handler checks execute extracted handlers with deterministic doubles and do not replace browser interaction testing.

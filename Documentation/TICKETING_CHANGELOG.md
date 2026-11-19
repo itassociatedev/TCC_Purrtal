@@ -1,5 +1,9 @@
 # Ticketing change history
 
+## 19 November 2026 - Comments and current references reconciled
+
+Updated the guide, documentation index, SLA notification reference and code map for resolver-based workload counts, filter interactions, selected-ticket authorization, separate notification feeds, read/poll concurrency and regression coverage. Corrected obsolete assignment-based resolution and missing closure-notification descriptions. Updated inline comments in TicketController, NotificationController, TicketNotification and HandleInertiaRequests to describe the existing implementation. This pass changes comments/documentation only; runtime behavior and database data are unchanged.
+
 ## 19 November 2026 - Notification links open ticket details
 
 New ticket notification URLs point to `/tickets/all?selected_ticket=<numeric ID>`. The shared bell also upgrades older stored ticket alerts using their `ticket_id`, without rewriting historical rows. The All Tickets controller loads the selected ticket independently of table pagination/search filters and includes the same relationships, SLA snapshot and member-submission flag as ordinary table records. The React ticket screen opens its existing details/manage dialog from `selectedTicket` on navigation.

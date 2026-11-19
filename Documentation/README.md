@@ -11,6 +11,8 @@ Current implementation reference, audited 19 November 2026:
 
 Latest documented behavior: supervisor-managed priorities use support hours; additional priorities populate ticket controls automatically, use default styling, and can be removed by supervisors: unused priorities are deleted, used ones archived and restorable. Historical references and at least one active priority are preserved. SLA pausing is unavailable to every role.
 
+Recent updates also cover clickable workload filters with resolver attribution, separate IT notification feeds, selected-ticket deep links, closure notifications, and focused regression scripts.
+
 Keep these documents updated with ticketing code changes; the guide includes the maintenance checklist. The original framework information follows.
 
 ---

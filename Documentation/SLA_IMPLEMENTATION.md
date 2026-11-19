@@ -75,14 +75,14 @@ Legacy tickets with null policy remain excluded from tracking; the service suppo
 
 ## Notifications and scheduling
 
-Notifications use [TicketNotification.php](../app/Notifications/TicketNotification.php), database channel only, with ticket_id, message and action_url to the ticket module. Email/Viber values describe how an incident was reported; they are not automatic outbound notification integrations.
+Notifications use [TicketNotification.php](../app/Notifications/TicketNotification.php), database channel only, with ticket_id, message and action_url to `/tickets/all?selected_ticket=<ID>`. Ticket alerts are isolated in the IT notifications bell; regular notification counts and bulk actions exclude them. Email/Viber values describe how an incident was reported; they are not automatic outbound notification integrations.
 
 - Creation notifies configured IT members/leaders; assignment notifies new owner.
-- Acknowledgment, priority review, pause/resume, restoration, progress, delays, resolution and reopening communicate through the existing website system.
+- Acknowledgment, priority review, legacy pause resumption, restoration, progress, delays, resolution and reopening communicate through the existing website system.
 - Changing priority to Critical/High records escalation and notifies staff recipients.
 - The 20%-remaining alert, response/resolution breaches and required-progress reminders go to the owner and configured leaders. If a first check is already overdue, wording states overdue rather than pretending 20% remains.
 - Alert markers deduplicate per priority/reopen cycle. Progress actions reset the progress-reminder marker.
-- Closure is audited; tracked closure does not have a separate explicit closure-notification call in `TicketSla::apply`. The optional feedback popup is driven by polling closed tickets, not by a push event.
+- Closure is audited; after supervisor/resolved-first/documentation/note validation, tracked closure explicitly notifies the requester in `TicketSla::apply`. The optional feedback popup is driven by polling closed tickets, not by a push event.
 - Preview mode suppresses live notifications and is excluded from scheduled SLA checks.
 
 [CheckTicketSlas.php](../app/Console/Commands/CheckTicketSlas.php) registers `tickets:check-sla`: live tracked tickets with priority and status other than closed, chunked by ID, each reloaded under transaction/row lock. [routes/console.php](../routes/console.php) schedules it every minute with `withoutOverlapping()`. A host scheduler must actually invoke Laravel scheduling; registration alone does not start a worker. Staff management actions also run `check` before applying changes to preserve past breaches before reclassification.

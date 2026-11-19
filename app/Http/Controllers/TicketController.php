@@ -217,12 +217,13 @@ class TicketController extends Controller
             }
         }
         if ($role === 'leader') {
-            // Aggregate once for all members, including completed assignments.
-            // Closed tickets retain resolution credit in this assignment-based summary.
+            // Current-owner assignments and actual-resolver completions are distinct cohorts.
+            // Both totals are environment-wide; table filters do not change these cards.
             $counts = Ticket::where('is_preview', $preview)->whereNotNull('assigned_to')
                 ->select('assigned_to')->selectRaw('COUNT(*) AS assigned_count')
                 ->selectRaw("SUM(CASE WHEN status IN ('resolved', 'closed') THEN 1 ELSE 0 END) AS resolved_count")
                 ->groupBy('assigned_to')->get()->keyBy('assigned_to');
+            // The loaded activity relationship orders newest first for legacy fallback.
             $resolvedCounts = Ticket::where('is_preview', $preview)->whereIn('status', ['resolved', 'closed'])
                 ->with(['activities' => fn ($q) => $q->where('type', 'resolved')])->get()
                 ->countBy(fn ($ticket) => $this->feedbackResolverId($ticket));
