@@ -1,3 +1,4 @@
+import DashboardTaskSummary from './DashboardTaskSummary.jsx';
 import SelfTaskApprover from './SelfTaskApprover.jsx';
 import PersonPicker from './PersonPicker.jsx';
 import ReviewStatus, { isReviewStatus } from './ReviewStatus.jsx';
@@ -25,7 +26,7 @@ import TaskDetailLayout from './TaskDetailLayout.jsx';
 import TaskHistory from './TaskHistory.jsx';
 import { corporatePositions } from './organizationStructure.mjs';
 import { companySettings, reconcileRosterTasks, rememberTaskDirectoryChanges } from './companyDirectory.mjs';
-import { sortPreviewRoles, sortPreviewPeople, groupPreviewPeople, previewMember } from './previewDirectory.mjs';
+import { sortPreviewRoles, sortPreviewPeople, groupPreviewPeople, previewMember, leadershipRoleLabel } from './previewDirectory.mjs';
 import { addRoleSampleTasks } from './sampleRoleTasks.mjs';
 import {routeTaskApproval,canApproveTaskRequest,approvalBlocksWork,backfillRequestApprovals} from './taskApproval.mjs';
 import TaskCollection,{isCreativeTaskPage,TaskCollectionControls} from './TaskCollection.jsx';
@@ -40,7 +41,7 @@ import { createLocalTaskCode } from './taskIdentity.mjs';
 import CollaborationCreateFields from './CollaborationCreateFields.jsx';
 import DeleteTaskControl from './DeleteTaskControl.jsx';
 import { deleteTaskTree } from './taskDeletion.mjs';
-import { taskListScope } from './personalTasks.mjs';
+import { taskListScope, dashboardTaskCounts } from './personalTasks.mjs';
 import { assignmentDirectory, isEvpDirectReport, eligibleAssignees, canAssignAcrossRoles, taskEditAssignees } from './assignmentDirectory.mjs';
 import CollaborativeTasks from './CollaborativeTasks.jsx';
 import { isCollaborativeTask, childTasks, dependencyBlockers, createChildTask, canReviewCollaborativeChild, createCollaborativeMain, removeIncorrectCollaborations, childDeadline, canCompleteMainTask, canCreateCollaborative, canMonitorCollaborative, monitorMatchesAssignment, appendCollaborativeChild } from './collaborativeTasks.mjs';
@@ -77,7 +78,7 @@ import OpeningRounds from './OpeningRounds.jsx';
 import NarrativeReport from './NarrativeReport.jsx';
 import OperationsReport from './OperationsReport.jsx';
 import { formatOperations } from './operationsReport.mjs';
-import { clinicDate, ensureDailyTasks, formatNarrative, isDailyTemplate, dashboardDailyTasks } from './dailyTasks.mjs';
+import { clinicDate, ensureDailyTasks, formatNarrative, isDailyTemplate, dashboardDailyTasks, dashboardReportTypes } from './dailyTasks.mjs';
 import { formatRounds } from './openingRounds.mjs';
 import WorkspaceSetup from './WorkspaceSetup.jsx';
 import { canRequestTask, branchScopedRole, pageTitle, canSubmitAssignedTask, canEditDailyReport, dailyReportTypes, itReportDone, canCorrectITReport } from './taskPolicy.mjs';
@@ -173,17 +174,17 @@ export default function TaskModule() {
 }
 function TaskWorkspace() {
   const {
-    auth, taskDirectory, taskAdmin, taskServerEnabled
+    auth, taskDirectory, taskAdmin, taskServerEnabled, taskPreviewEnabled = false, taskViewer, taskIdFormat
   } = usePage().props;
   const [showAdminControls, setShowAdminControls] = useState(() => readRolePreview(auth.user?.id)?.showAdminAccess === true);
-  const canManageSetup = taskAdmin === true && showAdminControls;
+  const canManageSetup = taskAdmin === true && (!taskPreviewEnabled || showAdminControls);
   const {
     url
   } = usePage();
   // Separate sample task storage by the signed-in portal user.
-  const storageKey = `purrtal-task-ui-v2-${auth.user.id}${taskDirectory ? '-company-v1' : ''}`;
+  const storageKey = `purrtal-task-ui-v2-${auth.user.id}${taskDirectory ? '-company-v1' : ''}${taskPreviewEnabled ? '' : '-server-account-v1'}`;
   const initialTasks = taskDirectory ? [] : seed;
-  const settingsForDirectory = raw => companySettings(loadSettings(raw), taskDirectory);
+  const settingsForDirectory = raw => companySettings({ ...loadSettings(raw), taskIdFormat: taskIdFormat || raw?.taskIdFormat || { prefixSource: 'department', dateFormat: 'my', digits: 5, separator: '-' } }, taskDirectory);
   const [today, setToday] = useState(() => clinicDate());
   // Refresh at midnight in Asia/Manila, and when returning to a suspended browser tab.
   useEffect(() => {
@@ -212,6 +213,7 @@ function TaskWorkspace() {
     teamLeaders
   } = config;
   const allAssignees = useMemo(() => assignmentDirectory(config), [config]);
+  const signedInPerson = allAssignees.find(person => Number(person.id) === Number(auth.user.id)) || { ...taskViewer, role: taskViewer?.role === 'Admin' ? 'Team Leader' : taskViewer?.role || 'Employee', baseRole: taskViewer?.role === 'Corporate Services' ? 'EVP' : taskViewer?.role || 'Employee' };
   const directoryByName = useMemo(() => new Map(allAssignees.map(person => [person.name, person])), [allAssignees]);
   const people = employees.map(person => person.name);
   const roles = sortPreviewRoles(config.roles).map(item => item.name);
@@ -284,6 +286,7 @@ function TaskWorkspace() {
   }, [storageKey]);
   const previousNotificationTasks = useRef(tasks);
   useEffect(() => {
+    if (!taskPreviewEnabled) return;
     const key=`${storageKey}-role-samples-v1`;
     if(localStorage.getItem(key))return;
     setTasks(previous=>addRoleSampleTasks(previous,config,today));
@@ -312,6 +315,10 @@ function TaskWorkspace() {
     const events = taskNotificationChanges(previousNotificationTasks.current, tasks, { name: actor?.name, role: roleLabel });
     previousNotificationTasks.current = tasks;
     try { publishTaskNotifications(storageKey, events); } catch { /* Tasks remain usable when browser storage is full. */ }
+    if (taskPreviewEnabled && taskAdmin && events.length) {
+      const previewEvents = events.filter(event => !tasks.find(task => task.id === event.taskId)?._serverKey).map(event => ({ action: event.action, title: event.title }));
+      for (let offset=0;offset<previewEvents.length;offset+=30) window.axios.post(route('tasks.preview-activity'), { person: actor?.name || auth.user.name, events: previewEvents.slice(offset,offset+30) }).catch(() => setNotice('Task saved locally, but its Admin preview activity could not be added to system logs.'));
+    }
   }, [tasks, storageKey]);
   useEffect(() => {
     try { publishTaskNotifications(storageKey, overdueNotifications(tasks, today)); } catch {}
@@ -321,7 +328,7 @@ function TaskWorkspace() {
     setTasks(previous => ensureDailyTasks(backfillRequestApprovals(previous,config), config, today));
   }, [config, today]);
   // Preview role changes presentation only; it does not grant server permissions.
-  const [roleLabel, setRole] = useState(() => {
+  const [selectedRoleLabel, setRole] = useState(() => {
     try {
       const saved = sessionStorage.getItem(storageKey + '-role');
       if (saved === 'Supervisor') return 'Employee';
@@ -331,14 +338,15 @@ function TaskWorkspace() {
       return roles.includes('Team Leader') ? 'Team Leader' : roles[0];
     }
   });
-  const role = config.roles.find(item => item.name === roleLabel)?.baseRole || 'Employee';
+  const roleLabel = taskPreviewEnabled ? selectedRoleLabel : signedInPerson.role;
+  const role = config.roles.find(item => item.name === roleLabel)?.baseRole || (roleLabel === 'Corporate Services' ? 'EVP' : roleLabel === 'Admin' ? 'Team Leader' : roleLabel) || 'Employee';
   // Preserve the selected preview role across shared sidebar navigation.
   useEffect(() => {
     try {
       sessionStorage.setItem(storageKey + '-role', roleLabel);
     } catch {}
   }, [roleLabel, storageKey]);
-  const [previewEmployee, setPreviewEmployee] = useState(() => {
+  const [selectedPreviewEmployee, setPreviewEmployee] = useState(() => {
     try {
       if (sessionStorage.getItem(storageKey + '-role') === 'Supervisor') {
         const department = sessionStorage.getItem(storageKey + '-tl-department');
@@ -351,6 +359,7 @@ function TaskWorkspace() {
       return people[0];
     }
   });
+  const previewEmployee = taskPreviewEnabled ? selectedPreviewEmployee : signedInPerson.name;
   useEffect(() => {
     try {
       sessionStorage.setItem(storageKey + '-employee', previewEmployee);
@@ -370,7 +379,7 @@ function TaskWorkspace() {
     } catch {}
   }, [workBranch, storageKey]);
   // Leadership identities are unique to a branch (OM) or department (TL), and survive sidebar navigation.
-  const [omBranch, setOmBranch] = useState(() => {
+  const [selectedOmBranch, setOmBranch] = useState(() => {
     try {
       const branch = sessionStorage.getItem(storageKey + '-om-branch');
       return branches.includes(branch) ? branch : 'Makati';
@@ -378,7 +387,7 @@ function TaskWorkspace() {
       return 'Makati';
     }
   });
-  const [tlDepartment, setTlDepartment] = useState(() => {
+  const [selectedTlDepartment, setTlDepartment] = useState(() => {
     try {
       const department = sessionStorage.getItem(storageKey + '-tl-department');
       return departments.includes(department) ? department : 'IT';
@@ -386,6 +395,8 @@ function TaskWorkspace() {
       return 'IT';
     }
   });
+  const omBranch = taskPreviewEnabled ? selectedOmBranch : signedInPerson.branch;
+  const tlDepartment = taskPreviewEnabled ? selectedTlDepartment : signedInPerson.department;
   const [previewLeaderName, setPreviewLeaderName] = useState(() => {
     try { return sessionStorage.getItem(storageKey + '-tl-person') || ''; } catch { return ''; }
   });
@@ -396,7 +407,7 @@ function TaskWorkspace() {
       sessionStorage.setItem(storageKey + '-tl-person', previewLeaderName);
     } catch {}
   }, [omBranch, tlDepartment, previewLeaderName, storageKey]);
-  const [vetBranch, setVetBranch] = useState(() => {
+  const [selectedVetBranch, setVetBranch] = useState(() => {
     try {
       const saved = sessionStorage.getItem(storageKey + '-vet-branch');
       return branches.includes(saved) ? saved : branches[0];
@@ -404,6 +415,7 @@ function TaskWorkspace() {
       return branches[0];
     }
   });
+  const vetBranch = taskPreviewEnabled ? selectedVetBranch : signedInPerson.branch;
   useEffect(() => {
     try {
       sessionStorage.setItem(storageKey + '-vet-branch', vetBranch);
@@ -419,7 +431,7 @@ function TaskWorkspace() {
   const availableDepartmentLeaders = sortPreviewPeople(teamLeaders.filter(person => (person.role || 'Team Leader') === roleLabel));
   const selectedDepartmentLeader = availableDepartmentLeaders.find(person => person.name === previewLeaderName) || availableDepartmentLeaders.find(person => person.department === tlDepartment) || availableDepartmentLeaders[0];
   const roleMembers = sortPreviewPeople(allAssignees.filter(person => person.role === roleLabel));
-  const actor = role === 'Employee' ? currentEmployee : role === 'Team Leader' ? allAssignees.find(person => person.name === selectedDepartmentLeader?.name) : role === 'Operations Manager' ? allAssignees.find(person => person.name === managerForBranch(omBranch).name) : previewMember(roleMembers,previewRoleMember,role === 'Chief Vet' ? vetBranch : undefined);
+  const actor = !taskPreviewEnabled ? signedInPerson : role === 'Employee' ? currentEmployee : role === 'Team Leader' ? allAssignees.find(person => person.name === selectedDepartmentLeader?.name) : role === 'Operations Manager' ? allAssignees.find(person => person.name === managerForBranch(omBranch).name) : previewMember(roleMembers,previewRoleMember,role === 'Chief Vet' ? vetBranch : undefined);
   const leadershipBranch = role === 'Chief Vet' ? actor?.branch || vetBranch : omBranch;
   useEffect(() => { if (role === 'Chief Vet' && actor?.branch && vetBranch !== actor.branch) setVetBranch(actor.branch); }, [role,actor?.branch,vetBranch]);
   useEffect(() => {
@@ -541,7 +553,8 @@ function TaskWorkspace() {
   const [dueFilter, setDueFilter] = useState('All');
   const [frequencyFilter,setFrequencyFilter]=useState('All');
   const [taskListType,setTaskListType]=useState('All');
-  const [taskListLayout,setTaskListLayout]=useState('list');
+  const [taskListLayout,setTaskListLayout]=useState(() => window.matchMedia('(max-width: 767px)').matches ? 'cards' : 'list');
+  useEffect(() => { const screen = window.matchMedia('(max-width: 767px)'); const change = () => setTaskListLayout(screen.matches ? 'cards' : 'list'); screen.addEventListener('change', change); return () => screen.removeEventListener('change', change); }, []);
   const [taskFiltersOpen,setTaskFiltersOpen]=useState(false);
   const [selectedSavedTemplate,setSelectedSavedTemplate]=useState('');
   const [activityType,setActivityType]=useState('All');
@@ -581,6 +594,11 @@ function TaskWorkspace() {
   const [calendarEmployee, setCalendarEmployee] = useState(null);
   const [calendarSearch, setCalendarSearch] = useState('');
   const [notice, setNotice] = useState('');
+  useEffect(() => {
+    const warn = event => setNotice(event.detail);
+    window.addEventListener('tcc-task-id-limit', warn);
+    return () => window.removeEventListener('tcc-task-id-limit', warn);
+  }, []);
   // Preserve the activity feed alongside task history across refreshes.
   const [activity, setActivity] = useState(() => {
     try {
@@ -661,9 +679,6 @@ function TaskWorkspace() {
   const overdue = task => isOverdue(task, today);
   const overdueCounts = employeeOverdueCounts(visible, today);
   const participants = [...visibleIndex.byAssignee.keys()];
-  const completed = visible.filter(t => t.status === 'Completed').length;
-  const progress = visible.filter(t => t.status === 'In Progress').length;
-  const late = visible.filter(overdue).length;
   const uniqueVisibleTasks = [...new Map(visible.map(task => [String(task.id), task])).values()];
   const personalTaskSource = [...new Map(tasks.filter(task => !isReportTask(task) && !task.supersededOpeningReport)
     .map(task => [String(task.id), task])).values()];
@@ -673,25 +688,28 @@ function TaskWorkspace() {
     .map(person => person.name));
   const teamTaskList = isEmployee ? [] : taskListScope(uniqueVisibleTasks, 'Team Tasks', actor?.name)
     .filter(task => departmentEmployeeNames.has(task.assignee));
-  const myTaskCount = myTaskList.length;
-  const teamTaskCount = teamTaskList.length;
-  const dashboardStats = isEmployee
-    ? [['My tasks', myTaskCount, 'tasks', 'blue', 'Assigned to you'], ['In progress', progress, 'clock', 'amber', 'Currently underway'], ['Completed', completed, 'check', 'green', 'Finished tasks'], ['Due today', visible.filter(task => task.due === today && !['Completed', 'Denied', 'Dismissed'].includes(task.status)).length, 'calendar', 'red', 'Open tasks due today']]
-    : [['My tasks', myTaskCount, 'tasks', 'blue', 'Assigned to you'], ['Team tasks', teamTaskCount, 'team', 'blue', 'Assigned to your team'], ['In progress', progress, 'clock', 'amber', 'Currently underway'], ['Completed', completed, 'check', 'green', 'Finished tasks'], ['Overdue', late, 'calendar', 'red', 'Open tasks past their deadline']];
-  const dailyToday = dashboardDailyTasks(workspaceTasks, today, reportTypeIds);
+  const taskCounts = dashboardTaskCounts(myTaskList, teamTaskList, today, isEmployee);
+  const myTaskCount = taskCounts.my;
+  const teamTaskCount = taskCounts.team;
+  const completed = taskCounts.completed;
+  const progress = taskCounts.inProgress;
+  const late = taskCounts.overdue;
+  const dashboardReports = dashboardReportTypes(reportTypes, workspaceTasks, today).filter(([id]) => !((roleLabel === 'EVP' || role === 'Team Leader' && weeklyReviewAllowed) && id === 'narrative-report'));
+  const dailyFormsLabel = dashboardReports.length === 1 && dashboardReports[0][0] === 'it-opening-rounds' ? 'Opening Rounds' : 'Daily reports';
+  const dailyToday = dashboardDailyTasks(workspaceTasks, today, dashboardReports.map(([id]) => id));
   const pending = visible.filter(t => t.assignee !== actor?.name && ['Pending Review', 'Pending Approval'].includes(t.status));
   const scopeLabel = role === 'Team Leader' ? tlDepartment : role === 'Operations Manager' ? omBranch : role === 'Employee' ? currentEmployee.department : role === 'Chief Vet' ? vetBranch : 'All departments & branches';
-  const displayRoleLabel = role === 'Team Leader' && tlDepartment === config.itDepartment ? 'IT Supervisor' : internEmployee ? 'Intern' : isEmployee && currentEmployee.employeeType === 'Supervisor' ? 'Supervisor' : roleLabel;
+  const displayRoleLabel = role === 'Team Leader' ? leadershipRoleLabel(actor, roleLabel) : internEmployee ? 'Intern' : isEmployee ? leadershipRoleLabel(currentEmployee, roleLabel) : roleLabel;
   useEffect(() => {
     publishRolePreview(auth.user?.id, {
-      active: true,
+      active: taskPreviewEnabled,
       role: displayRoleLabel,
       name: actor?.name || currentEmployee?.name || auth.user?.name,
       department: actor?.department || currentEmployee?.department || '',
       branch: actor?.branch || currentEmployee?.branch || '',
       showAdminAccess: showAdminControls,
     });
-  }, [auth.user?.id, displayRoleLabel, actor?.name, actor?.department, actor?.branch, currentEmployee?.name, currentEmployee?.department, currentEmployee?.branch, showAdminControls]);
+  }, [taskPreviewEnabled, auth.user?.id, displayRoleLabel, actor?.name, actor?.department, actor?.branch, currentEmployee?.name, currentEmployee?.department, currentEmployee?.branch, showAdminControls]);
   const reportsPage = ['Daily Reports', 'Daily Tasks', 'Weekly Reports'].includes(view);
   const title = pageTitle({
     view: reportsPage ? 'Reports' : view === 'Team Progress' ? 'Leaderboard' : view,
@@ -708,8 +726,21 @@ function TaskWorkspace() {
     if (!canManageSetup) throw new Error('Workspace Setup is available to administrators only.');
     if(action.entity==='taskIdSettings'){
       if(!['department','role'].includes(action.value?.prefixSource))throw new Error('Choose Department or Role for the task ID prefix.');
-      setConfig(previous=>({...previous,taskIdPrefixSource:action.value.prefixSource}));
-      setNotice('Task ID format updated for new tasks.');
+      if(action.applyTo==='all') {
+        const saved=new Map((action.records||[]).map(record=>[record.key,record]));
+        const next=tasks.map(task=>{
+          const record=saved.get(task._serverKey);
+          if(record)return {...task,taskCode:record.taskCode,_serverVersion:record.version,history:record.history};
+          if(task._serverKey)return task;
+          const firstHistory=task.history?.at(-1)?.at;
+          const date=new Date(task.createdAt || firstHistory || Date.now());
+          const taskCode=createLocalTaskCode({department:task.department,role:task.assigneeRole,format:action.value,date:Number.isNaN(date.getTime())?new Date():date});
+          return {...task,taskCode,taskIdPrefixSource:action.value.prefixSource,history:[{text:`Task ID updated from ${task.taskCode||'unassigned'} to ${taskCode}.`,at:new Date().toISOString()},...(task.history||[])]};
+        });
+        setTasks(next);
+      }
+      setConfig(previous=>({...previous,taskIdPrefixSource:action.value.prefixSource,taskIdFormat:action.value}));
+      setNotice(action.applyTo==='all'?'Existing task IDs updated and new format saved.':'Task ID format updated for new tasks.');
       return;
     }
     if(action.entity==='people'&&taskDirectory){
@@ -862,8 +893,14 @@ function TaskWorkspace() {
     setTaskListType('All');setTaskListSection('Tasks');
     setView(next === 'Reports' ? separateDailyReports ? 'Daily Reports' : reportTypes.length ? 'Daily Tasks' : 'Weekly Reports' : next);
   };
+  const openDashboardStatus = (destination, status) => {
+    go(destination);
+    if (status === 'Completed') setTaskListSection('Task History');
+    if (status === 'Today') setDueFilter('Today');
+    else setFilter(status);
+  };
   const openReportPeriod=frequency=>{
-    go('Daily Reports');setDailyReportGroup(frequency==='daily'?'it-opening-rounds':'narrative-report');setNarrativeFrequency(frequency);setReportSection('Reports');setReportDate(today);
+    go('Daily Reports');setDailyReportGroup('narrative-report');setNarrativeFrequency(frequency);setReportSection('Reports');setReportDate(today);
   };
   const attention = (due, review = false) => {
     go(review && !isEmployee ? 'Review Queue' : isEmployee ? 'My Tasks' : 'Team Tasks');
@@ -875,13 +912,14 @@ function TaskWorkspace() {
   const canSyncTasks=Boolean(taskServerEnabled && Number(actor?.id)===Number(auth.user.id));
   const persistTaskChanges=async documents=>{
     if (!canSyncTasks) {
+      if (!taskPreviewEnabled) throw new Error('Shared task storage is unavailable. No changes were saved. Contact your administrator.');
       const stored = JSON.parse(localStorage.getItem(storageKey) || '[]');
       const saved = documents.map(document => {
         const current = stored.find(task => task.id === document.id);
         if (current && (current._previewVersion || 0) !== (document._previewVersion || 0)) {
           throw new Error('This task changed in another tab. Reopen it before saving.');
         }
-        return { ...document, _previewVersion: (current?._previewVersion || 0) + 1 };
+        return { ...document, taskCode: document.taskCode || current?.taskCode || createLocalTaskCode({ department: document.department, role: document.assigneeRole, format: config.taskIdFormat }), _previewVersion: (current?._previewVersion || 0) + 1 };
       });
       const changed = new Map(saved.map(task => [task.id, task]));
       localStorage.setItem(storageKey, JSON.stringify([
@@ -995,14 +1033,15 @@ function TaskWorkspace() {
     setNotice(message);
     return {...task,...changes};
   };
-  const handoverAction=async(action,values)=>{
-    const task=tasks.find(item=>item.id===selected.id)||selected;
+  const handoverAction=async(action,values,target=selected,quiet=false)=>{
+    const task=tasks.find(item=>item.id===target.id)||target;
     const name=actor?.name||currentEmployee.name;
     let saved;
     if(canSyncTasks&&task._serverKey){
       try { const response=await window.axios.post(route('tasks.turnover',{},false),{key:task._serverKey,version:task._serverVersion,action,...values});saved=response.data.record; }
       catch(error){throw new Error(error.response?.data?.message||'Unable to save the handover. Try again.');}
     }else{
+      if (!taskPreviewEnabled) throw new Error('Save this task to shared storage before handing it over.');
       if(task.template!=='standard'||!['Not Started','In Progress','Revision Needed'].includes(task.status)||tasks.some(t=>t.parentId===task.id))throw new Error('Only open individual standard tasks can be handed over. Coordinators must keep their child assignments.');
       const pending=task.handover?.status==='pending';
       const manager=task.requestedBy===name||task.approvalReviewer===name||auth.user.role?.name==='Admin';
@@ -1011,7 +1050,7 @@ function TaskWorkspace() {
         if(pending)throw new Error('Cancel the current handover first.');
         if(task.assignee!==name&&!manager)throw new Error('Only the owner or task manager can offer a handover.');
         const person=allAssignees.find(p=>p.name===values.recipient&&p.name!==task.assignee&&p.name!==task.requestedBy&&p.name!==task.approvalReviewer&&(p.availableBranches||[p.branch]).includes(task.branch));
-        if(!person||!values.notes?.trim())throw new Error('Choose an eligible employee and add handover notes.');
+        if(!person||!allowedDepartments.includes(person.department)||!values.notes?.trim())throw new Error('Choose a person in a department you can assign to and add handover instructions.');
         saved.handover={status:'pending',from:task.assignee,to:person.name,requestedBy:name,requestedAt:at,notes:values.notes.trim()};
       }else{
         if(!pending)throw new Error('There is no pending handover.');
@@ -1029,11 +1068,33 @@ function TaskWorkspace() {
       }
       saved.history=[{text:name+' '+(action==='request'?'offered a handover to '+values.recipient+'. Notes: '+values.notes.trim():saved.handover.status+' the handover')+'.',at},...(task.history||[])];
     }
-    setTasks(previous=>previous.map(t=>t.id===saved.id?saved:t));setSelected(saved);setNotice(action==='accept'?'Task accepted. Press Start task when you are ready.':'Handover '+saved.handover.status+'.');
+    setTasks(previous=>previous.map(t=>t.id===saved.id?saved:t));if(!quiet)setSelected(saved);if(!quiet)setNotice(action==='accept'?'Task accepted. Press Start task when you are ready.':'Handover '+saved.handover.status+'.');
     if(action==='accept')setModal('start-task');
+    return saved;
   };
-  const handoverPanel=selected&&<TaskHandover key={selected.id+'-'+(selected.handover?.status||'none')} task={tasks.find(t=>t.id===selected.id)||selected} people={allAssignees} actor={actor?.name||currentEmployee.name} canManage={selected.requestedBy===(actor?.name||currentEmployee.name)||selected.approvalReviewer===(actor?.name||currentEmployee.name)} onAction={handoverAction}/>;
+  const handoverBatch=async(items,values)=>{
+    const name=actor?.name||currentEmployee.name;
+    if(items.length>50)throw new Error('Select up to 50 tasks at a time.');
+    if(items.some(task=>task.assignee!==name))throw new Error('Only tasks assigned to you can be included.');
+    let saved;
+    if(canSyncTasks&&items.every(task=>task._serverKey)) {
+      try { const response=await window.axios.post(route('tasks.turnover.batch'),{tasks:items.map(task=>({key:task._serverKey,version:task._serverVersion})),...values});saved=response.data.records; }
+      catch(error){throw new Error(error.response?.data?.message||'No requests were sent. Refresh the tasks and try again.');}
+    } else {
+      if(!taskPreviewEnabled||items.some(task=>task._serverKey))throw new Error('Choose either preview tasks or shared tasks in one request.');
+      const person=allAssignees.find(person=>person.name===values.recipient);
+      if(!values.notes?.trim()||!person||!allowedDepartments.includes(person.department)||items.some(task=>task.handover?.status==='pending'||task.template!=='standard'||!['Not Started','In Progress','Revision Needed'].includes(task.status)||tasks.some(child=>child.parentId===task.id)||person.name===task.assignee||person.name===task.approvalReviewer||person.name===task.requestedBy||!(person.availableBranches||[person.branch]).includes(task.branch)))throw new Error('Check the selected tasks, recipient and instructions. No requests were sent.');
+      saved=[]; for(const task of items)saved.push(await handoverAction('request',values,task,true));
+    }
+    const byId=new Map(saved.map(task=>[task.id,task]));
+    setTasks(previous=>previous.map(task=>byId.get(task.id)||task));
+    setSelected(previous=>byId.get(previous?.id)||previous);
+    setNotice(`${saved.length} handover requests sent. Each task stays with you until accepted.`);
+  };
+  const handoverEligibleTasks=tasks.filter(task=>task.assignee===(actor?.name||currentEmployee.name)&&task.template==='standard'&&['Not Started','In Progress','Revision Needed'].includes(task.status)&&task.handover?.status!=='pending'&&!tasks.some(child=>child.parentId===task.id));
+  const handoverPanel=selected&&<TaskHandover key={selected.id+'-'+(selected.handover?.status||'none')} tasks={tasks} task={tasks.find(t=>t.id===selected.id)||selected} people={allAssignees.filter(person=>allowedDepartments.includes(person.department))} actor={actor?.name||currentEmployee.name} canManage={selected.requestedBy===(actor?.name||currentEmployee.name)||selected.approvalReviewer===(actor?.name||currentEmployee.name)} onAction={handoverAction} onBatch={handoverBatch}/>;
   const deleteSelectedTask = async () => {
+    if (!canSyncTasks && !taskPreviewEnabled) { setNotice('Shared task storage is unavailable. No task was deleted.'); return; }
     const result = deleteTaskTree(selected, tasks, previewScope);
     if(canSyncTasks){const keys=tasks.filter(task=>result.removedIds.has(task.id)&&task._serverKey).map(task=>task._serverKey);if(keys.length){try{await window.axios.delete(route('tasks.records.destroy',{},false),{data:{keys}});}catch(error){setNotice(error.response?.data?.message||'Task could not be deleted on the server.');return;}}}
     setTasks(result.tasks);
@@ -1108,7 +1169,7 @@ function TaskWorkspace() {
   const isTaskListPage=['My Tasks','Team Tasks'].includes(view);
   const taskListView=isTaskListPage?(taskListSection==='Task History'?'Task Archive':taskListSection==='Submissions'?'Submissions':taskListSection==='Review Queue'?'Review Queue':view):view;
   // One set of rules powers lists, counts, sorting, and filtered exports.
-  const filterSource = ['Daily Reports', 'Weekly Reports'].includes(view) ? reportSectionTasks(workspaceTasks, { weekly: view === 'Weekly Reports', section: reportSection }) : view === 'Daily Tasks' ? workspaceTasks.filter(isDailyTemplate) : (view === 'My Tasks' ? myTaskList : view === 'Team Tasks' ? teamTaskList : uniqueVisibleTasks).filter(task => taskListView !== 'Review Queue' || canReviewTask(task)).filter(task=>!isTaskListPage||taskListType==='All'||taskListType==='collaborative'&&(task.template==='collaborative'||Boolean(task.parentId))||taskListType==='standard'&&task.template!=='collaborative'&&!task.parentId||taskListType==='self'&&task.kind==='Self-created request');
+  const filterSource = ['Daily Reports', 'Weekly Reports'].includes(view) ? reportSectionTasks(workspaceTasks, { weekly: view === 'Weekly Reports', section: reportSection }) : view === 'Daily Tasks' ? workspaceTasks.filter(isDailyTemplate) : (view === 'My Tasks' ? myTaskList : view === 'Team Tasks' ? teamTaskList : view === 'Dashboard' ? (isEmployee ? myTaskList : teamTaskList) : uniqueVisibleTasks).filter(task => taskListView !== 'Review Queue' || canReviewTask(task)).filter(task=>!isTaskListPage||taskListType==='All'||taskListType==='collaborative'&&(task.template==='collaborative'||Boolean(task.parentId))||taskListType==='standard'&&task.template!=='collaborative'&&!task.parentId||taskListType==='self'&&task.kind==='Self-created request');
   const entries = filterTasks(view === 'Calendar' ? calendarTasks : ['Daily Reports', 'Weekly Reports'].includes(view) ? reportEntries : view === 'Daily Tasks' ? activeDailyReportGroup==='narrative-report'?reportEntries:workspaceTasks.filter(task => task.template === activeDailyReportGroup && (!task.retiredDailyAssignment || reportSection === 'Archive') && (reportSection !== 'Archive' || ['Completed', 'Denied', 'Dismissed'].includes(task.status))) : filterSource, {
     view:taskListView,
     search,
@@ -1210,7 +1271,7 @@ function TaskWorkspace() {
     icon: () => <Icon name={icon} size={16} />
   }));
   return <SidebarLayout previewProfile={actor ? { name: actor.name, department: actor.department } : null} notificationSlot={<TaskNotifications storageKey={storageKey} scope={previewScope} taskLookup={taskIndex.byId} onOpen={id => { const task = workspaceIndex.byId.get(id); if (task) {if(task.handover){setSelected(task);setModal('start-task');}else openTask(task);} else setNotice('This task is no longer available in your current view.'); }} />} activeModule="Tasks" sidebarLinks={sidebarLinks} header={<h2 className="text-xl font-semibold leading-tight text-gray-800">Task Module{internEmployee ? ' · Intern' : ''}{role !== 'EVP' && view !== 'Workspace Setup' ? ` · ${scopeLabel}` : ''}</h2>}><Head title={title} /><div className="tm-app">
-        <main className="tm-main"><details className="tm-preview-panel"><summary>View as role <span>{displayRoleLabel} · {actor?.name || 'No person selected'}</span></summary><div className="tm-preview"><span><b>VIEW AS ROLE</b> Preview the portal header and module menu as this person. Your signed-in account still controls actual access.</span>{taskAdmin === true && <label><input type="checkbox" checked={showAdminControls} onChange={event => setShowAdminControls(event.target.checked)} /> Show Admin setup controls</label>}<label>View as <select aria-label="Preview role" value={roleLabel} onChange={e => {
+        <main className="tm-main">{taskPreviewEnabled && <details className="tm-preview-panel"><summary>View as role <span>{displayRoleLabel} · {actor?.name || 'No person selected'}</span></summary><div className="tm-preview"><span><b>VIEW AS ROLE</b> Preview the portal header and module menu as this person. Your signed-in account still controls actual access.</span>{taskAdmin === true && <label><input type="checkbox" checked={showAdminControls} onChange={event => setShowAdminControls(event.target.checked)} /> Show Admin setup controls</label>}<label>View as <select aria-label="Preview role" value={roleLabel} onChange={e => {
               setPreviewRoleMember('');
               const selectedRole = config.roles.find(item => item.name === e.target.value);
               if (selectedRole?.baseRole === 'Employee') {
@@ -1219,7 +1280,7 @@ function TaskWorkspace() {
               }
               setRole(e.target.value);
               changePreviewScope(selectedRole?.baseRole || 'Employee', employees.find(employee => employee.role === selectedRole?.name) || currentEmployee);
-            }}>{roles.map(r => <option key={r}>{r}</option>)}</select></label>{['EVP', 'Chief Vet'].includes(role) && roleMembers.length > 0 && <label>{roleLabel === 'Corporate Services' ? 'Corporate position / person' : 'Role member'}<select value={actor?.name || ''} onChange={event => { setPreviewRoleMember(event.target.value); changePreviewScope(); }}>{roleMembers.map(person => <option value={person.name} key={person.name}>{roleLabel === 'Corporate Services' ? `${person.position} · ${person.name}` : role === 'Chief Vet' ? `${person.branch} · ${person.name}` : person.name}</option>)}</select></label>}{role === 'Operations Manager' && <label>Operations Manager<select aria-label="Operations Manager branch" value={omBranch} onChange={event => {
+            }}>{roles.map(r => <option key={r} value={r}>{r === 'Team Leader' ? role === 'Team Leader' ? displayRoleLabel : 'Team Leader / Supervisor' : r}</option>)}</select></label>{['EVP', 'Chief Vet'].includes(role) && roleMembers.length > 0 && <label>{roleLabel === 'Corporate Services' ? 'Corporate position / person' : 'Role member'}<select value={actor?.name || ''} onChange={event => { setPreviewRoleMember(event.target.value); changePreviewScope(); }}>{roleMembers.map(person => <option value={person.name} key={person.name}>{roleLabel === 'Corporate Services' ? `${person.position} · ${person.name}` : role === 'Chief Vet' ? `${person.branch} · ${person.name}` : person.name}</option>)}</select></label>}{role === 'Operations Manager' && <label>Operations Manager<select aria-label="Operations Manager branch" value={omBranch} onChange={event => {
               setOmBranch(event.target.value);
               changePreviewScope();
             }}>{operationsManagers.map(manager => <option key={manager.branch} value={manager.branch}>{manager.branch} · {manager.name}</option>)}</select></label>}
@@ -1233,24 +1294,24 @@ function TaskWorkspace() {
               setRole(employeeByName(event.target.value).role);
               setWorkBranch(employeeByName(event.target.value).branch);
               changePreviewScope('Employee', employeeByName(event.target.value));
-            }}>{groupPreviewPeople(employees).map(({department,people}) => <optgroup key={department} label={department}>{people.map(employee => <option key={employee.name} value={employee.name}>{employee.name} · {employee.position} · {employee.branch}{isIntern(employee, config) ? ' · Intern' : ''}</option>)}</optgroup>)}</select></label>}{isEmployee && <label>Today’s work branch<select aria-label="Today’s work branch" value={workBranch} onChange={event => { if (currentEmployee.department === config.itDepartment) saveWorkAssignment(today, event.target.value); else setWorkBranch(event.target.value); }}>{(currentEmployee.availableBranches || [currentEmployee.branch]).map(branch => <option key={branch}>{branch}</option>)}</select></label>}<span className="tm-employee-context">{isEmployee ? `${internEmployee ? 'Intern' : currentEmployee.position} · ${currentEmployee.department} · Home: ${currentEmployee.branch} · Working at: ${workBranch}` : role === 'Operations Manager' ? `${managerForBranch(omBranch).name} · Operations Manager · ${omBranch} branch · all departments` : role === 'Team Leader' ? `${actor?.name} · ${actor?.position || roleLabel} · ${branches.join(', ')}` : role === 'Chief Vet' ? `Chief Vet · ${vetBranch} branch` : `${operationsManagers.length} Operations Managers · ${teamLeaders.length} department leaders · ${employees.length} sample employees`}</span>{isEmployee && <span className="tm-employee-context">Department lead: {leaderForDepartment(currentEmployee.department).name === 'Not assigned' ? `Branch OM · ${managerForBranch(workBranch).name}` : `${leaderForDepartment(currentEmployee.department).position} · ${leaderForDepartment(currentEmployee.department).name}`} · Work branch OM: {managerForBranch(workBranch).name}</span>}</div></details><HandoverInbox tasks={tasks} name={actor?.name} onOpen={task=>{setSelected(task);setModal('start-task');}}/><div className="tm-page-heading"><div><h1>{title}</h1><p>{view === 'Dashboard' ? `Welcome, ${actor?.name || currentEmployee?.name || auth.user.name}.` : view === 'My Tasks' ? 'Time to pounce on today’s tasks.' : view === 'Team Tasks' ? 'Round up the cat crew and keep every task on track.' : view === 'Review Queue' ? 'Put your whiskers to work. Review requests and submitted tasks.' : reportsPage ? 'The latest from the cat crew, all in one place.'  : 'Plan, follow through, and keep everyone in the loop.'}</p></div><div className="tm-heading-actions">{!['Workspace Setup','Team Progress'].includes(view) && <label className="tm-search"><Icon name="search" size={18} /><input aria-label={reportsPage ? 'Search reports' : 'Search tasks'} placeholder={reportsPage ? 'Search reports...' : 'Search tasks...'} value={search} onChange={e => {
+            }}>{groupPreviewPeople(employees).map(({department,people}) => <optgroup key={department} label={department}>{people.map(employee => <option key={employee.name} value={employee.name}>{employee.name} · {employee.position} · {employee.branch}{isIntern(employee, config) ? ' · Intern' : ''}</option>)}</optgroup>)}</select></label>}{isEmployee && <label>Today’s work branch<select aria-label="Today’s work branch" value={workBranch} onChange={event => { if (currentEmployee.department === config.itDepartment) saveWorkAssignment(today, event.target.value); else setWorkBranch(event.target.value); }}>{(currentEmployee.availableBranches || [currentEmployee.branch]).map(branch => <option key={branch}>{branch}</option>)}</select></label>}<span className="tm-employee-context">{isEmployee ? `${internEmployee ? 'Intern' : currentEmployee.position} · ${currentEmployee.department} · Home: ${currentEmployee.branch} · Working at: ${workBranch}` : role === 'Operations Manager' ? `${managerForBranch(omBranch).name} · Operations Manager · ${omBranch} branch · all departments` : role === 'Team Leader' ? `${actor?.name} · ${actor?.position || roleLabel} · ${branches.join(', ')}` : role === 'Chief Vet' ? `Chief Vet · ${vetBranch} branch` : `${operationsManagers.length} Operations Managers · ${teamLeaders.length} department leaders · ${employees.length} sample employees`}</span>{isEmployee && <span className="tm-employee-context">Department lead: {leaderForDepartment(currentEmployee.department).name === 'Not assigned' ? `Branch OM · ${managerForBranch(workBranch).name}` : `${leaderForDepartment(currentEmployee.department).position} · ${leaderForDepartment(currentEmployee.department).name}`} · Work branch OM: {managerForBranch(workBranch).name}</span>}</div></details>}<HandoverInbox tasks={tasks} name={actor?.name} onOpen={task=>{setSelected(task);setModal('start-task');}}/><div className="tm-page-heading"><div><h1>{title}</h1><p>{view === 'Dashboard' ? `Welcome, ${actor?.name || currentEmployee?.name || auth.user.name}.` : view === 'My Tasks' ? 'Time to pounce on today’s tasks.' : view === 'Team Tasks' ? 'Round up the cat crew and keep every task on track.' : view === 'Review Queue' ? 'Put your whiskers to work. Review requests and submitted tasks.' : reportsPage ? 'The latest from the cat crew, all in one place.'  : 'Plan, follow through, and keep everyone in the loop.'}</p></div><div className="tm-heading-actions">{!['Workspace Setup','Team Progress'].includes(view) && <label className="tm-search"><Icon name="search" size={18} /><input aria-label={reportsPage ? 'Search reports' : 'Search tasks'} placeholder={reportsPage ? 'Search reports...' : 'Search tasks...'} value={search} onChange={e => {
                 setSearch(e.target.value);
                 if (e.target.value && !listViews.includes(view) && view !== 'Calendar') setView(isEmployee ? 'My Tasks' : 'Team Tasks');
-              }} /></label>}{view !== 'Workspace Setup' && !reportsPage && canCreateTask && <button className="tm-primary" onClick={create}><Icon name="plus" size={17} />{'Create task'}</button>}{['Dashboard','My Tasks','Team Tasks'].includes(view) && !reportsPage && <button type="button" className="tm-secondary" onClick={() => setModal('templates')}>Task templates</button>}{!['Workspace Setup','Team Progress'].includes(view) && <details className="tm-file-actions"><summary>{!isEmployee&&['Dashboard','My Tasks','Team Tasks'].includes(view)?'Import / Export':'Export'} <span aria-hidden="true">⌄</span></summary><div className="tm-file-actions-menu"><button type="button" className="clinic-file-action tm-file-export-action" onClick={exportCurrentView}>Export current view</button>{!isEmployee && ['Dashboard','My Tasks','Team Tasks'].includes(view) && <details className="tm-import-menu"><summary>Import tasks</summary><CsvImportControl label="Import tasks" columns={['title','description','assignee','department','branch','priority','starting_date','deadline','reference_link','task_purpose','frequency','work_type']} sample={['Check inventory','Verify stock quantities',assignableEmployees[0]?.name||'Employee name',assignableEmployees[0]?.department||'IT',assignableEmployees[0]?.branch||'Makati','Medium',today,today,'','Assigned task','once','']} onImport={importTaskRows} description="Use task_purpose for Assigned task or Self-created request, frequency for once/daily/weekly/monthly, and work_type reportorial for IT Supervisor reports. Imports follow current assignment and approval rules."/></details>}</div></details>}</div></div>
+              }} /></label>}{view !== 'Workspace Setup' && !reportsPage && canCreateTask && <button className="tm-primary tm-heading-task-action" onClick={create}><Icon name="plus" size={17} />{'Create task'}</button>}{['Dashboard','My Tasks','Team Tasks'].includes(view) && !reportsPage && <button type="button" className="tm-secondary tm-heading-task-action" onClick={() => setModal('templates')}>Task templates</button>}{['Dashboard','My Tasks','Team Tasks'].includes(view)&&!reportsPage&&<button type="button" className="tm-secondary tm-heading-task-action" disabled={!handoverEligibleTasks.length} onClick={()=>{setSelected(handoverEligibleTasks[0]);setModal('handover');}}>Hand over tasks</button>}{!['Workspace Setup','Team Progress'].includes(view) && <details className="tm-file-actions"><summary>{!isEmployee&&['Dashboard','My Tasks','Team Tasks'].includes(view)?'Import / Export':'Export'} <span aria-hidden="true">⌄</span></summary><div className="tm-file-actions-menu"><button type="button" className="clinic-file-action tm-file-export-action" onClick={exportCurrentView}>Export current view</button>{!isEmployee && ['Dashboard','My Tasks','Team Tasks'].includes(view) && <details className="tm-import-menu"><summary>Import tasks</summary><CsvImportControl label="Import tasks" columns={['title','description','assignee','department','branch','priority','starting_date','deadline','reference_link','task_purpose','frequency','work_type']} sample={['Check inventory','Verify stock quantities',assignableEmployees[0]?.name||'Employee name',assignableEmployees[0]?.department||'IT',assignableEmployees[0]?.branch||'Makati','Medium',today,today,'','Assigned task','once','']} onImport={importTaskRows} description="Use task_purpose for Assigned task or Self-created request, frequency for once/daily/weekly/monthly, and work_type reportorial for IT Supervisor reports. Imports follow current assignment and approval rules."/></details>}</div></details>}</div></div>
 
         {view === 'Workspace Setup' && canManageSetup && <WorkspaceSetup config={config} directory={taskDirectory} onChange={saveSetting} canEdit={canManageSetup} />}
         {/* Dashboard statistics, tasks, deadlines, activity, and attention shortcuts. */}
-{view === 'Dashboard' && <div className="tm-dashboard-design"><div className="tm-dashboard-kicker"><span>{isEmployee ? 'Your day at a glance' : 'The clinic at a glance'}</span><small>One task at a time. All paws on deck.</small></div>{(String(actor?.department || "").trim().toLowerCase() === String(config.itDepartment || "it").trim().toLowerCase() || String(currentEmployee?.department || "").trim().toLowerCase() === String(config.itDepartment || "it").trim().toLowerCase()) && <ITWorkspaceSwitcher current="tasks" />}<div className={`tm-stats ${!isEmployee ? 'tm-stats-management' : ''}`}>{dashboardStats.map(([label, count, icon, color, note]) => <section className="tm-stat" key={label}><span className={`tm-stat-icon ${color}`}><Icon name={icon} size={24} /></span><div><h2>{label}</h2><strong>{count}</strong><small className={color === 'red' ? 'tm-late-text' : ''}>{note}</small></div></section>)}</div><div className="tm-dashboard-tools">{separateDailyReports && !(role==='Team Leader'&&weeklyReviewAllowed) && <div className="tm-dashboard-weekly"><span><Icon name="report" size={17} />Daily reports</span><button className="tm-secondary" onClick={() => go('Daily Reports')}>View reports</button></div>}{weeklyReportsAllowed && !internEmployee && !(weeklyReviewAllowed && role === 'Team Leader') && <div className="tm-dashboard-weekly"><span><Icon name="report" size={17} />Weekly reports</span><button className="tm-secondary" onClick={() => go('Weekly Reports')}>View reports</button></div>}{isEmployee && (internEmployee || currentEmployee.department === config.itDepartment) && <details className="tm-dashboard-tool"><summary><Icon name="calendar" size={17} />My reporting schedule</summary><EmployeeSchedule key={currentEmployee.name + today} employee={currentEmployee} today={today} intern={internEmployee} it={currentEmployee.department === config.itDepartment} onAssignment={saveWorkAssignment} /></details>}{weeklyReviewAllowed&&role==='Team Leader'&&[['daily','Daily reports'],['weekly','Weekly reports'],['monthly','Monthly reports']].map(([frequency,label])=><div className="tm-dashboard-weekly" key={frequency}><span><Icon name="report" size={17}/>{label}</span><button type="button" className="tm-secondary" onClick={()=>openReportPeriod(frequency)}>View reports</button></div>)}{internEmployee && <div className="tm-dashboard-weekly"><span><Icon name="report" size={17} />Intern weekly report</span><small>Due Friday</small><button className="tm-secondary" onClick={() => { const latest = workspaceTasks.filter(isWeeklyReport).sort((a, b) => b.weekStart.localeCompare(a.weekStart))[0]; if (latest) openTask(latest); else go('Weekly Reports'); }}>Open report</button></div>}{!separateDailyReports && reportTypes.length > 0 && <details className="tm-dashboard-tool"><summary><Icon name="tasks" size={17} />Daily reports<span className="tm-dashboard-tool-count">{dailyToday.filter(task => ['Pending Review', 'Completed'].includes(task.status)).length}/{dailyToday.length} submitted</span></summary><Panel title="Daily reports" className="tm-rounds-dashboard" action="View daily tasks" onAction={() => go('Daily Tasks')}><p className="tm-daily-caption">{today} · New tasks every day · Previous reports stay in history</p><div className="tm-daily-pair">{reportTypes.map(([template, label, description]) => {
+{view === 'Dashboard' && <div className="tm-dashboard-design"><div className="tm-dashboard-kicker"><span>{isEmployee ? 'Your day at a glance' : 'The clinic at a glance'}</span><small>One task at a time. All paws on deck.</small></div>{(String(actor?.department || "").trim().toLowerCase() === String(config.itDepartment || "it").trim().toLowerCase() || String(currentEmployee?.department || "").trim().toLowerCase() === String(config.itDepartment || "it").trim().toLowerCase()) && <ITWorkspaceSwitcher current="tasks" />}<DashboardTaskSummary myTasks={myTaskList} teamTasks={teamTaskList} today={today} onSelect={openDashboardStatus} showTeam={!isEmployee} /><div className="tm-dashboard-tools">{weeklyReportsAllowed && !internEmployee && !(weeklyReviewAllowed && role === 'Team Leader') && roleLabel!=='EVP' && <div className="tm-dashboard-weekly"><span><Icon name="report" size={17} />Weekly reports</span><button className="tm-secondary" onClick={() => go('Weekly Reports')}>View reports</button></div>}{isEmployee && (internEmployee || currentEmployee.department === config.itDepartment) && <details className="tm-dashboard-tool"><summary><Icon name="calendar" size={17} />My reporting schedule</summary><EmployeeSchedule key={currentEmployee.name + today} employee={currentEmployee} today={today} intern={internEmployee} it={currentEmployee.department === config.itDepartment} onAssignment={saveWorkAssignment} /></details>}{(roleLabel==='EVP'||weeklyReviewAllowed&&role==='Team Leader')&&[['daily','Daily narrative reports'],['weekly','Weekly narrative reports'],['monthly','Monthly narrative reports']].map(([frequency,label])=><div className="tm-dashboard-weekly" key={frequency}><span><Icon name="report" size={17}/>{label}</span><button type="button" className="tm-secondary" onClick={()=>openReportPeriod(frequency)}>View reports</button></div>)}{internEmployee && <div className="tm-dashboard-weekly"><span><Icon name="report" size={17} />Intern weekly report</span><small>Due Friday</small><button className="tm-secondary" onClick={() => { const latest = workspaceTasks.filter(isWeeklyReport).sort((a, b) => b.weekStart.localeCompare(a.weekStart))[0]; if (latest) openTask(latest); else go('Weekly Reports'); }}>Open report</button></div>}{dashboardReports.length > 0 && <details className="tm-dashboard-tool"><summary><Icon name="tasks" size={17} />{dailyFormsLabel}<span className="tm-dashboard-tool-count">{dailyToday.filter(task => ['Pending Review', 'Completed'].includes(task.status)).length}/{dailyToday.length} submitted</span></summary><Panel title={dailyFormsLabel} className="tm-rounds-dashboard" action="View daily reports" onAction={() => go(separateDailyReports ? 'Daily Reports' : 'Daily Tasks')}><p className="tm-daily-caption">{today} · New tasks every day · Previous reports stay in history</p><div className="tm-daily-pair">{dashboardReports.map(([template, label, description]) => {
                 const assigned = dailyToday.filter(task => task.template === template);
                 const done = isEmployee && assigned.length === 1 && itReportDone(assigned[0]);
-                return <div className={`tm-daily-card ${assigned.length === 1 ? 'tm-report-card-' + reportStatus(assigned[0].status).tone : ''}`} key={template}><div className="tm-report-states">{assigned.length === 1 ? <ReportStatus status={assigned[0].status} /> : [...new Set(assigned.map(task => task.status))].map(status => <ReportStatus key={status} status={status} count={assigned.filter(task => task.status === status).length} />)}</div><span className="tm-daily-label">DAILY</span><h3>{label}</h3><p>{description}</p><small>{assigned.length ? assigned.length + ' assigned · ' + assigned.filter(task => task.status === 'Completed').length + ' completed' : template === 'daily-operations' ? 'Cashier only · no assignments in this scope' : 'IT only · no assignments in this scope'}</small><button className="tm-secondary" disabled={!assigned.length} onClick={() => {
+                return <div className={`tm-daily-card ${assigned.length === 1 ? 'tm-report-card-' + reportStatus(assigned[0].status).tone : ''}`} key={template}><div className="tm-report-states">{assigned.length === 1 ? <ReportStatus status={assigned[0].status} /> : [...new Set(assigned.map(task => task.status))].map(status => <ReportStatus key={status} status={status} count={assigned.filter(task => task.status === status).length} />)}</div><span className="tm-daily-label">DAILY</span><h3>{label}</h3><p>{description}</p><small>{assigned.length ? assigned.length + ' assigned · ' + assigned.filter(task => task.status === 'Completed').length + ' completed' : 'No assignments in this scope today'}</small><button className="tm-secondary" disabled={!assigned.length} onClick={() => {
                     if (isEmployee && assigned.length === 1) openTask(assigned[0]);else {
-                      go('Daily Tasks');
+                      go(separateDailyReports ? 'Daily Reports' : 'Daily Tasks');
                       setDailyReportGroup(template);
                       setDailyTemplate('All');
                     }
                   }}>{isEmployee ? done ? 'View report' : 'Open report' : 'View reports'}</button>{done && canCorrectITReport(assigned[0], { role, employee: currentEmployee, config }) && <button className="tm-secondary" onClick={() => correctITReport(assigned[0])}>Edit report</button>}</div>;
-              })}</div></Panel></details>}</div><div className="tm-dashboard-grid">{!isEmployee && myTaskList.some(task => !['Completed', 'Denied'].includes(task.status)) && <Panel className="tm-own-task-panel" title="My Assigned Tasks" action="View my tasks" onAction={() => go('My Tasks')}><p className="tm-daily-caption">Tasks assigned to {actor?.name}, including your own monitoring responsibilities.</p>{table(myTaskList.filter(task => !['Completed', 'Denied'].includes(task.status)), true)}</Panel>}<Panel title={isEmployee ? 'My tasks' : 'Team tasks'} action="View all tasks" onAction={() => go(isEmployee ? 'My Tasks' : 'Team Tasks')} className="tm-task-panel"><label className="tm-navigation-select tm-report-view-select">Status<select value={filter} onChange={event=>setFilter(event.target.value)}>{['All Tasks','In Progress','Pending Review','Overdue'].map(value=><option key={value}>{value}</option>)}</select></label>{table(entries.filter(t => (isEmployee ? myTaskList : teamTaskList).some(task => String(task.id) === String(t.id))), true)}</Panel><Panel title="Upcoming deadlines" action="Calendar" onAction={() => go('Calendar')} className="tm-deadline-panel">{calendar()}<div className="tm-deadlines">{visible.filter(t => !['Completed', 'Denied'].includes(t.status)).sort((a, b) => a.due.localeCompare(b.due)).slice(0, 3).map(t => <button key={t.id} onClick={() => openTask(t)}><i className={t.priority === config.priorities[0] ? 'tm-dot-red' : ''} /><span>{prettyDate(t.due)}</span><strong>{t.title}</strong><Badge value={t.priority} /></button>)}</div></Panel><Panel className="tm-dashboard-activity-panel" title="Recent activity" action="View all" onAction={() => go('Activity')}><div className="tm-activity">{!scopedActivity.length && <p>No activity recorded for this scope yet.</p>}{scopedActivity.slice(0, 3).map((a, i) => <div key={i}><span className={`tm-activity-icon ${['green', 'blue', 'amber'][i % 3]}`}><Icon name={i === 0 ? 'check' : 'tasks'} size={15} /></span><div><p>{a.text}</p><small>{activityTime(a.time)}</small></div></div>)}</div></Panel><Panel className="tm-dashboard-progress-panel" title={isEmployee ? 'My progress' : 'Leaderboard'} action={isEmployee ? undefined : 'View rankings'} onAction={() => go('Team Progress')}>{isEmployee ? <div className="tm-personal-progress"><strong>{visible.length ? Math.round(completed / visible.length * 100) : 0}%</strong><p>of your tasks completed</p><div className="tm-track"><span style={{
+              })}</div></Panel></details>}</div><div className="tm-dashboard-grid">{!isEmployee && taskCounts.openMy.length > 0 && <Panel className="tm-own-task-panel" title="My Assigned Tasks" action="View my tasks" onAction={() => go('My Tasks')}><p className="tm-daily-caption">Tasks assigned to {actor?.name}, including your own monitoring responsibilities.</p>{table(taskCounts.openMy, true)}</Panel>}<Panel title={isEmployee ? 'My tasks' : 'Team tasks'} action="View all tasks" onAction={() => go(isEmployee ? 'My Tasks' : 'Team Tasks')} className="tm-task-panel"><label className="tm-navigation-select tm-report-view-select">Status<select value={filter} onChange={event=>setFilter(event.target.value)}>{['All Tasks','In Progress','Pending Review','Overdue'].map(value=><option key={value}>{value}</option>)}</select></label>{table(entries.filter(t => (isEmployee ? myTaskList : teamTaskList).some(task => String(task.id) === String(t.id))), true)}</Panel><Panel title="Upcoming deadlines" action="Calendar" onAction={() => go('Calendar')} className="tm-deadline-panel">{calendar()}<div className="tm-deadlines">{visible.filter(t => !['Completed', 'Denied'].includes(t.status)).sort((a, b) => a.due.localeCompare(b.due)).slice(0, 3).map(t => <button key={t.id} onClick={() => openTask(t)}><i className={t.priority === config.priorities[0] ? 'tm-dot-red' : ''} /><span>{prettyDate(t.due)}</span><strong>{t.title}</strong><Badge value={t.priority} /></button>)}</div></Panel><Panel className="tm-dashboard-activity-panel" title="Recent activity" action="View all" onAction={() => go('Activity')}><div className="tm-activity">{!scopedActivity.length && <p>No activity recorded for this scope yet.</p>}{scopedActivity.slice(0, 3).map((a, i) => <div key={i}><span className={`tm-activity-icon ${['green', 'blue', 'amber'][i % 3]}`}><Icon name={i === 0 ? 'check' : 'tasks'} size={15} /></span><div><p>{a.text}</p><small>{activityTime(a.time)}</small></div></div>)}</div></Panel><Panel className="tm-dashboard-progress-panel" title={isEmployee ? 'My progress' : 'Leaderboard'} action={isEmployee ? undefined : 'View rankings'} onAction={() => go('Team Progress')}>{isEmployee ? <div className="tm-personal-progress"><strong>{taskCounts.all.length ? Math.round(completed / taskCounts.all.length * 100) : 0}%</strong><p>of your tasks completed</p><div className="tm-track"><span style={{
                     width: `${visible.length ? completed / visible.length * 100 : 0}%`
                   }} /></div><small>Every completed task moves the team forward.</small></div> : <TaskLeaderboard compact tasks={tasks} employees={allAssignees} today={today} serverEnabled={taskServerEnabled}/>}</Panel><Panel className="tm-dashboard-attention-panel" title="Needs attention"><div className="tm-attention">
   <button onClick={() => attention('Today')}><span><Icon name="calendar" size={18} />Due today</span><b>{visible.filter(t => t.due === today && !['Completed', 'Denied'].includes(t.status)).length}</b></button>
@@ -1269,7 +1330,7 @@ function TaskWorkspace() {
   {(separateDailyReports || reportTypes.length > 0) && <button type="button" role="tab" aria-selected={view !== 'Weekly Reports'} className={view !== 'Weekly Reports' ? 'active' : ''} onClick={() => go(separateDailyReports ? 'Daily Reports' : 'Daily Tasks')}>Daily reports</button>}
   {weeklyReportsAllowed && <button type="button" role="tab" aria-selected={view === 'Weekly Reports'} className={view === 'Weekly Reports' ? 'active' : ''} onClick={() => go('Weekly Reports')}>Weekly reports</button>}
 </div>}
-{['Daily Reports','Daily Tasks','Weekly Reports'].includes(view) && dailyReportTabs}<label className="tm-navigation-select">View<select value={reportSection} onChange={event=>{setReportSection(event.target.value);resetFilters();}}>{['Reports',...(!isEmployee?['Review Queue']:[]),'Archive',...(!isEmployee?['Activity']:[])].map(section=><option key={section} value={section}>{section==='Archive'?'Report History':section}</option>)}</select></label>{['Daily Reports','Daily Tasks'].includes(view)&&activeDailyReportGroup==='narrative-report'&&<label className="tm-navigation-select">Period<select value={narrativeFrequency} onChange={event=>{setNarrativeFrequency(event.target.value);resetFilters();}}><option value="daily">Day</option><option value="weekly">Week</option><option value="monthly">Month</option></select></label>}
+{['Daily Reports','Daily Tasks','Weekly Reports'].includes(view) && dailyReportTabs}{!isEmployee && <label className="tm-navigation-select">Department<select aria-label="Report department" value={departmentFilter} onChange={event=>{setDepartmentFilter(event.target.value);setAssigneeFilter('All');}}><option value="All">All departments</option>{[...new Set(workspaceTasks.filter(isReportTask).map(task=>task.department).filter(Boolean))].sort().map(name=><option key={name} value={name}>{name}</option>)}</select></label>}<label className="tm-navigation-select">View<select value={reportSection} onChange={event=>{setReportSection(event.target.value);resetFilters();}}>{['Reports',...(!isEmployee?['Review Queue']:[]),'Archive',...(!isEmployee?['Activity']:[])].map(section=><option key={section} value={section}>{section==='Archive'?'Report History':section}</option>)}</select></label>{['Daily Reports','Daily Tasks'].includes(view)&&activeDailyReportGroup==='narrative-report'&&<label className="tm-navigation-select">Period<select value={narrativeFrequency} onChange={event=>{setNarrativeFrequency(event.target.value);resetFilters();}}><option value="daily">Day</option><option value="weekly">Week</option><option value="monthly">Month</option></select></label>}
 {['Daily Reports','Weekly Reports'].includes(view) && <div className="tm-report-list-controls"><label>{view === 'Weekly Reports' ? 'Date within the reporting week' : 'Report date'}<input type="date" value={reportDate} onChange={event => {setDateFrom('');setDateTo('');setReportDate(event.target.value);}} /></label><button type="button" className="tm-text-button" onClick={() => {setDateFrom('');setDateTo('');setReportDate(today);}}>Today</button>{reportDate && <button className="tm-text-button" onClick={() => setReportDate('')}>All dates</button>}</div>}
 {view === 'Daily Tasks' && <div className="tm-daily-controls"><label>Report date<input type="date" value={dailyDate} onChange={event => {setDateFrom('');setDateTo('');setDailyDate(event.target.value);}} /></label><button className="tm-text-button" onClick={() => {
               setDailyDate(today);
@@ -1302,10 +1363,10 @@ function TaskWorkspace() {
         if (e.target === e.currentTarget) setModal(null);
       }} onKeyDown={e => {
         if (e.key === 'Escape') setModal(null);
-      }}><section className={`tm-modal ${modal === 'start-task' ? 'tm-start-dialog' : selected && modal === 'details' ? 'tm-task-dialog' : ['create','edit'].includes(modal) ? 'tm-task-form-dialog' : ''}`}  role="dialog" aria-modal="true" aria-labelledby="tm-modal-title"><header><div className="tm-detail-heading">{(detailVisits.length>0||modal==='edit'&&selected)&&<button type="button" className="tm-detail-back" onClick={backToPreviousDetail} aria-label="Back to previous task or view">← Back</button>}<h2 id="tm-modal-title">{modal === 'calendar-day' ? `Employees · ${calendarEmployee.date}` : modal === 'calendar-employee' ? `${calendarEmployee.name} · ${calendarEmployee.date}` : modal === 'reset' ? 'Reset sample workspace?' : modal === 'edit' ? 'Edit task' : modal === 'create' ? assignment.template === 'collaborative' ? 'Create collaborative workflow' : isEmployee ? 'Request a new task' : 'Create a new task' : selected?.title}</h2></div><button autoFocus className="tm-icon-button" aria-label="Close dialog" onClick={() => setModal(null)}><Icon name="close" /></button></header>
+      }}><section className={`tm-modal ${modal === 'start-task' ? 'tm-start-dialog' : selected && modal === 'details' ? 'tm-task-dialog' : ['create','edit'].includes(modal) ? 'tm-task-form-dialog' : ''}`}  role="dialog" aria-modal="true" aria-labelledby="tm-modal-title"><header><div className="tm-detail-heading">{(detailVisits.length>0||modal==='edit'&&selected)&&<button type="button" className="tm-detail-back" onClick={backToPreviousDetail} aria-label="Back to previous task or view">← Back</button>}<h2 id="tm-modal-title">{modal === 'handover' ? 'Hand over your tasks' : modal === 'calendar-day' ? `Employees · ${calendarEmployee.date}` : modal === 'calendar-employee' ? `${calendarEmployee.name} · ${calendarEmployee.date}` : modal === 'reset' ? 'Reset sample workspace?' : modal === 'edit' ? 'Edit task' : modal === 'create' ? assignment.template === 'collaborative' ? 'Create collaborative workflow' : isEmployee ? 'Request a new task' : 'Create a new task' : selected?.title}</h2></div><button autoFocus className="tm-icon-button" aria-label="Close dialog" onClick={() => setModal(null)}><Icon name="close" /></button></header>
         {modal==='start-task'&&selected&&<div className="tm-start-overview">{handoverPanel}<h3>Task overview</h3><p>{selected.description || 'No description provided.'}</p><dl className="tm-task-overview"><dt>Assigned to</dt><dd>{selected.assignee}</dd><dt>Department / branch</dt><dd>{selected.department} · {selected.branch}</dd><dt>Priority</dt><dd>{selected.priority}</dd><dt>Starting date</dt><dd>{selected.startDate || 'Not specified'}</dd><dt>Deadline</dt><dd>{selected.due}</dd></dl><p>Start to unlock submissions. Time includes breaks and ends at submission.</p><div className="tm-modal-actions"><button type="button" className="tm-secondary" onClick={()=>setModal(null)}>Cancel</button><button type="button" disabled={isReportTask(selected) ? !reportEditable(selected) : selected.assignee !== (actor?.name || currentEmployee.name)} className="tm-primary" onClick={async()=>{const saved=await update(selected,{status:'In Progress'},'Task started.');if(saved)setModal('details');}}>Start task</button></div></div>}
 
-        {modal === 'calendar-day' ? <CalendarEmployeeList overdueCounts={overdueCounts} tasks={calendarTasks} date={calendarEmployee.date} onEmployee={name => { setCalendarEmployee({ name, date: calendarEmployee.date }); setModal('calendar-employee'); }} /> : modal === 'calendar-employee' ? <div><button type="button" className="tm-text-button" onClick={() => setModal('calendar-day')}>← All employees for this day</button><p className="tm-daily-caption">Tasks due on {calendarEmployee.date}. Select a task to view its full details.</p><CalendarTaskList tasks={calendarTasks.filter(task => (task.assignee || 'Unassigned') === calendarEmployee.name && task.due === calendarEmployee.date)} onOpen={openTask} overdue={overdue} renderPriority={task => <Badge value={task.priority} />} renderStatus={task => isReportTask(task) ? <ReportStatus status={task.status} /> : <Badge value={task.status} />} /></div> : modal === 'reset' ? <div><p className="tm-reset-note">This restores the original sample tasks, progress, and workspace settings in this browser. Your real portal records are unaffected.</p><div className="tm-modal-actions"><button className="tm-secondary" onClick={() => setModal(null)}>Keep my changes</button><button className="tm-primary" onClick={() => {
+        {modal === 'handover' && selected ? <TaskHandover bulk task={selected} tasks={tasks} people={allAssignees.filter(person=>allowedDepartments.includes(person.department))} actor={actor?.name||currentEmployee.name} canManage={false} onAction={handoverAction} onBatch={async(items,values)=>{await handoverBatch(items,values);setModal(null);}} /> : modal === 'calendar-day' ? <CalendarEmployeeList overdueCounts={overdueCounts} tasks={calendarTasks} date={calendarEmployee.date} onEmployee={name => { setCalendarEmployee({ name, date: calendarEmployee.date }); setModal('calendar-employee'); }} /> : modal === 'calendar-employee' ? <div><button type="button" className="tm-text-button" onClick={() => setModal('calendar-day')}>← All employees for this day</button><p className="tm-daily-caption">Tasks due on {calendarEmployee.date}. Select a task to view its full details.</p><CalendarTaskList tasks={calendarTasks.filter(task => (task.assignee || 'Unassigned') === calendarEmployee.name && task.due === calendarEmployee.date)} onOpen={openTask} overdue={overdue} renderPriority={task => <Badge value={task.priority} />} renderStatus={task => isReportTask(task) ? <ReportStatus status={task.status} /> : <Badge value={task.status} />} /></div> : modal === 'reset' ? <div><p className="tm-reset-note">This restores the original sample tasks, progress, and workspace settings in this browser. Your real portal records are unaffected.</p><div className="tm-modal-actions"><button className="tm-secondary" onClick={() => setModal(null)}>Keep my changes</button><button className="tm-primary" onClick={() => {
                 setTasks(initialTasks);
                 setConfig(settingsForDirectory());
                 setActivity([{
@@ -1363,7 +1424,7 @@ function TaskWorkspace() {
               link: data.get('link'),
               remarks: ''
             };
-            task.taskCode = createLocalTaskCode({ source: task.taskIdPrefixSource, department: task.department, role: task.assigneeRole });
+            try { task.taskCode = createLocalTaskCode({ source: task.taskIdPrefixSource, department: task.department, role: task.assigneeRole, format: config.taskIdFormat }); } catch(error) { setNotice(error.message); return; }
             if (modal !== 'edit' && task.template === 'collaborative' && data.get('kind') !== 'Assigned task') { setNotice('Collaborative tasks must be assigned by a higher-up, not self-requested.'); return; }
             if (task.template === 'it-opening-rounds' && (task.department !== config.itDepartment || employeeByName(task.assignee)?.department !== config.itDepartment)) {
               setNotice('Opening Rounds must be assigned to an IT employee.');

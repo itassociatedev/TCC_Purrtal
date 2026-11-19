@@ -1,3 +1,4 @@
+import { downloadCsv } from '@/Utils/csv.mjs';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
@@ -367,14 +368,14 @@ export default function AssetMasterlist({ auth, assets }) {
             'Acc. Depreciation', 'Current Book Value'
         ];
 
-        const csvRows = [headers.join(',')];
+        const csvRows = [];
 
         displayedAssets.forEach(asset => {
             if (!asset) return;
             const personnel = asset?.user?.name ? asset.user.name : (asset?.assigned_personnel || '-');
             const branch = getBranchValue(asset?.branch) || '-';
             const depData = getDepreciationData(asset);
-            const escapeCSV = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
+            const escapeCSV = (val) => String(val ?? '');
 
             const row = [
                 escapeCSV(asset?.name), escapeCSV(asset?.asset_tag), escapeCSV(asset?.serial_no), escapeCSV(asset?.model_no),
@@ -385,17 +386,10 @@ export default function AssetMasterlist({ auth, assets }) {
                 asset?.total_value || (asset?.unit_value * (asset?.qty || 1)) || 0,
                 depData.accumulated.toFixed(2), depData.current.toFixed(2) 
             ];
-            csvRows.push(row.join(','));
+            csvRows.push(row);
         });
 
-        const csvBlob = new Blob(["\uFEFF" + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-        const csvUrl = URL.createObjectURL(csvBlob);
-        const link = document.createElement("a");
-        link.href = csvUrl;
-        link.setAttribute("download", `Masterlist_Assets_Export_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        downloadCsv('Masterlist_Assets_Export.xlsx', headers, csvRows);
 
         if (isSuperAdmin) {
             try {

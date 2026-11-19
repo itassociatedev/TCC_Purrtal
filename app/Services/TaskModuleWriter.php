@@ -80,17 +80,17 @@ class TaskModuleWriter
         if(($previous['handover']['status'] ?? '')==='pending' && ($task['status'] ?? '')!==($previous['status'] ?? '') && in_array($task['status'],['Pending Review','Completed','Denied','Dismissed'])){ $task['handover']['status']='cancelled';$task['handover']['resolvedAt']=now()->toIso8601String(); }
         $version = ($record?->version ?? 0) + 1;
         unset($task['_serverVersion'], $task['_serverKey']);
-        abort_if(!empty($task['sharedBranchReport']) && ($task['template'] !== 'it-opening-rounds' || $task['department'] !== 'IT'),422,'Shared Opening Reports belong to IT.');
-        $assignee = !empty($task['sharedBranchReport']) && $task['template'] === 'it-opening-rounds' ? null : User::where('name', $task['assignee'])->first() ?? ($task['assignee'] === 'Ma. Sharlhyn Tolentino' ? User::find(225) : null);
+        abort_if(!empty($task['sharedBranchReport']) && !(($task['template'] === 'it-opening-rounds' && $task['department'] === 'IT') || str_starts_with($task['template'], 'daily-custom-')),422,'Shared reports must use an eligible daily report template.');
+        $assignee = !empty($task['sharedBranchReport']) ? null : User::where('name', $task['assignee'])->first() ?? ($task['assignee'] === 'Ma. Sharlhyn Tolentino' ? User::find(225) : null);
         abort_if(!$assignee && empty($task['sharedBranchReport']), 422, 'The assignee must be an existing employee account.');
         abort_if($assignee && (!$this->access->active($assignee) || !$previous && ($this->access->department($assignee) !== $task['department'] || !in_array($task['branch'], $this->access->branches($assignee)))), 422, 'The assignee is not active in this department and branch.');
         $parent = empty($task['parentId']) ? null : TaskModuleRecord::where('client_key', 'task:'.$task['parentId'])->first();
         abort_if(!empty($task['parentId']) && !$parent, 422, 'Save the parent task first.');
         $role = $this->access->role($actor);
         $daily = in_array($task['template'], ['it-opening-rounds','narrative-report','daily-operations','intern-weekly-report']) || str_starts_with($task['template'], 'daily-custom-');
-        $sharedWorker = !empty($task['sharedBranchReport']) && $task['template'] === 'it-opening-rounds' && $this->access->department($actor) === 'IT' && ($role==='Team Leader' || in_array($task['branch'], $this->access->branches($actor)));
+        $sharedWorker = !empty($task['sharedBranchReport']) && $this->access->department($actor) === $task['department'] && ($role==='Team Leader' || in_array($task['branch'], $this->access->branches($actor)));
         $performer = $assignee?->id === $actor->id || $sharedWorker;
-        $directOpeningSubmission=$sharedWorker && $role==='Team Leader' && (!$previous || in_array($previous['status'],['Not Started','In Progress','Revision Needed'])) && in_array($task['status'],['Pending Review','Completed']) && trim($task['submission'] ?? '')!=='';
+        $directOpeningSubmission=$task['template']==='it-opening-rounds' && $sharedWorker && $role==='Team Leader' && (!$previous || in_array($previous['status'],['Not Started','In Progress','Revision Needed'])) && in_array($task['status'],['Pending Review','Completed']) && trim($task['submission'] ?? '')!=='';
         if ($directOpeningSubmission) $task['status']='Completed';
         if ($previous) {
             $outputChanged = collect(['submission','rounds','narrative','operations','customReport','weeklyReport'])->contains(fn ($field) => ($task[$field] ?? null) !== ($previous[$field] ?? null));
@@ -220,13 +220,7 @@ class TaskModuleWriter
         $newRecord=!$record->exists;
         $record->fill(['assignee_id'=>$assignee?->id,'reviewer_id'=>$reviewer?->id,'department'=>$task['department'],'branch'=>$task['branch'],'payload'=>$task,'version'=>$version])->save();
         if ($newRecord) {
-            $task['taskCode'] = TaskIdFormatter::make(
-                $task['taskIdPrefixSource'] ?? 'department',
-                $task['department'],
-                $task['assigneeRole'] ?? ($assignee ? $this->access->role($assignee) : ''),
-                $record->created_at?->timezone('Asia/Manila')->format('Ymd') ?? now('Asia/Manila')->format('Ymd'),
-                (int) $record->id,
-            );
+            $task['taskCode'] = TaskIdSettings::reserve($task['department'], $task['assigneeRole'] ?? '', $record->created_at->timezone('Asia/Manila'));
             $record->forceFill(['payload' => $task])->save();
         } else {
             $task['taskCode'] = $previous['taskCode'] ?? TaskIdFormatter::make(

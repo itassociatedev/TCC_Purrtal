@@ -126,14 +126,14 @@ class DutyMealController extends Controller
         
         $allowedBranchIds = $user->branches->pluck('id')->push($user->branch_id)->filter()->unique();
 
-        $dutymeals = DutyMeal::with(['branch', 'participants.user:id,name'])
+        $dutymeals = DutyMeal::with(['branch', 'participants' => fn ($q) => $q->whereHas('user', fn ($u) => $u->whereNull('status')->orWhere('status', '!=', 'Disabled')), 'participants.user:id,name'])
         ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
             $query->whereIn('branch_id', $allowedBranchIds);
         })
         ->whereDate('duty_date', '>=', now()->startOfMonth())
-        ->withCount('participants')->latest('duty_date')->get();
+        ->withCount(['participants' => fn ($q) => $q->whereHas('user', fn ($u) => $u->whereNull('status')->orWhere('status', '!=', 'Disabled'))])->latest('duty_date')->get();
 
-        $employees = User::with(['department:id,name', 'position:id,name'])
+        $employees = User::where(fn ($q) => $q->whereNull('status')->orWhere('status', '!=', 'Disabled'))->with(['department:id,name', 'position:id,name'])
             ->select('id', 'name', 'department_id', 'position_id', 'branch_id')
             ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
                 $query->where(function ($q) use ($allowedBranchIds) {
@@ -178,7 +178,7 @@ class DutyMealController extends Controller
             })->orderBy('name')->get();
 
         // 🟢 NEW: Added 'schedules' and 'scheduleOverrides' to the relationships!
-        $employees = User::with(['branches', 'department:id,name', 'schedules', 'scheduleOverrides'])
+        $employees = User::where(fn ($q) => $q->whereNull('status')->orWhere('status', '!=', 'Disabled'))->with(['branches', 'department:id,name', 'schedules', 'scheduleOverrides'])
             ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
                 $query->where(function ($q) use ($allowedBranchIds) {
                     $q->whereIn('branch_id', $allowedBranchIds)
@@ -246,7 +246,7 @@ class DutyMealController extends Controller
             'schedule.*.main_meal' => 'nullable|string|max:255',
             'schedule.*.alt_meal' => 'nullable|string|max:255',
             'schedule.*.participants' => 'nullable|array',
-            'schedule.*.participants.*.id' => 'required_with:schedule.*.participants|exists:users,id',
+            'schedule.*.participants.*.id' => ['required_with:schedule.*.participants', \Illuminate\Validation\Rule::exists('users', 'id')->where(fn ($q) => $q->where(fn ($status) => $status->whereNull('status')->orWhere('status', '!=', 'Disabled')))],
             'schedule.*.participants.*.shift_type'=> 'required_with:schedule.*.participants|string|in:day,graveyard,straight',
         ]);
 
@@ -395,7 +395,7 @@ class DutyMealController extends Controller
     {
         // 🟢 NEW: Added validation payload rules for custom request notes
         $request->validate([
-            'user_id' => 'required|exists:users,id',
+            'user_id' => ['required', \Illuminate\Validation\Rule::exists('users', 'id')->where(fn ($q) => $q->where(fn ($status) => $status->whereNull('status')->orWhere('status', '!=', 'Disabled')))],
             'choice' => 'nullable|in:main,alt,special,none',
             'custom_request' => 'nullable|string|max:255'
         ]);
@@ -499,7 +499,7 @@ class DutyMealController extends Controller
         $filterYear = $request->input('year', $defaultYear);
         $filterMonth = $request->input('month', $defaultMonth);
 
-        $archivedMeals = DutyMeal::with(['branch', 'participants.user:id,name'])
+        $archivedMeals = DutyMeal::with(['branch', 'participants' => fn ($q) => $q->whereHas('user', fn ($u) => $u->whereNull('status')->orWhere('status', '!=', 'Disabled')), 'participants.user:id,name'])
             ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
                 $query->whereIn('branch_id', $allowedBranchIds);
             })
@@ -507,12 +507,12 @@ class DutyMealController extends Controller
             ->whereDate('duty_date', '<', now()->startOfMonth()) 
             ->whereYear('duty_date', $filterYear)
             ->whereMonth('duty_date', $filterMonth)
-            ->withCount('participants')->orderBy('duty_date', 'asc')->get()
+            ->withCount(['participants' => fn ($q) => $q->whereHas('user', fn ($u) => $u->whereNull('status')->orWhere('status', '!=', 'Disabled'))])->orderBy('duty_date', 'asc')->get()
             ->groupBy(function ($meal) {
                 return 'Week ' . Carbon::parse($meal->duty_date)->weekOfMonth;
             });
 
-        $employees = User::with(['department:id,name', 'position:id,name'])->select('id', 'name', 'department_id', 'position_id', 'branch_id')->get();
+        $employees = User::where(fn ($q) => $q->whereNull('status')->orWhere('status', '!=', 'Disabled'))->with(['department:id,name', 'position:id,name'])->select('id', 'name', 'department_id', 'position_id', 'branch_id')->get();
         $departments = Department::select('id', 'name')->orderBy('name')->get();
         $positions = Position::select('id', 'name', 'department_id')->orderBy('name')->get();
 

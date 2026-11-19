@@ -1,3 +1,5 @@
+import MobileRecordTiles from '@/Components/MobileRecordTiles';
+import ModuleWorkbookTools from '@/Components/ModuleWorkbookTools';
 import { getPRPOLinks } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, useForm } from '@inertiajs/react';
@@ -211,6 +213,18 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
         }]);
     };
 
+    const importRequestItems = rows => {
+        const imported = rows.map((row,index) => {
+            const line = row._sheet_row || index+3;
+            if (!row.product_name) throw new Error(`Row ${line}: product name is missing.`);
+            const product = products.find(item => item.name.toLowerCase() === row.product_name.toLowerCase());
+            if (!product) throw new Error(`Row ${line}: product "${row.product_name}" was not found. Choose an existing product.`);
+            if (!row.quantity || !Number.isFinite(Number(row.quantity)) || Number(row.quantity)<=0) throw new Error(`Row ${line}: quantity must be a number greater than zero.`);
+            for (const field of ['qty_on_hand','reorder_level']) if (row[field] && (!Number.isFinite(Number(row[field])) || Number(row[field])<0)) throw new Error(`Row ${line}: ${field.replaceAll('_',' ')} must be zero or greater.`);
+            return { product_id:String(product.id), supplier_id:String(product.supplier_id || ''), specifications:row.specifications || '', unit:product.unit || '', qty_requested:Number(row.quantity), qty_on_hand:Number(row.qty_on_hand || 0), reorder_level:Number(row.reorder_level || 0), est_unit_cost:Number(product.price || 0), total_cost:Number(row.quantity)*Number(product.price || 0) };
+        });
+        setData('items',[...data.items.filter(item=>item.product_id),...imported]);
+    };
     const removeItemRow = (index) => {
         const newItems = [...data.items];
         newItems.splice(index, 1);
@@ -268,7 +282,8 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
 
     return (
         <SidebarLayout activeModule="PR/PO Module" sidebarLinks={sidebarLinks}>
-            <Head title="Create Purchase Request" />
+            <MobileRecordTiles />
+            <Head title="Create Purchase Request" /><ModuleWorkbookTools name="purchase-request-items.xlsx" columns={['product_name','quantity','specifications','qty_on_hand','reorder_level']} rows={data.items.filter(item=>item.product_id).map(item=>[products.find(product=>String(product.id)===String(item.product_id))?.name,item.qty_requested,item.specifications,item.qty_on_hand,item.reorder_level])} sample={[products[0]?.name || 'Existing product','1','Required specifications','0','0']} onImport={importRequestItems} description="Import items into this draft. Complete the request details and submit normally; importing does not approve or submit the purchase request." />
 
             <div className="mx-auto max-w-[95%] pb-12 px-4 sm:px-6 lg:px-8">
                 <div className="mb-6 flex items-center justify-between">
@@ -391,7 +406,7 @@ export default function CreatePR({ auth, suppliers, products, branches = [], dep
                         </div>
 
                         <div className="overflow-x-auto rounded-lg border border-gray-200 pb-32">
-                        <table className="w-full divide-y divide-gray-200 text-sm table-auto">
+                        <table className="mobile-record-tiles w-full divide-y divide-gray-200 text-sm table-auto">
                             <thead className="bg-gray-50 text-gray-700">
                                 <tr>
                                     <th className="px-3 py-3 text-center font-semibold w-12 whitespace-nowrap">No.</th>

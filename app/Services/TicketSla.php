@@ -29,8 +29,8 @@ class TicketSla
         // Preview exercises the same clocks and event history but never notifies live accounts.
         if ($ticket->is_preview) return;
         $recipients = $team
-            ? User::with('role')->whereNotIn('id', \Illuminate\Support\Facades\DB::table('ticket_preview_users')->select('user_id'))
-                ->get()->filter(fn ($u) => TicketAccess::role($u) === 'leader' || $u->id === $ticket->assigned_to)
+            ? User::with(['role','position','department'])->where('status','Active')
+                ->get()->filter(fn ($u) => TicketAccess::notificationRole($u) === 'leader' || $u->id === $ticket->assigned_to)
             : collect([$ticket->creator]);
         Notification::send($recipients->filter()->unique('id'), new TicketNotification($ticket->id, "Ticket #{$ticket->ticket_code}: {$message}"));
     }

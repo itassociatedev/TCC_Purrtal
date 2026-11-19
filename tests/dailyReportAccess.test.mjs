@@ -17,19 +17,19 @@ test('submitted IT reports show done and allow only their owner to reopen a corr
 });
 
 test('department views hide unrelated report types while reviewers retain visibility', () => {
-    const config = { itDepartment: 'IT', cashierDepartment: 'Cashier' };
+    const config = { itDepartment: 'IT', receptionDepartment: 'Reception' };
     const types = (role, department) => dailyReportTypes({ role, department, config }).map(([template]) => template);
     assert.deepEqual(types('Employee', 'IT'), ['it-opening-rounds', 'narrative-report']);
-    assert.deepEqual(types('Employee', 'Cashier'), ['daily-operations']);
+    assert.deepEqual(types('Employee', 'Reception'), ['daily-operations']);
     assert.deepEqual(types('Employee', 'HR'), []);
-    assert.deepEqual(types('Team Leader', 'Cashier'), ['daily-operations']);
+    assert.deepEqual(types('Team Leader', 'Reception'), ['daily-operations', 'narrative-report']);
     assert.equal(types('EVP').length, 3);
     assert.equal(types('Operations Manager').length, 0);
 });
 
 test('daily report writes require the assigned department employee and an editable state', () => {
-    const config = { itDepartment: 'IT', cashierDepartment: 'Cashier' };
-    for (const [template, department] of [['daily-operations', 'Cashier'], ['it-opening-rounds', 'IT'], ['narrative-report', 'IT']]) {
+    const config = { itDepartment: 'IT', receptionDepartment: 'Reception' };
+    for (const [template, department] of [['daily-operations', 'Reception'], ['it-opening-rounds', 'IT'], ['narrative-report', 'IT']]) {
         const task = { template, department, assignee: 'John Doe', status: 'Not Started' };
         const context = { config, role: 'Employee', employee: { name: 'John Doe', department } };
         assert.equal(canEditDailyReport(task, context), true);
@@ -39,4 +39,12 @@ test('daily report writes require the assigned department employee and an editab
         for (const status of ['Pending Review', 'Completed', 'Denied']) assert.equal(canEditDailyReport({ ...task, status }, context), false);
         assert.equal(canEditDailyReport({ ...task, status: 'Revision Needed' }, context), true);
     }
+});
+
+
+test('legacy saved Cashier report moves to Reception and is hidden from Cashier', () => {
+    const config = { itDepartment: 'IT', cashierDepartment: 'Cashier', dailyReports: [{ id: 'daily-operations', name: 'Daily Operations Report', department: 'Cashier', enabled: true, fields: [] }] };
+    assert.equal(dailyReportTypes({ role: 'Employee', department: 'Reception', config })[0][1], 'Reception Report');
+    assert.deepEqual(dailyReportTypes({ role: 'Employee', department: 'Cashier', config }), []);
+    assert.equal(config.dailyReports[0].department, 'Cashier');
 });

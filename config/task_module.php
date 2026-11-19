@@ -1,6 +1,8 @@
 <?php
 
 return [
+    // Role simulation is restricted to local/testing Admin sessions.
+    'preview_enabled' => env('TASK_PREVIEW_ENABLED', in_array(env('APP_ENV', 'production'), ['local', 'testing'], true)),
     'server_enabled' => env('TASK_SERVER_ENABLED', false),
     // log = local preview, send = configured mail transport, off = no notifications.
     'email_mode' => env('TASK_EMAIL_MODE', 'log'),

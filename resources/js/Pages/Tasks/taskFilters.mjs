@@ -36,6 +36,8 @@ export function filterTasks(tasks, { view, search = '', status = 'All Tasks', pr
     const priorityOrder = Object.fromEntries(['Critical',...priorities.filter(name=>name!=='Critical')].map((name, index) => [name, index]));
     return result.sort((a, b) => {
         if (sort === 'priority') return priorityOrder[a.priority] - priorityOrder[b.priority] || a.due.localeCompare(b.due);
+        if (sort === 'department') return (a.department || '').localeCompare(b.department || '') || (a.assignee || '').localeCompare(b.assignee || '') || a.due.localeCompare(b.due);
+        if (sort === 'assignee') return (a.assignee || '').localeCompare(b.assignee || '') || a.due.localeCompare(b.due);
         if (sort === 'title') return a.title.localeCompare(b.title);
         if (sort === 'newest') return b.id - a.id;
         return a.due.localeCompare(b.due) || priorityOrder[a.priority] - priorityOrder[b.priority];

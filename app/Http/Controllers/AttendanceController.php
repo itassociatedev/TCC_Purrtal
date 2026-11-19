@@ -451,6 +451,11 @@ class AttendanceController extends Controller
             // Read the XLSX workbook through the existing attendance importer.
             $data = \Maatwebsite\Excel\Facades\Excel::toArray(new \App\Imports\AttendanceImport(null, null), $file);
             $rows = $data[0] ?? [];
+            // Strip only the B2 margin used by exported schedules; keep the title and date-header rows.
+            if (isset($rows[0]) && !array_filter($rows[0], fn ($value) => $value !== null && $value !== '')) {
+                array_shift($rows);
+                $rows = array_map(fn ($row) => array_slice($row, 1), $rows);
+            }
 
             if (count($rows) < 2) {
                 return redirect()->back()->with('error', 'The uploaded file is empty or formatted incorrectly.');

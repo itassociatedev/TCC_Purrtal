@@ -44,13 +44,14 @@ class TaskModuleRecurrence
                     $copy['department']=$data['recurrenceOwner']['department'] ?? $data['department'];
                     if(!$repeatOwner || !$access->active($repeatOwner))continue;
                     $copy['assignee']=$repeatOwner->name;$copy['assigneeRole']=$access->role($repeatOwner);
-                    foreach(['handover','handoverWork','recurrenceOwner','procedureReference','_serverKey','_serverVersion','startedAt','submittedAt','submittedBy','completedAt','elapsedSeconds','approvalGrantedAt','approvalGrantedBy','previousSubmission','correcting'] as $field)unset($copy[$field]);
+                    foreach(['handover','handoverWork','recurrenceOwner','procedureReference','taskCode','_serverKey','_serverVersion','startedAt','submittedAt','submittedBy','completedAt','elapsedSeconds','approvalGrantedAt','approvalGrantedBy','previousSubmission','correcting'] as $field)unset($copy[$field]);
                     $request=in_array($data['kind'] ?? '',['Self-created request','Turnover request']);
                     $creator=User::find($root->creator_id);if(!$creator)return;
                     $reviewer=$request?$access->reviewer($creator,$copy):User::find($source->reviewer_id);
                     if($request&&!$reviewer)return;
                     $copy=[...$copy,'id'=>++$nextId,'repeatSeriesId'=>(int)$series,'repeatAnchorStart'=>$anchor->toDateString(),'repeatAnchorDue'=>$deadline->toDateString(),'occurrenceStart'=>$date,'startDate'=>$date,'due'=>$due->toDateString(),'status'=>$request?'Pending Approval':'Not Started','submission'=>'','remarks'=>'','pings'=>[],'history'=>[['text'=>'Recurring task created.','at'=>now()->toIso8601String()]]];
                     if($request)$copy=[...$copy,'approvalRequired'=>true,'approvalReviewer'=>$reviewer->name,'approvalReviewerRole'=>$access->role($reviewer)];
+                    $copy['taskCode']=TaskIdSettings::reserve($copy['department'],$copy['assigneeRole'] ?? '',now('Asia/Manila'));
                     $record=TaskModuleRecord::create(['client_key'=>$key,'creator_id'=>$root->creator_id,'assignee_id'=>$repeatOwner->id,'reviewer_id'=>$reviewer?->id,'department'=>$copy['department'],'branch'=>$copy['branch'],'payload'=>$copy,'version'=>1]);
                     DB::table('task_module_events')->insert(['task_record_id'=>$record->id,'actor_id'=>$root->creator_id,'version'=>1,'event'=>'Recurring task created','recipient_ids'=>json_encode(array_values(array_unique(array_filter([$source->assignee_id,$root->creator_id,$request?$reviewer?->id:null])))),'created_at'=>now(),'updated_at'=>now()]);
                     $known[]=$date;$made++;

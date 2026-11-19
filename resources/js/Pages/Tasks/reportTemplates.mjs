@@ -3,10 +3,14 @@ export function defaultReportTemplates(config) {
     return [
         { id: 'it-opening-rounds', name: 'Opening Rounds', department: config.itDepartment || 'IT', description: 'Start-of-day IT checklist', enabled: true, fields: [] },
         { id: 'narrative-report', name: 'Narrative Report', department: config.itDepartment || 'IT', description: 'End-of-day summary, accomplishments, and follow-ups', enabled: true, fields: [] },
-        { id: 'daily-operations', name: 'Daily Operations Report', department: config.cashierDepartment || 'Cashier', description: 'Doctor loads, procedures, and confinement movements', enabled: true, fields: [] },
+        { id: 'daily-operations', name: 'Reception Report', department: config.receptionDepartment || 'Reception', description: 'Doctor loads, procedures, and confinement movements', enabled: true, fields: [] },
     ];
 }
-export const reportTemplates = config => config.dailyReports || defaultReportTemplates(config);
+// Upgrade the old built-in Cashier definition without losing custom fields or its enabled state.
+export const reportTemplates = config => (config.dailyReports || defaultReportTemplates(config)).map(report =>
+    report.id === 'daily-operations' && report.department === (config.cashierDepartment || 'Cashier')
+        ? { ...report, department: config.receptionDepartment || 'Reception', name: report.name === 'Daily Operations Report' ? 'Reception Report' : report.name }
+        : report);
 export function editReportTemplates(config, tasks, { action, original, value }) {
     const reports = structuredClone(reportTemplates(config));
     const index = reports.findIndex(report => report.id === original);
@@ -20,7 +24,8 @@ export function editReportTemplates(config, tasks, { action, original, value }) 
         if (builtIn && value.department !== reports[index].department) throw new Error('Built-in reports keep their existing department. Create a new report for another department.');
         const fields = (value.fields || []).map(field => ({ ...field, label: field.label.trim() }));
         if (!builtIn && (!fields.length || fields.some(field => !field.label || !['text', 'textarea', 'number', 'status'].includes(field.type)) || new Set(fields.map(field => field.id)).size !== fields.length)) throw new Error('Add at least one field with a label and supported type.');
-        const record = { id: index >= 0 ? reports[index].id : `daily-custom-${globalThis.crypto.randomUUID()}`, name, department: value.department, description: value.description?.trim() || '', enabled: value.enabled !== false, fields };
+        if (value.assignmentMode && !['individual', 'shared-branch'].includes(value.assignmentMode)) throw new Error('Choose a supported daily assignment option.');
+        const record = { assignmentMode: builtIn ? reports[index].assignmentMode || (reports[index].id === 'it-opening-rounds' ? 'shared-branch' : 'individual') : value.assignmentMode || 'individual', id: index >= 0 ? reports[index].id : `daily-custom-${globalThis.crypto.randomUUID()}`, name, department: value.department, description: value.description?.trim() || '', enabled: value.enabled !== false, fields };
         if (action === 'add') reports.push(record); else reports[index] = record;
     }
     // Existing task snapshots stay available; disabling/removing a template only stops new daily assignments.

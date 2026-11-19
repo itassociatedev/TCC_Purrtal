@@ -16,5 +16,5 @@ export function formatOperations(report) {
         const entries = report[key].map(row => `- ${row.name} - ${row.count}${key === 'procedures' ? '' : ' Cats'}`).join('\n') || 'None';
         return `${label}${total}\n${entries}${key === 'doctors' ? `\n- Non-vet sales - ${report.nonVet} Cats` : ''}`;
     });
-    return `🐾 TCC DAILY OPERATIONS REPORT\nDate: ${report.date}\nBranch: ${report.branch}\n\n${groups.join('\n\n————————————————\n\n')}\n\n————————————————\nCONFINEMENT MOVEMENT\n- New Confinement: ${report.newConfinement} Cats\n- Discharged: ${report.discharged} Cats\n\nNOTES: ${report.notes?.trim() || 'N/a'}\nReported by: ${report.reportedBy}`;
+    return `🐾 TCC RECEPTION REPORT\nDate: ${report.date}\nBranch: ${report.branch}\n\n${groups.join('\n\n————————————————\n\n')}\n\n————————————————\nCONFINEMENT MOVEMENT\n- New Confinement: ${report.newConfinement} Cats\n- Discharged: ${report.discharged} Cats\n\nNOTES: ${report.notes?.trim() || 'N/a'}\nReported by: ${report.reportedBy}`;
 }

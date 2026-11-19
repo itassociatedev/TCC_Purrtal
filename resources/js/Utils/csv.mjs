@@ -37,6 +37,9 @@ export async function downloadCsv(name, columns, rows) {
   anchor.click();
   URL.revokeObjectURL(url);
  } catch (error) {
-  window.alert('The XLSX export could not be downloaded. Please try again.');
+  let detail = error.response?.data;
+  if (detail instanceof Blob) { try { detail = JSON.parse(await detail.text()); } catch { detail = null; } }
+  const messages = detail?.errors ? Object.values(detail.errors).flat().join('\n') : detail?.message;
+  window.alert(messages || 'The XLSX export could not be downloaded. Please try again.');
  }
 }

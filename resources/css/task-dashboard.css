@@ -85,3 +85,64 @@
  .tm-dashboard-design .tm-dashboard-grid>.tm-own-task-panel{grid-column:1 / 9}
  .tm-dashboard-design .tm-dashboard-grid:not(:has(>.tm-own-task-panel))>.tm-deadline-panel{grid-row:1}
 }
+
+/* Keep each count and its label together, with a clear hierarchy per scope. */
+.tm-dashboard-design .tm-dashboard-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:20px;color:var(--clinic-dark-ink,#202936)}
+.tm-dashboard-summary .tm-summary-group{min-width:0;padding:18px 22px;border:1px solid var(--clinic-dark-border,#dfe3ec);border-radius:10px;background:var(--clinic-dark-surface,#fff)}
+.tm-dashboard-summary .tm-summary-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
+.tm-dashboard-summary .tm-summary-heading h2{margin:0;font-size:15px;font-weight:600;color:var(--clinic-dark-ink,#202936)}
+.tm-dashboard-summary .tm-summary-total{display:flex;align-items:center;gap:7px;padding:6px 10px;border-radius:6px;background:var(--clinic-dark-subtle,#f5f6fa);white-space:nowrap;color:var(--clinic-dark-muted,#64748b)}
+.tm-dashboard-summary .tm-summary-total strong{font-size:23px;line-height:1.2;font-weight:600;font-variant-numeric:tabular-nums;color:var(--clinic-dark-ink,#202936)}
+.tm-dashboard-summary .tm-summary-total span{font-size:12px}
+.tm-dashboard-summary .tm-summary-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;margin:0;padding-top:14px;border-top:1px solid var(--clinic-dark-border,#e8ebf1)}
+.tm-dashboard-summary .tm-summary-breakdown>div{display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;padding:0 8px;min-width:0}
+.tm-dashboard-summary .tm-summary-breakdown>div+div{border-left:1px solid var(--clinic-dark-border,#e8ebf1)}
+.tm-dashboard-summary .tm-summary-breakdown dt{order:2;font-size:12px;line-height:1.4;color:var(--clinic-dark-muted,#64748b)}
+.tm-dashboard-summary .tm-summary-breakdown dd{order:1;margin:0;font-size:24px;line-height:1.2;font-weight:600;font-variant-numeric:tabular-nums;color:var(--clinic-dark-ink,#202936)}
+.tm-dashboard-summary .tm-summary-breakdown .tm-summary-overdue :is(dt,dd){color:var(--clinic-dark-warning,#a85c26)}
+@media(max-width:600px){.tm-dashboard-design .tm-dashboard-summary{grid-template-columns:1fr;gap:10px}.tm-dashboard-summary .tm-summary-group{padding:16px}.tm-dashboard-summary .tm-summary-heading{margin-bottom:12px}.tm-dashboard-summary .tm-summary-breakdown dd{font-size:22px}}
+
+.tm-dashboard-summary .tm-summary-total{border:0;cursor:pointer}
+.tm-dashboard-summary .tm-summary-breakdown button{padding:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer}
+.tm-dashboard-summary .tm-summary-breakdown button:hover{text-decoration:underline;text-underline-offset:3px}
+.tm-dashboard-summary button:focus-visible,.tm-dashboard-design .tm-stat-link:focus-visible{outline:2px solid var(--clinic-dark-ink,#28364b);outline-offset:3px}
+.tm-dashboard-summary .tm-summary-total:hover{background:var(--clinic-dark-border,#e9ecf3)}
+.tm-dashboard-design .tm-stat-link{text-align:left;font:inherit;cursor:pointer}
+.tm-dashboard-design .tm-stat-link:hover{border-color:var(--clinic-dark-muted,#94a3b8)}
+
+.tm-dashboard-design .tm-dashboard-summary-personal{grid-template-columns:1fr}
+.tm-dashboard-summary .tm-summary-breakdown-four{grid-template-columns:repeat(4,minmax(0,1fr))}
+
+/* Task ID scope uses buttons, avoiding generic full-width form-input styling. */
+.tm-id-apply { min-width: 0; border: 0; padding: 0; margin: 0; }
+.tm-id-apply legend { margin-bottom: 8px; font-size: 13px; font-weight: 600; }
+.tm-id-apply-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.tm-id-apply-options .tm-id-apply-option { display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 76px; padding: 12px; border: 1px solid #d5dbe5; border-radius: 8px; background: #fff; color: #334155; text-align: left; cursor: pointer; white-space: normal; }
+.tm-id-apply-option strong, .tm-id-apply-option small { display: block; line-height: 1.5; }
+.tm-id-apply-option strong { font-size: 13px; font-weight: 600; }
+.tm-id-apply-option small { margin-top: 3px; font-size: 12px; opacity: .8; }
+.tm-id-apply-options .tm-id-apply-option[aria-pressed="true"] { border-color: #171717; background: #f3f4f6; color: #111; box-shadow: inset 0 0 0 1px #171717; }
+.tm-id-apply-option:focus-visible { outline: 2px solid #64748b; outline-offset: 3px; }
+.tm-id-apply-option:disabled { opacity: .55; cursor: not-allowed; }
+.tm-id-apply-indicator { flex: 0 0 auto; line-height: 20px; }
+.dark .tm-id-apply-options .tm-id-apply-option { background: #1e293b; color: #e2e8f0; border-color: #475569; }
+.dark .tm-id-apply-options .tm-id-apply-option[aria-pressed="true"] { background: #334155; border-color: #e2e8f0; box-shadow: inset 0 0 0 1px #e2e8f0; }
+@media(max-width: 480px) { .tm-id-apply-options { grid-template-columns: 1fr; } }
+
+.tm-handover-selection{margin:12px 0;border:1px solid var(--clinic-dark-border,#dce2ec);border-radius:8px;padding:12px}.tm-handover-selection>div{max-height:220px;overflow:auto;margin:8px 0}.tm-handover-selection>div>label{display:flex!important;align-items:flex-start;gap:10px;padding:9px 4px;border-bottom:1px solid var(--clinic-dark-border,#e5e9ef);cursor:pointer}.tm-handover-selection input[type=checkbox]{width:16px!important;height:16px!important;min-height:16px!important;flex:0 0 16px;margin:3px 0!important;padding:0!important}.tm-handover-selection strong,.tm-handover-selection small{display:block}.tm-handover-selection small,.tm-handover-hint{font-size:12px;color:var(--clinic-dark-muted,#64748b);line-height:1.6}.tm-handover-selection legend{font-weight:600}
+
+/* Keep multiple handovers contained inside the task dialog. */
+.tm-handover-panel{min-width:0;max-width:100%;overflow-wrap:anywhere}.tm-handover-panel form{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:14px}.tm-handover-panel form>label{display:grid!important;gap:6px;min-width:0;margin:0}.tm-handover-panel select,.tm-handover-panel textarea{width:100%;min-width:0;max-width:100%}.tm-handover-selection{min-width:0;margin:0}.tm-handover-selection>.tm-handover-selection-toolbar{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;max-height:none;overflow:visible;margin:0 0 10px}.tm-handover-selection-toolbar .tm-handover-search{display:grid!important;gap:5px;flex:1 1 180px;min-width:0;margin:0;padding:0;border:0}.tm-handover-search input{width:100%;min-width:0;min-height:36px}.tm-handover-selected-count{flex:0 0 auto;font-size:12px;white-space:nowrap;padding-bottom:7px}.tm-handover-selection>.tm-handover-task-options{max-height:210px;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;margin:0 0 8px;border:1px solid var(--clinic-dark-border,#e2e8f0);border-radius:6px}.tm-handover-task-options>label{margin:0!important;padding:10px!important;min-height:52px}.tm-handover-task-options>label.is-selected{background:var(--clinic-dark-subtle,#f0f3f8)}.tm-handover-task-copy{min-width:0;flex:1}.tm-handover-task-copy strong{line-height:1.45;overflow-wrap:anywhere;font-size:13px}.tm-handover-task-copy small{margin-top:3px;line-height:1.5;overflow-wrap:anywhere}.tm-handover-task-options>p{padding:12px}.tm-handover-panel form>button{justify-self:start;max-width:100%;white-space:normal}.tm-handover-panel .tm-detail-toolbar{flex-wrap:wrap}.tm-handover-panel .tm-detail-toolbar button{white-space:normal}@media(max-width:480px){.tm-handover-selection{padding:9px}.tm-handover-selection>.tm-handover-task-options{max-height:180px}.tm-handover-panel form>button{width:100%}}
+
+.tm-app .tm-handover-task-options>.tm-handover-task-option{display:flex!important;align-items:center;gap:10px;width:100%;min-width:0;min-height:60px;padding:11px!important;margin:0;text-align:left;border:0;border-bottom:1px solid var(--clinic-dark-border,#e2e8f0);border-radius:0;background:var(--clinic-dark-surface,#fff);color:var(--clinic-dark-ink,#1f2937);white-space:normal;cursor:pointer}.tm-app .tm-handover-task-options>.tm-handover-task-option.is-selected{background:var(--clinic-dark-subtle,#eef2f7);box-shadow:inset 3px 0 var(--clinic-dark-ink,#111827)}.tm-handover-task-option:focus-visible{outline:2px solid #818cf8;outline-offset:-3px}.tm-handover-checkbox{display:grid;place-items:center;flex:0 0 20px;width:20px;height:20px;border:1px solid var(--clinic-dark-muted,#64748b);border-radius:4px;font-size:14px;font-weight:700}.is-selected>.tm-handover-checkbox{background:var(--clinic-dark-ink,#111827);color:var(--clinic-dark-surface,#fff)}.tm-handover-selection-label{font-size:11px;flex:0 0 auto;font-weight:600}.tm-handover-task-option:disabled{opacity:.55;cursor:not-allowed}.tm-handover-selection-toolbar>.tm-secondary{min-height:32px;padding:6px 9px;font-size:12px}
+/* Compact, single-row report shortcuts. Expanded forms retain their full content. */
+.tm-dashboard-design .tm-dashboard-tools{align-items:stretch}
+.tm-dashboard-design .tm-dashboard-tools>.tm-dashboard-weekly{box-sizing:border-box;display:flex;flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:nowrap;gap:12px;padding:10px 14px;min-height:60px}
+.tm-dashboard-design .tm-dashboard-weekly>span{display:flex;align-items:center;gap:8px;line-height:20px;min-width:0}
+.tm-dashboard-design .tm-dashboard-weekly>span>svg{flex-shrink:0}
+.tm-dashboard-design .tm-dashboard-tools .tm-dashboard-weekly>button{flex-shrink:0;align-self:center;margin:0;min-height:32px;padding:5px 10px;white-space:nowrap}
+.tm-dashboard-design .tm-dashboard-tool:not([open])>summary{box-sizing:border-box;display:flex;align-items:center;flex-wrap:nowrap;gap:8px;min-height:60px;padding:10px 14px;line-height:20px}
+.tm-dashboard-design .tm-dashboard-tool:not([open])>summary>svg{flex-shrink:0}
+.tm-dashboard-design .tm-dashboard-tool:not([open])>summary>.tm-dashboard-tool-count{margin-left:auto;line-height:20px;white-space:nowrap}
+.tm-dashboard-design .tm-dashboard-tool:not([open])>summary::after{position:static;transform:none;margin-left:8px;line-height:20px}
+@media(max-width:640px){.tm-dashboard-design .tm-dashboard-tools>.tm-dashboard-weekly,.tm-dashboard-design .tm-dashboard-tool:not([open])>summary{min-height:56px}}

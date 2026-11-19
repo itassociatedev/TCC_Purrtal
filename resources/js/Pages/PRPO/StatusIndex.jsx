@@ -1,3 +1,4 @@
+import ModuleWorkbookTools from '@/Components/ModuleWorkbookTools';
 import TrackingStepper from '@/Components/TrackingStepper';
 import { getPRPOLinks } from '@/Config/navigation';
 import SidebarLayout from '@/Layouts/SidebarLayout';
@@ -271,6 +272,7 @@ export default function StatusIndex({ auth, requests, employees = [] }) {
     return (
         <SidebarLayout activeModule="PR/PO Module" sidebarLinks={sidebarLinks}>
             <Head title="My Delivery Tracker" />
+<ModuleWorkbookTools name="delivery-tracker.xlsx" columns={['pr_number','requester','branch','department','status','date_needed','created_at']} rows={filteredRequests.map(item=>[item.pr_number,item.user?.name,item.branch,item.department,item.status,item.date_needed,item.created_at])} />
             <div className="mx-auto max-w-5xl py-6 px-4 sm:px-0">
                 <div className="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                     <div>

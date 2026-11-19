@@ -132,11 +132,11 @@ public function update(Request $request, Product $product)
         ]);
 
         try {
-            Excel::import(new ProductsImport, $request->file('import_file'));
+            Excel::import(new ProductsImport(\App\Support\WorkbookLayout::headingRow($request->file('import_file')->getRealPath())), $request->file('import_file'));
             return back()->with('success', 'Products imported successfully!');
         } catch (\Exception $e) {
             // 🟢 NOW DISPLAYS THE EXACT SYSTEM ERROR MESSAGE!
-            return back()->with('error', 'Import Failed: ' . $e->getMessage());
+            return back()->with('error', \App\Support\ImportFeedback::message($e));
         }
     }
 

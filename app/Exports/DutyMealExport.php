@@ -23,7 +23,7 @@ class DutyMealExport implements FromView, WithStyles, WithColumnWidths
     public function view(): View
     {
         // Fetch the selected meals with their participants
-        $meals = DutyMeal::with(['participants.user', 'branch'])
+        $meals = DutyMeal::with(['participants' => fn ($q) => $q->whereHas('user', fn ($u) => $u->whereNull('status')->orWhere('status', '!=', 'Disabled')), 'participants.user', 'branch'])
             ->whereIn('id', $this->dutyMealIds)
             ->orderBy('duty_date')
             ->get();

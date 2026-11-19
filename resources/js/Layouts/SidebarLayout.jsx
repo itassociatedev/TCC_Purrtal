@@ -36,7 +36,7 @@ export default function SidebarLayout({
     return date.toLocaleDateString();
     };
 
-    const { auth } = usePage().props;
+    const { auth, taskPreviewEnabled = false } = usePage().props;
     const [settingsOpen,setSettingsOpen]=useState(false);
     const [installPrompt, setInstallPrompt] = useState(null);
     const [supportsHomeScreenInstall, setSupportsHomeScreenInstall] = useState(false);
@@ -80,7 +80,8 @@ export default function SidebarLayout({
             window.alert('In the Share menu, choose “Add to Home Screen,” then confirm.');
         }
     };
-    const [globalRolePreview, setGlobalRolePreview] = useState(() => readRolePreview(auth.user?.id));
+    const [storedRolePreview, setGlobalRolePreview] = useState(() => readRolePreview(auth.user?.id));
+    const globalRolePreview = taskPreviewEnabled ? storedRolePreview : null;
     const previewKey = rolePreviewStorageKey(auth.user?.id);
     useEffect(() => {
         const syncPreview = event => setGlobalRolePreview(event?.detail ?? readRolePreview(auth.user?.id));
@@ -91,7 +92,7 @@ export default function SidebarLayout({
             window.removeEventListener('storage', syncPreview);
         };
     }, [previewKey, auth.user?.id]);
-    const displayedProfile = globalRolePreview?.active ? globalRolePreview : previewProfile;
+    const displayedProfile = globalRolePreview?.active ? globalRolePreview : taskPreviewEnabled ? previewProfile : null;
     const moduleDepartment = displayedProfile?.department?.name || displayedProfile?.department || auth.user?.department?.name;
     const isItUser = String(moduleDepartment || '').trim().toLowerCase() === 'it'
         || (!globalRolePreview?.active && String(auth.user?.role?.name || '').trim().toLowerCase().startsWith('it '));
@@ -183,12 +184,30 @@ export default function SidebarLayout({
     const [localNotifications, setLocalNotifications] = useState(safeNotifications);
     const [localUnreadCount, setLocalUnreadCount] = useState(auth?.unreadNotificationsCount || 0);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
-    const itNotifications = localNotifications.filter(item =>
+    const [ticketFeed, setTicketFeed] = useState(null);
+    const ticketPreviewPerson = userRole === 'admin' && displayedProfile?.active ? displayedProfile.name : null;
+    const ticketFeedParams = ticketPreviewPerson ? { preview_person: ticketPreviewPerson } : {};
+    useEffect(() => {
+        if (!isItUser) { setTicketFeed(null); return; }
+        let stopped = false;
+        const refresh = async () => {
+            if (document.hidden) return;
+            try {
+                const response = await axios.get(route('notifications.ticketing-feed'), { params: ticketFeedParams });
+                if (!stopped) setTicketFeed(response.data);
+            } catch (error) { console.error('Unable to refresh IT notifications', error); }
+        };
+        refresh();
+        const timer = setInterval(refresh, 10000);
+        window.addEventListener('focus', refresh);
+        return () => { stopped = true; clearInterval(timer); window.removeEventListener('focus', refresh); };
+    }, [isItUser, auth?.user?.id, ticketPreviewPerson]);
+    const itNotifications = ticketFeed?.notifications || localNotifications.filter(item =>
         item?.type === 'App\\Notifications\\TicketNotification'
         || item?.data?.module === 'ticketing'
         || item?.data?.ticket_id != null
     );
-    const itUnreadCount = itNotifications.filter(item => !item.read_at).length;
+    const itUnreadCount = ticketFeed?.unread ?? itNotifications.filter(item => !item.read_at).length;
 
     // 🟢 Calculate hasMore dynamically
     const [totalNotificationsCount, setTotalNotificationsCount] = useState(auth.totalNotificationsCount || 0);
@@ -224,16 +243,30 @@ export default function SidebarLayout({
     }, [auth.notifications, auth.unreadNotificationsCount, auth.totalNotificationsCount]);
 
     const markAsRead = async (notificationId, url) => {
-        const notification = localNotifications.find(n => n.id === notificationId);
+        const notification = itNotifications.find(n => n.id === notificationId) || localNotifications.find(n => n.id === notificationId);
         if (notification && !notification.read_at) {
-            setLocalNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n));
-            setLocalUnreadCount(prev => Math.max(0, prev - 1));
+            const isTicketNotice = itNotifications.some(item => item.id === notificationId);
+            const isLocalUnread = localNotifications.some(item => item.id === notificationId && !item.read_at);
+            const readAt = new Date().toISOString();
+            setLocalNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read_at: readAt } : n));
+            if (isLocalUnread) setLocalUnreadCount(prev => Math.max(0, prev - 1));
+            setTicketFeed(previous => previous ? {
+                ...previous,
+                notifications: previous.notifications.map(item => item.id === notificationId ? { ...item, read_at: readAt } : item),
+                unread: Math.max(0, previous.unread - (isTicketNotice ? 1 : 0)),
+            } : previous);
             try {
-                // Finish the read before navigation fetches fresh unread counts.
-                await axios.post(route('notifications.read', notificationId));
+                // Preserve the shared branch's dedicated IT feed/preview routing,
+                // and finish the read before navigation fetches unread counts.
+                await axios.post(route(isTicketNotice ? 'notifications.ticketing-read' : 'notifications.read', notificationId), isTicketNotice ? ticketFeedParams : {});
             } catch {
-                setLocalNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read_at: null } : n));
-                setLocalUnreadCount(prev => prev + 1);
+                setLocalNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read_at: notification.read_at } : n));
+                if (isLocalUnread) setLocalUnreadCount(prev => prev + 1);
+                setTicketFeed(previous => previous ? {
+                    ...previous,
+                    notifications: previous.notifications.map(item => item.id === notificationId ? { ...item, read_at: notification.read_at } : item),
+                    unread: previous.unread + (isTicketNotice ? 1 : 0),
+                } : previous);
                 window.dispatchEvent(new CustomEvent('flash-toast', { detail: { message: 'Unable to mark this notification as read. Please try again.', type: 'error' } }));
             }
         }

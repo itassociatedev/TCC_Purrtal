@@ -23,6 +23,11 @@ class TaskModuleTurnover
                 abort_if(($pending['status'] ?? '')==='pending',422,'Cancel the current handover before choosing another person.');
                 $recipient=User::where('name',$input['recipient'] ?? '')->first();
                 abort_unless($recipient && $access->active($recipient) && $recipient->id!==$record->assignee_id && $recipient->id!==$record->reviewer_id && in_array($record->branch,$access->branches($recipient)),422,'Choose another active person available in this branch, other than the reviewer.');
+                $allowedDepartments=User::with(['position','department','branch','branches','role'])->get()
+                    ->filter(fn($person)=>$access->active($person) && $access->canAssign($actor,$person,false,$task['workCategory'] ?? ''))
+                    ->map(fn($person)=>$access->department($person))->unique()->all();
+                if($access->role($actor)==='Employee')$allowedDepartments[]=$access->department($actor);
+                abort_unless(in_array($access->department($recipient),$allowedDepartments),403,'You cannot hand over tasks to this department. Choose a department available in Create Task.');
                 $task['handover']=['status'=>'pending','from'=>$task['assignee'],'to'=>$recipient->name,'recipientId'=>$recipient->id,'requestedBy'=>$actor->name,'requestedAt'=>now()->toIso8601String(),'notes'=>trim($input['notes'] ?? '')];
                 abort_unless($task['handover']['notes']!=='',422,'Describe what is finished and what still needs doing.');
                 $text=$actor->name.' offered this task to '.$recipient->name.'. The current owner remains responsible until acceptance. Notes: '.$task['handover']['notes'];

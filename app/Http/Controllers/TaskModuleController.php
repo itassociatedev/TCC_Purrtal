@@ -127,6 +127,21 @@ class TaskModuleController extends Controller
         $input=$request->validate(['key'=>'required|string|max:255','version'=>'required|integer|min:1','action'=>'required|in:request,accept,decline,cancel','recipient'=>'nullable|string|max:255','notes'=>'nullable|string|max:4000']);
         return response()->json(['record'=>app(\App\Services\TaskModuleTurnover::class)->act($request->user(),$input,$access)]);
     }
+    public function turnoverBatch(Request $request, TaskModuleAccess $access)
+    {
+        $this->available();
+        $data=$request->validate(['tasks'=>'required|array|min:1|max:50','tasks.*.key'=>'required|string|distinct','tasks.*.version'=>'required|integer|min:1','recipient'=>'required|string|max:255','notes'=>'required|string|max:4000']);
+        $records=DB::transaction(function() use($request,$access,$data) {
+            $saved=[];
+            foreach($data['tasks'] as $item) {
+                $record=TaskModuleRecord::where('client_key',$item['key'])->lockForUpdate()->firstOrFail();
+                abort_unless($record->assignee_id===$request->user()->id,403,'You can only include tasks assigned to you in a multiple-task handover.');
+                $saved[]=app(\App\Services\TaskModuleTurnover::class)->act($request->user(),[...$item,'action'=>'request','recipient'=>$data['recipient'],'notes'=>$data['notes']],$access);
+            }
+            return $saved;
+        });
+        return response()->json(['records'=>$records]);
+    }
     public function destroy(Request $request, TaskModuleAccess $access)
     {
         $this->available();

@@ -34,6 +34,7 @@ class TaskModuleEmailTest extends TestCase
         });
         Schema::create('branch_user',function (Blueprint $table) {$table->unsignedBigInteger('user_id');$table->unsignedBigInteger('branch_id');});
         (require database_path('migrations/2026_10_25_000001_create_task_module_records.php'))->up();
+        (require database_path('migrations/2026_11_15_000001_create_task_id_settings.php'))->up();
         $role=DB::table('roles')->insertGetId(['name'=>'Employee']);
         $department=DB::table('departments')->insertGetId(['name'=>'IT']);
         $branch=DB::table('branches')->insertGetId(['name'=>'Makati']);
