@@ -12,6 +12,7 @@ use App\Models\Department;
 use App\Models\Position;
 use App\Models\SystemLog; // 🟢 INJECTED FOR LOGGING
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Auth;
@@ -23,6 +24,14 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class DutyMealController extends Controller
 {
+    // Staff picked for a roster must exist and must not have a disabled account
+    private function activeUserRule()
+    {
+        return Rule::exists('users', 'id')->where(function ($query) {
+            $query->whereNull('status')->orWhere('status', '!=', 'Disabled');
+        });
+    }
+
     // ... [index and create functions remain exactly the same, omitting them here for space, keep your original ones!] ...
     
     public function index()
@@ -133,7 +142,8 @@ class DutyMealController extends Controller
         ->whereDate('duty_date', '>=', now()->startOfMonth())
         ->withCount(['participants' => fn ($q) => $q->whereHas('user', fn ($u) => $u->whereNull('status')->orWhere('status', '!=', 'Disabled'))])->latest('duty_date')->get();
 
-        $employees = User::where(fn ($q) => $q->whereNull('status')->orWhere('status', '!=', 'Disabled'))->with(['department:id,name', 'position:id,name'])
+        $employees = User::with(['department:id,name', 'position:id,name'])
+            ->notDisabled()
             ->select('id', 'name', 'department_id', 'position_id', 'branch_id')
             ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
                 $query->where(function ($q) use ($allowedBranchIds) {
@@ -178,7 +188,8 @@ class DutyMealController extends Controller
             })->orderBy('name')->get();
 
         // 🟢 NEW: Added 'schedules' and 'scheduleOverrides' to the relationships!
-        $employees = User::where(fn ($q) => $q->whereNull('status')->orWhere('status', '!=', 'Disabled'))->with(['branches', 'department:id,name', 'schedules', 'scheduleOverrides'])
+        $employees = User::with(['branches', 'department:id,name', 'schedules', 'scheduleOverrides'])
+            ->notDisabled()
             ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
                 $query->where(function ($q) use ($allowedBranchIds) {
                     $q->whereIn('branch_id', $allowedBranchIds)
@@ -246,8 +257,10 @@ class DutyMealController extends Controller
             'schedule.*.main_meal' => 'nullable|string|max:255',
             'schedule.*.alt_meal' => 'nullable|string|max:255',
             'schedule.*.participants' => 'nullable|array',
-            'schedule.*.participants.*.id' => ['required_with:schedule.*.participants', \Illuminate\Validation\Rule::exists('users', 'id')->where(fn ($q) => $q->where(fn ($status) => $status->whereNull('status')->orWhere('status', '!=', 'Disabled')))],
+            'schedule.*.participants.*.id' => ['required_with:schedule.*.participants', $this->activeUserRule()],
             'schedule.*.participants.*.shift_type'=> 'required_with:schedule.*.participants|string|in:day,graveyard,straight',
+        ], [
+            'schedule.*.participants.*.id.exists' => 'One of the selected staff has a disabled account and cannot be added to a roster.',
         ]);
 
         // 🟢 SMART CHECK: Detect if a fully published real roster already exists for any of these dates
@@ -395,9 +408,11 @@ class DutyMealController extends Controller
     {
         // 🟢 NEW: Added validation payload rules for custom request notes
         $request->validate([
-            'user_id' => ['required', \Illuminate\Validation\Rule::exists('users', 'id')->where(fn ($q) => $q->where(fn ($status) => $status->whereNull('status')->orWhere('status', '!=', 'Disabled')))],
+            'user_id' => ['required', $this->activeUserRule()],
             'choice' => 'nullable|in:main,alt,special,none',
             'custom_request' => 'nullable|string|max:255'
+        ], [
+            'user_id.exists' => 'This staff member has a disabled account and cannot be added to a roster.',
         ]);
         $meal = DutyMeal::findOrFail($id);
 
