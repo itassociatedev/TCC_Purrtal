@@ -1,6 +1,6 @@
 # TCC Purrtal ticketing — current system guide
 
-Last audited against repository code: **10 November 2026**.
+Last audited against repository code: **19 November 2026**.
 This guide describes the current implementation, rather than earlier designs. Changes in this documentation update do not deploy code or change data.
 
 ## Documentation index
@@ -22,7 +22,7 @@ Open **IT Ticketing Module** from the header's module selector or visit `/ticket
 
 ## Roles and access
 
-Names are matched exactly after trimming and lowercasing, using [config/ticketing.php](config/ticketing.php).
+Names are matched exactly after trimming and lowercasing, using [config/ticketing.php](../config/ticketing.php).
 
 | Workflow role | Configured account roles | Access |
 | --- | --- | --- |
@@ -42,15 +42,19 @@ Sign in with a local test account to exercise that account’s ticket permission
 
 ## Frontend screens and navigation
 
+### Dedicated Admin dashboard
+
+The supervisor sidebar's **Admin** page (`/tickets/admin`) is a dedicated landing dashboard, not the locations editor. Three colored, responsive navigation cards open **Locations** (`/tickets/admin/locations`), **Handover** (`/tickets/admin/handover`) and **SLA & Priorities** (`/tickets/admin/sla`). Subpages link back to the Admin dashboard; the Admin sidebar item stays active throughout. Location add/remove redirects stay on the locations subpage. The legacy `/tickets/locations` bookmark redirects to the new locations URL. All pages remain supervisor-only and do not poll in the background.
+
 ### Assignment handover
 
-IT Team Leaders and Supervisors can open **Admin → Handover**, select an active IT member, and set the start and end dates. Both dates are inclusive in clinic time. Leaders can revoke a scheduled or active grant. Access expires automatically at the end of the final day.
+IT Supervisors can open **Admin → Handover**, select an active IT member, and set the start and end dates. Both dates are inclusive in clinic time. Leaders can revoke a scheduled or active grant. Access expires automatically at the end of the final day.
 
-During an active grant, the member can choose **Assign ticket during handover** from the ticket details and assign or reassign eligible tickets to active IT members. The grant covers assignment only. Closed, rejected, and revision-pending tickets are excluded. The server locks and checks the grant and ticket on each assignment, records the acting member in ticket history, and sends the usual assignment notification.
+During an active grant, the member can choose **Assign / priority / status** in ticket details. They can assign/reassign eligible tickets to active IT members, change priority with a required reason, and move a ticket to In progress. Reopening a resolved ticket through that status change requires a note. Closed, rejected and revision-pending tickets are excluded. The server rechecks and locks the grant and ticket on every write, applies the normal SLA/history/notification pipeline, and rejects expired or revoked access. Handover does not grant closure, review approval or global SLA administration permissions.
 
-IT Team Leaders and Supervisors can **Reject** a ticket submitted by an IT member or **Send back for revision** with a required comment. Rejected tickets stay in the ticket list and are excluded from leaderboard counts. The creator receives a notification linking to **Pending revisions**, where they can edit their intake details and resubmit. Resubmission preserves the ticket ID, category, and location, returns it to In progress, and resumes the resolution timer with its accumulated support time.
+IT Supervisors can **Reject** a ticket submitted by an IT member or **Send back for revision** with a required comment. Rejected tickets stay in the ticket list and are excluded from leaderboard counts. The creator receives a notification linking to **Pending revisions**, where they can edit their intake details and resubmit. Resubmission preserves the ticket ID, category, and location, returns it to In progress, and resumes the resolution timer with its accumulated support time.
 
-IT Team Leaders and Supervisors can open **Admin → Locations** to view the clinic branch codes and add ticket locations with unique names and codes. New codes require exactly three ASCII letters or digits and are saved in uppercase. Extra locations are stored separately from the branch directory and are available to everyone on the Create ticket page. The existing branch rules still apply to clinic branches.
+IT Supervisors can open **Admin → Locations** to view the clinic branch codes and add ticket locations with unique names and codes. New codes require exactly three ASCII letters or digits and are saved in uppercase. Extra locations are stored separately from the branch directory and are available to everyone on the Create ticket page. The existing branch rules still apply to clinic branches.
 
 Use **Remove** to retire a custom location from new ticket requests. Existing tickets retain that location and can still be filtered by it. Retired names and codes remain reserved for ticket history.
 
@@ -59,6 +63,28 @@ Use the sidebar to switch ticket pages. Ticket lists do not repeat the sidebar l
 Dashboards group ticket widgets under **All Tickets** (total, closed, leader closure periods, and staff priority counts across all statuses) and **Open Tickets** (open total, not started, in progress, resolved awaiting closure, and leader active queues). Percentages continue to use the role's full ticket total. Clicking a card opens the matching scope; unrelated date, priority or closure filters are cleared for the all-time status totals. Quick actions and personal ratings remain separate.
 
 Displayed percentages use exactly two decimal places, including zero and whole-number percentages. This also applies to SLA compliance/reopen percentages, leaderboard shares and XLSX percentage values; counts and star ratings keep their own formats.
+
+### SLA and priority administration
+
+Open **Admin → SLA & priorities** (`/tickets/admin/sla`). Only IT Supervisors can view or change global settings. Enter response and resolution targets and the optional progress-update interval **in support hours**, including fractions such as `0.25` or `0.5`. Values must be positive, no more than 8,760 hours, and resolve to at least one whole second; resolution cannot be shorter than response. Blank update interval disables periodic update reminders. Urgency order 1 is highest and acts as an insertion position. Adding/moving a priority shifts other rows automatically; oversized positions append. Every priority, including archived ones, has a unique consecutive position. Permanent deletion closes the gap; archiving/restoring retains the position. This controls dropdown order and priority sorting. Stored values remain seconds, so existing timers need no unit migration.
+
+| New-priority behavior | Current implementation |
+| --- | --- |
+| Creation | A unique name produces a stable key; label edits preserve that key. Archived names and keys remain reserved; deleted unused names/keys may be reused. Global settings are stored in `ticket_priorities`. |
+| Ticket creation and management | Automatically appears in creation, supervisor and active-handover selectors. |
+| Filters and reports | Automatically appears in priority filters, dashboard cards and SLA breach rows; sorting uses configured urgency order. |
+| XLSX | Active labels are accepted by import validation and displayed by export/template data. |
+| Ticket table/tile color | Custom priorities inherit ordinary text styling; **no automatic unique color** or color-picker setting exists. Built-in CSS remains keyed to original priorities. |
+| Dashboard color | Custom priorities default to **blue**. New priorities do not receive a distinct palette automatically. |
+| Removal | **Remove priority** asks for confirmation. Unused priorities are permanently deleted. A priority referenced by a current ticket or priority-change history is archived instead. Archived choices remain on existing tickets, historical filters, dashboard counts and reports, but cannot be selected for new tickets/imports or newly assigned. **Restore priority** reactivates the same key. The last active priority cannot be removed. |
+| SLA targets | New tickets snapshot current settings. Editing global values does not rewrite existing policies. Explicitly changing a ticket's priority adopts the latest selected target without resetting elapsed time. Completed response/resolution results stay preserved. |
+| Critical exception | Only the existing `critical` key supports supervisor-approved workaround acceptance; naming or ordering a custom priority does not grant that behavior. |
+
+New settings are effective on the next request. The config file supplies the support calendar and 20% warning threshold, and is a pre-migration fallback for targets. Once the table is installed, changing a local test-mode environment flag alone does not override its stored values.
+
+### Submission acknowledgement
+
+Successful non-IT submissions redirect to the dashboard with a one-time, dismissible thank-you popup containing the subject and ticket code. It displays configured **7:30 AM–7:00 PM daily** support hours, explains after-hours requests will be reviewed when support resumes, and directs users to **All my tickets**. This is a submission receipt, not an IT acknowledgement or SLA response milestone. Failed submissions and IT submissions do not trigger it. Optional feedback waits until the receipt closes. The shared page header no longer shows the role badge.
 
 ### Employee dashboard
 
@@ -89,6 +115,10 @@ Displayed percentages use exactly two decimal places, including zero and whole-n
 
 ### Leaderboard
 
+The main table includes average response and resolution **support minutes**, to two decimals, with eligible sample counts. These are calculated from the same resolved/closed-ticket cohort and selected resolution-date range as the ranking, credited to the recorded resolver. Response times describe that cohort, even if another person acknowledged the tickets. Missing milestones are excluded separately per metric and display N/A when there are no samples. Reopened and review-held tickets are excluded. XLSX includes the averages/counts. The chart uses exact-count filled SVG sectors, including shares above 50% and the full-circle case.
+
+Current server checks in this checkout restrict the leaderboard to the supervisor workflow role; EVP still uses the employee workflow and does not gain this view automatically.
+
 Each employee drill-down has an XLSX export for the selected date range and view: resolved tickets, overdue tickets, or ratings and comments. The export includes all matching rows across pages.
 
 Leader-only `/tickets/leaderboard`, implemented by `TicketLeaderboard.php` and `TicketLeaderboard.jsx`.
@@ -118,7 +148,7 @@ Leader-only `/tickets/leaderboard`, implemented by `TicketLeaderboard.php` and `
 | Ticket subject | `subject` | Required, max 180 characters |
 | Affected system, equipment, application or service | `affected_asset` | Required, max 255 |
 | Ticket category | `category` | Hardware, Software, Network, Account & Access, Other; UI adds examples but stores canonical category only |
-| Initial priority | `priority` | Required on the create-ticket form. Choose Critical (`critical`), High (`high`), Medium (`medium`) or Low (`low`). |
+| Initial priority | `priority` | Required on the create-ticket form. Choose a configured priority from `ticket_priorities`; the initial defaults are Critical, High, Medium and Low. Custom priorities are also accepted. |
 | Details of issue | `description` | Required, max 10,000 |
 | Business or clinical operational impact | `operational_impact` | Required, max 5,000 |
 | Screenshot or supporting-file links (optional) | `supporting_links` JSON array | Up to 10 HTTP/HTTPS URLs, max 2,048 characters each, one per line; no images/files uploaded or fetched |
@@ -157,7 +187,7 @@ flowchart TD
 | Acknowledge | Assessment and next steps required. Records actual responder; starts In progress when Not started; requester is notified. Required before resolving an SLA ticket. |
 | Send progress update | Message required. Optional vendor/reference/notification time, next-update estimate and related ticket ID in the same environment. |
 | Document SLA risk / delay | Message, reason, actions taken, assistance/approval required and next-update estimate. Does not automatically extend or pause SLA. |
-| Pause / resume | Approved reason plus message for pause; message for resume. Separate clock state, not a new ticket status. |
+| Resume historical pause | Message required. Available only for a previously paused ticket. No role may create a new SLA pause through the UI, HTTP API or service. |
 | Restore service temporarily | Workaround details required; remaining work/next steps optional. Ticket stays open and timer continues. |
 | Accept Critical workaround and recovery plan | Leader-only, Critical ticket, already acknowledged. Details + plan required. Satisfies resolution target while corrective work remains open. |
 | Resolve ticket | Issue found + Fix applied and verification required for tracked tickets. Records resolver, stops resolution work, notifies requester. Older detailed resolution payloads remain accepted for compatibility. |
@@ -205,7 +235,7 @@ Nine sortable data columns: Subject, Description, Category, Status, Timeline, Pr
 | `status_filter` | all/open/closed/not_started/in_progress/resolved/unassigned/revision_requested/rejected. Unassigned means active Not started/In progress with no owner. |
 | `branch_filter`, `location_filter` | Directory branch ID or custom location ID. The selector sends one at a time. Historical custom locations remain filterable. |
 | `assignee_filter` | Assigned user ID on the IT All tickets view. Combines with status, priority, location, dates, and search. |
-| `priority_filter` | all/critical/high/medium/low. All ticket lists expose it; applies in the backend to the authorized query. |
+| `priority_filter` | `all` or any stored priority key from `ticket_priorities`. All ticket lists expose it; applies in the backend to the authorized query. |
 | `search` | Subject or description, max 180 characters; OR conditions grouped inside the role scope. |
 | `date_from`, `date_to` | Optional creation dates, YYYY-MM-DD, inclusive Asia/Manila days. Either bound alone is accepted; end must not precede start. SQL uses start of day through exclusive next-day boundary. |
 | `closed_period` | day/week/month/year, using closed_at and current Closed status. Removable active filter. |
@@ -242,6 +272,10 @@ The template includes instructions and employee IDs/names/allowed branches. Empl
 Limits: 5 MB upload; 1–100 data rows; 10 exact columns; up to 3 workbook sheets; 200 ZIP entries and 20 MB expanded size. First sheet is read; formulas there are rejected, not evaluated. Pending raw rows live server-side in session under actor/environment key for 30 minutes. Confirmation revalidates identities and permissions; session-blocked POST serializes confirmation and a consumed token cannot be reused. Expired previews must be uploaded again. Import has no automatic duplicate-subject detection: uploading the same workbook as a new preview can create another batch.
 
 ## Database and migrations
+
+**Active ID counter:** `Ticket::withAllocatedTicketCode()` uses `ticket_annual_counters` only. `ticket_category_counters` and `ticket_location_category_counters` are legacy tables, referenced by historical migrations rather than current allocation code. They have not been removed by this documentation update. Any cleanup should use a new migration after backup and deployment-version verification; retain historical migrations. Do not remove `ticket_annual_counters`.
+
+**Policy settings:** `ticket_priorities` stores stable key, unique label, response/resolution/update seconds, urgency order and timestamps. Migration `2026_11_12_000001_create_ticket_priorities_table.php` seeds the installed targets without rewriting tickets. Admin HTTP endpoints are `GET /tickets/admin/sla`, `POST /tickets/admin/priorities` and `PATCH /tickets/admin/priorities/{priority}`. Removal uses `DELETE /tickets/admin/priorities/{priority}`; restoration uses `POST /tickets/admin/priorities/{priority}/restore`. Both are supervisor-only. The removal transaction locks settings rows, preserves used keys and prevents removal of the final active choice.
 
 Ticket IDs use `LOCATION-CATEGORY-YYNNNNN`, such as `ALB-HW-2600001`. Categories use **HW** (Hardware), **SW** (Software), **NW** (Network), **AC** (Account & Access), or **OT** (Other). Each location and category pair starts at `00001` each calendar year, based on the ticket creation date. The backfill assigns IDs to older tickets in creation order and advances the counters for future tickets.
 
@@ -329,7 +363,7 @@ The standalone PHP checks use the configured local database and real code. Most 
 
 Historical targeted builds/checks passed after their corresponding changes; this documentation audit does not rerun them or claim all scripts are currently green. `verify-ticket-schema.php` compares current rows against an old cleanup archive and will legitimately fail after those retained values are edited. Some older fixtures still use department strings that may not exist after the validated department dropdown; fixture maintenance may be needed before running older preview/feature checks. The full fresh-database feature suite was previously blocked by an unrelated procurement migration referencing purchase_orders before creation; it has not been reconfirmed or fixed here. Automated module checks do not replace an authenticated browser walkthrough, which has not been recorded as completed.
 
-Known implementation distinctions: SLA/view labels may still use internal P1/P2 terminology in some explanatory controls/configuration; visible creation priorities use Critical/High/Medium/Low. Branch/department names are dynamic. The account department is snapshotted into new tickets; ticket creation cannot change it or the user account. UI time formatting in some table/history cells uses browser timezone, while date filters and reports use Asia/Manila; SLA instants use explicit UTC casts. The standard creation code and import paths should be checked together when changing timestamp storage.
+Known implementation distinctions: SLA/view labels may still use internal P1/P2 terminology in some explanatory controls/configuration; visible priorities use database-backed labels, initially Critical/High/Medium/Low. Branch/department names are dynamic. The account department is snapshotted into new tickets; ticket creation cannot change it or the user account. UI time formatting in some table/history cells uses browser timezone, while date filters and reports use Asia/Manila; SLA instants use explicit UTC casts. The standard creation code and import paths should be checked together when changing timestamp storage.
 
 ## Documentation maintenance checklist
 
@@ -344,6 +378,10 @@ For every ticketing change:
 
 This is a repository maintenance convention, not an automation that silently watches or edits future code.
 
+
+## Dated implementation notes
+
+These entries record earlier implementation steps. The current reference sections above take precedence where later changes supersede earlier wording (especially minutes versus hours and pause permissions).
 
 ## 2026-11-12 - Correct leaderboard pie sectors
 
@@ -394,3 +432,46 @@ TicketSlaSettings.jsx and TicketPriorityController now accept response_hours, re
 ### 2026-11-13 - Remove SLA pause permission for all roles
 
 Removed the Pause resolution timer action and pause-reason form from Tickets/Index.jsx. TicketController rejects pause actions and pause_reason payloads; TicketSla::apply independently rejects pause for every role and no longer implements pausing. Existing paused tickets retain Resume resolution timer so their clocks can continue without backdating historical waiting time. Automatic resolution completion and review-hold/revision behavior are unchanged. No ticket data or elapsed time was rewritten. Tests: tests/verify-ticket-no-pause.php covers server rejection for supervisor/member/employee, unchanged state/history and legacy resume. Recent ticket feature changes are committed to taskmodule-ticketing-merge; local launcher/process files are excluded.
+
+
+## 2026-11-19 - Priority removal, archiving and restoration
+
+Admin > SLA & priorities now supports confirmed removal: never-used priorities are deleted, while current-ticket or priority-change-history references cause archiving. The additive migration `2026_11_19_000001_add_archived_at_to_ticket_priorities.php` adds nullable indexed archived_at and was applied locally. It archives/deletes no existing priorities by itself. Archived cards are labeled and read-only with a Restore priority action. At least one active priority is required.
+
+Historical `priorityLabels` and target lists retain archived rows for display/filter/report/sort; `selectablePriorityLabels` and active-only policy targets drive creation, supervisor/handover selections and XLSX imports. A ticket already on an archived priority can keep it during unrelated edits; changing away does not permit changing back until restoration. New tickets and priority-change writes acquire the same priority-row lock used by removal and reject archived/deleted keys, including stale submission/import attempts. Existing saved SLA policy/state and completion results remain unchanged. Blank-priority imports use Low when active, otherwise the first active configured priority.
+
+Verification: the removal integration script passed deletion, archival, restore, authorization, historical filter/timer preservation, new-use rejection, historical-reference protection, fallback-default and last-active checks. Priority-settings, handover and submission-receipt regression scripts passed; fixtures/settings were rolled back and notifications faked. PHP syntax and Vite build passed. No GitHub push was performed for this feature.
+
+
+### 2026-11-19 - Matching removal confirmation popups
+
+Priority and custom-location removal now use the shared TicketRemovalConfirmation.jsx modal. This replaces the priority inline confirmation and the location browser-native confirm. The popup names the selected item, explains priority delete/archive or location retirement, and provides Cancel and Confirm removal. No request is sent on opening/cancelling; the dialog disables controls and dismissal during submission, closes after success and shows server errors on failure. The shared Modal supplies focus containment and Escape/outside dismissal when idle, with Cancel initially focused. Tickets/Index.jsx and TicketSlaSettings.jsx call their existing removal endpoints; server permissions, history preservation and archive/delete rules are unchanged.
+
+
+### 2026-11-19 - Automatic unique urgency ordering
+
+Priority order is now a position, not an independent number. TicketPriorityOrdering.php locks the roster in a transaction, removes the edited row from its old position, inserts it at the requested position, and assigns consecutive positions to all rows (including archived priorities). Values beyond the list append to its end. The service writes through unused temporary positions before final positions to avoid collisions during swaps; transaction retries handle concurrent edits. Unused-priority deletion compacts positions; archive/restore retain positions. Priority keys, SLA targets, ticket policy/state and history are unchanged.
+
+Migration 2026_11_19_000002_make_ticket_priority_order_unique.php normalizes existing ties/gaps by prior sort_order then ID and adds a unique database constraint; applied locally. TicketPriorityController.php delegates saves/compaction to the new service. TicketSlaSettings.jsx refreshes shifted server-owned positions on other cards and explains insertion behavior. tests/verify-ticket-priority-order.php verifies insertion, moving, append, archived/restored positions, deletion gaps, uniqueness and unchanged keys/targets using rolled-back fixtures. Ordering/settings/removal checks, PHP syntax and frontend build passed. No push performed.
+
+
+### 2026-11-19 - Prevent stale priority-admin success notification replay
+
+The shared FlashMessage.jsx previously reran its success handler whenever the flash/errors object identities changed, even if the success text came from an older action. Ticket admin pages also inherited the ticket list's one-minute partial refresh. HandleInertiaRequests.php now assigns each server flash event an ID; flashEvents.mjs remembers displayed event IDs across SPA page remounts. FlashMessage.jsx reacts to primitive message/event values, handles validation feedback separately, and retains the existing flash-toast custom event. New saves with identical success text still display because they receive different event IDs. Tickets/Index.jsx skips polling on creation and admin/location/handover/SLA-settings views; ordinary ticket views retain polling. No priority data, ordering or SLA targets were changed. tests/flash-notification-events.test.mjs verifies clone/poll/remount deduplication and independent same-text saves; both checks, PHP syntax and the frontend build passed. No browser tests or push performed.
+
+
+### 2026-11-19 - Ticketing notification replay audit
+
+Reviewed shared success/error toasts, location/handover/priority inline banners, creation receipts, feedback queue, lifecycle bell notifications and SLA scheduler deduplication. Removed duplicate persistent success banners on admin screens in favor of the shared one-event toast. Validation errors now carry event IDs and do not replay from retained polling props; genuine subsequent failures still notify. Submission receipts use ticket-event identity across SPA history remounts. Shared notification bell paging/refresh merges by notification ID, includes newly arrived alerts without dropping older pages, and accepts authoritative read state; marking a notification read now completes before destination navigation, with rollback/error feedback if it fails. Existing custom flash-toast events remain supported. No ticket/SLA/recipient rules were changed.
+
+New notificationList.mjs helper and notification-list.test.mjs cover overlapping pages, refreshed alerts/read state and cleared lists. Extended flash-notification-events.test.mjs covers receipt and validation replay. verify-ticket-notification-replay.php uses fake notifications, a fixed clock and rolled-back fixtures to check one warning per cycle/recipient, one later breach, deduplicated progress reminders, a fresh reminder after a genuine new cycle, review-hold suppression, read-only ticket pages, and bell payload identity. Notification, receipt and handover checks passed. Build and PHP syntax passed. These are source and automated checks; no interactive browser audit was performed and no push was performed.
+
+
+### 2026-11-19 - Sidebar page label capitalization
+
+Ticketing sidebar page labels in Tickets/Index.jsx now capitalize every word: Create Ticket, All My Tickets, All Tickets, Assigned To Me and Pending Revisions. Dashboard, Leaderboard and Admin retain their existing capitalization. Routes and permissions are unchanged.
+
+
+### 2026-11-19 - Unknown ticket page routes return 404
+
+Added numeric route constraints to ticketing write endpoints for ticket, priority, handover and location IDs in routes/web.php. Previously GET /tickets/r matched the unconstrained PATCH /tickets/{ticket} path and returned 405. Unknown textual paths now match no record action and return Laravel's standard 404 response; /ticket/hello is also unknown. Valid named pages and numeric write routes are unchanged, including auth, binding and role checks. Genuine wrong-method requests on recognized numeric endpoints retain 405; this is not a global 405-to-404 exception conversion. tests/verify-ticket-route-404.php checks unknown paths and valid route names without database writes or controller dispatch.

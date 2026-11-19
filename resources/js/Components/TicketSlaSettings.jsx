@@ -1,10 +1,16 @@
-import { useForm, usePage } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
+import { useForm } from '@inertiajs/react';
+import TicketRemovalConfirmation from '@/Components/TicketRemovalConfirmation';
 
 // Six decimal places in hours preserve whole-second targets after server rounding.
 function PriorityForm({ priority, order }) {
+    const [confirmRemoval, setConfirmRemoval] = useState(false);
+    const removal = useForm({});
     const form = useForm({ label: priority?.label || '', response_hours: priority ? Number((priority.response_seconds / 3600).toFixed(6)) : '',
         resolution_hours: priority ? Number((priority.resolution_seconds / 3600).toFixed(6)) : '', update_hours: priority?.update_seconds ? Number((priority.update_seconds / 3600).toFixed(6)) : '',
         sort_order: priority?.sort_order || order });
+    // Other cards may shift after a save/removal; refresh only the server-owned position.
+    useEffect(() => { form.setData('sort_order', priority?.sort_order || order); }, [priority?.sort_order, order]);
     const submit = event => {
         event.preventDefault();
         const options = { preserveScroll: true, onSuccess: () => { if (!priority) form.reset(); } };
@@ -12,8 +18,18 @@ function PriorityForm({ priority, order }) {
         else form.post(route('tickets.priorities.store'), options);
     };
     return <section className="ticket-card ticket-priority-settings-card">
-        <div className="ticket-card-heading"><h2>{priority ? priority.label : 'Add priority'}</h2></div>
+        <div className="ticket-card-heading"><h2>{priority ? priority.label : 'Add priority'}{priority?.archived_at && <small> · Archived</small>}</h2></div>
+        {priority && <div className="ticket-priority-removal">
+            {priority.archived_at ? <button type="button" className="ticket-secondary" disabled={removal.processing} onClick={() => removal.post(route('tickets.priorities.restore', priority.id), { preserveScroll: true })}>Restore priority</button>
+                : <button type="button" className="ticket-secondary" onClick={() => { removal.clearErrors(); setConfirmRemoval(true); }}>Remove priority</button>}
+            {Object.entries(removal.errors).map(([field, message]) => <p key={field} className="ticket-error" role="alert">{message}</p>)}
+        </div>}
+        {priority && <TicketRemovalConfirmation show={confirmRemoval} kind="priority" itemName={priority.label}
+            processing={removal.processing} errors={removal.errors} onCancel={() => setConfirmRemoval(false)}
+            onConfirm={() => { if (!removal.processing) removal.delete(route('tickets.priorities.destroy', priority.id), { preserveScroll: true, onSuccess: () => setConfirmRemoval(false) }); }} />}
+        {priority?.archived_at && <p className="ticket-priority-removal">Unavailable for new tickets or priority changes. Existing tickets, history and filters are preserved.</p>}
         <form onSubmit={submit} className="ticket-priority-settings-form">
+            <fieldset disabled={Boolean(priority?.archived_at)} className="ticket-priority-settings-fields">
             <label>Priority name<input required maxLength={80} value={form.data.label} onChange={e => form.setData('label', e.target.value)} /></label>
             <label>Urgency order (1 is highest)<input required type="number" min="1" max="10000" step="1" value={form.data.sort_order} onChange={e => form.setData('sort_order', e.target.value)} /></label>
             <label>Response target (support hours)<input required type="number" min="0.000001" max="8760" step="any" value={form.data.response_hours} onChange={e => form.setData('response_hours', e.target.value)} /></label>
@@ -23,15 +39,14 @@ function PriorityForm({ priority, order }) {
                 {Object.entries(form.errors).map(([field, message]) => <p key={field} className="ticket-error" role="alert">{message}</p>)}
                 <button type="submit" className="ticket-primary" disabled={form.processing}>{form.processing ? 'Saving…' : priority ? 'Save priority' : 'Add priority'}</button>
             </div>
+            </fieldset>
         </form>
     </section>;
 }
 
 export default function TicketSlaSettings({ priorities }) {
-    const { flash } = usePage().props;
     return <div>
-        <div className="ticket-card-heading"><div><h1>SLA &amp; priorities</h1><p>Enter all durations in support hours. Fractions are allowed (for example, 0.5 hours). Existing tickets keep their saved targets; a priority change adopts the latest target without resetting elapsed time. Completed milestones stay preserved.</p><p>Urgency order controls dropdowns and sorting. The Critical priority retains its supervisor-approved workaround workflow.</p></div></div>
-        {flash?.success && <p role="status" className="ticket-settings-success">{flash.success}</p>}
+        <div className="ticket-card-heading"><div><h1>SLA &amp; priorities</h1><p>Enter all durations in support hours. Fractions are allowed (for example, 0.5 hours). Existing tickets keep their saved targets; a priority change adopts the latest target without resetting elapsed time. Completed milestones stay preserved.</p><p>Remove deletes an unused priority or archives a used one. Archived priorities can be restored. At least one priority must remain active. Urgency order is a position: inserting or moving a priority automatically shifts the others. All priorities, including archived ones, have unique positions. Values beyond the list append to the end. The Critical priority retains its supervisor-approved workaround workflow.</p></div></div>
         <div className="ticket-priority-settings-grid">{priorities.map(priority => <PriorityForm key={priority.id} priority={priority} />)}<PriorityForm order={Math.max(0, ...priorities.map(p => p.sort_order)) + 1} /></div>
     </div>;
 }

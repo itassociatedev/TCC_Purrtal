@@ -87,30 +87,34 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('tasks.index');
 
     Route::prefix('tickets')->name('tickets.')->group(function () {
+        // Record IDs are numeric: unknown text paths must not match write-only endpoints.
         // Named screen paths share the existing role and filter checks.
         foreach (['dashboard', 'all', 'open', 'closed', 'assigned', 'leaderboard', 'locations', 'revisions', 'handover', 'admin'] as $view) {
             Route::get('/'.$view, [\App\Http\Controllers\TicketController::class, 'index'])
                 ->defaults('ticket_view', $view)->name($view);
         }
+        Route::get('/admin/locations', [\App\Http\Controllers\TicketController::class, 'index'])->defaults('ticket_view', 'locations')->name('admin.locations');
         Route::get('/admin/sla', [\App\Http\Controllers\TicketController::class, 'index'])->defaults('ticket_view', 'sla_settings')->name('admin.sla');
         Route::post('/admin/priorities', [\App\Http\Controllers\TicketPriorityController::class, 'store'])->name('priorities.store');
-        Route::patch('/admin/priorities/{priority}', [\App\Http\Controllers\TicketPriorityController::class, 'update'])->name('priorities.update');
+        Route::patch('/admin/priorities/{priority}', [\App\Http\Controllers\TicketPriorityController::class, 'update'])->whereNumber('priority')->name('priorities.update');
+        Route::delete('/admin/priorities/{priority}', [\App\Http\Controllers\TicketPriorityController::class, 'destroy'])->whereNumber('priority')->name('priorities.destroy');
+        Route::post('/admin/priorities/{priority}/restore', [\App\Http\Controllers\TicketPriorityController::class, 'restore'])->whereNumber('priority')->name('priorities.restore');
         Route::get('/admin/handover', [\App\Http\Controllers\TicketController::class, 'index'])
             ->defaults('ticket_view', 'handover')->name('admin.handover');
         Route::get('/export', [\App\Http\Controllers\TicketController::class, 'index'])->name('export');
         Route::post('/handover', [\App\Http\Controllers\TicketController::class, 'storeHandover'])->name('handover.store');
-        Route::delete('/handover/{handover}', [\App\Http\Controllers\TicketController::class, 'revokeHandover'])->name('handover.revoke');
-        Route::patch('/{ticket}/handover-assignment', [\App\Http\Controllers\TicketController::class, 'assignDuringHandover'])->name('handover.assign');
-        Route::patch('/revisions/{ticket}', [\App\Http\Controllers\TicketController::class, 'resubmitRevision'])->name('revisions.update');
+        Route::delete('/handover/{handover}', [\App\Http\Controllers\TicketController::class, 'revokeHandover'])->whereNumber('handover')->name('handover.revoke');
+        Route::patch('/{ticket}/handover-assignment', [\App\Http\Controllers\TicketController::class, 'assignDuringHandover'])->whereNumber('ticket')->name('handover.assign');
+        Route::patch('/revisions/{ticket}', [\App\Http\Controllers\TicketController::class, 'resubmitRevision'])->whereNumber('ticket')->name('revisions.update');
         Route::post('/locations', [\App\Http\Controllers\TicketController::class, 'storeLocation'])->name('locations.store');
-        Route::delete('/locations/{ticketLocation}', [\App\Http\Controllers\TicketController::class, 'destroyLocation'])->name('locations.destroy');
+        Route::delete('/locations/{ticketLocation}', [\App\Http\Controllers\TicketController::class, 'destroyLocation'])->whereNumber('ticketLocation')->name('locations.destroy');
         Route::get('/import-template', [\App\Http\Controllers\TicketController::class, 'workbookTemplate'])->name('template');
         Route::post('/import', [\App\Http\Controllers\TicketController::class, 'workbookImport'])->name('import')->block(30, 30);
     });
     Route::get('/tickets/create', [\App\Http\Controllers\TicketController::class, 'index'])->name('tickets.create');
     Route::get('/tickets', [\App\Http\Controllers\TicketController::class, 'index'])->name('tickets.index');
     Route::post('/tickets', [\App\Http\Controllers\TicketController::class, 'store'])->name('tickets.store');
-    Route::patch('/tickets/{ticket}', [\App\Http\Controllers\TicketController::class, 'update'])->name('tickets.update');
+    Route::patch('/tickets/{ticket}', [\App\Http\Controllers\TicketController::class, 'update'])->whereNumber('ticket')->name('tickets.update');
 
     // --- HR MODULE (User Requests) ---
     Route::get('/hr-module', [HrRequestController::class, 'index'])->name('hr.index');

@@ -1,3 +1,4 @@
+import { claimFlashEvent } from '@/Components/flashEvents.mjs';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useId, useRef, useState } from 'react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
@@ -6,7 +7,9 @@ import TicketFeedbackQueue from '@/Components/TicketFeedbackQueue';
 import TicketLeaderboard from '@/Components/TicketLeaderboard';
 import TicketWorkbookControls from '@/Components/TicketWorkbookControls';
 import TicketSlaPerformance from '@/Components/TicketSlaPerformance';
+import TicketAdminDashboard from '@/Components/TicketAdminDashboard';
 import TicketSlaSettings from '@/Components/TicketSlaSettings';
+import TicketRemovalConfirmation from '@/Components/TicketRemovalConfirmation';
 import ITWorkspaceSwitcher from '@/Components/ITWorkspaceSwitcher';
 import '../../../css/ticketing.css';
 
@@ -178,6 +181,7 @@ function TicketSlaSummary({ ticket }) {
 
 export function TicketEditor({ ticket, role, members, onClose, ticketRoute, actor, canAssignDuringHandover, handoverMembers = [] }) {
     const priorityLabels = usePage().props.priorityLabels || defaultPriorityLabels;
+    const selectablePriorityLabels = usePage().props.selectablePriorityLabels || priorityLabels;
     const onReviewHold = ['revision_requested', 'rejected'].includes(ticket.status);
     const canManage = !onReviewHold && (role === 'leader' || (role === 'member' && ticket.assigned_to === actor.id));
     const requester = ticket.creator_id === actor.id;
@@ -277,13 +281,13 @@ export function TicketEditor({ ticket, role, members, onClose, ticketRoute, acto
                         {handoverMembers.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}
                     </select>
                 </label>
-                    <label>Priority<select value={form.data.priority} onChange={e => form.setData('priority', e.target.value)}>{Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                    <label>Priority<select value={form.data.priority} onChange={e => form.setData('priority', e.target.value)}>{!selectablePriorityLabels[ticket.priority] && <option value={ticket.priority} disabled>{priorityLabels[ticket.priority] || ticket.priority} (archived)</option>}{Object.entries(selectablePriorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                     {form.data.priority !== ticket.priority && field('priority_reason', 'Reason for priority change', true)}
                     <label>Status<select value={form.data.status} onChange={e => form.setData('status', e.target.value)}><option value="">Keep current status</option><option value="in_progress">In progress</option></select></label>
                     {field('note', 'Handover / status note', ticket.status === 'resolved' && form.data.status === 'in_progress')}
                 </>}
                 {action === 'save' && <>
-                    {role === 'leader' && <div className="ticket-field-row"><label>Priority<select value={form.data.priority} onChange={e => form.setData('priority', e.target.value)}>{Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Assign IT owner<select value={form.data.assigned_to} onChange={e => form.setData('assigned_to', e.target.value)}><option value="" disabled>Choose IT member</option>{members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label></div>}
+                    {role === 'leader' && <div className="ticket-field-row"><label>Priority<select value={form.data.priority} onChange={e => form.setData('priority', e.target.value)}>{!selectablePriorityLabels[ticket.priority] && <option value={ticket.priority} disabled>{priorityLabels[ticket.priority] || ticket.priority} (archived)</option>}{Object.entries(selectablePriorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Assign IT owner<select value={form.data.assigned_to} onChange={e => form.setData('assigned_to', e.target.value)}><option value="" disabled>Choose IT member</option>{members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label></div>}
                     {form.data.priority && form.data.priority !== ticket.priority && field('priority_reason', 'Reason for priority classification / change', true)}
                     <label>Status<select value={form.data.status} onChange={e => form.setData('status', e.target.value)}><option value="">Keep current status</option><option value="in_progress">In progress</option></select></label>
                     {field('note', 'Handover / status note', ticket.status === 'resolved' && form.data.status === 'in_progress')}
@@ -321,13 +325,15 @@ export default function Index(props) {
 }
 
 function TicketLocations({ branches, branchCodes, locations }) {
-    const { flash } = usePage().props;
     const form = useForm({ name: '', code: '' });
     const removal = useForm({});
-    const remove = location => {
-        if (window.confirm(`Remove ${location.name} from new tickets?`)) {
-            removal.delete(route('tickets.locations.destroy', location.id), { preserveScroll: true });
-        }
+    const [pendingRemoval, setPendingRemoval] = useState(null);
+    const remove = location => { removal.clearErrors(); setPendingRemoval(location); };
+    const confirmRemoval = () => {
+        if (!pendingRemoval || removal.processing) return;
+        removal.delete(route('tickets.locations.destroy', pendingRemoval.id), {
+            preserveScroll: true, onSuccess: () => setPendingRemoval(null),
+        });
     };
     const submit = event => {
         event.preventDefault();
@@ -336,7 +342,6 @@ function TicketLocations({ branches, branchCodes, locations }) {
 
     return <section className="ticket-card ticket-locations">
         <div className="ticket-card-heading"><div><h1>Ticket locations</h1><p>Manage extra locations for ticket requests.</p></div></div>
-        {flash?.success && <p role="status">{flash.success}</p>}
         <form onSubmit={submit}>
             <table className="ticket-admin-table">
                 <thead><tr><th scope="col">Location name</th><th scope="col">Location code</th><th scope="col">Actions</th></tr></thead>
@@ -358,6 +363,8 @@ function TicketLocations({ branches, branchCodes, locations }) {
             </table>
             <button type="submit" className="ticket-primary" disabled={form.processing}>+ Add location</button>
         </form>
+        <TicketRemovalConfirmation show={Boolean(pendingRemoval)} kind="location" itemName={pendingRemoval?.name || ''}
+            processing={removal.processing} errors={removal.errors} onCancel={() => setPendingRemoval(null)} onConfirm={confirmRemoval} />
     </section>;
 }
 
@@ -407,7 +414,6 @@ function TicketRevisionForm({ ticket, onClose }) {
 }
 
 function TicketHandover({ members, handovers, today }) {
-    const { flash } = usePage().props;
     const form = useForm({ member_id: '', starts_on: today, ends_on: today });
     const revocation = useForm({});
     const submit = event => {
@@ -420,7 +426,6 @@ function TicketHandover({ members, handovers, today }) {
             <h1>Assignment handover</h1>
             <p>Grant an IT member temporary access to assign tickets, change priority and update status. Both dates are included and follow local clinic time.</p>
         </div></div>
-        {flash?.success && <p role="status">{flash.success}</p>}
         <form onSubmit={submit}>
             <label>IT member<select required value={form.data.member_id} onChange={e => form.setData('member_id', e.target.value)}>
                 <option value="">Select IT member</option>
@@ -447,7 +452,7 @@ function TicketHandover({ members, handovers, today }) {
     </section>;
 }
 
-export function TicketScreen({ priorityLabels = defaultPriorityLabels, prioritySettings = [], submissionAcknowledgement = null, prioritySummary = null, pendingFeedback = [], leaderboard = null, pendingImport = null, leaderSummary = null, memberRating = null, memberSummary = null, employeeSummary = null, creationPage = false, departments = [], filterBranches = [], ticketLocations = [], branchCodes = {}, ticketRole, tickets, filters, categories, branches, members, reports, memberWorkloads = [], slaReport, slaPolicy, ticketUser, canAssignDuringHandover = false, handoverMembers = [], handovers = [], handoverToday = null }) {
+export function TicketScreen({ priorityLabels = defaultPriorityLabels, selectablePriorityLabels = priorityLabels, prioritySettings = [], submissionAcknowledgement = null, prioritySummary = null, pendingFeedback = [], leaderboard = null, pendingImport = null, leaderSummary = null, memberRating = null, memberSummary = null, employeeSummary = null, creationPage = false, departments = [], filterBranches = [], ticketLocations = [], branchCodes = {}, ticketRole, tickets, filters, categories, branches, members, reports, memberWorkloads = [], slaReport, slaPolicy, ticketUser, canAssignDuringHandover = false, handoverMembers = [], handovers = [], handoverToday = null }) {
     const { auth } = usePage().props;
     // Module content uses the test identity; SidebarLayout keeps the real admin session.
     const actor = ticketUser || auth.user;
@@ -462,7 +467,8 @@ export function TicketScreen({ priorityLabels = defaultPriorityLabels, priorityS
     const lastReceiptId = useRef(null);
     useEffect(() => {
         // Partial dashboard refreshes may retain props: never reopen a dismissed receipt.
-        if (employee && submissionAcknowledgement && lastReceiptId.current !== submissionAcknowledgement.id) {
+        if (employee && submissionAcknowledgement && lastReceiptId.current !== submissionAcknowledgement.id
+            && claimFlashEvent(`ticket-receipt:${submissionAcknowledgement.id}`)) {
             lastReceiptId.current = submissionAcknowledgement.id;
             setReceipt(submissionAcknowledgement);
         }
@@ -494,7 +500,7 @@ export function TicketScreen({ priorityLabels = defaultPriorityLabels, priorityS
         if (revisions) window.scrollTo(0, 0);
     };
     // Creation has its own route; the list never contains the intake form.
-    useEffect(() => { const timer = setInterval(() => { if (!selected && !document.hidden) router.reload({ only: ['canAssignDuringHandover', 'handoverMembers', 'handovers', 'handoverToday', 'tickets', 'slaReport', 'reports', 'memberWorkloads', 'employeeSummary', 'memberSummary', 'leaderSummary', 'memberRating', 'leaderboard', 'pendingFeedback', 'prioritySummary', 'priorityLabels', 'slaPolicy'] }); }, 60000); return () => clearInterval(timer); }, [selected]);
+    useEffect(() => { if (creationPage || ['admin', 'locations', 'handover', 'sla_settings'].includes(filters.view)) return; const timer = setInterval(() => { if (!selected && !document.hidden) router.reload({ only: ['canAssignDuringHandover', 'handoverMembers', 'handovers', 'handoverToday', 'tickets', 'slaReport', 'reports', 'memberWorkloads', 'employeeSummary', 'memberSummary', 'leaderSummary', 'memberRating', 'leaderboard', 'pendingFeedback', 'prioritySummary', 'priorityLabels', 'selectablePriorityLabels', 'slaPolicy'] }); }, 60000); return () => clearInterval(timer); }, [selected, creationPage, filters.view]);
     // Build the form for this role; Laravel independently validates every submitted field.
     const form = useForm({ branch_id: branches.find(b => b.id === actor.branch_id)?.id || branches[0]?.id || (ticketLocations.length ? `location:${ticketLocations[0].id}` : ''), subject: '', description: '', category: '', priority: '',
         employee_department: actor.department || '', affected_asset: '', operational_impact: '',
@@ -531,14 +537,15 @@ export function TicketScreen({ priorityLabels = defaultPriorityLabels, priorityS
         router.get(ticketRoute('index', { view: filters.view, search, sort: key, direction }), {}, { preserveScroll: true });
     };
     // Show only the views allowed by the flowchart; backend checks enforce the same boundary.
-    const views = employee ? [['dashboard', 'Dashboard'], ['all', 'All my tickets']] : ticketRole === 'leader' ? [['dashboard', 'Dashboard'], ['leaderboard', 'Leaderboard'], ['admin', 'Admin'], ['all', 'All tickets'], ['assigned', 'Assigned to me']] : [['dashboard', 'Dashboard'], ['assigned', 'Assigned to me'], ['revisions', 'Pending revisions'], ['all', 'All tickets']];
-    const adminView = ['admin', 'handover', 'sla_settings'].includes(filters.view);
+    // Sidebar page labels use a capital first letter for every word.
+    const views = employee ? [['dashboard', 'Dashboard'], ['all', 'All My Tickets']] : ticketRole === 'leader' ? [['dashboard', 'Dashboard'], ['leaderboard', 'Leaderboard'], ['admin', 'Admin'], ['all', 'All Tickets'], ['assigned', 'Assigned To Me']] : [['dashboard', 'Dashboard'], ['assigned', 'Assigned To Me'], ['revisions', 'Pending Revisions'], ['all', 'All Tickets']];
+    const adminView = ['admin', 'locations', 'handover', 'sla_settings'].includes(filters.view);
     // Creation links to its own page.
     const sidebarLinks = views.map(([view, label]) => {
         const active = !creationPage && (view === 'admin' ? adminView : filters.view === view);
         return { label, href: ticketRoute('index', { view, branch_filter: '', location_filter: '', assignee_filter: '', status_filter: 'all', closed_period: '' }), active, icon: () => <TicketSidebarIcon kind={view} active={active} /> };
     });
-    if (employee || member || leader) sidebarLinks.splice(1, 0, { label: employee ? 'Create ticket' : 'Create ticket', href: ticketRoute('create'), active: creationPage, icon: () => <TicketSidebarIcon kind="create" active={creationPage} /> });
+    if (employee || member || leader) sidebarLinks.splice(1, 0, { label: employee ? 'Create Ticket' : 'Create Ticket', href: ticketRoute('create'), active: creationPage, icon: () => <TicketSidebarIcon kind="create" active={creationPage} /> });
     // Both groups use the same denominator and authorized drill-down scope.
     const renderDashboardCards = cards => <div className="employee-ticket-stats">{cards.map(([key, label, color, caption, reportCount]) => {
         const count = reportCount ?? dashboardSummary?.[key] ?? 0;
@@ -553,18 +560,17 @@ export function TicketScreen({ priorityLabels = defaultPriorityLabels, priorityS
         </Link>;
     })}</div>;
     if (adminView) {
+        const showingDashboard = filters.view === 'admin';
         const showingHandover = filters.view === 'handover';
         const showingSla = filters.view === 'sla_settings';
         return <SidebarLayout activeModule="IT Ticketing Module" sidebarLinks={sidebarLinks}>
             <Head title="Ticketing Admin" />
             <main className="ticketing">
                 <header className="ticket-page-heading"><h1>Ticketing Admin</h1></header>
-                <nav className="ticket-admin-nav" aria-label="Ticketing admin sections">
-                    <Link className="ticket-secondary" href={route('tickets.admin')} aria-current={!showingHandover && !showingSla ? 'page' : undefined}>Locations</Link>
-                    <Link className="ticket-secondary" href={route('tickets.admin.handover')} aria-current={showingHandover ? 'page' : undefined}>Handover</Link>
-                    <Link className="ticket-secondary" href={route('tickets.admin.sla')} aria-current={showingSla ? 'page' : undefined}>SLA &amp; priorities</Link>
-                </nav>
-                {showingSla ? <TicketSlaSettings priorities={prioritySettings} /> : showingHandover
+                {!showingDashboard && <nav className="ticket-admin-nav" aria-label="Ticketing admin navigation">
+                    <Link className="ticket-secondary" href={route('tickets.admin')}>← Back To Admin Dashboard</Link>
+                </nav>}
+                {showingDashboard ? <TicketAdminDashboard /> : showingSla ? <TicketSlaSettings priorities={prioritySettings} /> : showingHandover
                     ? <TicketHandover members={handoverMembers} handovers={handovers} today={handoverToday} />
                     : <TicketLocations branches={filterBranches} branchCodes={branchCodes} locations={ticketLocations} />}
             </main>
@@ -650,7 +656,7 @@ export function TicketScreen({ priorityLabels = defaultPriorityLabels, priorityS
                     <label>Affected system, equipment, application or service<input required maxLength={255} value={form.data.affected_asset} onChange={e => form.setData('affected_asset', e.target.value)} /></label>
                     <label>Ticket category<select required value={form.data.category} onChange={e => form.setData('category', e.target.value)}><option value="" disabled>Select category</option>{categories.map(c => <option key={c} value={c}>{c}{categoryExamples[c] ? ` (e.g. ${categoryExamples[c]})` : ''}</option>)}</select></label>
                     {/* Initial priority starts the SLA target immediately; leadership can reclassify without resetting time. */}
-                    <label>Initial priority<select required value={form.data.priority} onChange={e => form.setData('priority', e.target.value)}><option value="" disabled>Select priority</option>{Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                    <label>Initial priority<select required value={form.data.priority} onChange={e => form.setData('priority', e.target.value)}><option value="" disabled>Select priority</option>{Object.entries(selectablePriorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                     <label>Details of issue<textarea required rows={5} maxLength={10000} placeholder="Describe what happened or the service you need…" value={form.data.description} onChange={e => form.setData('description', e.target.value)} /></label>
                     
                     

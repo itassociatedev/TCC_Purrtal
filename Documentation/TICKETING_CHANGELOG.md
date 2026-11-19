@@ -1,5 +1,17 @@
 # Ticketing change history
 
+## 19 November 2026 - Priority removal with history preservation
+
+Added supervisor-only confirmed removal of unused priorities, archival of used priorities, restoration, and last-active protection. Archived priorities retain ticket display/filter/report history and saved SLA policies but are unavailable for new tickets/imports or priority assignments. Historical priority-change references prevent hard deletion even after all current tickets have moved away. Active-priority row locks protect writes against removal races. Blank imports fall back to the first active priority if Low is archived. Added archive timestamp migration and integration coverage; no existing priorities were removed during implementation and no push was performed. Build, syntax, removal/settings/handover/receipt regression checks passed with rolled-back fixtures and fake notifications.
+
+
+## 13 November 2026 — Documentation reconciled with current implementation
+
+Updated the documentation index, main guide, SLA reference and code map against the current merged-project source. Corrected outdated assignment-only handover, minute-input settings, pause capability, config-only target selection and post-resolution priority behavior. Documented custom priority colors (ordinary ticket text, blue dashboard default), automatic selector/filter/report/import integration and the absence of priority deletion/archiving. Clarified current ticket ID counter tables, the submission popup/operating-hours/All my tickets wording, role badge removal and per-member leaderboard timing definitions.
+
+This is documentation-only: no application files, database rows, priorities or permissions were changed; no Git push or deployment was performed. Source review and local Markdown link checks were performed. Previously recorded build/integration results refer to the earlier implementation work; no browser or application tests were rerun for this documentation edit. Older dated entries below remain history, not the current behavior contract.
+
+
 ## 9–10 November 2026 — Ticket review, locations and leaderboard
 
 - Added leader rejection and revision requests for IT member submissions, a creator-only revision queue, activity history and notification links.
@@ -256,3 +268,42 @@ For future changes, add date, user-visible behavior, source/test paths, schema/d
 ### 2026-11-13 - Remove SLA pause permission for all roles
 
 Removed the Pause resolution timer action and pause-reason form from Tickets/Index.jsx. TicketController rejects pause actions and pause_reason payloads; TicketSla::apply independently rejects pause for every role and no longer implements pausing. Existing paused tickets retain Resume resolution timer so their clocks can continue without backdating historical waiting time. Automatic resolution completion and review-hold/revision behavior are unchanged. No ticket data or elapsed time was rewritten. Tests: tests/verify-ticket-no-pause.php covers server rejection for supervisor/member/employee, unchanged state/history and legacy resume. Recent ticket feature changes are committed to taskmodule-ticketing-merge; local launcher/process files are excluded.
+
+
+### 2026-11-19 - Matching removal confirmation popups
+
+Priority and custom-location removal now use the shared TicketRemovalConfirmation.jsx modal. This replaces the priority inline confirmation and the location browser-native confirm. The popup names the selected item, explains priority delete/archive or location retirement, and provides Cancel and Confirm removal. No request is sent on opening/cancelling; the dialog disables controls and dismissal during submission, closes after success and shows server errors on failure. The shared Modal supplies focus containment and Escape/outside dismissal when idle, with Cancel initially focused. Tickets/Index.jsx and TicketSlaSettings.jsx call their existing removal endpoints; server permissions, history preservation and archive/delete rules are unchanged.
+
+
+### 2026-11-19 - Automatic unique urgency ordering
+
+Priority order is now a position, not an independent number. TicketPriorityOrdering.php locks the roster in a transaction, removes the edited row from its old position, inserts it at the requested position, and assigns consecutive positions to all rows (including archived priorities). Values beyond the list append to its end. The service writes through unused temporary positions before final positions to avoid collisions during swaps; transaction retries handle concurrent edits. Unused-priority deletion compacts positions; archive/restore retain positions. Priority keys, SLA targets, ticket policy/state and history are unchanged.
+
+Migration 2026_11_19_000002_make_ticket_priority_order_unique.php normalizes existing ties/gaps by prior sort_order then ID and adds a unique database constraint; applied locally. TicketPriorityController.php delegates saves/compaction to the new service. TicketSlaSettings.jsx refreshes shifted server-owned positions on other cards and explains insertion behavior. tests/verify-ticket-priority-order.php verifies insertion, moving, append, archived/restored positions, deletion gaps, uniqueness and unchanged keys/targets using rolled-back fixtures. Ordering/settings/removal checks, PHP syntax and frontend build passed. No push performed.
+
+
+### 2026-11-19 - Prevent stale priority-admin success notification replay
+
+The shared FlashMessage.jsx previously reran its success handler whenever the flash/errors object identities changed, even if the success text came from an older action. Ticket admin pages also inherited the ticket list's one-minute partial refresh. HandleInertiaRequests.php now assigns each server flash event an ID; flashEvents.mjs remembers displayed event IDs across SPA page remounts. FlashMessage.jsx reacts to primitive message/event values, handles validation feedback separately, and retains the existing flash-toast custom event. New saves with identical success text still display because they receive different event IDs. Tickets/Index.jsx skips polling on creation and admin/location/handover/SLA-settings views; ordinary ticket views retain polling. No priority data, ordering or SLA targets were changed. tests/flash-notification-events.test.mjs verifies clone/poll/remount deduplication and independent same-text saves; both checks, PHP syntax and the frontend build passed. No browser tests or push performed.
+
+
+### 2026-11-19 - Ticketing notification replay audit
+
+Reviewed shared success/error toasts, location/handover/priority inline banners, creation receipts, feedback queue, lifecycle bell notifications and SLA scheduler deduplication. Removed duplicate persistent success banners on admin screens in favor of the shared one-event toast. Validation errors now carry event IDs and do not replay from retained polling props; genuine subsequent failures still notify. Submission receipts use ticket-event identity across SPA history remounts. Shared notification bell paging/refresh merges by notification ID, includes newly arrived alerts without dropping older pages, and accepts authoritative read state; marking a notification read now completes before destination navigation, with rollback/error feedback if it fails. Existing custom flash-toast events remain supported. No ticket/SLA/recipient rules were changed.
+
+New notificationList.mjs helper and notification-list.test.mjs cover overlapping pages, refreshed alerts/read state and cleared lists. Extended flash-notification-events.test.mjs covers receipt and validation replay. verify-ticket-notification-replay.php uses fake notifications, a fixed clock and rolled-back fixtures to check one warning per cycle/recipient, one later breach, deduplicated progress reminders, a fresh reminder after a genuine new cycle, review-hold suppression, read-only ticket pages, and bell payload identity. Notification, receipt and handover checks passed. Build and PHP syntax passed. These are source and automated checks; no interactive browser audit was performed and no push was performed.
+
+
+### 2026-11-19 - Sidebar page label capitalization
+
+Ticketing sidebar page labels in Tickets/Index.jsx now capitalize every word: Create Ticket, All My Tickets, All Tickets, Assigned To Me and Pending Revisions. Dashboard, Leaderboard and Admin retain their existing capitalization. Routes and permissions are unchanged.
+
+
+### 2026-11-19 - Unknown ticket page routes return 404
+
+Added numeric route constraints to ticketing write endpoints for ticket, priority, handover and location IDs in routes/web.php. Previously GET /tickets/r matched the unconstrained PATCH /tickets/{ticket} path and returned 405. Unknown textual paths now match no record action and return Laravel's standard 404 response; /ticket/hello is also unknown. Valid named pages and numeric write routes are unchanged, including auth, binding and role checks. Genuine wrong-method requests on recognized numeric endpoints retain 405; this is not a global 405-to-404 exception conversion. tests/verify-ticket-route-404.php checks unknown paths and valid route names without database writes or controller dispatch.
+
+
+### 2026-11-19 - Dedicated Ticketing Admin dashboard
+
+Added TicketAdminDashboard.jsx with colored navigation cards for Locations, Handover and SLA & Priorities. Tickets/Index.jsx renders the landing dashboard at /tickets/admin and individual admin tools at their own paths, with Back To Admin Dashboard navigation and active Admin sidebar state. routes/web.php adds tickets.admin.locations (/tickets/admin/locations). TicketController redirects old /tickets/locations bookmarks and location add/remove results to the dedicated locations page. ticketing.css adds responsive cards that stack on narrow screens. No schema changes. verify-ticket-admin-dashboard.php passed supervisor page selection, member/employee denial on all four pages and legacy-location redirect checks; verify-ticket-route-404.php and Vite build also passed. No browser tests or push performed.

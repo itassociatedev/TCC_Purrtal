@@ -73,7 +73,7 @@ class TicketController extends Controller
         abort_if($role === 'member' && !in_array($view, ['dashboard', 'all', 'assigned', 'revisions']), 403);
         abort_if($view === 'revisions' && $role !== 'member', 403);
         abort_if(in_array($view, ['admin', 'locations', 'handover', 'sla_settings'], true) && $role !== 'leader', 403);
-        if ($request->routeIs('tickets.locations')) return redirect()->route('tickets.admin');
+        if ($request->routeIs('tickets.locations')) return redirect()->route('tickets.admin.locations');
         if ($request->routeIs('tickets.handover')) return redirect()->route('tickets.admin.handover');
         abort_if($view === 'leaderboard' && $role !== 'leader', 403);
         // Leaders can also view their own assignments.
@@ -364,6 +364,7 @@ class TicketController extends Controller
             'slaReport' => $slaReport,
             'slaPolicy' => TicketPrioritySettings::policy(),
             'priorityLabels' => TicketPrioritySettings::labels(),
+            'selectablePriorityLabels' => TicketPrioritySettings::labels(true),
             'prioritySettings' => $view === 'sla_settings' ? \App\Models\TicketPriority::orderBy('sort_order')->orderBy('id')->get() : [],
             // The module uses this identity while the surrounding layout keeps auth.user.
             'ticketUser' => $actor->only(['id', 'name', 'branch_id']) + ['department' => $actor->department?->name],
@@ -378,7 +379,7 @@ class TicketController extends Controller
             'New tickets' => [\App\Services\TicketWorkbook::HEADERS],
             'Instructions' => [['Field', 'Instructions'], ['Import', 'Creates new tickets only; no ticket IDs, updates, statuses or historical timestamps. Maximum 100 rows.'],
                 ['employee_id', 'Use an employee ID from the Employees sheet.'], ['branch_affected', 'Exact branch name; employee branch permissions apply.'],
-                ['priority', implode(', ', TicketPrioritySettings::labels()).' (blank defaults to '.(TicketPrioritySettings::labels()['low'] ?? 'Low').')'], ['category', implode(', ', config('ticketing.categories'))],
+                ['priority', implode(', ', TicketPrioritySettings::labels(true)).' (blank defaults to '.(TicketPrioritySettings::labels(true)[TicketPrioritySettings::defaultKey()]).')'], ['category', implode(', ', config('ticketing.categories'))],
                 ['supporting_links', 'Optional HTTP/HTTPS links, one per line, maximum 10.'], ['Required', 'All other columns are required. Creation and SLA receipt use import time.'],
                 ['Notifications', $preview ? 'Preview imports send no live notifications.' : 'Confirming sends website notifications to the IT team.']],
             'Employees' => [['Employee ID', 'Name', 'Allowed branches'], ...User::whereIn('id', $preview ? DB::table('ticket_preview_users')->select('user_id') : User::select('id')->whereNotIn('id', DB::table('ticket_preview_users')->select('user_id')))->orderBy('name')->get()->map(fn ($u) => [$u->id, $u->name, TicketAccess::branches($u)->pluck('name')->implode(', ')])->all()],
@@ -458,7 +459,7 @@ class TicketController extends Controller
 
             $data = $request->validate([
                 'assigned_to' => ['sometimes', 'required', 'integer', Rule::in(TicketAccess::members($preview, true)->where('status', 'Active')->pluck('id')->all())],
-                'priority' => ['sometimes', 'required', Rule::in(array_keys(TicketPrioritySettings::targets()))],
+                'priority' => ['sometimes', 'required', Rule::in(array_keys(TicketPrioritySettings::targets(true)))],
                 'priority_reason' => ['nullable', 'string', 'max:5000'],
                 // Resolution documentation and closure use their existing dedicated workflows.
                 'status' => ['sometimes', 'required', Rule::in(['in_progress'])],
@@ -494,7 +495,7 @@ class TicketController extends Controller
         ]);
         TicketLocation::create($location);
 
-        return redirect()->route('tickets.admin')->with('success', 'Ticket location added.');
+        return redirect()->route('tickets.admin.locations')->with('success', 'Ticket location added.');
     }
 
     public function destroyLocation(Request $request, TicketLocation $ticketLocation)
@@ -503,7 +504,7 @@ class TicketController extends Controller
 
         $ticketLocation->delete();
 
-        return redirect()->route('tickets.admin')->with('success', 'Ticket location removed.');
+        return redirect()->route('tickets.admin.locations')->with('success', 'Ticket location removed.');
     }
 
     public function store(Request $request)
@@ -523,7 +524,7 @@ class TicketController extends Controller
             'description' => ['required', 'string', 'max:10000'],
             'category' => ['required', Rule::in(config('ticketing.categories'))],
             // Requesters classify the initial urgency; IT leadership may revise it later.
-            'priority' => ['required', Rule::in(array_keys(TicketPrioritySettings::targets()))],
+            'priority' => ['required', Rule::in(array_keys(TicketPrioritySettings::targets(true)))],
             'employee_department' => ['required', 'string', 'max:255', Rule::exists('departments', 'name')],
             'affected_asset' => ['required', 'string', 'max:255'],
             'operational_impact' => ['required', 'string', 'max:5000'],
@@ -650,7 +651,7 @@ class TicketController extends Controller
         $data = $request->validate([
             'action' => ['sometimes', Rule::in(['save', 'reopen', 'acknowledge', 'resume', 'update', 'delay', 'restore', 'approve_workaround', 'reply', 'confirm', 'feedback', 'dismiss_feedback'])],
             'status' => $requesterAction || !in_array($action, ['save', 'reopen']) ? ['prohibited'] : ['sometimes', 'required', Rule::in(['in_progress', 'resolved', 'closed'])],
-            'priority' => !$requesterAction && $role === 'leader' ? ['sometimes', 'required', Rule::in(array_keys(TicketPrioritySettings::targets()))] : ['prohibited'],
+            'priority' => !$requesterAction && $role === 'leader' ? ['sometimes', 'required', Rule::in(array_keys(TicketPrioritySettings::targets(true)))] : ['prohibited'],
             'assigned_to' => !$requesterAction && $role === 'leader' ? ['sometimes', 'required', 'integer', Rule::exists('users', 'id')->whereIn('id', TicketAccess::members($preview)->pluck('id'))] : ['prohibited'],
             'priority_reason' => ['nullable', 'string', 'max:5000'],
             'note' => ['nullable', 'string', 'max:10000'],

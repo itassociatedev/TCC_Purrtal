@@ -116,6 +116,20 @@ class HandleInertiaRequests extends Middleware
             ],
 
             'flash' => [
+                // Identify the notification event, not just its wording. Repeated saves
+                // get fresh IDs; partial reloads retaining old props cannot replay it.
+                'id' => function () use ($request) {
+                    if (!$request->session()->has('success') && !$request->session()->has('error')) return null;
+                    $id = $request->session()->get('ui_flash_event_id');
+                    if (!$id) {
+                        $id = (string) \Illuminate\Support\Str::uuid();
+                        $request->session()->now('ui_flash_event_id', $id);
+                    }
+                    return $id;
+                },
+                // Validation responses also need event identity when partial reloads retain errors.
+                'validation_id' => fn() => $request->session()->has('errors')
+                    ? (string) \Illuminate\Support\Str::uuid() : null,
                 'success' => fn() => $request->session()->get('success'),
                 'error' => fn() => $request->session()->get('error'),
             ],

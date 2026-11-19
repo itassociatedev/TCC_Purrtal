@@ -2,12 +2,14 @@
 
 ## Ticketing system documentation
 
-Current implementation reference, audited 3 November 2026:
+Current implementation reference, audited 19 November 2026:
 
 - [Ticketing guide](TICKETING.md): screens, permissions, lifecycle, fields, filters, XLSX, schema and operations.
-- [SLA reference](SLA_IMPLEMENTATION.md): targets, timing, priority changes, pauses, alerts and compliance.
+- [SLA reference](SLA_IMPLEMENTATION.md): targets, timing, hour-based priority settings, milestone preservation, legacy pause resumption, alerts and compliance.
 - [Frontend/backend code map](TICKETING_CODE_MAP.md): source files, entry points, migrations and tests.
 - [Change history](TICKETING_CHANGELOG.md): implemented changes and superseded behavior.
+
+Latest documented behavior: supervisor-managed priorities use support hours; additional priorities populate ticket controls automatically, use default styling, and can be removed by supervisors: unused priorities are deleted, used ones archived and restorable. Historical references and at least one active priority are preserved. SLA pausing is unavailable to every role.
 
 Keep these documents updated with ticketing code changes; the guide includes the maintenance checklist. The original framework information follows.
 

@@ -1,3 +1,4 @@
+import { claimFlashEvent } from './flashEvents.mjs';
 import { usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -41,34 +42,33 @@ export default function FlashMessage() {
         }, 4000);
     };
 
+    // Primitive dependencies prevent retained success props from replaying when
+    // polling delivers a new errors/flash object with the same content.
     useEffect(() => {
-        let currentMessage = '';
-        let currentType = '';
-
-        if (flash?.success) {
-            currentMessage = flash.success;
-            currentType = 'success';
-        } else if (flash?.error) {
-            currentMessage = flash.error;
-            currentType = 'error';
-        } else if (Object.keys(errors).length > 0) {
-            currentMessage = getFirstErrorMessage(errors);
-            currentType = 'error';
+        const message = flash?.success || flash?.error;
+        if (message && claimFlashEvent(flash.id)) {
+            showToast(message, flash.success ? 'success' : 'error');
         }
+    }, [flash.id, flash.success, flash.error]);
 
-        if (currentMessage) {
-            showToast(currentMessage, currentType);
+    // Retained validation props must not replay on polling; an actual second
+    // validation failure gets a new event ID even if the error wording is identical.
+    const validationMessage = getFirstErrorMessage(errors);
+    useEffect(() => {
+        if (!flash?.error && validationMessage && claimFlashEvent(flash.validation_id ? `validation:${flash.validation_id}` : null)) {
+            showToast(validationMessage, 'error');
         }
+    }, [flash.error, flash.validation_id, validationMessage]);
 
-        const handleCustomToast = (e) => showToast(e.detail.message, e.detail.type);
-        window.addEventListener('flash-toast', handleCustomToast);
-
+    useEffect(() => {
+        const handleToast = event => showToast(event.detail.message, event.detail.type);
+        window.addEventListener('flash-toast', handleToast);
         return () => {
-            window.removeEventListener('flash-toast', handleCustomToast);
+            window.removeEventListener('flash-toast', handleToast);
             if (timerRef.current) clearTimeout(timerRef.current);
             if (progressTimerRef.current) clearTimeout(progressTimerRef.current);
         };
-    }, [flash, errors]);
+    }, []);
 
     useEffect(() => {
         const handleClickOutside = (event) => {

@@ -1,0 +1,56 @@
+<?php
+// No live messages: fake notifications and roll back all ticket/alert fixtures.
+require __DIR__.'/../vendor/autoload.php';
+$app = require __DIR__.'/../bootstrap/app.php';
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+use App\Models\{Ticket, User};
+use App\Services\{TicketAccess, TicketPrioritySettings, TicketSla};
+use App\Notifications\TicketNotification;
+use Illuminate\Support\Facades\{DB, Notification, Route};
+use Illuminate\Support\Carbon;
+use Carbon\CarbonImmutable;
+Notification::fake(); DB::beginTransaction();
+try {
+    $now = CarbonImmutable::parse('2026-11-19 10:00:00', 'Asia/Manila');
+    Carbon::setTestNow($now); CarbonImmutable::setTestNow($now);
+    $roster = TicketAccess::members(false)->with('role')->get();
+    $leader = $roster->first(fn ($u) => TicketAccess::role($u) === 'leader');
+    $member = $roster->first(fn ($u) => TicketAccess::role($u) === 'member');
+    if (!$leader || !$member) throw new RuntimeException('Live supervisor/member fixtures required');
+    $check = function ($ok, $message) { if (!$ok) throw new RuntimeException($message); echo 'PASS: '.$message.PHP_EOL; };
+    $ticket = Ticket::where('is_preview', false)->firstOrFail()->replicate();
+    $ticket->status = 'in_progress'; $ticket->priority = TicketPrioritySettings::defaultKey(); $ticket->assigned_to = $member->id; $ticket->save();
+    $sla = app(TicketSla::class); $sla->enroll($ticket, $leader, now());
+    $policy = $ticket->sla_policy; $policy['targets'][$ticket->priority] = ['label' => 'Check', 'response' => 1000, 'resolution' => 4000, 'update' => null];
+    $state = $ticket->sla_state; $state['elapsed'] = 3600; $state['running_since'] = null;
+    $state['acknowledged_at'] = now()->toIso8601String(); $state['response_result'] = ['elapsed' => 30, 'target' => 1000];
+    $ticket->sla_policy = $policy; $ticket->sla_state = $state; $ticket->save();
+    $count = fn ($user) => Notification::sent($user, TicketNotification::class, fn ($notification) => $notification->ticketId === $ticket->id)->count();
+    $run = function () use ($ticket, $sla) { DB::transaction(function () use ($ticket, $sla) { $locked = Ticket::whereKey($ticket->id)->lockForUpdate()->firstOrFail(); $sla->check($locked); }); };
+    $run(); $run(); $run();
+    $check($count($leader) === 1 && $count($member) === 1, '20-percent warning delivered once per recipient despite repeated checks');
+    $state = $ticket->fresh()->sla_state; $state['elapsed'] = 4100; $ticket->sla_state = $state; $ticket->save();
+    $run(); $run();
+    $check($count($leader) === 2 && $count($member) === 2, 'Later breach is a new alert, but repeated checks do not duplicate it');
+    $state = $ticket->fresh()->sla_state; $state['elapsed'] = 100; $state['alerts'] = []; $state['last_update_at'] = $now->subMinutes(10)->toIso8601String();
+    $policy['targets'][$ticket->priority]['update'] = 300;
+    $ticket->sla_policy = $policy; $ticket->sla_state = $state; $ticket->save();
+    $run(); $run();
+    $check($count($leader) === 3, 'Progress reminder does not repeat without a new progress cycle');
+    $sla->apply($ticket->fresh(), $member, 'member', ['action' => 'update', 'note' => 'Progress update recorded']);
+    $run();
+    $check($count($leader) === 3, 'Progress update clears due reminder without immediately resending it');
+    Carbon::setTestNow($now->addMinutes(10)); CarbonImmutable::setTestNow($now->addMinutes(10));
+    $run(); $run();
+    $check($count($leader) === 4, 'A genuinely new overdue progress cycle generates one fresh reminder');
+    $ticket->refresh(); $ticket->status = 'revision_requested'; $ticket->save(); $run();
+    $check($count($leader) === 4, 'Review-held ticket emits no background SLA alert');
+    $request = Illuminate\Http\Request::create('/tickets/all', 'GET');
+    $request->setUserResolver(fn () => $leader); $request->setLaravelSession($app['session']->driver());
+    $request->setRouteResolver(fn () => Route::getRoutes()->getByName('tickets.all'));
+    app(App\Http\Controllers\TicketController::class)->index($request);
+    app(App\Http\Controllers\TicketController::class)->index($request);
+    $check($count($leader) === 4, 'Repeated ticket page reads do not generate action or success bell alerts');
+    $payload = (new TicketNotification($ticket->id, 'Notification check'))->toArray($leader);
+    $check($payload['module'] === 'ticketing' && $payload['ticket_id'] === $ticket->id && str_contains($payload['action_url'], '/tickets/'), 'Bell payload retains ticket identity and ticketing destination');
+} finally { Carbon::setTestNow(); CarbonImmutable::setTestNow(); DB::rollBack(); }

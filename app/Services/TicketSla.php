@@ -37,6 +37,7 @@ class TicketSla
 
     public function enroll(Ticket $ticket, User $actor, $received): void
     {
+        TicketPrioritySettings::requireActive($ticket->priority);
         $ticket->sla_policy = TicketPrioritySettings::policy();
         $ticket->sla_received_at = $received;
         $ticket->sla_state = ['elapsed' => 0, 'running_since' => CarbonImmutable::parse($received)->utc()->toIso8601String(),
@@ -150,6 +151,7 @@ class TicketSla
             throw ValidationException::withMessages(['status' => 'Reopen the closed ticket as In progress first.']);
         }
         if (array_key_exists('priority', $data) && $data['priority'] !== $oldPriority) {
+            TicketPrioritySettings::requireActive($data['priority']);
             $reason = $this->need($data, 'priority_reason');
             // Preserve completed legacy milestones before adopting a new priority target.
             $previousTarget = $ticket->sla_policy['targets'][$oldPriority ?? ''] ?? null;

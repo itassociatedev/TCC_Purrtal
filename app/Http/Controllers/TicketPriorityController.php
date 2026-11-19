@@ -10,6 +10,38 @@ class TicketPriorityController extends Controller
 {
     public function store(Request $request) { return $this->save($request, new TicketPriority); }
     public function update(Request $request, TicketPriority $priority) { return $this->save($request, $priority); }
+    public function destroy(Request $request, TicketPriority $priority)
+    {
+        abort_unless(TicketAccess::role($request->user()) === 'leader', 403);
+        $archived = \Illuminate\Support\Facades\DB::transaction(function () use ($priority) {
+            // Serialize removals so simultaneous requests cannot remove the final active choice.
+            $priorities = TicketPriority::orderBy('id')->lockForUpdate()->get();
+            $current = $priorities->firstWhere('id', $priority->id);
+            abort_unless($current, 404);
+            if (!$current->archived_at && $priorities->whereNull('archived_at')->count() <= 1) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['removal' => 'Keep at least one active priority.']);
+            }
+            if (\App\Services\TicketPrioritySettings::isUsed($current->key)) {
+                if (!$current->archived_at) { $current->archived_at = now(); $current->save(); }
+                return true;
+            }
+            $current->delete();
+            \App\Services\TicketPriorityOrdering::compact();
+            return false;
+        });
+        return back()->with('success', $archived ? 'Priority archived. Existing tickets and historical filters are preserved.' : 'Unused priority deleted.');
+    }
+
+    public function restore(Request $request, TicketPriority $priority)
+    {
+        abort_unless(TicketAccess::role($request->user()) === 'leader', 403);
+        \Illuminate\Support\Facades\DB::transaction(function () use ($priority) {
+            $current = TicketPriority::whereKey($priority->id)->lockForUpdate()->firstOrFail();
+            $current->archived_at = null; $current->save();
+        });
+        return back()->with('success', 'Priority restored and available for new tickets.');
+    }
+
     private function save(Request $request, TicketPriority $priority)
     {
         // Handover delegates cannot change global policy, even with a crafted request.
@@ -37,9 +69,9 @@ class TicketPriorityController extends Controller
             }
             $priority->key = $key;
         }
-        $priority->fill(['label' => $data['label'], 'sort_order' => $data['sort_order'],
+        \App\Services\TicketPriorityOrdering::save($priority, ['label' => $data['label'],
             'response_seconds' => $seconds['response'], 'resolution_seconds' => $seconds['resolution'],
-            'update_seconds' => $seconds['update']])->save();
+            'update_seconds' => $seconds['update']], (int) $data['sort_order']);
         return back()->with('success', 'SLA priority saved. New tickets use these targets; existing ticket targets are preserved.');
     }
 }

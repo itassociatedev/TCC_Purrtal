@@ -496,3 +496,26 @@
 .ticket-priority-settings-actions { grid-column: 1 / -1; }
 .ticket-settings-success { padding: 12px 24px; color: #13723d; }
 @media (max-width: 800px) { .ticket-priority-settings-grid, .ticket-priority-settings-form { grid-template-columns: minmax(0, 1fr); } }
+
+/* Archived policies remain readable; removal controls stay separate from the edit form. */
+.ticket-priority-settings-form { display: block; }
+.ticket-priority-settings-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; min-width: 0; }
+.ticket-priority-settings-fields:disabled { opacity: .65; }
+.ticket-priority-removal { margin: 0 24px 18px; font-size: 12px; }
+.ticket-priority-removal p { margin-bottom: 10px; }
+.ticket-priority-removal button { margin: 0 8px 8px 0; }
+@media(max-width: 800px) { .ticket-priority-settings-fields { grid-template-columns: minmax(0, 1fr); } }
+
+/* Dedicated admin landing page; navigation cards stack without horizontal scrolling. */
+.ticket-admin-dashboard-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.ticket-admin-dashboard-card { display: flex; flex-direction: column; gap: 14px; padding: 26px; border-top: 4px solid var(--admin-tone); }
+.ticket-admin-dashboard-card svg, .ticket-admin-dashboard-card > span { color: var(--admin-tone); }
+.ticket-admin-dashboard-card h3 { font-size: 18px; font-weight: 600; }
+.ticket-admin-dashboard-card p { color: #65748b; font-size: 13px; line-height: 1.7; flex: 1; }
+.ticket-admin-dashboard-card > span { font-size: 13px; font-weight: 600; }
+.ticket-admin-dashboard-card:hover { box-shadow: 0 4px 14px #172a4612; }
+.ticket-admin-dashboard-card:focus-visible { outline: 3px solid var(--admin-tone); outline-offset: 3px; }
+.ticket-admin-tone-blue { --admin-tone: #2563eb; }
+.ticket-admin-tone-green { --admin-tone: #15803d; }
+.ticket-admin-tone-purple { --admin-tone: #7c3aed; }
+@media(max-width: 850px) { .ticket-admin-dashboard-grid { grid-template-columns: minmax(0, 1fr); } }

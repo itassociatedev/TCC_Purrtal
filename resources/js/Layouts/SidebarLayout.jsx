@@ -1,3 +1,4 @@
+import { mergeNotificationList } from '@/Components/notificationList.mjs';
 import DisplaySettings from '@/Components/DisplaySettings';
 import ApplicationLogo from '@/Components/ApplicationLogo';
 import Dropdown from '@/Components/Dropdown';
@@ -205,7 +206,7 @@ export default function SidebarLayout({
             const newNotifications = response.data.notifications || [];
 
             // Append the older notifications to our existing list
-            setLocalNotifications(prev => [...prev, ...newNotifications]);
+            setLocalNotifications(prev => mergeNotificationList(prev, newNotifications));
         } catch (error) {
             console.error("Failed to load older notifications", error);
         } finally {
@@ -214,19 +215,27 @@ export default function SidebarLayout({
     };
 
     useEffect(() => {
-        if (localNotifications.length <= (auth.notifications?.length || 0)) {
-            setLocalNotifications(auth.notifications || []);
-        }
+        // Refresh newest alerts without duplicating IDs or dropping already loaded older rows.
+        setLocalNotifications(prev => mergeNotificationList(prev, auth.notifications || [], {
+            total: auth.totalNotificationsCount ?? (auth.notifications || []).length, refresh: true,
+        }));
         setLocalUnreadCount(auth.unreadNotificationsCount || 0);
         setTotalNotificationsCount(auth.totalNotificationsCount || 0);
     }, [auth.notifications, auth.unreadNotificationsCount, auth.totalNotificationsCount]);
 
-    const markAsRead = (notificationId, url) => {
+    const markAsRead = async (notificationId, url) => {
         const notification = localNotifications.find(n => n.id === notificationId);
         if (notification && !notification.read_at) {
             setLocalNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n));
             setLocalUnreadCount(prev => Math.max(0, prev - 1));
-            axios.post(route('notifications.read', notificationId));
+            try {
+                // Finish the read before navigation fetches fresh unread counts.
+                await axios.post(route('notifications.read', notificationId));
+            } catch {
+                setLocalNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read_at: null } : n));
+                setLocalUnreadCount(prev => prev + 1);
+                window.dispatchEvent(new CustomEvent('flash-toast', { detail: { message: 'Unable to mark this notification as read. Please try again.', type: 'error' } }));
+            }
         }
         if (url) router.visit(url);
     };
