@@ -505,3 +505,7 @@ Action choices use title capitalization without changing the submitted action ke
 ### Removed reporting metadata (20 November 2026)
 
 Creation, revision, details, XLSX import defaults, demo generation and SLA receipt events no longer collect or write `reporting_channel` or `emergency_reason`. The migration `2026_11_20_000001_remove_ticket_emergency_reporting_fields.php` drops both columns for all existing tickets and removes these JSON keys (plus `channel` on receipt events) from history. Ticket records and their other fields remain. Rollback restores empty/default columns only; removed values are not recoverable through migration rollback. Descriptions remain the place to explain the issue. IT-created tickets still use creation time, auto-assign to their creator, and follow normal SLA rules.
+
+### Default sorting and partial updates (20 November 2026)
+
+Ticket column headers cycle ascending, descending, then default order (creation time descending, with descending ID as the stable tie-breaker). A different column starts ascending. `filters.sort_active` distinguishes default order from an explicitly selected creation-date sort. Clear filters resets sorting as well as table filters. Sort requests preserve React page state and scroll position and use Inertia partial props (`tickets`, `filters`), so header/sidebar/dashboard props are retained rather than replaced. The server still queries and sorts the authorized ticket dataset. Mobile sort controls can explicitly select a direction. Blank sort/direction parameters restore defaults.

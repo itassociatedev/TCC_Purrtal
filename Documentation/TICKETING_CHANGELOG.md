@@ -1,5 +1,9 @@
 # Ticketing change history
 
+## 20 November 2026 - Resettable table sorting and partial refresh
+
+Added ascending/descending/default header cycles and a hover hint. Clear filters now restores creation-date descending order. The server returns `sort_active` to distinguish default from explicit sort, including the creation-date column. Sort and clear requests preserve page state/scroll and fetch only ticket/filter props. Other navigation retains default-sort state instead of silently making it explicit. Added handler and controller regression checks. No database change or push performed.
+
 ## 20 November 2026 - Remove reporting channel and emergency reason
 
 Removed Emergency Reporting Channel and Why A Ticket Could Not Be Created from every role's creation flow, revision form, details, backend validation, model attributes, import defaults and demo generation. SLA receipt events no longer copy a channel. Applied a focused migration to drop both database columns for all existing test tickets and clean obsolete metadata from historical activity JSON. Verified both columns/model attributes and copied receipt metadata are absent; 201 tickets remain. Form submission checks for all three workflow roles, receipt checks and production build passed. The older verify-ticket-department.php script fails its department snapshot assertion because it still authenticates the admin while passing a removed preview identity; this unrelated legacy test is not a passing check. Other ticket data and SLA behavior remain unchanged. Migration rollback recreates columns without restoring discarded values. Updated intake fixtures, comments, documentation and focused schema/form checks. No push performed.

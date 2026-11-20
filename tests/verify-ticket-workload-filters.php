@@ -37,6 +37,10 @@ try {
         return app(App\Http\Controllers\TicketController::class)->index($r)->toResponse($r)->getData(true)['props'];
     };
     $check = function ($ok, $message) { if (!$ok) throw new RuntimeException($message); echo 'PASS: '.$message.PHP_EOL; };
+    $default = $props($leader, ['sort' => '', 'direction' => '']);
+    $check($default['filters']['sort'] === 'created_at' && $default['filters']['direction'] === 'desc' && !$default['filters']['sort_active'], 'Blank sort restores newest-first default with inactive header cycle');
+    $explicit = $props($leader, ['sort' => 'subject', 'direction' => 'asc']);
+    $check($explicit['filters']['sort_active'] && $explicit['filters']['sort'] === 'subject', 'Explicit sort is distinguished from default order');
     $result = $props($leader, ['resolver_filter' => $member->id]);
     $ids = array_column($result['tickets']['data'], 'id'); sort($ids); $expected = [$resolved->id, $closed->id, $legacy->id]; sort($expected);
     $check($ids === $expected, 'Resolver filter follows actual resolver after reassignment and includes closed tickets');

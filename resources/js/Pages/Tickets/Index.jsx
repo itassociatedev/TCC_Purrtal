@@ -456,7 +456,7 @@ export function TicketScreen({ selectedTicket = null, priorityLabels = defaultPr
         const { view, ...query } = params;
         // Screen identity belongs in the path. Export still takes a view filter.
         const page = action === 'index' ? (view || 'dashboard') : action;
-        return route(`tickets.${page}`, { ...(view && filters.location_filter ? { location_filter: filters.location_filter } : {}), ...(view && filters.branch_filter ? { branch_filter: filters.branch_filter } : {}), ...(view === 'all' && filters.assignee_filter ? { assignee_filter: filters.assignee_filter } : {}), resolver_filter: view && view !== 'all' ? '' : filters.resolver_filter || '', leaderboard_period: filters.leaderboard_period || 'all', priority_filter: filters.priority_filter || 'all', closed_period: filters.closed_period || '', date_from: filters.date_from || '', date_to: filters.date_to || '', status_filter: filters.status_filter || 'all', sort: filters.sort || 'created_at', direction: filters.direction || 'desc', report_period: filters.report_period || 'all', per_page: filters.per_page || '10', ...(action === 'index' ? query : params) });
+        return route(`tickets.${page}`, { ...(view && filters.location_filter ? { location_filter: filters.location_filter } : {}), ...(view && filters.branch_filter ? { branch_filter: filters.branch_filter } : {}), ...(view === 'all' && filters.assignee_filter ? { assignee_filter: filters.assignee_filter } : {}), resolver_filter: view && view !== 'all' ? '' : filters.resolver_filter || '', leaderboard_period: filters.leaderboard_period || 'all', priority_filter: filters.priority_filter || 'all', closed_period: filters.closed_period || '', date_from: filters.date_from || '', date_to: filters.date_to || '', status_filter: filters.status_filter || 'all', sort: filters.sort_active ? filters.sort : '', direction: filters.sort_active ? filters.direction : '', report_period: filters.report_period || 'all', per_page: filters.per_page || '10', ...(action === 'index' ? query : params) });
     };
     const employee = ticketRole === 'employee';
     const [receipt, setReceipt] = useState(null);
@@ -529,10 +529,21 @@ export function TicketScreen({ selectedTicket = null, priorityLabels = defaultPr
         setDateFrom('');
         setDateTo('');
         setSearch('');
-        router.get(ticketRoute('index', { view: filters.view, search: '', date_from: '', date_to: '', branch_filter: '', location_filter: '', status_filter: 'all', priority_filter: 'all', assignee_filter: '', resolver_filter: '', closed_period: '' }), {}, { preserveState: true, preserveScroll: true });
+        router.get(ticketRoute('index', { view: filters.view, search: '', date_from: '', date_to: '', branch_filter: '', location_filter: '', status_filter: 'all', priority_filter: 'all', assignee_filter: '', resolver_filter: '', closed_period: '', sort: '', direction: '' }), {}, { preserveState: true, preserveScroll: true, only: ['tickets', 'filters'] });
     };
-    const sortTickets = (key, direction = filters.sort === key && filters.direction === 'asc' ? 'desc' : 'asc') => {
-        router.get(ticketRoute('index', { view: filters.view, search, sort: key, direction }), {}, { preserveScroll: true });
+    const sortTickets = (key, direction) => {
+        // Header clicks cycle ascending -> descending -> default (newest created first).
+        // Explicit directions from mobile controls bypass the cycle.
+        let sort = key;
+        if (!direction) {
+            if (filters.sort_active && filters.sort === key) {
+                if (filters.direction === 'asc') direction = 'desc';
+                else { sort = ''; direction = ''; }
+            } else direction = 'asc';
+        }
+        router.get(ticketRoute('index', { view: filters.view, search, sort, direction }), {}, {
+            preserveState: true, preserveScroll: true, only: ['tickets', 'filters'],
+        });
     };
     // Show only the views allowed by the flowchart; backend checks enforce the same boundary.
     // Sidebar page labels use a capital first letter for every word.
@@ -727,7 +738,7 @@ export function TicketScreen({ selectedTicket = null, priorityLabels = defaultPr
                         {/* Compact columns at wide widths, labeled ticket rows when the list gets narrow. */}
                         <div className="ticket-list-mobile-sort">
                             <label>Sort by<select value={filters.sort || 'created_at'} onChange={e => sortTickets(e.target.value, 'asc')}>{ticketColumns.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-                            <button type="button" className="ticket-secondary" onClick={() => sortTickets(filters.sort || 'created_at')}>{filters.direction === 'asc' ? 'Ascending ↑' : 'Descending ↓'}</button>
+                            <button type="button" className="ticket-secondary" onClick={() => sortTickets(filters.sort || 'created_at', filters.direction === 'asc' ? 'desc' : 'asc')}>{filters.direction === 'asc' ? 'Ascending ↑' : 'Descending ↓'}</button>
                         </div>
                         </div>
                         <div className="ticket-tile-grid" aria-label="Tickets">
@@ -738,7 +749,7 @@ export function TicketScreen({ selectedTicket = null, priorityLabels = defaultPr
                                 <colgroup>{ticketColumns.map(([key, , width]) => <col key={key} style={{ width: `${width}%` }} />)}</colgroup>
                                 <thead role="rowgroup"><tr role="row">
                                     {ticketColumns.map(([key, label]) =>
-                                        <th key={key} scope="col" aria-sort={filters.sort === key ? (filters.direction === 'asc' ? 'ascending' : 'descending') : 'none'}><button type="button" className="ticket-sort" onClick={() => sortTickets(key)}>{label} <span aria-hidden="true">{filters.sort === key ? (filters.direction === 'asc' ? '↑' : '↓') : '↕'}</span></button></th>
+                                        <th key={key} scope="col" aria-sort={filters.sort === key ? (filters.direction === 'asc' ? 'ascending' : 'descending') : 'none'}><button type="button" className="ticket-sort" title="Click to cycle ascending, descending, then default order" onClick={() => sortTickets(key)}>{label} <span aria-hidden="true">{filters.sort === key ? (filters.direction === 'asc' ? '↑' : '↓') : '↕'}</span></button></th>
                                     )}
                                 </tr></thead>
                                 <tbody role="rowgroup">{tickets.data.map(t => {

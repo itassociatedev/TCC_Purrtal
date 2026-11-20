@@ -302,8 +302,8 @@ class TicketController extends Controller
             }
         }
         // Validate the sort key above and use explicit columns/subqueries: no raw user SQL.
-        $sort = $filters['sort'] ?? 'created_at';
-        $direction = $filters['direction'] ?? 'desc';
+        $sort = ($filters['sort'] ?? null) ?: 'created_at';
+        $direction = ($filters['direction'] ?? null) ?: 'desc';
         $sortColumn = match ($sort) {
             'branch' => DB::raw('COALESCE((SELECT name FROM ticket_locations WHERE id = tickets.ticket_location_id), (SELECT name FROM branches WHERE id = tickets.branch_id))'),
             'assignee' => User::select('name')->whereColumn('users.id', 'tickets.assigned_to')->limit(1),
@@ -378,7 +378,7 @@ class TicketController extends Controller
                 $ticket->setAttribute('sla', $sla->snapshot($ticket));
                 return $ticket;
             }),
-            'filters' => ['location_filter' => $locationFilter, 'branch_filter' => $branchFilter, 'assignee_filter' => $assigneeFilter, 'resolver_filter' => $resolverFilter, 'leaderboard_period' => $filters['leaderboard_period'] ?? 'all', 'priority_filter' => $priorityFilter, 'closed_period' => $filters['closed_period'] ?? '', 'date_from' => $filters['date_from'] ?? '', 'date_to' => $filters['date_to'] ?? '', 'status_filter' => $statusFilter, 'sort' => $sort, 'direction' => $direction, 'view' => $legacyStatusView ? 'all' : $view, 'search' => $filters['search'] ?? '', 'report_period' => $filters['report_period'] ?? 'all', 'per_page' => $perPage],
+            'filters' => ['location_filter' => $locationFilter, 'branch_filter' => $branchFilter, 'assignee_filter' => $assigneeFilter, 'resolver_filter' => $resolverFilter, 'leaderboard_period' => $filters['leaderboard_period'] ?? 'all', 'priority_filter' => $priorityFilter, 'closed_period' => $filters['closed_period'] ?? '', 'date_from' => $filters['date_from'] ?? '', 'date_to' => $filters['date_to'] ?? '', 'status_filter' => $statusFilter, 'sort' => $sort, 'direction' => $direction, 'sort_active' => $request->filled('sort'), 'view' => $legacyStatusView ? 'all' : $view, 'search' => $filters['search'] ?? '', 'report_period' => $filters['report_period'] ?? 'all', 'per_page' => $perPage],
             'categories' => config('ticketing.categories'),
             // The shared role/department exceptions may choose any affected branch.
             'departments' => \App\Models\Department::orderBy('name')->get(['id', 'name']),
