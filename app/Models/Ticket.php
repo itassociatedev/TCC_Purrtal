@@ -63,7 +63,7 @@ class Ticket extends Model
     // preview values are supplied by the server rather than the browser.
     protected $fillable = ['creator_id', 'branch_id', 'ticket_location_id', 'employee_name', 'subject', 'description', 'category', 'status', 'priority', 'assigned_to', 'closed_at', 'is_preview',
         'employee_department', 'affected_asset', 'operational_impact', 'supporting_links',
-        'sla_policy', 'sla_state', 'sla_received_at', 'reporting_channel', 'emergency_reason'];
+        'sla_policy', 'sla_state', 'sla_received_at'];
 
     protected function casts(): array
     {

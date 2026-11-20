@@ -444,7 +444,7 @@ class TicketController extends Controller
             $team = $preview ? collect() : User::with(['role','position','department'])->where('status','Active')->get()->filter(fn ($user) => TicketAccess::notificationRole($user) !== 'employee');
             foreach ($data as $row) {
                 $received = now()->utc();
-                $ticket = Ticket::create($row + ['is_preview' => $preview, 'reporting_channel' => 'portal']);
+                $ticket = Ticket::create($row + ['is_preview' => $preview]);
                 app(TicketSla::class)->enroll($ticket, $actor, $received);
                 app(TicketSla::class)->activity($ticket, $actor, 'imported', 'Created from a validated XLSX workbook by IT leadership.');
                 if (!$preview) Notification::send($team, new TicketNotification($ticket->id, "New imported ticket #{$ticket->ticket_code}: {$ticket->subject}"));
@@ -561,8 +561,6 @@ class TicketController extends Controller
             // Store URLs only; no files are fetched or uploaded by the application.
             'supporting_links' => ['nullable', 'array', 'max:10'],
             'supporting_links.*' => ['required', 'string', 'max:2048', 'url:http,https'],
-            'reporting_channel' => ['required', Rule::in($it ? ['email', 'viber', 'messaging_app'] : ['portal'])],
-            'emergency_reason' => [$it ? 'required' : 'prohibited', 'string', 'max:5000'],
         ]);
         // Preserve the account department name as a historical ticket snapshot.
         // Creation and SLA receipt use the same server timestamp. User-supplied
@@ -633,10 +631,7 @@ class TicketController extends Controller
             'operational_impact' => ['required', 'string', 'max:5000'],
             'supporting_links' => ['nullable', 'array', 'max:10'],
             'supporting_links.*' => ['required', 'string', 'max:2048', 'url:http,https'],
-            'reporting_channel' => ['required', Rule::in(['portal', 'email', 'viber', 'messaging_app'])],
-            'emergency_reason' => ['exclude_if:reporting_channel,portal', 'required', 'string', 'max:5000'],
         ]);
-        $data['emergency_reason'] ??= null;
 
         DB::transaction(function () use ($actor, $ticket, $data) {
             $locked = Ticket::whereKey($ticket->id)->lockForUpdate()->firstOrFail();

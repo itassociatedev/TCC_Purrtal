@@ -44,7 +44,7 @@ try {
     try { $controller->store($req($leader, $input)); throw new RuntimeException('Duplicate priority accepted'); }
     catch (ValidationException $e) { echo 'PASS: duplicate priority rejected'.PHP_EOL; }
     $ticketInput = ['branch_id' => $employee->branch_id, 'subject' => 'Custom priority verification', 'description' => 'Rolled-back test', 'category' => config('ticketing.categories')[0],
-        'priority' => $key, 'reporting_channel' => 'portal', 'affected_asset' => 'Workstation', 'operational_impact' => 'Testing'];
+        'priority' => $key, 'affected_asset' => 'Workstation', 'operational_impact' => 'Testing'];
     app(App\Http\Controllers\TicketController::class)->store($req($employee, $ticketInput));
     $ticket = Ticket::where('subject', $ticketInput['subject'])->latest('id')->firstOrFail();
     $sla = app(TicketSla::class);

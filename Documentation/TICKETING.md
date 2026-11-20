@@ -155,7 +155,7 @@ Leader-only `/tickets/leaderboard`, implemented by `TicketLeaderboard.php` and `
 
 Priority and ticket status are separate fields. Reporting time uses the server's ticket creation timestamp. SLA has its own UTC receipt field.
 
-The button is **Create ticket** for all roles. IT-created form submissions still require email/Viber/other-messaging reporting channel and a reason the original ticket could not be created. They are assigned to the creating IT worker and use current creation/receipt time. Employee submissions use portal reporting, start unassigned, and cannot supply emergency-only fields. All form submissions require an initial priority. Every new ticket starts `not_started`; clients cannot set creator, initial status or arbitrary assignment.
+The button is **Create ticket** for all roles. Reporting channel and inability-to-create reason fields have been removed for every role; the issue description supplies the explanation. They are assigned to the creating IT worker and use current creation/receipt time. Employee submissions start unassigned. All form submissions require an initial priority. Every new ticket starts `not_started`; clients cannot set creator, initial status or arbitrary assignment.
 
 Historical ticket names, department snapshots and retained descriptions are not rewritten to invent missing information.
 
@@ -283,7 +283,7 @@ Ticket IDs use `LOCATION-CATEGORY-YYNNNNN`, such as `ALB-HW-2600001`. Categories
 
 The annual ID backfill processes legacy tickets in creation order, using numeric ID for ties. It preserves already issued annual codes and advances the counters in the same transaction. Ticket history keeps its numeric foreign keys, and linked ticket codes in structured activity details are updated. Historic notification messages can still contain old codes. Search accepts the current code. The related-ticket field currently resolves legacy compact codes or numeric IDs, so it does not yet resolve the new hyphenated codes. Apply migrations with ticket writes paused.
 
-`tickets` retains identity snapshots, creator/assignee foreign keys and nullable branch/custom-location foreign keys, subject/description/category/status/priority, department, affected asset, operational impact, supporting-links JSON, timestamps/closed_at, preview flag, reporting channel/emergency reason, and SLA policy/state/receipt.
+`tickets` retains identity snapshots, creator/assignee foreign keys and nullable branch/custom-location foreign keys, subject/description/category/status/priority, department, affected asset, operational impact, supporting-links JSON, timestamps/closed_at, preview flag and SLA policy/state/receipt. Reporting channel/emergency reason columns and copied receipt-history metadata were removed on 20 November 2026.
 
 `ticket_activities`: ID, ticket FK (cascade delete), nullable actor FK (null on actor deletion), type, message, details JSON and created_at; indexed by ticket + creation time. `ticket_preview_users` registers test identities by role/slot. Existing users, roles, branches, departments, notification, cache and session infrastructure remain shared dependencies.
 
@@ -497,3 +497,11 @@ Tracked closure sends the requester a `Closed: <closure note>` notification afte
 - `tests/ticket-notification-read.test.mjs`: initial-load badge updates, duplicate clicks, failed reads and old-alert selected-ticket navigation.
 
 The PHP integration scripts use the configured local database with rolled-back fixtures and suppressed notifications. Review environment configuration before running them; they are not database initialization commands. Frontend handler checks execute extracted handlers with deterministic doubles and do not replace browser interaction testing.
+
+### Ticket action labels and delay documentation
+
+Action choices use title capitalization without changing the submitted action keys. Document SLA Risk / Delay And Revised Estimate asks for a single required Reason For Anticipated Delay / SLA Risk (`delay_reason`), actions already taken, assistance/approval needed (or none), and revised estimate/next-update time. No second generic message is required. The service uses the delay explanation as the activity and notification message, while retaining optional separate notes from older clients for compatibility. Existing activity records are not rewritten.
+
+### Removed reporting metadata (20 November 2026)
+
+Creation, revision, details, XLSX import defaults, demo generation and SLA receipt events no longer collect or write `reporting_channel` or `emergency_reason`. The migration `2026_11_20_000001_remove_ticket_emergency_reporting_fields.php` drops both columns for all existing tickets and removes these JSON keys (plus `channel` on receipt events) from history. Ticket records and their other fields remain. Rollback restores empty/default columns only; removed values are not recoverable through migration rollback. Descriptions remain the place to explain the issue. IT-created tickets still use creation time, auto-assign to their creator, and follow normal SLA rules.

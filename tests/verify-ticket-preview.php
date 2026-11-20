@@ -20,7 +20,6 @@ $check = function ($condition, $message) {
 $request = function ($name, $actor, $input = []) use ($app) {
     if (str_ends_with($name, '.store')) {
         $input = array_merge([
-            'reporting_channel' => 'portal',
             'employee_department' => 'Operations',
             'affected_asset' => 'Reception printer',
             'operational_impact' => 'Printing is delayed', 'supporting_links' => ['https://example.com/screenshot'],

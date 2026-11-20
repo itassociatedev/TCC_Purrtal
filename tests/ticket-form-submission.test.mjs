@@ -65,7 +65,7 @@ try {
         ['acknowledge', 'member', {}, { assessment: 'Checked service', next_steps: 'Investigate' }, { action: 'acknowledge', assessment: 'Checked service' }],
         ['resume', 'member', { sla: { enabled: true, paused: true } }, { note: 'Vendor available' }, { action: 'resume', note: 'Vendor available' }],
         ['update', 'member', {}, { note: 'Investigating', vendor: 'Sample vendor' }, { action: 'update', vendor: 'Sample vendor' }],
-        ['delay', 'member', {}, { note: 'Revised estimate', delay_reason: 'Parts', actions_taken: 'Contacted vendor', assistance_required: 'Delivery', next_update_at: '2026-10-28T16:00' }, { action: 'delay', delay_reason: 'Parts' }],
+        ['delay', 'member', {}, { delay_reason: 'Parts', actions_taken: 'Contacted vendor', assistance_required: 'Delivery', next_update_at: '2026-10-28T16:00' }, { action: 'delay', delay_reason: 'Parts' }],
         ['restore', 'member', {}, { workaround: 'Backup service', recovery_plan: 'Repair primary' }, { action: 'restore', workaround: 'Backup service' }],
         ['approve_workaround', 'leader', { priority: 'critical' }, { workaround: 'Backup accepted', recovery_plan: 'Repair primary' }, { action: 'approve_workaround' }],
         ['resolve', 'member', {}, { findings: 'Fault found', troubleshooting_performed: 'Tested', corrective_actions: 'Repaired', resolution_details: 'Restored' }, { action: 'save', status: 'resolved' }],
@@ -83,6 +83,10 @@ try {
         const tree = capture(TicketEditor, { ticket: { ...base, ...ticketOverrides }, role,
             members: [{ id: 3, name: 'Member' }, { id: 7, name: 'Other member' }], actor,
             ticketRoute: () => '/tickets/preview/42?preview_user=1', onClose: () => { closed = true; } });
+        if (action === 'delay') {
+            const textareas = nodes(tree, node => node.type === 'textarea');
+            assert.equal(textareas.length, 3, 'Delay requires one reason plus actions and assistance, without a duplicate message');
+        }
         const form = nodes(tree, node => node.type === 'form')[0];
         assert.ok(form, `${action}: form is rendered`);
         let prevented = false;
@@ -102,12 +106,13 @@ try {
         console.log(`PASS: ${action} submits through the installed Inertia hook`);
     }
 
+    for (const creationRole of ['employee', 'member', 'leader']) {
     requests.length = 0;
     state.page = { auth: { user: { id: 1, name: 'Requester', branch_id: 1 } } };
     state.input = { subject: 'Printer issue', description: 'Cannot print', category: 'Hardware', employee_department: 'Operations',
         affected_asset: 'Printer', operational_impact: 'Printing delayed',
         supporting_links: 'https://example.com/one\nhttps://example.com/two' };
-    const screen = capture(TicketScreen, { creationPage: true, ticketRole: 'employee',
+    const screen = capture(TicketScreen, { creationPage: true, ticketRole: creationRole,
         tickets: { total: 0, data: [], links: [], last_page: 1 }, filters: { view: 'all', search: '', per_page: '10' },
         categories: ['Hardware'], branches: [{ id: 1, name: 'Makati' }], members: [], reports: null,
         ticketUser: state.page.auth.user, preview: false, canPreview: false, previewUsers: [] });
@@ -120,7 +125,9 @@ try {
     for (const field of ['issue_at', 'issue_time_type', 'affected_users', 'affected_areas', 'error_messages', 'troubleshooting_steps', 'follow_up_contact']) assert.equal(Object.hasOwn(requests[0].data, field), false);
     assert.equal(Object.hasOwn(requests[0].data, 'emergency_received_at'), false);
     assert.equal(Object.hasOwn(requests[0].data, 'emergency_reason'), false);
-    console.log('PASS: new employee ticket submits through the installed Inertia hook');
+    assert.equal(Object.hasOwn(requests[0].data, 'reporting_channel'), false);
+    console.log(`PASS: new ${creationRole} ticket submits without removed reporting fields`);
+    }
 } finally {
     inertia.router.patch = originalPatch;
     inertia.router.post = originalPost;

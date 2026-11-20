@@ -45,7 +45,7 @@ class TicketSla
             'last_update_at' => $this->stamp(), 'alerts' => []];
         $ticket->save();
         $this->activity($ticket, $actor, 'received', 'Ticket received; SLA support time starts at receipt.',
-            ['received_at' => $ticket->sla_received_at->toIso8601String(), 'channel' => $ticket->reporting_channel]);
+            ['received_at' => $ticket->sla_received_at->toIso8601String()]);
     }
 
     public function snapshot(Ticket $ticket, $at = null): array
@@ -270,9 +270,13 @@ class TicketSla
             if ($action === 'delay') {
                 $details = [];
                 foreach (['delay_reason', 'actions_taken', 'assistance_required', 'next_update_at'] as $key) $details[$key] = $this->need($data, $key);
-                $note = $this->need($data, 'note');
+                // The delay reason is the single required explanation. Preserve an optional
+                // separate note from older clients without requiring the redundant input.
+                $note = trim($data['note'] ?? '') ?: $details['delay_reason'];
                 $this->activity($ticket, $actor, 'delay', $note, $details);
-                $this->notify($ticket, 'Delay / revised estimate: '.$note.'. Reason: '.$details['delay_reason'].'. Next update: '.$details['next_update_at']);
+                $this->notify($ticket, 'Delay / revised estimate: '.$note
+                    .($note !== $details['delay_reason'] ? '. Reason: '.$details['delay_reason'] : '')
+                    .'. Next update: '.$details['next_update_at']);
             }
             if ($action === 'reopen' && !in_array($oldStatus, ['closed', 'resolved']) && empty($ticket->sla_state['workaround_accepted_at'])) {
                 throw ValidationException::withMessages(['action' => 'Only resolved, closed or accepted-workaround tickets can be reopened.']);

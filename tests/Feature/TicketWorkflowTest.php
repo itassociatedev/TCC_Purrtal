@@ -13,7 +13,7 @@ function ticketUser(string $role): User
 
 function ticketIntakeFields(): array
 {
-    return ['reporting_channel' => 'portal', 'employee_department' => 'Operations', 'priority' => 'medium',
+    return ['employee_department' => 'Operations', 'priority' => 'medium',
         'affected_asset' => 'Workstation',
         'operational_impact' => 'Work is delayed'];
 }

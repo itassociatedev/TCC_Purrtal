@@ -24,7 +24,7 @@ try {
     $check = function ($ok, $message) { if (!$ok) throw new RuntimeException($message); echo 'PASS: '.$message.PHP_EOL; };
     $payload = ['branch_id' => $employee->branch_id, 'subject' => 'Receipt verification '.bin2hex(random_bytes(8)),
         'description' => 'Temporary receipt check', 'category' => config('ticketing.categories')[0],
-        'priority' => 'low', 'reporting_channel' => 'portal', 'affected_asset' => 'Workstation', 'operational_impact' => 'Testing'];
+        'priority' => 'low', 'affected_asset' => 'Workstation', 'operational_impact' => 'Testing'];
     session()->forget('tickets.submission_acknowledgement');
     try { $send($employee, [...$payload, 'subject' => '']); throw new RuntimeException('Invalid submission accepted'); }
     catch (ValidationException $e) { $check(!session()->has('tickets.submission_acknowledgement'), 'Failed submission does not create receipt'); }
@@ -33,6 +33,6 @@ try {
     $ticket = Ticket::findOrFail($receipt['id']);
     $check($receipt['subject'] === $payload['subject'] && $receipt['code'] === $ticket->ticket_code, 'Non-IT submission receives matching ticket subject and code');
     $check(empty($ticket->sla_state['acknowledged_at']) && $ticket->status === 'not_started', 'Receipt does not acknowledge SLA or change ticket status');
-    $send($member, [...$payload, 'branch_id' => $member->branch_id, 'subject' => 'IT receipt exclusion', 'reporting_channel' => 'email', 'emergency_reason' => 'Testing']);
+    $send($member, [...$payload, 'branch_id' => $member->branch_id, 'subject' => 'IT receipt exclusion', ]);
     $check(!session()->has('tickets.submission_acknowledgement'), 'IT submission does not create popup receipt');
 } finally { DB::rollBack(); session()->forget('tickets.submission_acknowledgement'); }

@@ -47,13 +47,12 @@ try {
     $intake = ['branch_id' => $member->branch_id, 'subject' => 'Emergency enrollment check',
         'description' => 'Portal unavailable', 'category' => 'Network', 'employee_department' => \App\Models\Department::firstOrCreate(['name' => 'IT'])->name,
         'affected_asset' => 'Branch network', 'operational_impact' => 'Cannot access portal',
-        'reporting_channel' => 'viber',
-        'emergency_reason' => 'No connectivity to portal', 'emergency_received_at' => now()->subMinutes(10)->toIso8601String(),
+        'emergency_received_at' => now()->subMinutes(10)->toIso8601String(),
         'priority' => 'critical'];
     $controller->store($request('tickets.store', $member, $intake));
     $emergency = Ticket::where('subject', 'Emergency enrollment check')->firstOrFail();
     $sla = app(TicketSla::class);
-    $assert($emergency->assigned_to === $member->id && $emergency->priority === 'critical' && $emergency->reporting_channel === 'viber'
+    $assert($emergency->assigned_to === $member->id && $emergency->priority === 'critical'
         && $sla->snapshot($emergency)['resolution_elapsed'] === 0, 'IT creation uses creation time, assigns owner and applies initial priority');
     try {
         $controller->update($request('tickets.update', $employee, ['status' => 'closed']), $emergency);

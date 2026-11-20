@@ -189,34 +189,35 @@ export function TicketEditor({ ticket, role, members, onClose, ticketRoute, acto
     const history = [...(ticket.activities || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at) || a.id - b.id);
     const tracked = ticket.sla?.enabled;
     const reopening = ticket.status === 'closed';
-    const actions = canManage ? (reopening ? [['reopen', 'Reopen ticket']] : [
-        ['save', 'Assignment / priority / status'],
+    const actions = canManage ? (reopening ? [['reopen', 'Reopen Ticket']] : [
+        ['save', 'Assignment / Priority / Status'],
         ...(tracked ? [
-            ...(!ticket.sla_state?.acknowledged_at ? [['acknowledge', 'Acknowledge and communicate next steps']] : []),
-            ['update', 'Send progress update / vendor details'],
-            ['delay', 'Document SLA risk / delay and revised estimate'],
-            ...(ticket.sla_state?.workaround_accepted_at ? [['reopen', 'Resume original timer after failed workaround']] : []),
+            ...(!ticket.sla_state?.acknowledged_at ? [['acknowledge', 'Acknowledge And Communicate Next Steps']] : []),
+            ['update', 'Send Progress Update / Vendor Details'],
+            ['delay', 'Document SLA Risk / Delay And Revised Estimate'],
+            ...(ticket.sla_state?.workaround_accepted_at ? [['reopen', 'Resume Original Timer After Failed Workaround']] : []),
             // Existing paused tickets can resume, but no role may create a new pause.
-            ...(ticket.sla?.paused && !ticket.sla?.resolution_complete ? [['resume', 'Resume resolution timer']] : []),
-            ...(!['resolved', 'closed'].includes(ticket.status) ? [['restore', 'Restore service temporarily'], ...(role === 'leader' && ticket.priority === 'critical' ? [['approve_workaround', 'Accept P1 workaround and recovery plan']] : [])] : []),
+            ...(ticket.sla?.paused && !ticket.sla?.resolution_complete ? [['resume', 'Resume Resolution Timer']] : []),
+            ...(!['resolved', 'Closed'].includes(ticket.status) ? [['restore', 'Restore Service Temporarily'], ...(role === 'leader' && ticket.priority === 'critical' ? [['approve_workaround', 'Accept P1 Workaround And Recovery Plan']] : [])] : []),
         ] : []),
-        ...(ticket.status !== 'resolved' ? [['resolve', 'Resolve ticket']] : [['reopen', 'Reopen for further work'], ...(role === 'leader' ? [['close', 'Close ticket']] : [])]),
+        ...(ticket.status !== 'resolved' ? [['resolve', 'Resolve Ticket']] : [['reopen', 'Reopen For Further Work'], ...(role === 'leader' ? [['close', 'Close Ticket']] : [])]),
     ]) : [];
     if (canAssignDuringHandover && !onReviewHold && !reopening) {
         // Delegate only assignment, priority and ordinary status changes, not supervisor approval.
         const saveIndex = actions.findIndex(([value]) => value === 'save');
         if (saveIndex !== -1) actions.splice(saveIndex, 1);
-        actions.unshift(['handover_assign', 'Assign / priority / status']);
+        actions.unshift(['handover_assign', 'Assign / Priority / Status']);
     }
-    if (role === 'leader' && ticket.member_submission && !['closed', 'rejected'].includes(ticket.status)) {
-        if (!onReviewHold) actions.push(['send_back', 'Send back for revision']);
-        actions.push(['reject', 'Reject ticket']);
+    if (role === 'leader' && ticket.member_submission && !['closed', 'Rejected'].includes(ticket.status)) {
+        if (!onReviewHold) actions.push(['send_back', 'Send Back For Revision']);
+        actions.push(['reject', 'Reject Ticket']);
     }
-    if (requester && !onReviewHold) actions.push(['reply', 'Reply / report a continuing issue'], ...(ticket.status === 'resolved' ? [['confirm', 'Confirm service is working']] : []));
+    if (requester && !onReviewHold) actions.push(['reply', 'Reply / Report A Continuing Issue'], ...(ticket.status === 'resolved' ? [['confirm', 'Confirm Service Is Working']] : []));
     // Only fields relevant to the selected action are sent. Server authorization
     // independently checks role, assignment, and live/preview boundaries.
     const form = useForm({ action: actions[0]?.[0] || 'save', priority: ticket.priority || 'low', assigned_to: ticket.assigned_to || '', status: '',
         priority_reason: '', note: '', assessment: '', next_steps: '',
+        delay_reason: '', actions_taken: '', assistance_required: '',
         findings: '', troubleshooting_performed: '', corrective_actions: '', resolution_details: '',
         workaround: '', recovery_plan: '', vendor: '', vendor_reference: '', vendor_notified_at: '', next_update_at: '', linked_ticket_id: '', rating: 5 });
     const action = form.data.action;
@@ -243,7 +244,7 @@ export function TicketEditor({ ticket, role, members, onClose, ticketRoute, acto
                 restore: ['workaround', 'recovery_plan'], approve_workaround: ['workaround', 'recovery_plan'],
                 resolve: ['findings', 'resolution_details'],
                 send_back: ['note'], reject: ['note'], close: ['note'], reopen: ['note'], reply: ['note'], confirm: ['note'], feedback: ['note', 'rating'], save: ['priority_reason', 'note'],
-                delay: ['note', 'delay_reason', 'actions_taken', 'assistance_required', 'next_update_at'],
+                delay: ['delay_reason', 'actions_taken', 'assistance_required', 'next_update_at'],
             };
             (fields[data.action] || []).forEach(key => { if (data[key] !== '') payload[key] = data[key]; });
             ['vendor_notified_at', 'next_update_at'].forEach(key => { if (payload[key]) payload[key] = new Date(payload[key]).toISOString(); });
@@ -267,10 +268,10 @@ export function TicketEditor({ ticket, role, members, onClose, ticketRoute, acto
     return <div className="ticket-overlay" onClick={onClose}>
         <section className="ticket-dialog" role="dialog" aria-modal="true" aria-labelledby="ticket-title" onClick={e => e.stopPropagation()} onKeyDown={e => e.key === 'Escape' && onClose()}>
             <div className="ticket-card-heading"><div><span className="ticket-eyebrow">TICKET #{ticket.ticket_code}</span><h2 id="ticket-title">{ticket.subject}</h2></div><button type="button" onClick={onClose} aria-label="Close ticket">✕</button></div>
-            <dl className="ticket-details"><div><dt>Created by</dt><dd>{ticket.employee_name}</dd></div><div><dt>Branch</dt><dd>{ticket.ticket_location?.name || ticket.branch?.name}</dd></div><div><dt>Category</dt><dd>{ticket.category}</dd></div>{ticket.closed_at && <div><dt>Closed at</dt><dd>{new Date(ticket.closed_at).toLocaleString()}</dd></div>}<div><dt>Priority</dt><dd>{priorityLabels[ticket.priority] || 'Low'}</dd></div><div><dt>Status</dt><dd>{labels[ticket.status]}</dd></div><div><dt>Assigned to</dt><dd>{ticket.assignee?.name || 'Unassigned — awaiting leader allocation'}</dd></div><div><dt>Reporting channel</dt><dd>{ticket.reporting_channel || 'portal'}</dd></div></dl>
+            <dl className="ticket-details"><div><dt>Created by</dt><dd>{ticket.employee_name}</dd></div><div><dt>Branch</dt><dd>{ticket.ticket_location?.name || ticket.branch?.name}</dd></div><div><dt>Category</dt><dd>{ticket.category}</dd></div>{ticket.closed_at && <div><dt>Closed at</dt><dd>{new Date(ticket.closed_at).toLocaleString()}</dd></div>}<div><dt>Priority</dt><dd>{priorityLabels[ticket.priority] || 'Low'}</dd></div><div><dt>Status</dt><dd>{labels[ticket.status]}</dd></div><div><dt>Assigned to</dt><dd>{ticket.assignee?.name || 'Unassigned — awaiting leader allocation'}</dd></div></dl>
             <div className="ticket-dialog-intake"><TicketSlaSummary ticket={ticket} /></div>
             <p className="ticket-description">{ticket.description}</p>
-            <div className="ticket-dialog-intake"><TicketIntakeDetails ticket={ticket} />{ticket.emergency_reason && <p>Emergency reporting reason: {ticket.emergency_reason}</p>}</div>
+            <div className="ticket-dialog-intake"><TicketIntakeDetails ticket={ticket} /></div>
             {/* Native validation otherwise stops submission before Inertia can
                 display errors. Surface its message beside the save controls too. */}
             {actions.length > 0 && <form onSubmit={submit} onInvalidCapture={e => form.setError('validation', e.target.validationMessage)}>
@@ -294,10 +295,11 @@ export function TicketEditor({ ticket, role, members, onClose, ticketRoute, acto
                 </>}
                 {action === 'acknowledge' && <>{field('assessment', 'Initial assessment', true)}{field('next_steps', 'Next steps to communicate to requester', true)}</>}
 
-                {['resume', 'update', 'delay', 'close', 'reopen', 'reply', 'confirm', 'feedback'].includes(action) && field('note', action === 'feedback' ? 'Feedback comments (optional)' : action === 'close' ? 'Closure reason and requester follow-up' : action === 'reopen' ? 'Reason for reopening' : 'Message / reason / findings / next steps', !['confirm', 'feedback'].includes(action))}
+                {['resume', 'update', 'close', 'reopen', 'reply', 'confirm', 'feedback'].includes(action) && field('note', action === 'feedback' ? 'Feedback comments (optional)' : action === 'close' ? 'Closure reason and requester follow-up' : action === 'reopen' ? 'Reason for reopening' : 'Message / reason / findings / next steps', !['confirm', 'feedback'].includes(action))}
                 {action === 'send_back' && field('note', 'Explain what the creator needs to revise', true)}
                 {action === 'reject' && field('note', 'Rejection reason (optional)')}
-                {action === 'delay' && <>{field('delay_reason', 'Reason for anticipated delay', true)}{field('actions_taken', 'Actions already taken', true)}{field('assistance_required', 'Assistance or approval required (or none)', true)}<label>Revised estimate / next update<input required type="datetime-local" value={form.data.next_update_at} onChange={e => form.setData('next_update_at', e.target.value)} /></label></>}
+                {/* One required explanation replaces the overlapping generic message and delay reason. */}
+                {action === 'delay' && <>{field('delay_reason', 'Reason For Anticipated Delay / SLA Risk', true)}{field('actions_taken', 'Actions already taken', true)}{field('assistance_required', 'Assistance or approval required (or none)', true)}<label>Revised estimate / next update<input required type="datetime-local" value={form.data.next_update_at} onChange={e => form.setData('next_update_at', e.target.value)} /></label></>}
                 {['restore', 'approve_workaround'].includes(action) && <>
                     <p className="ticket-form-note">Service is available through a workaround. The ticket stays open until the underlying issue is fixed. Recording restoration does not stop the SLA timer; leader acceptance of a Critical workaround can satisfy the resolution target.</p>
                     {field('workaround', 'How service was restored temporarily', true)}
@@ -376,8 +378,6 @@ function TicketRevisionForm({ ticket, onClose }) {
         affected_asset: ticket.affected_asset || '',
         operational_impact: ticket.operational_impact || '',
         supporting_links: (ticket.supporting_links || []).join('\n'),
-        reporting_channel: ticket.reporting_channel || 'portal',
-        emergency_reason: ticket.emergency_reason || '',
     });
     const submit = event => {
         event.preventDefault();
@@ -400,10 +400,6 @@ function TicketRevisionForm({ ticket, onClose }) {
             <label>Details of issue<textarea required rows={5} maxLength={10000} value={form.data.description} onChange={e => form.setData('description', e.target.value)} /></label>
             <label>Business or clinical operational impact<textarea required rows={3} maxLength={5000} value={form.data.operational_impact} onChange={e => form.setData('operational_impact', e.target.value)} /></label>
             <label>Supporting links (optional, one per line)<textarea rows={3} value={form.data.supporting_links} onChange={e => form.setData('supporting_links', e.target.value)} /></label>
-            <label>Reporting channel<select required value={form.data.reporting_channel} onChange={e => form.setData('reporting_channel', e.target.value)}>
-                <option value="portal">Portal</option><option value="email">Email</option><option value="viber">Viber</option><option value="messaging_app">Other messaging app</option>
-            </select></label>
-            {form.data.reporting_channel !== 'portal' && <label>Reason the original ticket could not be created<textarea required rows={3} maxLength={5000} value={form.data.emergency_reason} onChange={e => form.setData('emergency_reason', e.target.value)} /></label>}
             {Object.entries(form.errors).map(([key, error]) => <p key={key} className="ticket-error" role="alert">{error}</p>)}
             <div className="ticket-dialog-actions">
                 <button type="button" className="ticket-secondary" onClick={onClose}>Cancel</button>
@@ -506,15 +502,15 @@ export function TicketScreen({ selectedTicket = null, priorityLabels = defaultPr
     // Build the form for this role; Laravel independently validates every submitted field.
     const form = useForm({ branch_id: branches.find(b => b.id === actor.branch_id)?.id || branches[0]?.id || (ticketLocations.length ? `location:${ticketLocations[0].id}` : ''), subject: '', description: '', category: '', priority: '',
         employee_department: actor.department || '', affected_asset: '', operational_impact: '',
-        supporting_links: '', reporting_channel: employee ? 'portal' : 'email', emergency_reason: '' });
+        supporting_links: '' });
     const submitTicket = e => {
         e.preventDefault();
         // One URL per line becomes a validated JSON array. No image upload occurs.
         form.transform(data => {
-            const { emergency_reason, branch_id, ...intake } = data;
+            const { branch_id, ...intake } = data;
             const location = String(branch_id).startsWith('location:');
             // The server supplies creation time; no client timestamp is submitted.
-            return { ...intake, ...(location ? { ticket_location_id: branch_id.slice(9) } : { branch_id }), ...(employee ? {} : { emergency_reason }),
+            return { ...intake, ...(location ? { ticket_location_id: branch_id.slice(9) } : { branch_id }),
             supporting_links: data.supporting_links.split(/\r?\n/).map(url => url.trim()).filter(Boolean),
         }; });
         form.post(ticketRoute('store'), { preserveScroll: true, onSuccess: () => {
@@ -599,7 +595,7 @@ export function TicketScreen({ selectedTicket = null, priorityLabels = defaultPr
                 onSelectTicket={setSelected}
             />}
             {dashboard && <section className="ticket-card employee-ticket-dashboard" aria-labelledby="employee-dashboard-title">
-                {(leader || employee) && <div className="employee-ticket-actions"><div><h3>{leader ? 'Manage team support' : member ? 'Manage your support workload' : 'Need IT support?'}</h3><p>{leader ? 'Review team tickets, manage your assignments, or log an emergency request.' : member ? 'Review your assignments, browse team tickets, or log an emergency request.' : 'Create a request or check updates on your tickets.'}</p></div><div>
+                {(leader || employee) && <div className="employee-ticket-actions"><div><h3>{leader ? 'Manage team support' : member ? 'Manage your support workload' : 'Need IT support?'}</h3><p>{leader ? 'Review team tickets, manage your assignments, or create a ticket.' : member ? 'Review your assignments, browse team tickets, or create a ticket.' : 'Create a request or check updates on your tickets.'}</p></div><div>
                     <Link className="ticket-primary" href={ticketRoute('create')}>{employee ? '+ Create ticket' : '+ Create ticket'}</Link>
                     <Link className="ticket-secondary" href={ticketRoute('index', { view: employee ? 'all' : 'assigned', status_filter: 'all' })}>{employee ? 'View my tickets' : 'Assigned to me'}</Link>
                     {!employee && <Link className="ticket-secondary" href={ticketRoute('index', { view: 'all', assignee_filter: '', status_filter: 'all' })}>All tickets</Link>}
@@ -630,7 +626,7 @@ export function TicketScreen({ selectedTicket = null, priorityLabels = defaultPr
                     <div><h3>My support rating</h3><p>Ratings from tickets you resolved. Reassignment does not transfer ratings.</p></div>
                     <div><strong>{memberRating?.count ? `${Number(memberRating.average).toFixed(1)} / 5` : 'Not rated yet'}</strong><span>{memberRating?.count ?? 0} rated ticket{memberRating?.count === 1 ? '' : 's'}</span></div>
                 </div>}
-                {member && <div className="employee-ticket-actions"><div><h3>{leader ? 'Manage team support' : member ? 'Manage your support workload' : 'Need IT support?'}</h3><p>{leader ? 'Review team tickets, manage your assignments, or log an emergency request.' : member ? 'Review your assignments, browse team tickets, or log an emergency request.' : 'Create a request or check updates on your tickets.'}</p></div><div>
+                {member && <div className="employee-ticket-actions"><div><h3>{leader ? 'Manage team support' : member ? 'Manage your support workload' : 'Need IT support?'}</h3><p>{leader ? 'Review team tickets, manage your assignments, or create a ticket.' : member ? 'Review your assignments, browse team tickets, or create a ticket.' : 'Create a request or check updates on your tickets.'}</p></div><div>
                     <Link className="ticket-primary" href={ticketRoute('create')}>{employee ? '+ Create ticket' : '+ Create ticket'}</Link>
                     <Link className="ticket-secondary" href={ticketRoute('index', { view: employee ? 'all' : 'assigned', status_filter: 'all' })}>{employee ? 'View my tickets' : 'Assigned to me'}</Link>
                     {!employee && <Link className="ticket-secondary" href={ticketRoute('index', { view: 'all', assignee_filter: '', status_filter: 'all' })}>All tickets</Link>}
@@ -646,7 +642,6 @@ export function TicketScreen({ selectedTicket = null, priorityLabels = defaultPr
             {!dashboard && !ranking && <Link className="ticket-primary ticket-emergency-toggle" href={ticketRoute(creationPage ? 'index' : 'create')}>{creationPage ? 'Back to tickets' : employee ? '+ Create ticket' : '+ Create ticket'}</Link>}
             <div className={creationPage ? 'ticket-creation-page' : ''}>
                 {creationPage && <section className="ticket-card ticket-create"><div className="ticket-card-heading"><h2>{employee ? 'Submit a Ticket' : 'Create ticket'}</h2></div><form onSubmit={submitTicket}>
-                    {!employee && <><label>Emergency reporting channel<select value={form.data.reporting_channel} onChange={e => form.setData('reporting_channel', e.target.value)}><option value="email">Email</option><option value="viber">Viber</option><option value="messaging_app">Other messaging app</option></select></label><label>Why a ticket could not be created<textarea required maxLength={5000} value={form.data.emergency_reason} onChange={e => form.setData('emergency_reason', e.target.value)} /></label></>}
                     <label>Employee name<input value={actor.name} readOnly /></label>
                     {/* Account department is display-only; the server derives its own snapshot. */}
                     <label>Department<input readOnly value={actor.department || ''} placeholder="No department assigned" /></label>

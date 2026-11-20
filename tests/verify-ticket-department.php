@@ -30,7 +30,7 @@ try {
     $check(collect($props['departments'])->contains('id', $department->id), 'Existing department remains available in creation data');
     $input = ['branch_id' => TicketAccess::branches($employee)->firstOrFail()->id, 'subject' => 'Department dropdown verification',
         'description' => 'Rolled back', 'category' => 'Hardware', 'employee_department' => $department->name,
-        'affected_asset' => 'Printer', 'operational_impact' => 'Printing delayed', 'reporting_channel' => 'portal'];
+        'affected_asset' => 'Printer', 'operational_impact' => 'Printing delayed', ];
     // Exercise a direct submission that bypasses the required browser dropdown.
     foreach ([[], ['priority' => ''], ['priority' => 'not_set']] as $priorityInput) {
         try {

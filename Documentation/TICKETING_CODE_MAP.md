@@ -271,3 +271,7 @@ Applied the specific additive 2026_11_15_000001_create_task_id_settings.php migr
 | [TicketSla.php](../app/Services/TicketSla.php) | Validated tracked closure sends a requester notification; timing behavior is unchanged by navigation/feed changes. |
 
 Focused checks: [workload and deep links](../tests/verify-ticket-workload-filters.php), [notification separation](../tests/verify-ticket-notification-separation.php), [ticket fixes](../tests/verify-ticket-bugfixes.php), [bulk handlers](../tests/ticket-notification-actions.test.mjs), [single reads](../tests/ticket-notification-read.test.mjs). Database fixtures roll back and notifications are suppressed. These checks passed along with the production build in the implementation pass; no interactive browser audit was performed.
+
+## 20 November 2026 - Reporting metadata removal
+
+[Removal migration](../database/migrations/2026_11_20_000001_remove_ticket_emergency_reporting_fields.php) drops the two obsolete ticket columns and cleans copied metadata from activity JSON. Earlier migration definitions remain historical and are superseded by this migration. TicketController creation/import/revision handling, Ticket fillable attributes, TicketSla enrollment, TicketDemoFactory and React creation/revision/details no longer use these fields. [Read-only schema check](../tests/verify-ticket-reporting-removal.php) checks columns, model attributes and receipt-history metadata; form submission coverage exercises employee, member and supervisor creation without them.

@@ -1,5 +1,15 @@
 # Ticketing change history
 
+## 20 November 2026 - Remove reporting channel and emergency reason
+
+Removed Emergency Reporting Channel and Why A Ticket Could Not Be Created from every role's creation flow, revision form, details, backend validation, model attributes, import defaults and demo generation. SLA receipt events no longer copy a channel. Applied a focused migration to drop both database columns for all existing test tickets and clean obsolete metadata from historical activity JSON. Verified both columns/model attributes and copied receipt metadata are absent; 201 tickets remain. Form submission checks for all three workflow roles, receipt checks and production build passed. The older verify-ticket-department.php script fails its department snapshot assertion because it still authenticates the admin while passing a removed preview identity; this unrelated legacy test is not a passing check. Other ticket data and SLA behavior remain unchanged. Migration rollback recreates columns without restoring discarded values. Updated intake fixtures, comments, documentation and focused schema/form checks. No push performed.
+
+## 19 November 2026 - Action labels and single delay explanation
+
+Ticket management action choices now capitalize the first letter of every word, retaining identifiers and acronyms. Document SLA Risk / Delay And Revised Estimate uses one required Reason For Anticipated Delay / SLA Risk field instead of both the generic Message / Reason / Findings / Next Steps and delay reason. Actions already taken, assistance required and next-update estimate remain required. The frontend submits `delay_reason` without `note`; TicketSla uses it as the history/notification message when no legacy note is supplied and avoids repeating the same reason in the notification. Older clients can still send a separate note. Existing history is unchanged.
+
+Validation: form regression verifies three delay textareas and successful single-reason submission; transactional service regression verifies history persistence and missing-reason rejection. PHP syntax and production build passed. No push performed.
+
 ## 19 November 2026 - Comments and current references reconciled
 
 Updated the guide, documentation index, SLA notification reference and code map for resolver-based workload counts, filter interactions, selected-ticket authorization, separate notification feeds, read/poll concurrency and regression coverage. Corrected obsolete assignment-based resolution and missing closure-notification descriptions. Updated inline comments in TicketController, NotificationController, TicketNotification and HandleInertiaRequests to describe the existing implementation. This pass changes comments/documentation only; runtime behavior and database data are unchanged.

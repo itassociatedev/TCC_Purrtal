@@ -68,8 +68,6 @@ class TicketDemoFactory
                 'operational_impact' => 'Sample operational impact: access or printing delays affecting clinic workflows.',
                 'supporting_links' => [],
                 'assigned_to' => $scenario === 'new' && !$it ? null : $owner?->id,
-                'reporting_channel' => $it ? 'viber' : 'portal',
-                'emergency_reason' => $it ? 'Sample emergency: the portal could not be reached when IT was notified.' : null,
                 'is_preview' => $preview,
             ]);
             $sla->enroll($ticket, $creator, $received);

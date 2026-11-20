@@ -37,6 +37,14 @@ try {
     $inactive = $leader->replicate(); $inactive->email = 'inactive-check-'.bin2hex(random_bytes(8)).'@example.invalid'; $inactive->status = 'Inactive'; $inactive->save();
     try { $request(['action' => 'save', 'assigned_to' => $inactive->id]); throw new RuntimeException('Inactive assignee accepted'); }
     catch (ValidationException $e) { $check(isset($e->errors()['assigned_to']), 'Inactive assignee rejected'); }
+    $sla->apply($ticket->fresh(), $leader, 'leader', ['action' => 'delay', 'delay_reason' => 'Waiting for replacement part',
+        'actions_taken' => 'Contacted supplier', 'assistance_required' => 'None', 'next_update_at' => now()->addHour()->toIso8601String()]);
+    $event = $ticket->activities()->where('type', 'delay')->firstOrFail();
+    $check($event->message === 'Waiting for replacement part' && $event->details['delay_reason'] === $event->message, 'Delay accepts a single explanation and preserves it in history');
+    try {
+        $sla->apply($ticket->fresh(), $leader, 'leader', ['action' => 'delay', 'actions_taken' => 'Checked', 'assistance_required' => 'None', 'next_update_at' => now()->addHour()->toIso8601String()]);
+        throw new RuntimeException('Missing delay explanation accepted');
+    } catch (ValidationException $e) { $check(isset($e->errors()['delay_reason']), 'Delay still requires its explanation'); }
     $sla->apply($ticket->fresh(), $leader, 'leader', ['action' => 'acknowledge', 'assessment' => 'Checked', 'next_steps' => 'Repair']);
     $sla->apply($ticket->fresh(), $leader, 'leader', ['action' => 'save', 'status' => 'resolved', 'findings' => 'Fault found', 'resolution_details' => 'Fixed and verified']);
     Notification::fake();
