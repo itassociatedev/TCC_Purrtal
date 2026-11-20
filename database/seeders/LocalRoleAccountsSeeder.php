@@ -26,10 +26,13 @@ class LocalRoleAccountsSeeder extends Seeder
 
         DB::transaction(function () use ($roles, $branch, $operations, $it) {
             foreach ($roles as $role) {
-                $slug = Str::slug($role->name);
+                $roleSlug = Str::slug($role->name);
+                $slug = $roleSlug === 'executive-vice-president' ? 'evp' : $roleSlug;
                 $email = $slug.'@tcc.local';
                 $name = 'Local Role Test ('.$role->name.')';
                 $account = User::where('email', $email)->first();
+                // Adopt the older EVP test login rather than creating a second identity.
+                if (!$account && $slug === 'evp') $account = User::where('email', $roleSlug.'@tcc.local')->first();
                 // Never replace an existing employee or another role's credentials.
                 if ($account && ($account->name !== $name || (int) $account->role_id !== (int) $role->id)) {
                     throw new \RuntimeException("The email {$email} is already assigned to another account.");

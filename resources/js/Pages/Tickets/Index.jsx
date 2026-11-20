@@ -448,7 +448,7 @@ function TicketHandover({ members, handovers, today }) {
     </section>;
 }
 
-export function TicketScreen({ selectedTicket = null, priorityLabels = defaultPriorityLabels, selectablePriorityLabels = priorityLabels, prioritySettings = [], submissionAcknowledgement = null, prioritySummary = null, pendingFeedback = [], leaderboard = null, pendingImport = null, leaderSummary = null, memberRating = null, memberSummary = null, employeeSummary = null, creationPage = false, departments = [], filterBranches = [], ticketLocations = [], branchCodes = {}, ticketRole, tickets, filters, categories, branches, members, reports, memberWorkloads = [], slaReport, slaPolicy, ticketUser, canAssignDuringHandover = false, handoverMembers = [], handovers = [], handoverToday = null }) {
+export function TicketScreen({ canViewLeaderboard = false, selectedTicket = null, priorityLabels = defaultPriorityLabels, selectablePriorityLabels = priorityLabels, prioritySettings = [], submissionAcknowledgement = null, prioritySummary = null, pendingFeedback = [], leaderboard = null, pendingImport = null, leaderSummary = null, memberRating = null, memberSummary = null, employeeSummary = null, creationPage = false, departments = [], filterBranches = [], ticketLocations = [], branchCodes = {}, ticketRole, tickets, filters, categories, branches, members, reports, memberWorkloads = [], slaReport, slaPolicy, ticketUser, canAssignDuringHandover = false, handoverMembers = [], handovers = [], handoverToday = null }) {
     const { auth } = usePage().props;
     // Module content uses the test identity; SidebarLayout keeps the real admin session.
     const actor = ticketUser || auth.user;
@@ -473,7 +473,7 @@ export function TicketScreen({ selectedTicket = null, priorityLabels = defaultPr
     const leader = ticketRole === 'leader';
     const revisions = filters.view === 'revisions';
     const dashboardSummary = leader ? leaderSummary : member ? memberSummary : employeeSummary;
-    const ranking = leader && !creationPage && filters.view === 'leaderboard';
+    const ranking = (leader || canViewLeaderboard) && !creationPage && filters.view === 'leaderboard';
     const dashboard = !creationPage && filters.view === 'dashboard';
     const [dateFrom, setDateFrom] = useState(filters.date_from || '');
     const [dateTo, setDateTo] = useState(filters.date_to || '');
@@ -547,7 +547,7 @@ export function TicketScreen({ selectedTicket = null, priorityLabels = defaultPr
     };
     // Show only the views allowed by the flowchart; backend checks enforce the same boundary.
     // Sidebar page labels use a capital first letter for every word.
-    const views = employee ? [['dashboard', 'Dashboard'], ['all', 'All My Tickets']] : ticketRole === 'leader' ? [['dashboard', 'Dashboard'], ['leaderboard', 'Leaderboard'], ['admin', 'Admin'], ['all', 'All Tickets'], ['assigned', 'Assigned To Me']] : [['dashboard', 'Dashboard'], ['assigned', 'Assigned To Me'], ['revisions', 'Pending Revisions'], ['all', 'All Tickets']];
+    const views = employee ? [['dashboard', 'Dashboard'], ...(canViewLeaderboard ? [['leaderboard', 'Leaderboard']] : []), ['all', 'All My Tickets']] : ticketRole === 'leader' ? [['dashboard', 'Dashboard'], ['leaderboard', 'Leaderboard'], ['admin', 'Admin'], ['all', 'All Tickets'], ['assigned', 'Assigned To Me']] : [['dashboard', 'Dashboard'], ['assigned', 'Assigned To Me'], ['revisions', 'Pending Revisions'], ['all', 'All Tickets']];
     const adminView = ['admin', 'locations', 'handover', 'sla_settings'].includes(filters.view);
     // Creation links to its own page.
     const sidebarLinks = views.map(([view, label]) => {
@@ -594,13 +594,13 @@ export function TicketScreen({ selectedTicket = null, priorityLabels = defaultPr
             {ranking && <TicketLeaderboard
                 data={leaderboard}
                 onPeriodChange={period => router.get(ticketRoute('index', { view: 'leaderboard', leaderboard_period: period }), {}, { preserveScroll: true })}
-                exportUrl={ticketRoute('export', {
+                exportUrl={leader ? ticketRoute('export', {
                     view: 'leaderboard',
                     ...(leaderboard?.detail && {
                         leaderboard_member: leaderboard.detail.member.id,
                         leaderboard_detail: leaderboard.detail.type,
                     }),
-                })}
+                }) : null}
                 backUrl={ticketRoute('index', { view: 'leaderboard' })}
                 detailUrl={(member, detail, page = 1) => ticketRoute('index', { view: 'leaderboard', leaderboard_member: member, leaderboard_detail: detail, leaderboard_page: page })}
                 onSelectTicket={setSelected}

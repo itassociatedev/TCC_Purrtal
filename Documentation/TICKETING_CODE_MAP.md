@@ -275,3 +275,11 @@ Focused checks: [workload and deep links](../tests/verify-ticket-workload-filter
 ## 20 November 2026 - Reporting metadata removal
 
 [Removal migration](../database/migrations/2026_11_20_000001_remove_ticket_emergency_reporting_fields.php) drops the two obsolete ticket columns and cleans copied metadata from activity JSON. Earlier migration definitions remain historical and are superseded by this migration. TicketController creation/import/revision handling, Ticket fillable attributes, TicketSla enrollment, TicketDemoFactory and React creation/revision/details no longer use these fields. [Read-only schema check](../tests/verify-ticket-reporting-removal.php) checks columns, model attributes and receipt-history metadata; form submission coverage exercises employee, member and supervisor creation without them.
+
+## 20 November 2026 - EVP leaderboard visibility
+
+`config/ticketing.php` adds `leaderboard_viewer_roles`; `TicketAccess::canViewLeaderboard` centralizes the capability without changing `TicketAccess::role`. `TicketController::index` permits the additional view, produces summary/drill-down props and returns `canViewLeaderboard`; existing IT-only export/admin/write authorization remains in place. `Tickets/Index.jsx` adds the EVP sidebar entry and enables the ranking screen, passing no export URL. `TicketLeaderboard.jsx` renders export controls only when a URL is provided. `tests/verify-ticket-evp-leaderboard.php` verifies periods, all drill-down types, employee identity scoping, IT/admin/export denials and continued denial for ordinary employees/members using rolled-back fixtures and fake notifications.
+
+### EVP local account setup
+
+`database/seeders/LocalEvpAccountSeeder.php` configures only the local EVP dummy account (`evp@tcc.local`), reusing the former long-form test email and preserving its identity. Run `php artisan db:seed --class=LocalEvpAccountSeeder` only against the isolated local database; the seeder enforces local environment/database checks and rejects unrelated email ownership. The general LocalRoleAccountsSeeder uses the same alias. This test-account seeder is not part of production provisioning.

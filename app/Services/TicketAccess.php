@@ -31,6 +31,12 @@ class TicketAccess
             || in_array(strtolower(trim($user->role?->name ?? '')), ['admin', 'it admin'], true);
     }
 
+    public static function canViewLeaderboard(User $user): bool
+    {
+        return self::role($user) === 'leader' || in_array(strtolower(trim($user->role?->name ?? '')),
+            array_map(fn ($name) => strtolower(trim($name)), config('ticketing.leaderboard_viewer_roles', [])), true);
+    }
+
     // Normalize case and spaces, then match exact configured role names.
     // Unlisted roles use the employee workflow rather than inheriting IT privileges.
     public static function role(User $user): string

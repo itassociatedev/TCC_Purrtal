@@ -26,7 +26,7 @@ function LeaderboardDetail({ detail, period, detailUrl, backUrl, exportUrl, onSe
         <nav className="leaderboard-detail-links" aria-label="Leaderboard details">
             {Object.entries(detailLabels).map(([key, label]) => <Link key={key} className="ticket-secondary" href={href(key)} aria-current={key === type ? 'page' : undefined}>{label}</Link>)}
         </nav>
-        <a className="ticket-secondary clinic-file-action" href={exportUrl}>Export {detailLabels[type].toLowerCase()} XLSX</a>
+        {exportUrl && <a className="ticket-secondary clinic-file-action" href={exportUrl}>Export {detailLabels[type].toLowerCase()} XLSX</a>}
         {entries.length ? <div className="ticket-table-wrap"><table className="leaderboard-table">
             <thead><tr><th scope="col">Ticket</th><th scope="col">{ratings ? 'Rating' : 'Status'}</th><th scope="col">{ratings ? 'Comment' : 'Branch'}</th><th scope="col">{ratings ? 'Submitted' : type === 'resolved' ? 'Resolved' : 'Created'}</th></tr></thead>
             <tbody>{entries.map(entry => {
@@ -59,7 +59,7 @@ export default function TicketLeaderboard({ data, onPeriodChange, exportUrl, det
     return <div className="ticket-leaderboard">
         <div className="leaderboard-period-toolbar"><label>Date range<select value={data?.period || 'all'} onChange={e => onPeriodChange(e.target.value)}>
             {Object.entries(periods).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select></label><a className="ticket-secondary clinic-file-action" href={exportUrl}>Export leaderboard XLSX</a></div>
+        </select></label>{exportUrl && <a className="ticket-secondary clinic-file-action" href={exportUrl}>Export leaderboard XLSX</a>}</div>
         <div className="leaderboard-overview">
             <section className="leaderboard-panel"><header><h2>Top cats <span className="leaderboard-sparkle" aria-hidden="true">✦</span></h2><p>A little spotlight for a job well done.</p></header>
                 <div className="leaderboard-podium">{podium.map((m, index) => m ? <article key={m.id} className={`leaderboard-place leaderboard-place-${[2, 1, 3][index]}`}>

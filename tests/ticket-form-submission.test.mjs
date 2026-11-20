@@ -128,6 +128,16 @@ try {
     assert.equal(Object.hasOwn(requests[0].data, 'reporting_channel'), false);
     console.log(`PASS: new ${creationRole} ticket submits without removed reporting fields`);
     }
+    state.input = {};
+    const evpScreen = capture(TicketScreen, { ticketRole: 'employee', canViewLeaderboard: true,
+        tickets: { total: 0, data: [], links: [], last_page: 1 }, filters: { view: 'leaderboard', search: '', per_page: '10' },
+        categories: ['Hardware'], branches: [{ id: 1, name: 'Makati' }], members: [], reports: null,
+        ticketUser: state.page.auth.user });
+    assert.ok(nodes(evpScreen, n => n.props?.sidebarLinks?.some(link => link.label === 'Leaderboard')).length);
+    const rankingComponent = nodes(evpScreen, n => typeof n.props?.detailUrl === 'function')[0];
+    assert.ok(rankingComponent, 'EVP ranking screen renders');
+    assert.equal(rankingComponent.props.exportUrl, null, 'EVP gets no leaderboard export URL');
+    console.log('PASS: EVP sidebar includes leaderboard and ranking renders without export permission');
 } finally {
     inertia.router.patch = originalPatch;
     inertia.router.post = originalPost;

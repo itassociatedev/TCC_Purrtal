@@ -30,6 +30,8 @@ Names are matched exactly after trimming and lowercasing, using [config/ticketin
 | IT member | IT Member, IT Staff, IT Intern | Dashboard for current assignments; Assigned to me and All tickets; manage only own assignments; create an IT-reported ticket |
 | IT leader | IT TL, IT Team Leader, IT Supervisor | Team dashboard, all/open/closed/own-assignment tables, reports, staff workload, leaderboard; priority changes, assignment/reassignment, management, closure, Critical workaround approval, XLSX import |
 
+Executive Vice President remains an employee-workflow role with the extra `TicketAccess::canViewLeaderboard` capability, configured by `ticketing.leaderboard_viewer_roles`. The ticketing sidebar adds Leaderboard. EVP can view rankings, period filters, resolved/overdue ticket details and ratings/comments, but cannot export or gain IT administration, assignment, priority, status or closure rights. Its normal ticket lists and notification deep links remain creator-scoped. Leaderboard entries can be inspected read-only through the existing dialog; action permissions are unchanged.
+
 IT leaders are valid ticket assignees. On an unassigned ticket, substantive IT action can establish the acting worker as owner; changing priority alone can leave it unassigned. Members cannot claim arbitrary unassigned tickets through a crafted update, because current assignment is checked under a row lock.
 
 Employees can choose their primary or linked branches. Executive Vice President, Executive Assistant, IT, IT Admin and configured IT members/leaders can choose any existing branch. Employees whose account department is Information Technology may also select any existing branch, regardless of workflow role. Branch exceptions do not grant management rights. Clinic branches come from the branch directory. Active ticket-only locations are available to all requesters.
@@ -121,7 +123,7 @@ Current server checks in this checkout restrict the leaderboard to the superviso
 
 Each employee drill-down has an XLSX export for the selected date range and view: resolved tickets, overdue tickets, or ratings and comments. The export includes all matching rows across pages.
 
-Leader-only `/tickets/leaderboard`, implemented by `TicketLeaderboard.php` and `TicketLeaderboard.jsx`.
+IT supervisors and Executive Vice Presidents can view `/tickets/leaderboard`, implemented by `TicketLeaderboard.php` and `TicketLeaderboard.jsx`.
 
 - Podium cards have a common baseline and stationary heights in rank order. Only the cat icons bob, and reduced-motion preferences suppress that animation. The pie legend footer shows total resolutions and total share (100.00% with resolutions, 0.00% without).
 - Click a member’s resolved count, overdue text or rating to open a detail view for that member and calendar period. All three drill-downs open full ticket details from the subject, including ratings rows. Ratings show the latest counted score per ticket and its comment. The views paginate at 15 entries. Clickable leaderboard values have no underline and retain keyboard focus styling.
@@ -231,7 +233,7 @@ Nine sortable data columns: Subject, Description, Category, Status, Timeline, Pr
 
 | Parameter | Accepted values / interpretation |
 | --- | --- |
-| `view` | Legacy bookmark/export parameter. The screen is normally selected by its path, which takes precedence over this query parameter.  Employee: dashboard/all/open/closed. Member: dashboard/assigned/all. Leader: dashboard/leaderboard/all/open/closed/assigned; legacy reports bookmark normalizes to open. |
+| `view` | Legacy bookmark/export parameter. The screen is normally selected by its path, which takes precedence over this query parameter.  Employee: dashboard/all/open/closed, plus leaderboard for Executive Vice President. Member: dashboard/assigned/all. Leader: dashboard/leaderboard/all/open/closed/assigned; legacy reports bookmark normalizes to open. |
 | `status_filter` | all/open/closed/not_started/in_progress/resolved/unassigned/revision_requested/rejected. Unassigned means active Not started/In progress with no owner. |
 | `branch_filter`, `location_filter` | Directory branch ID or custom location ID. The selector sends one at a time. Historical custom locations remain filterable. |
 | `selected_ticket` | Numeric ticket ID to open in the details/manage dialog, independent of pagination and table filters. Employees can open only their own live tickets; unavailable or unauthorized IDs return 404. |

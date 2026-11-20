@@ -33,6 +33,7 @@ class TicketController extends Controller
     {
         [$actor, $preview] = $this->context($request);
         $role = TicketAccess::role($actor);
+        $canViewLeaderboard = TicketAccess::canViewLeaderboard($actor);
         // Export is an IT workflow permission, including when using a preview identity.
         abort_if($role === 'employee' && $request->routeIs('tickets.export'), 403, 'Only IT members and leaders may export tickets.');
         // Older bookmarks still select Critical.
@@ -71,13 +72,14 @@ class TicketController extends Controller
             'member' => 'dashboard',
             default => 'dashboard',
         };
-        abort_if($role === 'employee' && !in_array($view, ['dashboard', 'all', 'open', 'closed']), 403);
+        abort_if($role === 'employee' && !in_array($view, ['dashboard', 'all', 'open', 'closed'])
+            && !($view === 'leaderboard' && $canViewLeaderboard), 403);
         abort_if($role === 'member' && !in_array($view, ['dashboard', 'all', 'assigned', 'revisions']), 403);
         abort_if($view === 'revisions' && $role !== 'member', 403);
         abort_if(in_array($view, ['admin', 'locations', 'handover', 'sla_settings'], true) && $role !== 'leader', 403);
         if ($request->routeIs('tickets.locations')) return redirect()->route('tickets.admin.locations');
         if ($request->routeIs('tickets.handover')) return redirect()->route('tickets.admin.handover');
-        abort_if($view === 'leaderboard' && $role !== 'leader', 403);
+        abort_if($view === 'leaderboard' && !$canViewLeaderboard, 403);
         // Leaders can also view their own assignments.
         // Old report bookmarks now show the persistent statistics panel and open table.
         // Normalize only after authorization so other roles cannot access leader views.
@@ -317,7 +319,7 @@ class TicketController extends Controller
         } else $query->orderBy($sortColumn, $direction);
         $query->orderBy('id', $direction); // Stable pagination when column values match.
         $exporting = $request->routeIs('tickets.export');
-        $leaderboardData = $role === 'leader' && $view === 'leaderboard'
+        $leaderboardData = $canViewLeaderboard && $view === 'leaderboard'
             ? app(\App\Services\TicketLeaderboard::class)->summary($preview, $filters['leaderboard_period'] ?? 'all',
                 isset($filters['leaderboard_member']) ? (int) $filters['leaderboard_member'] : null,
                 $filters['leaderboard_detail'] ?? null, (int) ($filters['leaderboard_page'] ?? 1), $exporting) : null;
@@ -354,6 +356,7 @@ class TicketController extends Controller
         }
         return Inertia::render('Tickets/Index', [
             // One-time receipt after a successful non-IT submission; not an SLA acknowledgement.
+            'canViewLeaderboard' => $canViewLeaderboard,
             'selectedTicket' => $selectedTicket,
             'submissionAcknowledgement' => $role === 'employee' ? $request->session()->pull('tickets.submission_acknowledgement') : null,
             'canAssignDuringHandover' => $canAssignDuringHandover,

@@ -1,5 +1,13 @@
 # Ticketing change history
 
+## 20 November 2026 - EVP local test login
+
+Reused local dummy user 454 (Executive Vice President), replacing the older long-form test email with evp@tcc.local and setting the requested test password. Role, department, branch and ticket identity were preserved. LocalEvpAccountSeeder configures only this dummy identity, rejects non-local databases and unrelated account collisions, and verifies the password hash and leaderboard permission. LocalRoleAccountsSeeder now uses the EVP alias and can adopt the older test email without duplication. No other accounts were reset; no push performed.
+
+## 20 November 2026 - EVP can view the ticketing leaderboard
+
+Granted Executive Vice President a separate read-only leaderboard capability and sidebar entry. EVP can filter by period and view resolved, overdue and rating/comment drill-downs. Existing employee ticket scoping and IT-only management/admin/export permissions remain unchanged; exports are hidden for EVP and rejected server-side. No role/database migration or data change required. Added transactional permission coverage; period/drill-down checks, blocked actions and production build passed. No push performed.
+
 ## 20 November 2026 - Resettable table sorting and partial refresh
 
 Added ascending/descending/default header cycles and a hover hint. Clear filters now restores creation-date descending order. The server returns `sort_active` to distinguish default from explicit sort, including the creation-date column. Sort and clear requests preserve page state/scroll and fetch only ticket/filter props. Other navigation retains default-sort state instead of silently making it explicit. Added handler and controller regression checks. No database change or push performed.

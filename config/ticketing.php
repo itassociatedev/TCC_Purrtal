@@ -2,6 +2,8 @@
 
 return [
     // Exact role names only: unrelated administrators do not inherit IT privileges.
+    // Read-only leaderboard visibility does not grant IT management or export rights.
+    'leaderboard_viewer_roles' => ['Executive Vice President'],
     'leader_roles' => ['IT TL', 'IT Team Leader', 'IT Supervisor'],
     // IT interns use the same assigned-ticket workflow and appear in leader
     // workload/leaderboard rosters alongside IT members.
