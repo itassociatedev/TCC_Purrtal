@@ -40,11 +40,7 @@ class LocalRoleAccountsSeeder extends Seeder
 
                 $departmentId = User::where('role_id', $role->id)
                     ->whereNotNull('department_id')->orderBy('id')->value('department_id');
-                if (in_array(strtolower($role->name), array_map('strtolower', [
-                    ...config('ticketing.leader_roles'), ...config('ticketing.member_roles'),
-                ]), true)) {
-                    $departmentId = $it->id;
-                }
+
 
                 $account ??= new User();
                 $account->fill([
@@ -63,6 +59,7 @@ class LocalRoleAccountsSeeder extends Seeder
             }
         });
 
+        $this->call(LocalItPositionAccountsSeeder::class);
         $this->command?->info("Configured {$roles->count()} local accounts for {$branch->name}.");
     }
 }

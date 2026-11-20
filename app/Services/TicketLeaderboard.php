@@ -19,7 +19,7 @@ class TicketLeaderboard
         $within = fn ($date) => !$start || ($date && \Carbon\CarbonImmutable::parse($date)->betweenIncluded($start, $end));
         // Start from the roster so IT staff with zero resolutions still appear.
         $members = TicketAccess::members($preview)->with(['role', 'branches', 'branch'])->get();
-        $rows = $members->mapWithKeys(fn ($u) => [$u->id => ['id' => $u->id, 'name' => $u->name, 'role' => $u->role?->name, 'branches' => $u->branches->pluck('name')->push($u->branch?->name)->filter()->unique()->sort()->implode(', '), 'resolved' => 0, 'overdue' => 0, 'rating_count' => 0, 'rating_average' => null, 'sla_response_average' => null, 'sla_resolution_average' => null, 'sla_response_count' => 0, 'sla_resolution_count' => 0]])->all();
+        $rows = $members->mapWithKeys(fn ($u) => [$u->id => ['id' => $u->id, 'name' => $u->name, 'role' => $u->position?->name, 'branches' => $u->branches->pluck('name')->push($u->branch?->name)->filter()->unique()->sort()->implode(', '), 'resolved' => 0, 'overdue' => 0, 'rating_count' => 0, 'rating_average' => null, 'sla_response_average' => null, 'sla_resolution_average' => null, 'sla_response_count' => 0, 'sla_resolution_count' => 0]])->all();
         abort_if($memberId !== null && !isset($rows[$memberId]), 404);
         $detailMember = $memberId !== null ? $rows[$memberId] : null;
         $entries = [];
@@ -114,7 +114,7 @@ class TicketLeaderboard
         if ($type !== 'ratings' || !$exporting) {
             $relations = ['branch:id,name', 'ticketLocation:id,name', 'assignee:id,name'];
             // The editor needs ticket history, while the workbook only needs row data.
-            if (!$exporting) $relations = array_merge($relations, ['activities.actor:id,name', 'creator:id,name,role_id']);
+            if (!$exporting) $relations = array_merge($relations, ['activities.actor:id,name', 'creator:id,name,role_id,position_id', 'creator.position:id,name']);
             (new \Illuminate\Database\Eloquent\Collection(array_filter(array_column($entries, 'ticket'))))->load($relations);
             if (!$exporting) {
                 foreach ($entries as $entry) {

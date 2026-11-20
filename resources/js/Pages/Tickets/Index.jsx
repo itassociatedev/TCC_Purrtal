@@ -288,7 +288,7 @@ export function TicketEditor({ ticket, role, members, onClose, ticketRoute, acto
                     {field('note', 'Handover / status note', ticket.status === 'resolved' && form.data.status === 'in_progress')}
                 </>}
                 {action === 'save' && <>
-                    {role === 'leader' && <div className="ticket-field-row"><label>Priority<select value={form.data.priority} onChange={e => form.setData('priority', e.target.value)}>{!selectablePriorityLabels[ticket.priority] && <option value={ticket.priority} disabled>{priorityLabels[ticket.priority] || ticket.priority} (archived)</option>}{Object.entries(selectablePriorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Assign IT owner<select value={form.data.assigned_to} onChange={e => form.setData('assigned_to', e.target.value)}><option value="" disabled>Choose IT member</option>{members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label></div>}
+                    {role === 'leader' && <div className="ticket-field-row"><label>Priority<select value={form.data.priority} onChange={e => form.setData('priority', e.target.value)}>{!selectablePriorityLabels[ticket.priority] && <option value={ticket.priority} disabled>{priorityLabels[ticket.priority] || ticket.priority} (archived)</option>}{Object.entries(selectablePriorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Assign IT owner<select value={form.data.assigned_to} onChange={e => form.setData('assigned_to', e.target.value)}><option value="" disabled>Choose IT member</option>{members.filter(m => m.status === 'Active').map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label></div>}
                     {form.data.priority && form.data.priority !== ticket.priority && field('priority_reason', 'Reason for priority classification / change', true)}
                     <label>Status<select value={form.data.status} onChange={e => form.setData('status', e.target.value)}><option value="">Keep current status</option><option value="in_progress">In progress</option></select></label>
                     {field('note', 'Handover / status note', ticket.status === 'resolved' && form.data.status === 'in_progress')}
@@ -590,7 +590,7 @@ export function TicketScreen({ canViewLeaderboard = false, selectedTicket = null
         <Head title="IT Ticketing Module · TCC Purrtal" />
         <main className="ticketing">
             <header className="ticket-page-heading"><div><span className="ticket-eyebrow">TCC PURRTAL / IT SUPPORT</span><h1>IT Ticketing Module</h1><p>{employee ? 'Let us know how we can help. Submit a ticket to the IT team.' : 'Keep every request moving, from first report to resolution.'}</p></div></header>
-            {(member || leader || String(actor?.department?.name || actor?.department || auth.user?.department?.name || auth.user?.department || '').trim().toLowerCase() === 'it') && <ITWorkspaceSwitcher current="tickets" />}
+            {(member || leader) && <ITWorkspaceSwitcher current="tickets" />}
             {ranking && <TicketLeaderboard
                 data={leaderboard}
                 onPeriodChange={period => router.get(ticketRoute('index', { view: 'leaderboard', leaderboard_period: period }), {}, { preserveScroll: true })}

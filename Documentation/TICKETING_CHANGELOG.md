@@ -1,5 +1,17 @@
 # Ticketing change history
 
+## 20 November 2026 - Hide disabled staff in workload
+
+Applied the existing User::notDisabled scope only to the staff workload query. Disabled accounts no longer appear in workload panels or the corresponding workbook sheet. Their accounts/tickets/history and other roster scopes are unchanged. Extended position regression confirms exclusion and retained data using rolled-back fixtures. No migration or push performed.
+
+## 20 November 2026 - Replace IT database roles with HR positions
+
+Ticket workflow authorization now uses IT Team Leader for the supervisor view, other IT positions for the member view and non-IT/missing positions for the employee view. Workload, leaderboard, handover, member-submission review, notifications and sidebar navigation use the same classification. EVP read-only leaderboard access remains. The migration reassigns obsolete IT-role users to employee with their IT position, including the three active dummy accounts; removes IT TL/IT Member/IT Intern roles and their obsolete ACL entries; preserves unique legacy preview links and existing accounts/tickets. Test account passwords and real admin portal roles are unchanged. Updated local/legacy seeders to avoid recreating obsolete roles. Added position permission regression and updated current documentation/comments. Position, actual/test roster, member review controls, EVP, handover, no-pause, ticket lifecycle, workload filters, frontend submission checks, PHP syntax and the production build passed. Assigned-owner selectors omit inactive accounts; historical staff filters/rosters retain them. No push performed.
+
+## 20 November 2026 - Visible import limits
+
+Added a compact note beside Import new tickets: .xlsx only, maximum 5 MB, maximum 100 data rows. It remains visible when the import panel is collapsed; the header is not counted as a data row. This is a UI clarification only; import validation is unchanged.
+
 ## 20 November 2026 - EVP local test login
 
 Reused local dummy user 454 (Executive Vice President), replacing the older long-form test email with evp@tcc.local and setting the requested test password. Role, department, branch and ticket identity were preserved. LocalEvpAccountSeeder configures only this dummy identity, rejects non-local databases and unrelated account collisions, and verifies the password hash and leaderboard permission. LocalRoleAccountsSeeder now uses the EVP alias and can adopt the older test email without duplication. No other accounts were reset; no push performed.

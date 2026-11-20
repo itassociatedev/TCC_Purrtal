@@ -30,7 +30,8 @@ try {
     $makeUser = function ($role) {
         return User::withoutEvents(fn () => User::create(['name' => 'SLA verification '.$role,
             'email' => Str::uuid().'@example.invalid', 'password' => Str::random(64), 'status' => 'Disabled',
-            'role_id' => Role::firstOrCreate(['name' => $role])->id, 'branch_id' => Branch::firstOrFail()->id,
+            'role_id' => Role::whereRaw('LOWER(name) = ?', ['employee'])->firstOrFail()->id,
+            'position_id' => match ($role) { 'IT TL' => \App\Models\Position::where('name', 'IT Team Leader')->firstOrFail()->id, 'IT Member' => \App\Models\Position::where('name', 'IT Associate')->firstOrFail()->id, default => null }, 'branch_id' => Branch::firstOrFail()->id,
             'department_id' => Department::firstOrCreate(['name' => 'IT'])->id]));
     };
     $employee = $makeUser('employee');

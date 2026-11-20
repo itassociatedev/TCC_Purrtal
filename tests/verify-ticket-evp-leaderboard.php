@@ -12,6 +12,7 @@ Notification::fake(); DB::beginTransaction();
 try {
     $role = Role::where('name', 'Executive Vice President')->firstOrFail();
     $evp = User::firstOrFail()->replicate(); $evp->role_id = $role->id;
+    $evp->position_id = null;
     $evp->email = 'evp-check-'.bin2hex(random_bytes(8)).'@example.invalid'; $evp->status = 'Active'; $evp->save();
     $evp->load('role');
     $controller = app(App\Http\Controllers\TicketController::class);

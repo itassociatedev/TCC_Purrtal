@@ -24,7 +24,7 @@ class UserAccountsSeeder extends Seeder
             ['name' => 'Vet Tech TL', 'email' => 'vttl@gmail.com', 'password' => 'ad123456', 'role' => 'Vet Tech TL', 'nickname' => 'VTTL'],
             ['name' => 'Director of Corporate Services and Operations', 'email' => 'dcso@gmail.com', 'password' => 'ad123456', 'role' => 'Director of Corporate Services and Operations', 'nickname' => 'DCSO'],
             ['name' => 'HRBP', 'email' => 'hrbp@gmail.com', 'password' => 'ad123456', 'role' => 'HRBP', 'nickname' => 'HRBP'],
-            ['name' => 'IT TL', 'email' => 'ittl@gmail.com', 'password' => 'ad123456', 'role' => 'IT TL', 'nickname' => 'ITTL'],
+            ['name' => 'IT TL', 'email' => 'ittl@gmail.com', 'password' => 'ad123456', 'role' => 'employee', 'position' => 'IT Team Leader', 'nickname' => 'ITTL'],
             ['name' => 'Marketing Manager', 'email' => 'mm@gmail.com', 'password' => 'ad123456', 'role' => 'Marketing Manager', 'nickname' => 'MM'],
             ['name' => 'Cashier TL', 'email' => 'ctl@gmail.com', 'password' => 'ad123456', 'role' => 'Cashier TL', 'nickname' => 'CTL'],
             ['name' => 'Housekeeping TL', 'email' => 'hktl@gmail.com', 'password' => 'ad123456', 'role' => 'Housekeeping TL', 'nickname' => 'HKTL'],
@@ -46,6 +46,7 @@ class UserAccountsSeeder extends Seeder
                 ['email' => $account['email']],
                 [
                     'name' => $account['name'],
+                    ...(!empty($account['position']) ? ['position_id' => \App\Models\Position::where('name', $account['position'])->firstOrFail()->id] : []),
                     'password' => Hash::make($account['password']),
                     'email_verified_at' => now(),
                     'status' => 'Active',

@@ -283,3 +283,12 @@ Focused checks: [workload and deep links](../tests/verify-ticket-workload-filter
 ### EVP local account setup
 
 `database/seeders/LocalEvpAccountSeeder.php` configures only the local EVP dummy account (`evp@tcc.local`), reusing the former long-form test email and preserving its identity. Run `php artisan db:seed --class=LocalEvpAccountSeeder` only against the isolated local database; the seeder enforces local environment/database checks and rejects unrelated email ownership. The general LocalRoleAccountsSeeder uses the same alias. This test-account seeder is not part of production provisioning.
+
+## 20 November 2026 - Position-based workflow permissions
+
+- `TicketAccess::role` and `notificationRole` classify by position; `members` uses equivalent SQL criteria and preserves live/legacy-preview isolation. `branches` grants IT position holders the existing all-branch exception. `canViewLeaderboard` retains the EVP capability.
+- `TicketController` and `TicketLeaderboard` include creator position IDs/relationships when loading records, preserving IT-member submission review in table and detail screens. Leaderboard staff labels show positions rather than shared portal roles.
+- `HandleInertiaRequests` exposes `auth.user.ticketing_role`; `SidebarLayout` uses it for real-account IT navigation. Task role previews retain their own department context.
+- `2026_11_20_000002_use_positions_for_ticket_access.php` migrates old IT-role users/test accounts, moves preview links into unused employee slots, discards obsolete role-specific ACL entries and deletes the three obsolete roles. It preserves accounts and ticket data; rollback is explicitly unsupported.
+- `LocalItPositionAccountsSeeder` locally maintains the IT supervisor/member/intern logins using employee role and their HR positions. LocalRoleAccountsSeeder invokes it; UserAccountsSeeder, TicketPreviewSeeder and AdditionalTicketMembersSeeder no longer recreate IT roles.
+- `tests/verify-ticket-position-access.php` verifies actual/test identities, classification, workload inclusion, handover roster restrictions, review controls and admin denials. Existing EVP and workflow fixture helpers now set positions.

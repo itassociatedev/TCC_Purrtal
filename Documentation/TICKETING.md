@@ -22,21 +22,21 @@ Open **IT Ticketing Module** from the header's module selector or visit `/ticket
 
 ## Roles and access
 
-Names are matched exactly after trimming and lowercasing, using [config/ticketing.php](../config/ticketing.php).
+Ticket workflow access is derived from the account position by `TicketAccess::role`, after trimming and lowercasing. Shared portal roles remain responsible for permissions outside ticketing.
 
-| Workflow role | Configured account roles | Access |
+| Workflow role | Position | Access |
 | --- | --- | --- |
-| Employee | Any role outside the configured member/leader lists | Create tickets; dashboard and lists for own creator ID only; reply; confirm resolved service; optional feedback after closure |
-| IT member | IT Member, IT Staff, IT Intern | Dashboard for current assignments; Assigned to me and All tickets; manage only own assignments; create an IT-reported ticket |
-| IT leader | IT TL, IT Team Leader, IT Supervisor | Team dashboard, all/open/closed/own-assignment tables, reports, staff workload, leaderboard; priority changes, assignment/reassignment, management, closure, Critical workaround approval, XLSX import |
+| Employee | Missing or non-IT position | Create tickets; dashboard and lists for own creator ID only; reply; confirm resolved service; optional feedback after closure |
+| IT member | Any position named IT or beginning with IT followed by a space, except IT Team Leader (e.g. IT Associate, IT Admin, IT Intern) | Dashboard for current assignments; Assigned to me and All tickets; manage only own assignments; create an IT-reported ticket |
+| IT supervisor | IT Team Leader | Team dashboard, all/open/closed/own-assignment tables, reports, staff workload, leaderboard; priority changes, assignment/reassignment, management, closure, Critical workaround approval, XLSX import |
 
-Executive Vice President remains an employee-workflow role with the extra `TicketAccess::canViewLeaderboard` capability, configured by `ticketing.leaderboard_viewer_roles`. The ticketing sidebar adds Leaderboard. EVP can view rankings, period filters, resolved/overdue ticket details and ratings/comments, but cannot export or gain IT administration, assignment, priority, status or closure rights. Its normal ticket lists and notification deep links remain creator-scoped. Leaderboard entries can be inspected read-only through the existing dialog; action permissions are unchanged.
+An Executive Vice President with a non-IT position retains the employee workflow with the extra `TicketAccess::canViewLeaderboard` capability, configured by `ticketing.leaderboard_viewer_roles`. The ticketing sidebar adds Leaderboard. EVP can view rankings, period filters, resolved/overdue ticket details and ratings/comments, but cannot export or gain IT administration, assignment, priority, status or closure rights. Its normal ticket lists and notification deep links remain creator-scoped. Leaderboard entries can be inspected read-only through the existing dialog; action permissions are unchanged.
 
 IT leaders are valid ticket assignees. On an unassigned ticket, substantive IT action can establish the acting worker as owner; changing priority alone can leave it unassigned. Members cannot claim arbitrary unassigned tickets through a crafted update, because current assignment is checked under a row lock.
 
-Employees can choose their primary or linked branches. Executive Vice President, Executive Assistant, IT, IT Admin and configured IT members/leaders can choose any existing branch. Employees whose account department is Information Technology may also select any existing branch, regardless of workflow role. Branch exceptions do not grant management rights. Clinic branches come from the branch directory. Active ticket-only locations are available to all requesters.
+Employees can choose their primary or linked branches. Executive Vice President, Executive Assistant, IT, IT Admin and position-classified IT staff can choose any existing branch. Employees whose account department is Information Technology may also select any existing branch, regardless of workflow role. Branch exceptions do not grant management rights. Clinic branches come from the branch directory. Active ticket-only locations are available to all requesters.
 
-**All tickets** means all tickets authorized for that role and environment: an employee still sees only their own tickets. Admin/IT/other unlisted role names do not implicitly become IT staff workflow roles.
+**All tickets** means all tickets authorized for that role and environment: an employee still sees only their own tickets. An admin role, IT department, or legacy IT role name alone does not grant IT workflow access; an IT position is required.
 
 ### Local role testing
 
@@ -511,3 +511,21 @@ Creation, revision, details, XLSX import defaults, demo generation and SLA recei
 ### Default sorting and partial updates (20 November 2026)
 
 Ticket column headers cycle ascending, descending, then default order (creation time descending, with descending ID as the stable tie-breaker). A different column starts ascending. `filters.sort_active` distinguishes default order from an explicitly selected creation-date sort. Clear filters resets sorting as well as table filters. Sort requests preserve React page state and scroll position and use Inertia partial props (`tickets`, `filters`), so header/sidebar/dashboard props are retained rather than replaced. The server still queries and sorts the authorized ticket dataset. Mobile sort controls can explicitly select a direction. Blank sort/direction parameters restore defaults.
+
+### Position-based ticketing access and account migration (20 November 2026)
+
+The workflow classifier and SQL staff roster use the same rule: IT Team Leader is the supervisor; IT and other IT-prefixed position names are members; missing/non-IT positions are employees. Only the exact trimmed, case-insensitive IT Team Leader position grants supervisor authority. An IT Supervisor position, if later added, is an ordinary IT member under this rule. Database role names do not grant ticket assignment, priority/status management, administration or closure permissions. EVP's explicit leaderboard-viewing exception is retained.
+
+This governs dashboards, table access, assigned-ticket writes, ticket review, rating restrictions, assignable/hand-over rosters, workload and leaderboard membership, and notification recipients. The shared sidebar consumes `auth.user.ticketing_role`, and leaderboard staff labels use position names. Existing actual IT employees appear even when their portal role is admin or employee. IT Staff Workload excludes accounts whose status is Disabled. Historical leaderboard and staff filters retain their own roster scope; active-account checks still govern new assignment and handover choices/validation.
+
+Applied migration `2026_11_20_000002_use_positions_for_ticket_access.php` moves users of obsolete IT TL/IT Member/IT Intern roles to the existing employee role and maps their positions. It removes those three role rows and their obsolete admin ACL entries without copying ACL grants to all employees. Legacy preview registrations are retained under unique employee slots so their data remains isolated. User IDs, passwords, statuses, departments, branches, tickets, histories and existing assignments are preserved. Actual admin users keep their portal roles. This is a forward-only data migration; it does not recreate obsolete roles on rollback.
+
+| Local test login | Portal role | Position | Ticket workflow |
+| --- | --- | --- | --- |
+| it-tl@tcc.local | employee | IT Team Leader | IT Supervisor |
+| it-member@tcc.local | employee | IT Associate | IT Member |
+| it-intern@tcc.local | employee | IT Intern | IT Member |
+
+`LocalItPositionAccountsSeeder` supports repeatable local-only creation/correction of these test identities, preserving existing passwords. General local-role seeding calls it after seeding ordinary portal roles. Legacy test seeders no longer create IT-specific portal roles. `verify-ticket-position-access.php` checks actual/test users, old-role-only denial, roster parity, member-submission controls and supervisor-only administration. EVP, handover, no-pause, ticket lifecycle and frontend regressions cover the unchanged permission boundaries. These installed-database checks roll back fixtures and suppress outgoing notifications.
+
+Disabled accounts are omitted from IT Staff Workload panels and the matching Staff workload export sheet. Their accounts, tickets, assignments and history remain stored; disabling an account does not delete or reassign its tickets. Other account statuses retain their existing behavior.

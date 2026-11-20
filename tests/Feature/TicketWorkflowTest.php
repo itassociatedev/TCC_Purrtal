@@ -7,7 +7,9 @@ use Illuminate\Support\Facades\Notification;
 // Shared fixtures keep each scenario focused on permissions and workflow behavior.
 function ticketUser(string $role): User
 {
-    return User::factory()->create(['role_id' => Role::firstOrCreate(['name' => $role])->id,
+        $title = ['IT TL' => 'IT Team Leader', 'IT Member' => 'IT Associate', 'IT Intern' => 'IT Intern'][$role] ?? null;
+    return User::factory()->create(['role_id' => Role::firstOrCreate(['name' => $title ? 'employee' : $role])->id,
+        'position_id' => $title ? \App\Models\Position::firstOrCreate(['name' => $title])->id : null,
         'branch_id' => Branch::firstOrCreate(['name' => 'Test Clinic'])->id]);
 }
 

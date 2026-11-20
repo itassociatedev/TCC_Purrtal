@@ -7,7 +7,9 @@ export default function TicketWorkbookControls({ leader, pending, ticketRoute, v
     return <section className="ticket-workbook-controls clinic-file-actions" aria-label="XLSX import and export">
         {/* Native links download binary workbooks without an Inertia navigation. */}
         <a className="ticket-secondary clinic-file-action" href={ticketRoute('export', { view, search })}>Export XLSX</a>
-        {leader && <details><summary>Import new tickets (XLSX)</summary>
+        {leader && <details>
+            {/* Keep upload limits visible even while the import panel is collapsed. */}
+            <summary>Import new tickets (XLSX)<span className="ml-2 inline-block text-xs font-normal text-slate-500">.xlsx only · Max 5 MB · Max 100 data rows</span></summary>
             <p>Creates new tickets only, using import time for creation and SLA receipt. Maximum 100 tickets / 5 MB. Validate and review before saving.</p>
             <a href={ticketRoute('template')} className="ticket-secondary clinic-file-action">Download XLSX template</a>
             <form onSubmit={e => { e.preventDefault(); upload.post(ticketRoute('import'), { forceFormData: true, preserveScroll: true }); }}>

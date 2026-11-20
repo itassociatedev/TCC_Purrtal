@@ -11,13 +11,12 @@ class TicketAccess
     {
         // Use one scope for dropdown options and submission validation, including
         // the selected test identity in preview instead of the real administrator.
-        $allowedRoles = array_merge(config('ticketing.all_branch_roles', []),
-            config('ticketing.leader_roles', []), config('ticketing.member_roles', []));
+        $allowedRoles = config('ticketing.all_branch_roles', []);
         $name = strtolower(trim($user->role?->name ?? ''));
         $department = strtolower(trim($user->department?->name ?? ''));
         $itDepartment = in_array($department, array_map(fn ($name) => strtolower(trim($name)), config('ticketing.all_branch_departments', [])), true);
         $query = Branch::query();
-        if ($itDepartment || in_array($name, array_map(fn ($role) => strtolower(trim($role)), $allowedRoles), true)) {
+        if (self::role($user) !== 'employee' || $itDepartment || in_array($name, array_map(fn ($role) => strtolower(trim($role)), $allowedRoles), true)) {
             return $query;
         }
         $ids = $user->branches()->pluck('branches.id')->push($user->branch_id)->filter()->unique();
@@ -37,29 +36,18 @@ class TicketAccess
             array_map(fn ($name) => strtolower(trim($name)), config('ticketing.leaderboard_viewer_roles', [])), true);
     }
 
-    // Normalize case and spaces, then match exact configured role names.
-    // Unlisted roles use the employee workflow rather than inheriting IT privileges.
+    // Ticketing permissions follow the HR position, never the shared portal role.
     public static function role(User $user): string
     {
-        $name = strtolower(trim($user->role?->name ?? ''));
-        foreach (['leader', 'member'] as $type) {
-            $roles = array_map(fn ($role) => strtolower(trim($role)), config("ticketing.{$type}_roles", []));
-            if (in_array($name, $roles, true)) return $type;
-        }
-        return 'employee';
+        $position = strtolower(trim($user->position?->name ?? ''));
+        if ($position === 'it team leader') return 'leader';
+        return $position === 'it' || str_starts_with($position, 'it ') ? 'member' : 'employee';
     }
 
-    // Notification routing also recognizes an IT job title on an Admin login.
-    // This does not change ticket-management authorization.
+    // Assignment, lifecycle and SLA notifications use the same position-based authority.
     public static function notificationRole(User $user): string
     {
-        $role = self::role($user);
-        if ($role !== 'employee') return $role;
-        if (!in_array(strtolower(trim($user->department?->name ?? '')), ['it', 'information technology'], true)) return 'employee';
-        $position = strtolower(trim($user->position?->name ?? ''));
-        if (in_array($position, ['it supervisor', 'it team leader', 'it tl'], true)) return 'leader';
-        if (in_array($position, ['it associate', 'it admin', 'it intern', 'it staff', 'it member'], true)) return 'member';
-        return 'employee';
+        return self::role($user);
     }
 
     public static function canRateResolver(User $requester, User $resolver): bool
@@ -73,11 +61,14 @@ class TicketAccess
     // An assignee may be an IT member or team leader and belong to the selected environment.
     public static function members(bool $preview = false, bool $membersOnly = false)
     {
-        $roles = $membersOnly ? config('ticketing.member_roles') : array_merge(config('ticketing.member_roles'), config('ticketing.leader_roles'));
-        return User::whereHas('role', fn ($query) => $query->whereIn(
-            \Illuminate\Support\Facades\DB::raw('LOWER(TRIM(name))'),
-            array_map(fn ($name) => strtolower(trim($name)), $roles)
-        ))->whereIn('id', $preview
+        // Match the PHP classifier exactly, including future IT positions.
+        return User::with('position')->whereHas('position', function ($query) use ($membersOnly) {
+            $query->where(function ($it) {
+                $it->whereRaw('LOWER(TRIM(name)) = ?', ['it'])
+                    ->orWhereRaw('LOWER(TRIM(name)) LIKE ?', ['it %']);
+            });
+            if ($membersOnly) $query->whereRaw('LOWER(TRIM(name)) != ?', ['it team leader']);
+        })->whereIn('id', $preview
             ? \Illuminate\Support\Facades\DB::table('ticket_preview_users')->select('user_id')
             : User::select('id')->whereNotIn('id', \Illuminate\Support\Facades\DB::table('ticket_preview_users')->select('user_id')));
     }

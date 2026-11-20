@@ -1,13 +1,9 @@
 <?php
 
 return [
-    // Exact role names only: unrelated administrators do not inherit IT privileges.
-    // Read-only leaderboard visibility does not grant IT management or export rights.
+    // EVP has leaderboard-only access in addition to its ordinary position workflow.
     'leaderboard_viewer_roles' => ['Executive Vice President'],
-    'leader_roles' => ['IT TL', 'IT Team Leader', 'IT Supervisor'],
-    // IT interns use the same assigned-ticket workflow and appear in leader
-    // workload/leaderboard rosters alongside IT members.
-    'member_roles' => ['IT Member', 'IT Staff', 'IT Intern'],
+    // TicketAccess classifies IT Team Leader as supervisor and all other IT positions as members.
     // Branch selection exceptions do not grant IT ticket-management permissions.
     // IT department staff may report any affected location, regardless of job role.
     'all_branch_departments' => ['Information Technology'],

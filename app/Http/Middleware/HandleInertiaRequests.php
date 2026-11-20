@@ -78,6 +78,8 @@ class HandleInertiaRequests extends Middleware
 
                     // Now we send the FULL role, position, and department objects to React!
                     'role' => $user->role,
+                    // Ticket views follow the HR position independently of portal ACL roles.
+                    'ticketing_role' => \App\Services\TicketAccess::role($user),
                     'position' => $user->position,
                     'department' => $user->department,
 

@@ -17,8 +17,8 @@ class TicketPreviewSeeder extends Seeder
     public function run(): void
     {
         DB::transaction(function () {
-            // Ensure all three ticket workflows exist even on a small database.
-            foreach (['Employee', config('ticketing.leader_roles')[0], config('ticketing.member_roles')[0]] as $name) {
+            // Legacy preview seeding must not recreate obsolete IT database roles.
+            foreach (['employee'] as $name) {
                 Role::firstOrCreate(['name' => $name]);
             }
             // Reuse configured clinic locations instead of creating a fake branch.

@@ -98,7 +98,7 @@ class TicketController extends Controller
         $request->session()->put('tickets.per_page', $perPage);
         // Scope every list to live or preview data before applying other filters.
         // Eager loading prevents separate relationship queries for every table row.
-        $query = Ticket::where('is_preview', $preview)->with(['creator:id,name,role_id', 'branch:id,name', 'ticketLocation:id,name', 'assignee:id,name', 'activities.actor:id,name']);
+        $query = Ticket::where('is_preview', $preview)->with(['creator:id,name,role_id,position_id', 'creator.position:id,name', 'branch:id,name', 'ticketLocation:id,name', 'assignee:id,name', 'activities.actor:id,name']);
         if ($role === 'employee') $query->where('creator_id', $actor->id);
         // Employee summary ignores table filters, but always enforces identity and
         // live/preview isolation. Open includes resolved tickets awaiting closure.
@@ -229,8 +229,9 @@ class TicketController extends Controller
             $resolvedCounts = Ticket::where('is_preview', $preview)->whereIn('status', ['resolved', 'closed'])
                 ->with(['activities' => fn ($q) => $q->where('type', 'resolved')])->get()
                 ->countBy(fn ($ticket) => $this->feedbackResolverId($ticket));
-            // Start from the member roster so members with no tickets still appear.
-            $memberWorkloads = TicketAccess::members($preview)->orderBy('name')->get(['id', 'name'])
+            // Hide disabled staff from workload cards without deleting their assignments/history.
+            // Other rosters (such as historical leaderboard results) retain their own scope.
+            $memberWorkloads = TicketAccess::members($preview)->notDisabled()->orderBy('name')->get(['id', 'name'])
                 ->map(fn ($member) => [
                     'rating_count' => $ratings->get($member->id, collect())->count(),
                     'rating_average' => $ratings->get($member->id, collect())->avg(fn ($event) => $event->details['rating']),
@@ -348,7 +349,7 @@ class TicketController extends Controller
         $selectedTicket = null;
         if (!empty($filters['selected_ticket'])) {
             $detailQuery = Ticket::where('is_preview', $preview)
-                ->with(['creator:id,name,role_id', 'branch:id,name', 'ticketLocation:id,name', 'assignee:id,name', 'activities.actor:id,name']);
+                ->with(['creator:id,name,role_id,position_id', 'creator.position:id,name', 'branch:id,name', 'ticketLocation:id,name', 'assignee:id,name', 'activities.actor:id,name']);
             if ($role === 'employee') $detailQuery->where('creator_id', $actor->id);
             $selectedTicket = $detailQuery->findOrFail($filters['selected_ticket']);
             $selectedTicket->setAttribute('member_submission', $role === 'leader' && $selectedTicket->isMemberSubmission());
@@ -391,7 +392,7 @@ class TicketController extends Controller
             'branchCodes' => $view === 'admin' ? TicketLocation::BRANCH_CODES : [],
             'filterBranches' => Branch::orderBy('name')->get(['id', 'name']),
             'branches' => TicketAccess::branches($actor)->orderBy('name')->get(['id', 'name']),
-            'members' => ($role === 'leader' || $canFilterByAssignee) ? TicketAccess::members($preview)->orderBy('name')->get(['id', 'name']) : [],
+            'members' => ($role === 'leader' || $canFilterByAssignee) ? TicketAccess::members($preview)->orderBy('name')->get(['id', 'name', 'status']) : [],
             'reports' => $reports,
             'memberWorkloads' => $memberWorkloads,
             'slaReport' => $slaReport,

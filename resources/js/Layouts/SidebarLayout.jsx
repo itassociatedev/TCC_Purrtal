@@ -94,8 +94,10 @@ export default function SidebarLayout({
     }, [previewKey, auth.user?.id]);
     const displayedProfile = globalRolePreview?.active ? globalRolePreview : taskPreviewEnabled ? previewProfile : null;
     const moduleDepartment = displayedProfile?.department?.name || displayedProfile?.department || auth.user?.department?.name;
-    const isItUser = String(moduleDepartment || '').trim().toLowerCase() === 'it'
-        || (!globalRolePreview?.active && String(auth.user?.role?.name || '').trim().toLowerCase().startsWith('it '));
+    // Actual IT navigation follows the server's position classifier; task previews retain their department context.
+    const isItUser = globalRolePreview?.active
+        ? ['it', 'information technology'].includes(String(moduleDepartment || '').trim().toLowerCase())
+        : ['leader', 'member'].includes(auth.user?.ticketing_role);
 
 
     const safeSidebarLinks = Array.isArray(sidebarLinks) ? sidebarLinks : [];
