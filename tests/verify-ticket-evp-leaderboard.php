@@ -11,10 +11,11 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 Notification::fake(); DB::beginTransaction();
 try {
     $role = Role::where('name', 'Executive Vice President')->firstOrFail();
-    $evp = User::firstOrFail()->replicate(); $evp->role_id = $role->id;
-    $evp->position_id = null;
+    $evp = User::firstOrFail()->replicate();
+    $evp->role_id = Role::where('name', 'admin')->firstOrFail()->id;
+    $evp->position_id = \App\Models\Position::where('name', 'Executive Vice President')->firstOrFail()->id;
     $evp->email = 'evp-check-'.bin2hex(random_bytes(8)).'@example.invalid'; $evp->status = 'Active'; $evp->save();
-    $evp->load('role');
+    $evp->load(['role', 'position']);
     $controller = app(App\Http\Controllers\TicketController::class);
     $request = function ($actor, $route, $data = []) use ($app) {
         $r = Request::create('/tickets', 'GET', $data); $r->headers->set('X-Inertia', 'true');
@@ -25,6 +26,12 @@ try {
         $r = $request($actor, $route, $data); return $controller->index($r)->toResponse($r)->getData(true)['props'];
     };
     $check = function ($ok, $message) { if (!$ok) throw new RuntimeException($message); echo 'PASS: '.$message.PHP_EOL; };
+    $roleOnly = new User(['role_id' => $role->id]);
+    $roleOnly->setRelation('role', $role); $roleOnly->setRelation('position', null);
+    $check(!TicketAccess::canViewLeaderboard($roleOnly), 'EVP database role alone grants no leaderboard access');
+    $actual = User::findOrFail(377);
+    $check(TicketAccess::canViewLeaderboard($actual), 'Employee 377 gains access through the EVP position');
+    $check(TicketAccess::branches($actual)->count() === App\Models\Branch::count(), 'EVP position retains all-branch selection regardless of role');
     $check(TicketAccess::role($evp) === 'employee' && TicketAccess::canViewLeaderboard($evp), 'EVP gains leaderboard visibility without IT role elevation');
     foreach (['all', 'week'] as $period) {
         $props = $page($evp, 'tickets.leaderboard', ['leaderboard_period' => $period]);

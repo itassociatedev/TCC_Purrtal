@@ -292,3 +292,9 @@ Focused checks: [workload and deep links](../tests/verify-ticket-workload-filter
 - `2026_11_20_000002_use_positions_for_ticket_access.php` migrates old IT-role users/test accounts, moves preview links into unused employee slots, discards obsolete role-specific ACL entries and deletes the three obsolete roles. It preserves accounts and ticket data; rollback is explicitly unsupported.
 - `LocalItPositionAccountsSeeder` locally maintains the IT supervisor/member/intern logins using employee role and their HR positions. LocalRoleAccountsSeeder invokes it; UserAccountsSeeder, TicketPreviewSeeder and AdditionalTicketMembersSeeder no longer recreate IT roles.
 - `tests/verify-ticket-position-access.php` verifies actual/test identities, classification, workload inclusion, handover roster restrictions, review controls and admin denials. Existing EVP and workflow fixture helpers now set positions.
+
+`resources/js/Components/ITWorkspaceSwitcher.jsx` and its adjacent CSS provide one title-adjacent destination link, reused in Task module headings and Ticketing regular/admin headings. Old segmented switcher styles were removed from clinic-design.css. The component navigates with Inertia and changes no permission checks.
+
+## 21 November 2026 - EVP position capability
+
+TicketAccess::canViewLeaderboard now checks `ticketing.leaderboard_viewer_positions` against User::position. Branch access reuses the capability and no longer treats the EVP database role as an exception. LocalEvpAccountSeeder and LocalRoleAccountsSeeder resolve the existing EVP position; no title/role creation occurs. The EVP regression covers employee 377, position-based access with admin role, denial for role-only EVP identities, all-branch access and unchanged management/export denials.

@@ -575,7 +575,7 @@ export function TicketScreen({ canViewLeaderboard = false, selectedTicket = null
         return <SidebarLayout activeModule="IT Ticketing Module" sidebarLinks={sidebarLinks}>
             <Head title="Ticketing Admin" />
             <main className="ticketing">
-                <header className="ticket-page-heading"><h1>Ticketing Admin</h1></header>
+                <header className="ticket-page-heading"><div className="it-module-title-row"><h1>Ticketing Admin</h1><ITWorkspaceSwitcher current="tickets" /></div></header>
                 {!showingDashboard && <nav className="ticket-admin-nav" aria-label="Ticketing admin navigation">
                     <Link className="ticket-secondary" href={route('tickets.admin')}>← Back To Admin Dashboard</Link>
                 </nav>}
@@ -589,8 +589,7 @@ export function TicketScreen({ canViewLeaderboard = false, selectedTicket = null
     return <SidebarLayout activeModule="IT Ticketing Module" sidebarLinks={sidebarLinks}>
         <Head title="IT Ticketing Module · TCC Purrtal" />
         <main className="ticketing">
-            <header className="ticket-page-heading"><div><span className="ticket-eyebrow">TCC PURRTAL / IT SUPPORT</span><h1>IT Ticketing Module</h1><p>{employee ? 'Let us know how we can help. Submit a ticket to the IT team.' : 'Keep every request moving, from first report to resolution.'}</p></div></header>
-            {(member || leader) && <ITWorkspaceSwitcher current="tickets" />}
+            <header className="ticket-page-heading"><div><span className="ticket-eyebrow">TCC PURRTAL / IT SUPPORT</span><div className="it-module-title-row"><h1>IT Ticketing Module</h1>{(member || leader) && <ITWorkspaceSwitcher current="tickets" />}</div></div></header>
             {ranking && <TicketLeaderboard
                 data={leaderboard}
                 onPeriodChange={period => router.get(ticketRoute('index', { view: 'leaderboard', leaderboard_period: period }), {}, { preserveScroll: true })}
@@ -611,7 +610,7 @@ export function TicketScreen({ canViewLeaderboard = false, selectedTicket = null
                     <Link className="ticket-secondary" href={ticketRoute('index', { view: employee ? 'all' : 'assigned', status_filter: 'all' })}>{employee ? 'View my tickets' : 'Assigned to me'}</Link>
                     {!employee && <Link className="ticket-secondary" href={ticketRoute('index', { view: 'all', assignee_filter: '', status_filter: 'all' })}>All tickets</Link>}
                 </div></div>}
-                <div className="ticket-card-heading"><div><h2 id="employee-dashboard-title">{leader ? 'IT team dashboard' : member ? 'My IT ticket dashboard' : 'My ticket dashboard'}</h2><p>{leader ? 'Team tickets at a glance. Percentages use all tickets in this environment.' : member ? 'Your assigned tickets at a glance. Percentages use all tickets currently assigned to you.' : 'Your support requests at a glance. Percentages use all your tickets.'} Open includes resolved tickets awaiting closure.</p></div></div>
+                <div className="ticket-card-heading"><div><h2 id="employee-dashboard-title">{leader ? 'IT team dashboard' : member ? 'My IT ticket dashboard' : 'My ticket dashboard'}</h2><p>{leader ? 'Percentages use all tickets in this environment.' : member ? 'Percentages use all tickets currently assigned to you.' : 'Percentages use all your tickets.'} Open includes resolved tickets awaiting closure.</p></div></div>
                 <section className="ticket-dashboard-group" aria-labelledby="dashboard-all-tickets">
                     <div className="ticket-dashboard-group-heading"><h3 id="dashboard-all-tickets">All Tickets</h3><p>Overall ticket volume, including closed tickets.</p></div>
                     {renderDashboardCards([['total', 'Total tickets', 'gray'], ...(!employee ? [['closed', 'Closed tickets', 'green']] : [])])}

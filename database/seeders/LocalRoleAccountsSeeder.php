@@ -43,6 +43,7 @@ class LocalRoleAccountsSeeder extends Seeder
 
 
                 $account ??= new User();
+                if ($slug === 'evp') $account->position_id = \App\Models\Position::where('name', 'Executive Vice President')->firstOrFail()->id;
                 $account->fill([
                     'name' => $name,
                     'email' => $email,

@@ -1,5 +1,25 @@
 # Ticketing change history
 
+## 21 November 2026 - EVP access follows position
+
+Changed the EVP leaderboard/all-branch exception from database role to the existing Executive Vice President position. Verified employee 377 now has leaderboard access while a role-only EVP identity does not. Assigned the existing EVP position to the named local EVP test account, preserving its database role and password; updated repeatable local seeders. No new roles or positions. Expanded rollback-only permission regression; comments/docs updated. No push performed.
+
+## 20 November 2026 - Removed locations no longer remain in admin list
+
+Fixed the dedicated Locations screen loading soft-deleted rows after successful removal. All ticket admin screens and creation now exclude retired locations; historical ticket lists/filters and ticket relationships still include them. Existing removed rows disappear without another deletion or migration. Also restored built-in branch-code props on the dedicated Locations route, which previously only received them under the old Admin view. Added transactional controller coverage for active-list visibility, deletion redirect, post-delete exclusion, historical references/filtering, branch-code display and member denial. Regression and PHP syntax passed; no push performed.
+
+## 20 November 2026 - Remove decorative interface copy
+
+Removed dashboard/page/form taglines and decorative task-list introductions across Task and Ticketing. Replaced cat-themed empty states and leaderboard labels with plain content labels (Top Performers, First place). Kept operational instructions, percentage definitions, workflow notices, validation and submission acknowledgment content. No permission, timing, data or action changes. Frontend regression and production build passed; no push performed.
+
+## 20 November 2026 - Prominent module heading switch
+
+Replaced the small Tasks / IT Tickets tab pair with a single switch button beside the module heading. Task Module links to IT Ticketing; Ticketing and Ticketing Admin link back to Task Module. Added shared responsive/focus styling with a swap icon and 44px target, moved Task navigation from its dashboard into the persistent module heading and removed obsolete tab CSS. Existing routes and position-based access remain enforced. Comments and documentation updated; frontend regression and production build passed. No push performed.
+
+## 20 November 2026 - Match Task leaderboard colors
+
+Ticket leaderboard now uses the muted eight-color Task CompletedTaskPie palette, matching gold/silver/bronze podium colors and shared portal surface, text, header and rank-badge theme tokens. Added matching dark-mode podium shades and warm overdue text. Ticket layout, fixed podium heights, icon animation, chart geometry, ranking, filters and permissions are unchanged. Updated component/CSS comments. Production build passed; no push performed.
+
 ## 20 November 2026 - Hide disabled staff in workload
 
 Applied the existing User::notDisabled scope only to the staff workload query. Disabled accounts no longer appear in workload panels or the corresponding workbook sheet. Their accounts/tickets/history and other roster scopes are unchanged. Extended position regression confirms exclusion and retained data using rolled-back fixtures. No migration or push performed.

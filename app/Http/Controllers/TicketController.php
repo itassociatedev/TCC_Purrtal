@@ -387,9 +387,10 @@ class TicketController extends Controller
             // The shared role/department exceptions may choose any affected branch.
             'departments' => \App\Models\Department::orderBy('name')->get(['id', 'name']),
             'ticketLocations' => TicketLocation::query()
-                ->withTrashed($view !== 'admin' && !$request->routeIs('tickets.create'))
+                // Retired locations belong in historical filters/details, never admin removal lists.
+                ->withTrashed(!in_array($view, ['admin', 'locations', 'handover', 'sla_settings'], true) && !$request->routeIs('tickets.create'))
                 ->orderBy('name')->get(['id', 'name', 'code', 'deleted_at']),
-            'branchCodes' => $view === 'admin' ? TicketLocation::BRANCH_CODES : [],
+            'branchCodes' => in_array($view, ['admin', 'locations'], true) ? TicketLocation::BRANCH_CODES : [],
             'filterBranches' => Branch::orderBy('name')->get(['id', 'name']),
             'branches' => TicketAccess::branches($actor)->orderBy('name')->get(['id', 'name']),
             'members' => ($role === 'leader' || $canFilterByAssignee) ? TicketAccess::members($preview)->orderBy('name')->get(['id', 'name', 'status']) : [],

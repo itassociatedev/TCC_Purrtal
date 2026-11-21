@@ -1,7 +1,7 @@
 <?php
 namespace Database\Seeders;
 
-use App\Models\{Branch, Department, Role, User};
+use App\Models\{Branch, Department, Position, Role, User};
 use Illuminate\Database\Seeder;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Support\Facades\{DB, Hash};
@@ -28,6 +28,8 @@ class LocalEvpAccountSeeder extends Seeder
                 'branch_id' => Branch::where('name', 'Makati')->firstOrFail()->id,
                 'department_id' => User::where('role_id', $role->id)->whereNotNull('department_id')->value('department_id')
                     ?? Department::where('name', 'Operations')->firstOrFail()->id]);
+            // Use an existing position; never create roles or HR titles for the test login.
+            $account->position_id = Position::where('name', 'Executive Vice President')->firstOrFail()->id;
             $account->fill(['email' => 'evp@tcc.local', 'password' => 'evp123123', 'status' => 'Active',
                 'email_verified_at' => now(), 'failed_login_attempts' => 0, 'device_limit' => 5])->save();
             $account->branches()->syncWithoutDetaching([$account->branch_id]);

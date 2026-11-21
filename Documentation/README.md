@@ -11,7 +11,7 @@ Current implementation reference, audited 19 November 2026:
 
 Latest documented behavior: supervisor-managed priorities use support hours; additional priorities populate ticket controls automatically, use default styling, and can be removed by supervisors: unused priorities are deleted, used ones archived and restorable. Historical references and at least one active priority are preserved. SLA pausing is unavailable to every role.
 
-Ticket access now follows positions: IT Team Leader gets the supervisor workflow, other IT positions get the member workflow, and other/missing positions get the employee workflow. EVP retains leaderboard viewing. The obsolete IT-specific database roles were removed and test accounts use employee plus their IT position.
+Ticket access now follows positions: IT Team Leader gets the supervisor workflow, other IT positions get the member workflow, and other/missing positions get the employee workflow. The Executive Vice President position retains leaderboard viewing regardless of portal role. The obsolete IT-specific database roles were removed and test accounts use employee plus their IT position.
 
 Recent updates also cover clickable workload filters with resolver attribution, separate IT notification feeds, selected-ticket deep links, closure notifications, and focused regression scripts.
 

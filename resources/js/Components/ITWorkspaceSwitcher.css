@@ -1,0 +1,11 @@
+/* Shared title-adjacent navigation stays visible and touch-friendly in either module. */
+.it-module-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 18px; }
+.it-module-title-row > h1, .it-module-title-row > h2 { margin: 0; }
+.it-module-switch { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 44px; padding: 10px 16px; border: 1px solid var(--clinic-accent-line, #c7d2fe); border-radius: 8px; background: var(--clinic-accent-soft, #eef2ff); color: var(--clinic-accent-ink, #4338ca); font-size: 13px; font-weight: 650; line-height: 1.4; text-decoration: none; }
+.it-module-switch svg { width: 20px; height: 20px; flex-shrink: 0; }
+.it-module-switch:hover { border-color: currentColor; box-shadow: 0 2px 6px #172a4612; }
+.it-module-switch:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+@media (max-width: 480px) {
+    .it-module-title-row { gap: 10px; }
+    .it-module-switch { padding: 10px 12px; }
+}

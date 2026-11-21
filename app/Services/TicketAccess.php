@@ -16,7 +16,7 @@ class TicketAccess
         $department = strtolower(trim($user->department?->name ?? ''));
         $itDepartment = in_array($department, array_map(fn ($name) => strtolower(trim($name)), config('ticketing.all_branch_departments', [])), true);
         $query = Branch::query();
-        if (self::role($user) !== 'employee' || $itDepartment || in_array($name, array_map(fn ($role) => strtolower(trim($role)), $allowedRoles), true)) {
+        if (self::role($user) !== 'employee' || self::canViewLeaderboard($user) || $itDepartment || in_array($name, array_map(fn ($role) => strtolower(trim($role)), $allowedRoles), true)) {
             return $query;
         }
         $ids = $user->branches()->pluck('branches.id')->push($user->branch_id)->filter()->unique();
@@ -32,8 +32,9 @@ class TicketAccess
 
     public static function canViewLeaderboard(User $user): bool
     {
-        return self::role($user) === 'leader' || in_array(strtolower(trim($user->role?->name ?? '')),
-            array_map(fn ($name) => strtolower(trim($name)), config('ticketing.leaderboard_viewer_roles', [])), true);
+        // EVP visibility, like IT management, follows the position rather than portal ACL role.
+        return self::role($user) === 'leader' || in_array(strtolower(trim($user->position?->name ?? '')),
+            array_map(fn ($name) => strtolower(trim($name)), config('ticketing.leaderboard_viewer_positions', [])), true);
     }
 
     // Ticketing permissions follow the HR position, never the shared portal role.

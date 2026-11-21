@@ -1,6 +1,7 @@
 import { Link } from '@inertiajs/react';
 
-const colors = ['#2860ef', '#e72229', '#e9b600', '#12a345', '#9333ea', '#0891b2', '#ea580c', '#64748b'];
+// Match the Task Module's CompletedTaskPie palette for slices and legend keys.
+const colors = ['#526e8b', '#a36b69', '#a5874f', '#597e70', '#807490', '#aa8061', '#547c85', '#697789'];
 const periods = { day: 'Day', week: 'Week', month: 'Month', year: 'Year', all: 'All time' };
 const detailLabels = { resolved: 'Resolved tickets', overdue: 'Overdue tickets', ratings: 'Ratings and comments' };
 const formatDate = value => value ? new Date(value).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila' }) : '—';
@@ -61,14 +62,14 @@ export default function TicketLeaderboard({ data, onPeriodChange, exportUrl, det
             {Object.entries(periods).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select></label>{exportUrl && <a className="ticket-secondary clinic-file-action" href={exportUrl}>Export leaderboard XLSX</a>}</div>
         <div className="leaderboard-overview">
-            <section className="leaderboard-panel"><header><h2>Top cats <span className="leaderboard-sparkle" aria-hidden="true">✦</span></h2><p>A little spotlight for a job well done.</p></header>
+            <section className="leaderboard-panel"><header><h2>Top Performers</h2></header>
                 <div className="leaderboard-podium">{podium.map((m, index) => m ? <article key={m.id} className={`leaderboard-place leaderboard-place-${[2, 1, 3][index]}`}>
-                    <span className="leaderboard-place-label">{['Second place', 'Top cat', 'Third place'][index]}</span><CatMedal rank={m.rank} /><h3>{m.name}</h3><strong>{m.resolved}</strong><p>tickets resolved</p><p className="leaderboard-rating">{ratingLabel(m)}</p>
-                </article> : <div key={`empty-${index}`} className={`leaderboard-place-empty leaderboard-place-${[2, 1, 3][index]}`}><span>{['Second place', 'Top cat', 'Third place'][index]}</span><p>No ranked staff yet</p></div>)}</div>
+                    <span className="leaderboard-place-label">{['Second place', 'First place', 'Third place'][index]}</span><CatMedal rank={m.rank} /><h3>{m.name}</h3><strong>{m.resolved}</strong><p>tickets resolved</p><p className="leaderboard-rating">{ratingLabel(m)}</p>
+                </article> : <div key={`empty-${index}`} className={`leaderboard-place-empty leaderboard-place-${[2, 1, 3][index]}`}><span>{['Second place', 'First place', 'Third place'][index]}</span><p>No ranked staff yet</p></div>)}</div>
             </section>
             <section className="leaderboard-panel"><header><h2>Tickets resolved</h2><p>Share of completed resolutions in the current results</p></header>
                 <div className="leaderboard-chart-row"><svg viewBox="0 0 200 200" role="img" aria-label={total ? 'Share of resolved tickets by IT staff; values listed in the legend.' : 'No resolved tickets to chart'}>
-                    <circle cx="100" cy="100" r="80" fill="#eef0f6" />
+                    <circle cx="100" cy="100" r="80" className="leaderboard-chart-empty" />
                     {/* Exact counts define segments; displayed percentages are rounded independently. */}
                     {total > 0 && members.filter(m => m.resolved > 0).map(m => {
                         const share = m.resolved / total;

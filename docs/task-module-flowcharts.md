@@ -225,3 +225,7 @@ Recurring tasks create separate records; they do not erase the previous period's
 - `app/Services/TaskModuleRecurrence.php`: recurring occurrences.
 - `resources/js/Pages/Tasks/Index.jsx`: navigation, preview behavior and task/report interfaces.
 - `resources/js/Pages/Tasks/taskApproval.mjs`, `collaborativeTasks.mjs`, `taskCsv.mjs`: preview approval, collaboration and import flows.
+
+## Interface wording (20 November 2026)
+
+Decorative dashboard greetings, taglines, task-form introductions and cat-themed list/leaderboard phrases were removed or replaced with plain headings and empty-state messages. Functional workflow instructions, counts, filters and permission rules remain unchanged.

@@ -207,11 +207,11 @@
 .leaderboard-panel header p { margin-top: 7px; font-size: 12px; color: #78849b; }
 .leaderboard-sparkle { color: #c39031; margin-left: 5px; }
 .leaderboard-podium { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 9px; padding-top: 16px; }
-/* Each rank's lift exceeds the six-pixel bob so the cards keep their order. */
+/* Fixed podium heights stay in rank order; only the cat icons animate. */
 .leaderboard-place { min-width: 0; min-height: var(--podium-height); text-align: center; padding: 12px 8px 16px; border: 1px solid; border-top-width: 3px; border-radius: 13px; box-shadow: 0 2px 4px #172a4608; }
-.leaderboard-place-1 { --podium-height: 238px; --cat-delay: 0s; color: #a57d32; border-color: #e8d9b9; border-top-color: #c99d3c; background: linear-gradient(#fff6dc, #fffdf8); }
-.leaderboard-place-2 { --podium-height: 216px; --cat-delay: -.6s; color: #79889e; border-color: #d7dfec; border-top-color: #98a8c0; background: #f6f8fc; }
-.leaderboard-place-3 { --podium-height: 194px; --cat-delay: -1.2s; color: #ae7958; border-color: #e8d8ca; border-top-color: #bd9277; background: #fbf7f3; }
+.leaderboard-place-1 { --podium-height: 238px; --cat-delay: 0s; --podium-color: #9a7432; color: var(--podium-color); border-color: #dfd4bd; border-top-color: #c69b42; background: linear-gradient(180deg, #fff5d9, #fffdf7); }
+.leaderboard-place-2 { --podium-height: 216px; --cat-delay: -.6s; --podium-color: #67758b; color: var(--podium-color); border-color: #d5dce6; border-top-color: #94a3b8; background: #f7f9fc; }
+.leaderboard-place-3 { --podium-height: 194px; --cat-delay: -1.2s; --podium-color: #a06d4a; color: var(--podium-color); border-color: #e4d6cb; border-top-color: #b98b6d; background: #fcf7f3; }
 @keyframes leaderboard-bob {
     from { transform: translateY(0); }
     to { transform: translateY(-4px); }
@@ -526,3 +526,27 @@
 .ticket-member-counts a::after { content: ''; position: absolute; inset: 0; border-radius: 6px; }
 .ticket-member-counts a:hover::after, .ticket-member-counts a:focus-visible::after,
 .ticket-member-counts a[aria-current="true"]::after { outline: 2px solid #4f46e5; outline-offset: 2px; }
+
+/* Leaderboard colors mirror Task Module podiums and shared portal theme tokens. */
+.ticketing .ticket-leaderboard,
+.ticketing .leaderboard-panel { background: var(--clinic-dark-surface, #fff); border-color: var(--clinic-dark-border, #e5e7eb); color: var(--clinic-dark-ink, #111827); }
+.ticketing .leaderboard-panel h2,
+.ticketing .leaderboard-place h3 { color: var(--clinic-dark-ink, #111827); }
+.ticketing .leaderboard-panel header p,
+.ticketing .leaderboard-place p,
+.ticketing .leaderboard-rules,
+.ticketing .leaderboard-table td small,
+.ticketing .leaderboard-clear { color: var(--clinic-dark-muted, #6b7280); }
+.ticketing .leaderboard-place strong { color: var(--clinic-accent-ink, #4338ca); }
+.ticketing .leaderboard-place .leaderboard-rating { color: var(--podium-color); }
+.ticketing .leaderboard-chart-empty { fill: var(--clinic-dark-subtle, #eef2ff); }
+.ticketing .leaderboard-table th { background: var(--clinic-accent-soft, #f9fafb); color: var(--clinic-accent-ink, #6b7280); border-bottom-color: var(--clinic-accent-line, #e5e7eb); }
+.ticketing .leaderboard-table td { border-bottom-color: var(--clinic-dark-border, #e5e7eb); }
+.ticketing .leaderboard-table tbody tr:nth-child(even) { background: var(--clinic-dark-surface, #f9fafb); }
+.ticketing .leaderboard-rank { color: var(--clinic-dark-muted, #4b5563); background: var(--clinic-dark-subtle, #f3f4f6); }
+.ticketing .leaderboard-rank-top { color: var(--clinic-dark-ink, #111111); background: var(--clinic-dark-subtle, #f4f5fa); border-color: var(--clinic-dark-border, #dce0ee); }
+.ticketing .leaderboard-overdue { color: #9a3412; }
+html[data-clinic-theme=dark] .ticketing .leaderboard-place-1 { --podium-color: #e1bd70; border-color: #64573d; background: linear-gradient(180deg, #383226, #242b38); }
+html[data-clinic-theme=dark] .ticketing .leaderboard-place-2 { --podium-color: #bdc9df; border-color: #56657c; background: #252e3d; }
+html[data-clinic-theme=dark] .ticketing .leaderboard-place-3 { --podium-color: #dfb194; border-color: #755b4a; background: #322b2d; }
+html[data-clinic-theme=dark] .ticketing .leaderboard-overdue { color: #fdba74; }
