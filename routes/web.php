@@ -74,6 +74,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/task-module/settings/task-ids', [\App\Http\Controllers\TaskIdSettingsController::class,'show'])->name('tasks.ids.show');
     Route::post('/task-module/settings/task-ids', [\App\Http\Controllers\TaskIdSettingsController::class,'update'])->name('tasks.ids.update');
     Route::get('/task-module/records', [\App\Http\Controllers\TaskModuleController::class, 'index'])->name('tasks.records.index');
+    Route::get('/task-module/settings/scoring', [\App\Http\Controllers\TaskScoringController::class,'show'])->name('tasks.scoring.show');
+    Route::post('/task-module/settings/scoring', [\App\Http\Controllers\TaskScoringController::class,'update'])->name('tasks.scoring.update');
     Route::get('/task-module/leaderboard', [\App\Http\Controllers\TaskModuleController::class, 'leaderboard'])->middleware('throttle:30,1')->name('tasks.records.leaderboard');
     Route::post('/task-module/records', [\App\Http\Controllers\TaskModuleController::class, 'store'])->middleware('throttle:60,1')->name('tasks.records.store');
     Route::post('/task-module/turnover-batch', [\App\Http\Controllers\TaskModuleController::class, 'turnoverBatch'])->middleware('throttle:20,1')->name('tasks.turnover.batch');
@@ -89,7 +91,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         $serverReady = config('task_module.server_enabled') && \Illuminate\Support\Facades\Schema::hasTable('task_module_records') && \Illuminate\Support\Facades\Schema::hasTable('task_module_events');
         abort_if(app()->environment('production') && !$serverReady, 503, 'Shared Task Module storage must be configured before use.');
         abort_if($request->query('view') === 'Workspace Setup' && !$isTaskAdmin, 403);
+        abort_if($request->query('view') === 'Team Progress' && !\App\Services\TaskScoring::canView($request->user()),403);
         return Inertia::render('Tasks/Index', [
+            'taskLeaderboardAllowed' => \App\Services\TaskScoring::canView($request->user()),
             'taskIdFormat' => \App\Services\TaskIdSettings::current(),
             'taskAdmin' => $isTaskAdmin,
             'taskViewer' => [

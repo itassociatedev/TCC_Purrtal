@@ -14,7 +14,7 @@ class TaskModuleTurnover
             $record=TaskModuleRecord::where('client_key',$input['key'])->lockForUpdate()->firstOrFail();
             abort_unless($access->visible($actor)->whereKey($record->id)->exists(),403);
             abort_if($record->version!==$input['version'],409,'This task changed. Refresh it before continuing.');
-            $task=$record->payload;$pending=$task['handover'] ?? null;$action=$input['action'];
+            $task=$record->payload;$before=$task;$fromId=$record->assignee_id;$pending=$task['handover'] ?? null;$action=$input['action'];
             abort_unless(($task['template'] ?? '')==='standard' && in_array($task['status'],['Not Started','In Progress','Revision Needed']),422,'Only open standard tasks can be handed over. Finish approval or review first.');
             abort_if(TaskModuleRecord::where('payload->parentId',$task['id'])->exists(),422,'This person coordinates other assignments. Hand over the individual work tasks instead.');
             $manager=$record->creator_id===$actor->id || $record->reviewer_id===$actor->id || $access->role($actor)==='Admin';
@@ -50,6 +50,7 @@ class TaskModuleTurnover
             }
             $task['history']=[['text'=>$text,'at'=>now()->toIso8601String()],...($task['history'] ?? [])];
             $record->payload=$task;$record->version++;$record->save();
+            app(TaskScoring::class)->observe($record,$actor,$before,false,false,$action==='accept' ? ['from'=>['id'=>$fromId,'name'=>$before['assignee'],'department'=>$before['department'],'branch'=>$before['branch']]] : null);
             DB::table('task_module_events')->insert(['task_record_id'=>$record->id,'actor_id'=>$actor->id,'version'=>$record->version,'event'=>$text,'recipient_ids'=>json_encode(array_values(array_unique(array_filter([$record->assignee_id,$record->creator_id,$record->reviewer_id,$task['handover']['recipientId']])))),'created_at'=>now(),'updated_at'=>now()]);
             return $record->document();
         });

@@ -1,5 +1,10 @@
 # TCC Purrtal
 
+## Task Module documentation
+
+- [Leaderboard scoring](../docs/task-module-scoring.md): approved rubric, settings, evidence, handovers, audit trail, permissions and validation.
+- [Task workflow](../docs/task-module-flowcharts.md): task lifecycle and review permissions.
+
 ## Ticketing system documentation
 
 Current implementation reference, audited 19 November 2026:

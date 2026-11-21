@@ -46,6 +46,7 @@ class TaskModuleWriter
             abort_if(($task['_serverVersion'] ?? null) !== $record->version, 409, 'This task changed in another session. Refresh before saving.');
         }
         $previous = $record?->payload;
+        unset($task['scoring']); // Scoring is server-owned, never a client write field.
         $deadlineChanged = !$previous || ($task['due'] ?? null) !== ($previous['due'] ?? null);
         $manualTask = empty($task['recurrence']) && empty($task['repeatSeriesId']);
         if ($deadlineChanged && $manualTask && ($task['due'] ?? '') < now('Asia/Manila')->toDateString()) {
@@ -232,6 +233,7 @@ class TaskModuleWriter
             );
             if (($record->payload['taskCode'] ?? null) !== $task['taskCode']) $record->forceFill(['payload' => $task])->save();
         }
+        app(TaskScoring::class)->observe($record, $actor, $previous, $isSubmission, $newRecord);
         if($newRecord)$createdInBatch[$record->id]=true;
         if ($previous && $task['status'] === $previous['status'] && ($previous['assignee'] ?? '') === $task['assignee']) {
             LoggerService::log('Task Module', 'Update', 'Updated task: '.$task['title'], userId: $actor->id);

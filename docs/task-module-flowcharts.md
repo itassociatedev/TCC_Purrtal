@@ -1,6 +1,6 @@
 # Task Module — Current workflow
 
-Based on the local implementation reviewed on November 18, 2026. This describes the current rules, not a claim that every role has been tested. IT Ticketing is a separate project and appears here only as a navigation destination.
+Workflow reference updated November 21, 2026. See [Leaderboard scoring](task-module-scoring.md) for the versioned rubric, evidence, allocations and tests. This describes the current rules, not a claim that every role has been tested. IT Ticketing is a separate project and appears here only as a navigation destination.
 
 ## 1. Module overview
 
@@ -206,7 +206,7 @@ flowchart TD
     Q --> R[Workbook table begins at B2 with gridlines hidden]
     S[Task events] --> T[Notifications, Activity and task History]
     S --> U[Admin System Logs]
-    V[Completed eligible tasks] --> W[Leaderboard counts and completed-task drill-down]
+    V[Completed eligible tasks] --> W[Leaderboard points, separate completion counts and score breakdown]
     X[Overdue unfinished tasks] --> Y[Overdue counts and task drill-down]
     Z[Calendar] --> AA[Group work by deadline and show overdue work]
     AB[Admin Workspace Setup] --> AC[Maintain task options, people overrides, task IDs and sounds]

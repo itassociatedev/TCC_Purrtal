@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {buildLeaderboard,completionDate,completionPie,leaderboardDemoTasks,leaderboardPeriod,leaderboardTeams,leaderboardScope} from '../resources/js/Pages/Tasks/leaderboard.mjs';
-const task=(id,assignee='Alex',changes={})=>({id,assignee,department:'IT',branch:'Makati',template:'standard',title:'Real task',status:'Completed',due:'2026-10-25',completedAt:'2026-10-25T04:00:00Z',...changes});
-test('rankings count only distinct approved completions without weighted contribution metrics',()=>{
+const task=(id,assignee='Alex',changes={})=>({id,assignee,department:'IT',branch:'Makati',template:'standard',title:'Real task',status:'Completed',due:'2026-10-25',completedAt:'2026-10-25T04:00:00Z',scoring:{eligible:true,earned_units:940000,allocations:[{id:assignee,name:assignee,department:changes.department||'IT',branch:changes.branch||'Makati',units:1000000,awarded_units:940000}]},...changes});
+test('rankings count distinct completions and separately aggregate authoritative point allocations',()=>{
  const tasks=[task(1),task(1),task(2,'Bea',{template:'collaborative'}),task(3,'Alex',{status:'Pending Review'}),task(4,'Alex',{title:'[Sample] Test'}),task(5,'Alex',{template:'narrative-report'}),task(6,'Alex',{template:'intern-weekly-report'})];
  const board=buildLeaderboard(tasks);
  assert.equal(board.total,2);assert.deepEqual(board.rows.map(row=>[row.name,row.rank,row.share]),[['Alex',1,50],['Bea',2,50]]);
@@ -40,10 +40,10 @@ test('search and display sorting preserve completion ranks and contribution with
 test('employees with overdue unfinished work are visible even with zero completed tasks',()=>{
  const tasks=[task(1,'Alex'),task(2,'Bea',{status:'In Progress',due:'2026-10-24'}),task(3,'Cara',{status:'Pending Review',due:'2026-10-23'}),task(4,'Drew',{status:'Pending Approval',due:'2026-10-23'}),task(5,'Eve',{status:'Not Started',due:'2026-10-23',approvalRequired:true}),task(6,'Faye',{status:'In Progress',due:'2026-10-26'})];
  const board=buildLeaderboard(tasks,{today:'2026-10-25'});
- assert.deepEqual(board.rows.map(row=>row.name),['Alex','Bea']);
+ assert.deepEqual(board.rows.map(row=>row.name),['Alex','Bea','Eve']);
  assert.equal(board.rows[1].completed,0);assert.equal(board.rows[1].overdue,1);assert.equal(board.rows[1].rank,2);
- assert.equal(board.needsAttention,1);
- assert.deepEqual(buildLeaderboard(tasks,{today:'2026-10-25',attentionOnly:true}).rows.map(row=>row.name),['Bea']);
+ assert.equal(board.needsAttention,2);
+ assert.deepEqual(buildLeaderboard(tasks,{today:'2026-10-25',attentionOnly:true}).rows.map(row=>row.name),['Bea','Eve']);
 });
 test('active directory employees with no tasks appear at zero within scope',()=>{
  const employees=[{name:'Alex',department:'IT',branch:'Makati'},{name:'Bea',department:'IT',branch:'Alabang'},{name:'Cara',department:'HR',branch:'Makati'}];
@@ -75,14 +75,14 @@ test('demo fixtures do not modify employees or real task records',()=>{
  const board=buildLeaderboard(demo,{employees});assert.equal(board.rows.length,2);assert.equal(board.total,demo.length);
 });
 
-test('equal completions resolve by on-time count then overdue work then stable ID',()=>{
+test('equal points resolve by name independently of completion and overdue counts',()=>{
  const employees=[{id:2,name:'Alex',department:'IT',branch:'Makati'},{id:1,name:'Bea',department:'IT',branch:'Makati'},{id:3,name:'Cara',department:'IT',branch:'Makati'}];
  const tasks=[task(1,'Alex'),task(2,'Bea'),task(3,'Cara',{due:'2026-10-24'}),task(4,'Alex',{status:'In Progress',due:'2026-10-24'})];
  const board=buildLeaderboard(tasks,{employees,today:'2026-10-25'});
- assert.deepEqual(board.rows.map(row=>row.name),['Bea','Alex','Cara']);
+ assert.deepEqual(board.rows.map(row=>row.name),['Alex','Bea','Cara']);
  assert.deepEqual(board.rows.map(row=>row.rank),[1,2,3]);
  const exact=buildLeaderboard([task(1,'Alex'),task(2,'Bea')],{employees:employees.slice(0,2)});
- assert.equal(exact.rows[0].name,'Bea');assert.match(exact.rows[0].tieBreak,/administrative/);
+ assert.equal(exact.rows[0].name,'Alex');assert.match(exact.rows[0].tieBreak,/points, then name/);
 });
 test('demo employees have distinct completed counts and team scope lists individual people',()=>{
  const employees=Array.from({length:30},(_,index)=>({name:'Employee '+index,department:'IT',branch:index%2?'Alabang':'Makati'}));
@@ -139,4 +139,22 @@ test('IT team combines branches while other teams keep branch choices',()=>{
  const team=teams.find(([,team])=>team.department==='IT')[1];
  assert.equal(buildLeaderboard([],{employees,department:team.department,branch:team.branch}).rows.length,2);
  assert.deepEqual(leaderboardTeams(employees,{fixedBranch:'Makati'}).find(([,team])=>team.department==='IT')[1],{department:'IT',branch:'Makati'});
+});
+
+
+test('missing historical scores and Low completions count but never manufacture points',()=>{
+ const board=buildLeaderboard([task(501,'Alex',{scoring:null}),task(502,'Bea',{priority:'Low',scoring:{eligible:false,reason:'excluded_low',earned_units:0,allocations:[]}})]);
+ assert.equal(board.total,2);assert.equal(board.totalUnits,0);assert.ok(board.rows.every(r=>r.points===0&&r.unscored===1));
+});
+test('handover allocations are conserved across people and group filters without duplicate awards',()=>{
+ const scoring={eligible:true,earned_units:800000,allocations:[{id:1,name:'Alex',department:'IT',branch:'Makati',units:800000,awarded_units:640000},{id:2,name:'Bea',department:'HR',branch:'Alabang',units:160000,awarded_units:128000},{id:3,name:'Cara',department:'IT',branch:'Makati',units:40000,awarded_units:32000}]};
+ const t=task(503,'Cara',{scoring});const people=buildLeaderboard([t,t]);assert.equal(people.total,1);assert.equal(people.totalUnits,800000);assert.equal(people.rows.find(r=>r.name==='Alex').completed,0);
+ assert.equal(buildLeaderboard([t],{department:'IT'}).totalUnits,672000);assert.equal(buildLeaderboard([t],{branch:'Alabang'}).totalUnits,128000);
+ assert.equal(buildLeaderboard([t],{group:'departments'}).totalUnits,800000);assert.equal(buildLeaderboard([t],{from:'2026-10-26'}).totalUnits,0);
+ assert.equal(people.rows.reduce((n,r)=>n+r.scoreEntries.reduce((v,e)=>v+e.awardedUnits,0),0),800000);
+});
+test('reopened work removes points and demo scores never bleed into actual results',()=>{
+ assert.equal(buildLeaderboard([task(504,'Alex',{status:'In Progress'})]).totalUnits,0);
+ const employees=[{id:1,name:'Alex',department:'IT',branch:'Makati'}],fixtures=leaderboardDemoTasks(employees,'2026-10-25');
+ assert.equal(buildLeaderboard(fixtures,{employees}).totalUnits,0);assert.ok(buildLeaderboard(fixtures,{employees,demo:true}).totalUnits>0);
 });

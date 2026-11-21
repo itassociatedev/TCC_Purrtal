@@ -21,23 +21,25 @@ export function leaderboardTaskIsOverdue(task,today){
 export function leaderboardTeams(employees,{fixedBranch='',fixedDepartment=''}={}){
  return [...new Map(leaderboardPeople(employees).filter(person=>!fixedDepartment||person.department===fixedDepartment).flatMap(person=>(person.department==='IT'&&!fixedBranch?['All']:leaderboardBranches(person).filter(branch=>!fixedBranch||branch===fixedBranch)).map(branch=>[JSON.stringify([person.department,branch]),{department:person.department,branch}]))).entries()].sort((a,b)=>(a[1].department+' '+a[1].branch).localeCompare(b[1].department+' '+b[1].branch));
 }
-export function buildLeaderboard(tasks,{group='people',department='All',branch='All',from='',to='',search='',sort='completed',today='',attentionOnly=false,employees=[]}={}) {
+export function buildLeaderboard(tasks,{group='people',department='All',branch='All',from='',to='',search='',sort='completed',today='',attentionOnly=false,employees=[],demo=false}={}) {
  const rows=new Map(),seen=new Set();let undated=0;
- const identities = new Map(leaderboardPeople(employees).flatMap(person =>
+ const people=leaderboardPeople(employees),peopleById=new Map(people.map(p=>[String(p.id),p])),peopleByName=new Map(people.flatMap(p=>[p.name,p.accountName,...(p.previousNames||[])].filter(Boolean).map(name=>[name,p])));
+ const identities = new Map(people.flatMap(person =>
   [person.name, person.accountName, ...(person.previousNames || [])].filter(Boolean).map(name => [name, person.name])));
  const groupName=(department,branch,name)=>group==='departments'?department:group==='teams'?`${department} · ${branch}`:group==='branches'?branch:name;
- for(const person of leaderboardPeople(employees)){
+ for(const person of people){
   if(!person.name||person.active===false||person.disabled||department!=='All'&&person.department!==department||branch!=='All'&&!leaderboardBranches(person).includes(branch))continue;
   const memberships=group==='branches'||group==='teams'?leaderboardBranches(person).filter(value=>branch==='All'||value===branch):[branch==='All'?person.branch:branch];
   for(const memberBranch of memberships){
   const name=groupName(person.department,memberBranch,person.name);
-  const row=rows.get(name)||{name,completed:0,onTime:0,overdue:0,overdueTasks:[],completedTasks:[],stableKey:name,departments:new Set(),branches:new Set(),members:new Set()};
+  const row=rows.get(name)||{name,completed:0,pointUnits:0,scoreEntries:[],unscored:0,onTime:0,overdue:0,overdueTasks:[],completedTasks:[],stableKey:name,departments:new Set(),branches:new Set(),members:new Set()};
   if(group==='people'||group==='teams')row.stableKey=String(person.id??person.employeeId??person.name);
   row.departments.add(person.department);row.branches.add(memberBranch);row.members.add(person.name);rows.set(name,row);
   }
  }
  for(const savedTask of tasks){
   const task = {...savedTask, assignee: identities.get(savedTask.assignee) || savedTask.assignee};
+  if(employees.length && !identities.has(savedTask.assignee))continue;
   if(seen.has(String(task.id))||isEmailSample(task)||isDailyTemplate(task)||isWeeklyReport(task)||!task.assignee)continue;
   seen.add(String(task.id));
 
@@ -48,9 +50,11 @@ export function buildLeaderboard(tasks,{group='people',department='All',branch='
   if(task.status!=='Completed'&&!overdue)continue;
   if((from||to)&&!date||from&&date<from||to&&date>to)continue;
   const name=group==='departments'?task.department:group==='teams'?`${task.department} · ${task.branch}`:group==='branches'?task.branch:task.assignee;
-  const row=rows.get(name)||{name,completed:0,onTime:0,overdue:0,overdueTasks:[],completedTasks:[],stableKey:name,departments:new Set(),branches:new Set(),members:new Set()};
+  const row=rows.get(name)||{name,completed:0,pointUnits:0,scoreEntries:[],unscored:0,onTime:0,overdue:0,overdueTasks:[],completedTasks:[],stableKey:name,departments:new Set(),branches:new Set(),members:new Set()};
   if(task.status==='Completed'){
    row.completed++;
+   row.scoreEntries.push({task,scoring:task.scoring||{reason:'incomplete_records',eligible:false},awardedUnits:0});
+   if(!demo&&!task.scoring?.eligible)row.unscored++;
    row.completedTasks.push({id:task.id,title:task.title||'Untitled task',completedAt:date,due:task.due||'',department:task.department||'',branch:task.branch||'',assignee:task.assignee||''});
    const submittedDate=task.submittedAt?completionDate({completedAt:task.submittedAt}):date;
    if(submittedDate&&task.due&&submittedDate<=task.due)row.onTime++;
@@ -60,20 +64,40 @@ export function buildLeaderboard(tasks,{group='people',department='All',branch='
   }
   row.departments.add(task.department);row.branches.add(task.branch);row.members.add(task.assignee);rows.set(name,row);
  }
- const compare=(a,b)=>b.completed-a.completed||b.onTime-a.onTime||a.overdue-b.overdue||a.name.localeCompare(b.name,'en',{numeric:true,sensitivity:'base'});
+ // Points are separate from completion counts and come only from the server ledger.
+ const scored=new Set();
+ for(const task of tasks){
+  if(scored.has(String(task.id))||task.status!=='Completed'||isEmailSample(task)||isDailyTemplate(task)||isWeeklyReport(task))continue;
+  scored.add(String(task.id));
+  const date=completionDate(task);if((from||to)&&!date||from&&date<from||to&&date>to)continue;
+  let score=task.scoring;
+  if(demo)score={eligible:true,percentage:94,earned_units:940000,scores:{time:30,priority:24,returns:20,ownership:20},return_count:0,return_deduction:0,priority:'High',submission_at:task.completedAt,deadline:task.due,allocations:[{id:task.assignee,name:task.assignee,department:task.department,branch:task.branch,units:1000000,awarded_units:940000}],policy_version:'DEMO'};
+  if(!score?.eligible)continue;
+  for(const allocation of score.allocations||[]){
+   const person=peopleById.get(String(allocation.id))||peopleByName.get(allocation.name);
+   if(employees.length&&!person)continue;
+   const who=person?.name||allocation.name,dept=allocation.department||task.department,location=allocation.branch||task.branch;
+   if(department!=='All'&&dept!==department||branch!=='All'&&location!==branch)continue;
+   const name=groupName(dept,location,who);
+   const row=rows.get(name)||{name,completed:0,pointUnits:0,scoreEntries:[],unscored:0,onTime:0,overdue:0,overdueTasks:[],completedTasks:[],stableKey:name,departments:new Set(),branches:new Set(),members:new Set()};
+   row.pointUnits+=Number(allocation.awarded_units||0);
+   let entry=row.scoreEntries.find(entry=>String(entry.task.id)===String(task.id));
+   if(!entry){entry={task,scoring:score,awardedUnits:0};row.scoreEntries.push(entry);}entry.scoring=score;entry.awardedUnits+=Number(allocation.awarded_units||0);
+   row.departments.add(dept);row.branches.add(location);row.members.add(who);rows.set(name,row);
+  }
+ }
+ const compare=(a,b)=>b.pointUnits-a.pointUnits||a.name.localeCompare(b.name,'en',{numeric:true,sensitivity:'base'})||a.stableKey.localeCompare(b.stableKey);
  const ordered=[...rows.values()].filter(row=>!attentionOnly||row.overdue>0)
   .sort(attentionOnly?(a,b)=>b.overdue-a.overdue||compare(a,b):compare);
  let result=ordered.map((row,index)=>{
-  const next=ordered[index+1],previous=ordered[index-1];
-  const peer=next?.completed===row.completed?next:previous?.completed===row.completed?previous:null;
-  const tieBreak=attentionOnly?'Overdue unfinished tasks':!peer?'Completed tasks':row.onTime!==peer.onTime?'On-time completions':row.overdue!==peer.overdue?'Overdue unfinished tasks':'Name A–Z';
+  const tieBreak=attentionOnly?'Overdue unfinished tasks':'Leaderboard points, then name A–Z';
   return {...row,rank:index+1,tieBreak,departments:[...row.departments].sort(),branches:[...row.branches].sort(),memberNames:[...row.members],members:row.members.size};
  });
  result=result.filter(row=>matchesSearch(search,row.name,row.departments,row.branches,row.memberNames));
- const total=result.reduce((sum,row)=>sum+row.completed,0);
- result=result.map(row=>({...row,share:total?Math.round(row.completed/total*1000)/10:0}));
- if (!attentionOnly) result.sort((a,b)=>sort==='name'?a.name.localeCompare(b.name):sort==='overdue'?b.overdue-a.overdue||b.completed-a.completed||a.name.localeCompare(b.name):sort==='fewest'?a.completed-b.completed||a.name.localeCompare(b.name):compare(a,b));
- return {rows:result,total,undated,needsAttention:result.filter(row=>row.overdue>0).length};
+ const total=result.reduce((sum,row)=>sum+row.completed,0),totalUnits=result.reduce((sum,row)=>sum+row.pointUnits,0);
+ result=result.map(row=>({...row,points:row.pointUnits/1000000,share:totalUnits?Math.round(row.pointUnits/totalUnits*10000)/100:0}));
+ if (!attentionOnly) result.sort((a,b)=>sort==='name'?a.name.localeCompare(b.name):sort==='overdue'?b.overdue-a.overdue||b.pointUnits-a.pointUnits||a.name.localeCompare(b.name):sort==='fewest'?a.pointUnits-b.pointUnits||a.name.localeCompare(b.name):compare(a,b));
+ return {rows:result,total,totalUnits,totalPoints:totalUnits/1000000,undated,needsAttention:result.filter(row=>row.overdue>0).length};
 }
 export function completionPie(rows,limit=8){
  const ordered=rows.filter(row=>row.completed>0).sort((a,b)=>b.completed-a.completed||a.name.localeCompare(b.name));

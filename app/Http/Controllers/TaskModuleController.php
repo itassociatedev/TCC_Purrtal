@@ -28,7 +28,7 @@ class TaskModuleController extends Controller
     {
         $this->available();
         abort_unless($access->active($request->user()), 403);
-        abort_unless($access->role($request->user()) !== 'Employee', 403, 'The leaderboard is available to management roles only.');
+        abort_unless(\App\Services\TaskScoring::canView($request->user()), 403, 'The leaderboard is available to management roles only.');
         $today = $request->validate(['today' => 'required|date_format:Y-m-d'])['today'];
         $activePeople = \App\Models\User::query()->get()->filter(fn ($person) => $access->active($person));
         $activeAssignees = $activePeople->modelKeys();
@@ -37,15 +37,16 @@ class TaskModuleController extends Controller
         // Older task records may have an assignee name in their payload but no
         // assignee_id. Include those rows, then validate ownership by active name.
         $records = TaskModuleRecord::query()->where(function ($query) use ($activeAssignees) {
-            $query->whereIn('assignee_id', $activeAssignees)->orWhereNull('assignee_id');
-        })->get(['id', 'assignee_id', 'payload']);
+            $query->whereIn('assignee_id', $activeAssignees)->orWhereNull('assignee_id')->orWhere('payload->status','Completed');
+        })->get(['id', 'assignee_id', 'payload', 'version', 'created_at']);
         $rows = $records->filter(function ($record) use ($today, $activeNames, $activeAssignees) {
             $task = $record->payload;
             $hasActiveOwner = $record->assignee_id !== null
                 ? in_array((int) $record->assignee_id, $activeAssignees, true)
                 : isset($activeNames[mb_strtolower(trim($task['assignee'] ?? ''))]);
             $due = substr((string) ($task['due'] ?? ''), 0, 10);
-            return $hasActiveOwner
+            return ($hasActiveOwner || ($task['status'] ?? '') === 'Completed')
+                && empty($task['sample']) && empty($task['sampleKey'])
                 && !str_starts_with($task['title'] ?? '', '[Sample]')
                 && !in_array($task['template'] ?? '', ['it-opening-rounds', 'narrative-report', 'daily-operations', 'intern-weekly-report'], true)
                 && !str_starts_with($task['template'] ?? '', 'daily-custom-')
@@ -54,9 +55,13 @@ class TaskModuleController extends Controller
                         && preg_match('/^\d{4}-\d{2}-\d{2}$/', $due) === 1 && $due < $today);
         })->map(function ($record) use ($activeNamesById) {
             $task = $record->payload;
+            $document=$record->document();
             $approvalGrantedAt = $task['approvalGrantedAt'] ?? collect($task['history'] ?? [])->first(fn ($event) => preg_match('/^.*: approved\.$|request approved|task approved/i', $event['text'] ?? '') === 1)['at'] ?? null;
             return [
                 'id' => $task['id'] ?? $record->id,
+                'taskCode' => $document['taskCode'], 'priority'=>$task['priority'] ?? '',
+                'parentId'=>$task['parentId'] ?? null, '_serverVersion'=>$record->version,
+                'scoring'=>$document['scoring'],
                 'assignee' => $activeNamesById[(int) $record->assignee_id] ?? $task['assignee'] ?? '',
                 'department' => $task['department'] ?? '',
                 'branch' => $task['branch'] ?? '',
@@ -164,6 +169,7 @@ class TaskModuleController extends Controller
             $clientIds=$all->whereIn('id',$ids)->map(fn($record)=>$record->payload['id'])->all();
             foreach($all as $record) if(!in_array($record->id,$ids,true))abort_if(array_intersect($record->payload['dependsOn'] ?? [],$clientIds),422,'Other tasks depend on this work. Delete the containing workflow instead.');
             foreach ($all->whereIn('id', $ids) as $record) {
+                app(\App\Services\TaskScoring::class)->suspend($record,$actor);
                 $record->delete();
                 LoggerService::log('Task Module', 'Delete', 'Deleted task: '.$record->payload['title'], userId: $actor->id);
             }

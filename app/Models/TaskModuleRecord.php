@@ -22,6 +22,6 @@ class TaskModuleRecord extends Model
             (int) $this->id,
         );
 
-        return [...$payload, '_serverKey' => $this->client_key, '_serverVersion' => $this->version];
+        return [...$payload, 'scoring'=>\App\Services\TaskScoring::snapshot($this), '_serverKey' => $this->client_key, '_serverVersion' => $this->version];
     }
 }
