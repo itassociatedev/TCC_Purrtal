@@ -66,14 +66,20 @@ class AuditObserver
      */
     public function created(Model $model): void
     {
-        // Try to find a name or title to make the log more readable
-        $identifier = $model->name ?? $model->title ?? $model->label ?? "a record";
+        // Special handling for Assets to include asset_tag in description
+        if ($model instanceof \App\Models\Asset) {
+            $description = "Created new asset: {$model->asset_tag} ({$model->name}).";
+        } else {
+            // Try to find a name or title to make the log more readable
+            $description = "Created " . ($model->name ?? $model->title ?? $model->label ?? "a record") . " in " . $this->getModuleName($model);
+        }
+
         $userId = $this->determineUserId($model);
-        
+
         LoggerService::log(
-            $this->getModuleName($model), 
-            'Create', 
-            "Created $identifier in " . $this->getModuleName($model),
+            $this->getModuleName($model),
+            'Create',
+            $description,
             'success',
             $userId
         );
@@ -84,22 +90,25 @@ class AuditObserver
      */
     public function updated(Model $model): void
     {
-        // 🟢 THE FIX: Ignore background authentication changes for Users!
-        if ($model instanceof \App\Models\User) {
+        // Special handling for Assets to include asset_tag in description
+        if ($model instanceof \App\Models\Asset) {
+            $description = "Updated asset: {$model->asset_tag}.";
+        } elseif ($model instanceof \App\Models\User) {
+            // 🟢 THE FIX: Ignore background authentication changes for Users!
             // Get an array of columns that actually changed during this update
             $changedColumns = array_keys($model->getChanges());
-            
+
             // Define the background columns that should NOT trigger a system log
             $ignoredColumns = [
-                'remember_token', 
-                'updated_at', 
-                'last_login_at', 
+                'remember_token',
+                'updated_at',
+                'last_login_at',
                 'failed_login_attempts'
             ];
-            
+
             // Remove the ignored columns from the list of changed columns
             $actualChanges = array_diff($changedColumns, $ignoredColumns);
-            
+
             // If the array is empty, it means ONLY background columns were changed.
             // We stop the observer right here so no false log is created.
             if (empty($actualChanges)) {
@@ -109,16 +118,19 @@ class AuditObserver
 
         // Check if the record is being "Updated" or if it's specifically a "Status Change"
         $module = $this->getModuleName($model);
-        $identifier = $model->name ?? $model->title ?? $model->label ?? "record";
-        $userId = $this->determineUserId($model);
-        
-        $description = "Updated $identifier in $module";
-        
-        // Capture specific status changes for HR/PRPO workflows
-        if ($model->wasChanged('status')) {
-            $description = "Status of $identifier changed to: " . strtoupper($model->status);
+
+        // Skip description building if we already set it for Asset
+        if (!($model instanceof \App\Models\Asset)) {
+            $identifier = $model->name ?? $model->title ?? $model->label ?? "record";
+            $description = "Updated $identifier in $module";
+
+            // Capture specific status changes for HR/PRPO workflows
+            if ($model->wasChanged('status')) {
+                $description = "Status of $identifier changed to: " . strtoupper($model->status);
+            }
         }
 
+        $userId = $this->determineUserId($model);
         LoggerService::log($module, 'Update', $description, 'warning', $userId);
     }
 
@@ -127,13 +139,19 @@ class AuditObserver
      */
     public function deleted(Model $model): void
     {
-        $identifier = $model->name ?? $model->title ?? $model->label ?? "a record";
+        // Special handling for Assets to include asset_tag in description
+        if ($model instanceof \App\Models\Asset) {
+            $description = "Deleted asset: {$model->asset_tag}.";
+        } else {
+            $description = "Deleted " . ($model->name ?? $model->title ?? $model->label ?? "a record") . " from " . $this->getModuleName($model);
+        }
+
         $userId = $this->determineUserId($model);
-        
+
         LoggerService::log(
-            $this->getModuleName($model), 
-            'Delete', 
-            "Deleted $identifier from " . $this->getModuleName($model), 
+            $this->getModuleName($model),
+            'Delete',
+            $description,
             'danger',
             $userId
         );
