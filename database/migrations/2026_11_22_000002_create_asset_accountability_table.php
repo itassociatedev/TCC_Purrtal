@@ -19,6 +19,7 @@ return new class extends Migration
                 $table->id();
                 $table->foreignId('asset_id')->constrained()->cascadeOnDelete();
                 $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+                $table->string('accountability_type', 20)->default('personal');
                 $table->boolean('is_team_leader')->default(false);
                 $table->timestamps();
                 $table->unique(['asset_id', 'user_id']);

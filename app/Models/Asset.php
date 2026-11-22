@@ -53,7 +53,7 @@ class Asset extends Model
     public function accountableUsers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'asset_user')
-            ->withPivot('is_team_leader')
+            ->withPivot('is_team_leader', 'accountability_type')
             ->withTimestamps()
             ->orderByPivot('is_team_leader', 'desc');
     }

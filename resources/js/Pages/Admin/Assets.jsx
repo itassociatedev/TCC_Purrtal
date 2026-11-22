@@ -793,7 +793,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
 
                             {canManageAssets && (
                                 <>
-                                    <a href={route('assets.template')} download="Asset_Template.xlsx" className="inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-md font-bold text-[10px] text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none transition ease-in-out duration-150 justify-center gap-2 whitespace-nowrap">
+                                    <a href={route('admin.assets.template')} download="Asset_Template.xlsx" className="inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-md font-bold text-[10px] text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none transition ease-in-out duration-150 justify-center gap-2 whitespace-nowrap">
                                         <svg className="w-4 h-4 text-indigo-300" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 110 2H7z" clipRule="evenodd" /></svg>
                                         Download Template
                                     </a>

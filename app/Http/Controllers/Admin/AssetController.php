@@ -237,9 +237,11 @@ class AssetController extends Controller
             'assigned_personnel' => $leader ? User::find($leader)?->name : null,
             'asset_status' => $ids ? 'Assigned' : 'In Storage',
         ]);
-        $asset->accountableUsers()->sync(array_fill_keys($ids, ['is_team_leader' => false]));
+        // Sync pivot with accountability_type included
+        $pivotData = array_fill_keys($ids, ['is_team_leader' => false, 'accountability_type' => $data['type']]);
+        $asset->accountableUsers()->sync($pivotData);
         if ($leader && in_array($leader, $ids, true)) {
-            $asset->accountableUsers()->updateExistingPivot($leader, ['is_team_leader' => true]);
+            $asset->accountableUsers()->updateExistingPivot($leader, ['is_team_leader' => true, 'accountability_type' => $data['type']]);
         }
 
         return back()->with('success', 'Asset accountability updated.');
