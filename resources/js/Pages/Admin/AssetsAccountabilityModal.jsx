@@ -23,7 +23,7 @@ export default function AssetsAccountabilityModal({ show, onClose, asset, users 
     const handleSubmit = (e) => {
         e.preventDefault();
         setIsSubmitting(true);
-        form.post(route('.assets.accountability', asset.id), {
+        form.post(route('admin.assets.accountability', asset.id), {
             preserveScroll: true,
             onSuccess: () => {
                 setIsSubmitting(false);

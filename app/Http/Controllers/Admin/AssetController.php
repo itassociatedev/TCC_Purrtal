@@ -20,23 +20,40 @@ use App\Models\AssetImportBatch;
 use App\Models\AssetImportItem;
 use App\Exports\AssetTemplateExport;
 
+use App\Models\AssetPhotoSubmission;
+use App\Support\AssetAccess;
+
 class AssetController extends Controller
 {
     public function index()
     {
-        // Security Bouncer for Audit
-        $userRole = strtolower(trim(Auth::user()?->role?->name ?? ''));
-        if (str_contains($userRole, 'audit') || str_contains($userRole, 'view only') || str_contains($userRole, 'accountability')) {
-            return redirect()->route('admin.asset-masterlist');
-        }
+        $user = Auth::user();
+        if (!AssetAccess::canViewOverview($user)) return redirect()->route('admin.assets.entry');
+
+        $isIt = AssetAccess::isIt($user);
 
         return Inertia::render('Admin/Assets', [
-            // 🟢 FIXED: Changed paginate(10) to get() so React receives all 100+ items
             'assets' => Asset::with(['user', 'supplier', 'accountableUsers'])->latest()->get(),
-
-            // 🟢 CLEANED: Combined the unused variables you had earlier into the render array
             'suppliers' => Supplier::where('status', 'Active')->orderBy('name')->get(['id', 'name']),
             'users' => User::with(['department', 'position'])->orderBy('name')->get(),
+            'branches' => Branch::all(),
+            'departments' => Department::all(),
+            'rejectedPhotoSubmissions' => AssetPhotoSubmission::with('asset:id,name,asset_tag')
+                ->where('submitted_by', $user->id)
+                ->where('status', 'rejected')
+                ->latest()
+                ->get(),
+            'canReviewPhotos' => $isIt,
+        ]);
+    }
+
+    public function entry()
+    {
+        $user = Auth::user();
+        abort_unless(AssetAccess::canEnter($user), 403);
+
+        return Inertia::render('Admin/AssetEntry', [
+            'suppliers' => Supplier::where('status', 'Active')->orderBy('name')->get(['id', 'name']),
             'branches' => Branch::all(),
             'departments' => Department::all(),
         ]);
@@ -46,7 +63,7 @@ class AssetController extends Controller
     {
         // Security Bouncer for Admins
         $userRole = strtolower(trim(Auth::user()?->role?->name ?? ''));
-        $isAdmin = in_array($userRole, ['admin', 'super admin', 'director of corporate services and operations']);
+        $isAdmin = AssetAccess::isFullManager(Auth::user());
         
         if ($isAdmin) {
             return redirect()->route('admin.assets.index');
@@ -249,7 +266,10 @@ class AssetController extends Controller
 
     public function importSpreadsheet(Request $request)
     {
-        $request->validate(['file' => ['required', 'file', 'mimes:csv,txt,xlsx,xls', 'max:20480']]);
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:csv,txt,xlsx,xls', 'max:20480'],
+            'fallback_branch' => ['nullable', 'string', 'max:255'],
+        ]);
         $file = $request->file('file');
         $storedPath = $file->store('asset-imports');
         $batch = AssetImportBatch::create([
@@ -261,25 +281,67 @@ class AssetController extends Controller
         ]);
 
         try {
-            $rows = Excel::toArray(null, $file)[0] ?? [];
-            if (!$rows) abort(422, 'The workbook has no readable rows.');
-            $headers = array_map(fn ($header) => strtolower(trim((string) $header)), array_shift($rows));
+            $sheets = Excel::toArray(null, $file);
+            $rows = [];
+            $headers = [];
+            $headerRowIndex = null;
+            $workbookBranch = null;
+
+            // Some masterfiles have title, summary, and grouped-header rows before
+            // the actual table. Find the sheet/row containing the asset columns.
+            foreach ($sheets as $sheetRows) {
+                foreach (array_slice($sheetRows, 0, 60, true) as $index => $candidate) {
+                    $candidateHeaders = array_map([self::class, 'normalizeImportHeader'], $candidate);
+                    $hasName = in_array('name', $candidateHeaders, true)
+                        || in_array('asset name', $candidateHeaders, true);
+                    $hasTag = in_array('tag', $candidateHeaders, true)
+                        || in_array('asset tag', $candidateHeaders, true)
+                        || in_array('asset_tag', $candidateHeaders, true);
+
+                    if ($hasName && $hasTag) {
+                        $rows = $sheetRows;
+                        $headers = $candidateHeaders;
+                        $headerRowIndex = $index;
+                        break 2;
+                    }
+                }
+            }
+
+            if ($headerRowIndex === null) abort(422, 'The workbook must contain a masterlist header row with Name and Tag columns.');
+
+            // Use the workbook-level branch as the fallback for rows that do not
+            // carry their own branch value (e.g. the Project Brave masterfile).
+            foreach (array_slice($rows, 0, $headerRowIndex) as $metadataRow) {
+                foreach ($metadataRow as $column => $value) {
+                    if (self::normalizeImportHeader($value) === 'branch') {
+                        $workbookBranch = trim((string) ($metadataRow[$column + 1] ?? '')) ?: null;
+                        break 2;
+                    }
+                }
+            }
+
+            $rows = array_slice($rows, $headerRowIndex + 1);
             $created = 0; $updated = 0;
             $branchCodes = ['gh' => 'Greenhills', 'mkt' => 'Makati', 'alb' => 'Alabang'];
 
-            DB::transaction(function () use ($rows, $headers, $batch, $branchCodes, &$created, &$updated) {
+            $fallbackBranch = trim((string) $request->input('fallback_branch')) ?: null;
+
+            DB::transaction(function () use ($rows, $headers, $batch, $branchCodes, $workbookBranch, $fallbackBranch, &$created, &$updated) {
                 foreach ($rows as $values) {
-                    $row = array_combine($headers, array_pad($values, count($headers), null));
-                    $tag = trim((string) ($row['asset tag'] ?? $row['assettag'] ?? $row['asset_tag'] ?? ''));
-                    $name = trim((string) ($row['asset name'] ?? $row['asst name'] ?? $row['name'] ?? ''));
+                    $row = array_combine($headers, array_pad(array_slice($values, 0, count($headers)), count($headers), null));
+                    $tag = trim((string) ($row['tag'] ?? $row['asset tag'] ?? $row['assettag'] ?? $row['asset_tag'] ?? ''));
+                    $name = trim((string) ($row['name'] ?? $row['asset name'] ?? $row['asst name'] ?? ''));
                     if ($tag === '' && $name === '') continue;
                     if ($tag === '') $tag = 'AST-' . strtoupper(substr(hash('sha256', $name . microtime(true)), 0, 8));
 
                     $prefix = strtolower((string) preg_replace('/-.*/', '', $tag));
-                    $branch = $branchCodes[$prefix] ?? trim((string) ($row['branch'] ?? '')) ?: null;
+                    $branch = self::branchFromAssetTag($tag, $branchCodes)
+                        ?? trim((string) ($row['branch'] ?? ''))
+                        ?: $workbookBranch
+                        ?: $fallbackBranch;
                     $person = trim((string) ($row['assigned personnel'] ?? $row['assigned_personnel'] ?? $row['personnel'] ?? ''));
                     $user = $person ? User::whereRaw('LOWER(name) = ?', [strtolower($person)])->first() : null;
-                    $asset = Asset::where('asset_tag', $tag)->first();
+                    $asset = Asset::whereRaw('LOWER(asset_tag) = ?', [strtolower($tag)])->first();
                     $isNew = !$asset;
                     $before = $asset?->getAttributes();
                     $asset ??= new Asset();
@@ -288,11 +350,11 @@ class AssetController extends Controller
                         'serial_no' => $row['serial no.'] ?? $row['serial no'] ?? null,
                         'model_no' => $row['model no.'] ?? $row['model no'] ?? null,
                         'color' => $row['color'] ?? null, 'category' => $row['category'] ?? null,
-                        'classification' => $row['classification'] ?? null, 'department' => $row['department'] ?? null,
+                        'classification' => $row['asset classification'] ?? $row['classification'] ?? $row['noncurrent/supplies'] ?? null, 'department' => $row['department'] ?? null,
                         'branch' => $branch, 'area' => $row['area'] ?? null, 'supplier_name' => $row['supplier'] ?? null,
                         'assigned_personnel' => $person ?: null, 'user_id' => $user?->id,
-                        'purchase_date' => self::parseImportDate($row['purchased date'] ?? $row['purchase date'] ?? $row['purchase_date'] ?? null),
-                        'warranty_expiration' => self::parseImportDate($row['warranty exp.'] ?? $row['warranty exp'] ?? $row['warranty date'] ?? null),
+                        'purchase_date' => self::parseImportDate($row['date'] ?? $row['purchased date'] ?? $row['purchase date'] ?? $row['purchase_date'] ?? null),
+                        'warranty_expiration' => self::parseImportDate($row['warranty expiration'] ?? $row['warranty exp.'] ?? $row['warranty exp'] ?? $row['warranty date'] ?? null),
                         'condition' => $row['condition'] ?? 'Good', 'asset_status' => $person ? 'Assigned' : ($row['status'] ?? 'New'),
                         'qty' => max(1, (int) ($row['qty'] ?? $row['quantity'] ?? 1)),
                         'unit_value' => (float) preg_replace('/[^0-9.\-]/', '', (string) ($row['unit value'] ?? $row['value'] ?? 0)),
@@ -311,6 +373,23 @@ class AssetController extends Controller
             Log::error('Asset workbook import failed', ['exception' => $e]);
             return back()->withErrors(['file' => 'Import failed: ' . $e->getMessage()]);
         }
+    }
+
+    private static function normalizeImportHeader($header): string
+    {
+        $header = strtolower(trim((string) $header));
+        $header = preg_replace('/[\r\n]+/', ' ', $header);
+        $header = preg_replace('/\s+/', ' ', $header);
+        return trim($header);
+    }
+
+    private static function branchFromAssetTag(string $tag, array $branchCodes): ?string
+    {
+        if (preg_match('/^(GH|MKT|ALB)(?:[-_\s]|\d|$)/i', trim($tag), $match)) {
+            return $branchCodes[strtolower($match[1])] ?? null;
+        }
+
+        return null;
     }
 
     private static function parseImportDate($value): ?string
@@ -612,6 +691,19 @@ class AssetController extends Controller
             }
             fclose($file);
         }, $fileName, $headers);
+    }
+
+    public function pdf(Request $request)
+    {
+        $ids = collect($request->input('ids', []))->map(fn ($id) => (int) $id)->filter()->unique()->values();
+        abort_if($ids->isEmpty(), 422, 'No assets were selected for the PDF.');
+
+        $assets = Asset::with(['user', 'supplier'])->whereIn('id', $ids)->orderBy('asset_tag')->get();
+
+        return response()->view('exports.asset-masterlist-pdf', [
+            'assets' => $assets,
+            'generatedAt' => now(),
+        ]);
     }
 
     // 🟢 FIXED: Required functions to catch the 500 error from the React interface background logs

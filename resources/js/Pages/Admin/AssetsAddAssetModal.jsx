@@ -33,7 +33,7 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
     const handleSubmit = (e) => {
         e.preventDefault();
         setIsSubmitting(true);
-        form.post(route('.assets.store'), {
+        form.post(route('admin.assets.store'), {
             preserveScroll: true,
             onSuccess: () => {
                 setIsSubmitting(false);
@@ -202,9 +202,11 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
                             <input
                                 type="file"
                                 accept="image/*"
+                                capture="environment"
                                 onChange={e => form.setData('image', e.target.files[0])}
                                 className="mt-1 w-full text-sm"
                             />
+                            <p className="mt-1 text-xs text-gray-500">On a phone, this opens the camera and requests permission when required. You may also choose an existing image.</p>
                         </div>
                     </div>
 

@@ -3,6 +3,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\AssetAccess;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -50,9 +51,12 @@ class AdminMiddleware
 
         // Accountability (assets) is not an ACL module; it uses the same asset admin roles as AssetController
         if ($module === 'assets') {
-            $roleName = strtolower(trim($user->role?->name ?? ''));
+            $routeName = $request->route()?->getName();
+            if (in_array($routeName, ['admin.assets.index', 'admin.assets.entry', 'admin.assets.store'], true)) {
+                return AssetAccess::canEnter($user);
+            }
 
-            return in_array($roleName, ['admin', 'super admin', 'director of corporate services and operations'], true);
+            return AssetAccess::isFullManager($user);
         }
 
         if ($module === 'admin_overview') {
@@ -83,6 +87,7 @@ class AdminMiddleware
 
         $routeMap = [
             'admin.dashboard' => 'admin_overview',
+            'admin.assets.entry' => 'assets',
             'admin.logs.index' => 'system_logs',
             'admin.logs.export' => 'system_logs',
             'admin.company-content.index' => 'company_content',

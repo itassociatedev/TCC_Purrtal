@@ -21,31 +21,34 @@ const getSafeStr = (val) => {
     return String(val).toLowerCase().trim();
 };
 
-export default function Assets({ auth, assets, suppliers, branches, users, departments }) {
-    const assetLinks = typeof getAssetLinks === 'function' ? getAssetLinks(auth) : []; 
+export default function Assets({ auth, assets, suppliers, branches, users, departments, rejectedPhotoSubmissions = [], canReviewPhotos = false }) {
+    const assetLinks = typeof getAssetLinks === 'function' ? getAssetLinks(auth) : [];
     const { system } = usePage().props;
-    
+
     // SECURE ROLE CHECKING
     const userRole = getSafeStr(auth?.user?.role?.name || auth?.user?.role);
     const userPosition = getSafeStr(auth?.user?.position?.name || auth?.user?.position);
     const userDepartment = getSafeStr(auth?.user?.department?.name || auth?.user?.department);
     const userName = getSafeStr(auth?.user?.name);
     const userId = String(auth?.user?.id || '');
-    
-    const isSuperAdmin = ['admin', 'super admin', 'director of corporate services and operations'].includes(userRole);
+
+    const isSuperAdmin = ['admin', 'super admin', 'director of corporate services and operations'].includes(userRole)
+        || ['ralph ranie saura', 'reuben mikko s. capuno', 'patrick mimay', 'robert liton', 'donald rey saberon'].includes(userName);
     const isAudit = userRole.includes('audit') || userPosition.includes('audit') || userDepartment.includes('audit') || userRole.includes('view only');
-    const canManageAssets = isSuperAdmin; 
-    const isAllowedToView = isSuperAdmin || !isAudit; 
+    const canManageAssets = isSuperAdmin;
+    const isAllowedToView = isSuperAdmin || !isAudit;
 
     // SAFE DATA ARRAYS
     const rawAssets = getArray(assets);
     const safeUsers = getArray(users);
     const safeSuppliers = getArray(suppliers);
-    const safeDepartments = getArray(departments); 
-    
+    const safeDepartments = getArray(departments);
+    const safeRejectedSubmissions = getArray(rejectedPhotoSubmissions);
+
     let safeBranches = getArray(branches);
     if (safeBranches.length === 0) safeBranches = getArray(system?.branches);
     if (safeBranches.length === 0) safeBranches = ['Makati', 'Greenhills', 'Alabang'];
+    const branchOptions = [...new Set([...safeBranches.map(b => typeof b === 'object' ? b?.name : b), 'Unassigned'].filter(Boolean))];
 
     const allDepartments = [...new Set([
         ...safeDepartments.map(d => typeof d === 'object' ? d.name : d),
@@ -76,15 +79,18 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     };
     const closeConfirm = () => setConfirmDialog(prev => ({ ...prev, isOpen: false }));
 
-    // CUSTOM SYSTEM ALERT MODAL STATE 
+    // CUSTOM SYSTEM ALERT MODAL STATE
     const [alertDialog, setAlertDialog] = useState({ isOpen: false, title: '', message: '', type: 'success' });
     const closeAlert = () => setAlertDialog(prev => ({ ...prev, isOpen: false }));
 
-    const safeAssets = isSuperAdmin 
-        ? rawAssets 
+    // PHOTO DECLINED HISTORY MODAL STATE
+    const [isPhotoHistoryModalOpen, setIsPhotoHistoryModalOpen] = useState(false);
+
+    const safeAssets = isSuperAdmin
+        ? rawAssets
         : rawAssets.filter(asset => {
             if (!asset) return false;
-            
+
             const assetDept = getSafeStr(asset.department);
             const assetPersonnel = getSafeStr(asset.assigned_personnel);
             const assetUserId = String(asset.user_id || '');
@@ -177,6 +183,8 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     
     const [selectedAssets, setSelectedAssets] = useState([]);
     const [showOnlySelected, setShowOnlySelected] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(25);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
@@ -191,6 +199,10 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     const [importFile, setImportFile] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
     const [importError, setImportError] = useState('');
+    const [importFallbackBranch, setImportFallbackBranch] = useState('');
+    const [isSavedImportsOpen, setIsSavedImportsOpen] = useState(false);
+    const [savedImports, setSavedImports] = useState([]);
+    const [savedImportsLoading, setSavedImportsLoading] = useState(false);
 
     const [userSearchTerm, setUserSearchTerm] = useState('');
     const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
@@ -373,7 +385,10 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         safeAssets.forEach(asset => {
             if (!asset) return; 
 
-            const matchesBranch = filterBranch ? getBranchValue(asset?.branch) === filterBranch : true;
+            const searchTerm = getSafeStr(search);
+            const matchesSearch = [asset?.name, asset?.asset_tag, asset?.serial_no, asset?.model_no, asset?.user?.name || asset?.assigned_personnel]
+                .some(value => getSafeStr(value).includes(searchTerm));
+            const matchesBranch = filterBranch ? (filterBranch === 'Unassigned' ? !getBranchValue(asset?.branch) : getBranchValue(asset?.branch) === filterBranch) : true;
             const matchesCategory = filterCategory ? asset?.category === filterCategory : true;
             const matchesDept = filterDept ? asset?.department === filterDept : true;
             const matchesCondition = filterCondition ? asset?.condition === filterCondition : true;
@@ -384,9 +399,9 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
             else if (filterWarranty === 'Expired') { matchesWarranty = isWarrantyExpired(asset.warranty_expiration); }
 
             const safeAssetPersonnel = getSafeStr(asset?.user?.name || asset?.assigned_personnel);
-            const matchesPersonnel = filterPersonnel ? safeAssetPersonnel === getSafeStr(filterPersonnel) : true;
+            const matchesPersonnel = filterPersonnel ? (filterPersonnel === '__unassigned__' ? !safeAssetPersonnel : safeAssetPersonnel === getSafeStr(filterPersonnel)) : true;
 
-            if (!(matchesBranch && matchesCategory && matchesDept && matchesDate && matchesCondition && matchesWarranty && matchesPersonnel)) return;
+            if (!(matchesSearch && matchesBranch && matchesCategory && matchesDept && matchesDate && matchesCondition && matchesWarranty && matchesPersonnel)) return;
 
             const qty = Number(asset?.qty || 1);
             let val = 0;
@@ -419,7 +434,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         const assignedCount = uniquePersonnel.size;
 
         return { totalItems, totalValue, totalCurrentValue, totalAccumulatedDepreciation, assignedCount, needsMaintenance, branchBreakdown, conditionBreakdown };
-    }, [safeAssets, safeBranches, filterBranch, filterCategory, filterDept, filterWarranty, dateRangeType, customStartDate, customEndDate, filterCondition, filterPersonnel]);
+    }, [safeAssets, safeBranches, search, filterBranch, filterCategory, filterDept, filterWarranty, dateRangeType, customStartDate, customEndDate, filterCondition, filterPersonnel]);
 
     const filteredAssets = useMemo(() => {
         return safeAssets.filter(asset => {
@@ -440,10 +455,10 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                   
             const matchesCategory = filterCategory ? asset?.category === filterCategory : true;
             const matchesDept = filterDept ? asset?.department === filterDept : true;
-            const matchesBranch = filterBranch ? getBranchValue(asset?.branch) === filterBranch : true;
+            const matchesBranch = filterBranch ? (filterBranch === 'Unassigned' ? !getBranchValue(asset?.branch) : getBranchValue(asset?.branch) === filterBranch) : true;
             const matchesCondition = filterCondition ? asset?.condition === filterCondition : true;
             const matchesDate = isDateInRange(asset, dateRangeType, customStartDate, customEndDate);
-            const matchesPersonnel = filterPersonnel ? safePersonnel === getSafeStr(filterPersonnel) : true;
+            const matchesPersonnel = filterPersonnel ? (filterPersonnel === '__unassigned__' ? !safePersonnel : safePersonnel === getSafeStr(filterPersonnel)) : true;
             
             let matchesWarranty = true;
             if (filterWarranty === 'Valid') { matchesWarranty = asset.warranty_expiration && !isWarrantyExpired(asset.warranty_expiration); } 
@@ -468,16 +483,30 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         return processed;
     }, [filteredAssets, selectedAssets, showOnlySelected]);
 
+    const totalPages = Math.max(1, Math.ceil(displayedAssets.length / pageSize));
+    const paginatedAssets = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return displayedAssets.slice(start, start + pageSize);
+    }, [displayedAssets, currentPage, pageSize]);
+    useEffect(() => {
+        if (currentPage > totalPages) setCurrentPage(totalPages);
+    }, [currentPage, totalPages]);
+    const changePage = (page) => {
+        const scrollY = window.scrollY;
+        setCurrentPage(Math.max(1, Math.min(totalPages, page)));
+        requestAnimationFrame(() => window.scrollTo(0, scrollY));
+    };
+
     const handleToggleSelectAll = () => {
         if (selectedAssets.length > 0) {
             setSelectedAssets([]);
             setShowOnlySelected(false);
         } else {
-            setSelectedAssets(displayedAssets.map(a => a?.id).filter(Boolean));
+            handleSelectAll();
         }
     };
 
-    const handleSelectAll = () => setSelectedAssets(displayedAssets.map(a => a?.id).filter(Boolean));
+    const handleSelectAll = () => setSelectedAssets(prev => [...new Set([...prev, ...paginatedAssets.map(a => a?.id).filter(Boolean)])]);
     const handleDeselectAll = () => { setSelectedAssets([]); setShowOnlySelected(false); };
     const handleSelectOne = (e, id) => setSelectedAssets(prev => e.target.checked ? [...prev, id] : prev.filter(item => item !== id));
 
@@ -516,6 +545,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         setSearch(''); setFilterCategory(''); setFilterDept(''); setFilterBranch('');
         setFilterCondition(''); setFilterWarranty(''); setFilterPersonnel('');
         setDateRangeType('All Time'); setCustomStartDate(''); setCustomEndDate('');
+        setCurrentPage(1);
     };
 
     const openAddModal = () => { setIsEditMode(false); reset(); setImagePreview(null); clearErrors(); setIsModalOpen(true); };
@@ -531,7 +561,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         setData({ 
             ...asset, supplier_id: asset?.supplier_id || '', user_id: asset?.user_id || '', branch: getBranchValue(asset?.branch), image: null 
         });
-        setImagePreview(asset.image_path ? `/storage/${asset.image_path}` : null);
+        setImagePreview(asset.image_path ? (asset.image_path.startsWith('http') ? asset.image_path : `/storage/${asset.image_path}`) : null);
         
         if (asset.category && !allCategories.includes(asset.category)) {
             setCustomCategories(prev => [...prev, asset.category]);
@@ -581,8 +611,43 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         );
     };
 
-    const openImportModal = () => { setImportFile(null); setImportError(''); setIsImportModalOpen(true); };
-    const closeImportModal = () => { setIsImportModalOpen(false); setImportFile(null); setImportError(''); setIsUploading(false); };
+    const openImportModal = () => { setImportFile(null); setImportError(''); setImportFallbackBranch(''); setIsImportModalOpen(true); };
+    const closeImportModal = () => { setIsImportModalOpen(false); setImportFile(null); setImportError(''); setImportFallbackBranch(''); setIsUploading(false); };
+
+    const loadSavedImports = async () => {
+        setSavedImportsLoading(true);
+        try {
+            const response = await fetch(route('admin.assets.import-batches'), { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+            if (!response.ok) throw new Error('Unable to load saved imports.');
+            const payload = await response.json();
+            setSavedImports(Array.isArray(payload?.data) ? payload.data : []);
+        } catch (error) {
+            setAlertDialog({ isOpen: true, title: 'Saved Imports', message: error.message, type: 'error' });
+        } finally {
+            setSavedImportsLoading(false);
+        }
+    };
+
+    const openSavedImports = () => {
+        setIsSavedImportsOpen(true);
+        loadSavedImports();
+    };
+
+    const requestImportReversal = (batch) => {
+        triggerConfirm(
+            'Reverse Import Batch',
+            `Reverse ${batch.original_filename}? New assets from this batch will be removed and previous asset details will be restored. This cannot be undone.`,
+            () => router.post(route('admin.assets.import-batches.reverse', batch.id), {}, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    loadSavedImports();
+                    setAlertDialog({ isOpen: true, title: 'Import Reversed', message: 'The import batch was reversed successfully.', type: 'success' });
+                },
+                onError: errors => setAlertDialog({ isOpen: true, title: 'Reversal Blocked', message: errors?.message || errors?.batch || 'The batch could not be reversed because an affected asset changed.', type: 'error' }),
+            }),
+            'danger'
+        );
+    };
 
     const handleImportSubmit = (e) => {
         e.preventDefault();
@@ -596,77 +661,95 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
             setIsUploading(true);
             const formData = new FormData();
             formData.append('file', importFile);
+            if (importFallbackBranch) formData.append('fallback_branch', importFallbackBranch);
 
             const uploadTimeout = setTimeout(() => { setIsUploading(false); }, 10000);
 
             router.post(route('admin.assets.import-workbook'), formData, {
                 forceFormData: true, preserveScroll: true,
-                onSuccess: () => { 
-                    clearTimeout(uploadTimeout); 
-                    closeImportModal(); 
-                    setAlertDialog({ isOpen: true, title: 'Success', message: 'Your assets have been successfully imported!', type: 'success' }); 
+                onSuccess: () => {
+                    clearTimeout(uploadTimeout);
+                    closeImportModal();
+                    setAlertDialog({ isOpen: true, title: 'Success', message: 'Your assets have been successfully imported!', type: 'success' });
                 },
                 onError: (err) => { clearTimeout(uploadTimeout); setImportError(err.file || "Import failed."); setIsUploading(false); },
                 onFinish: () => { clearTimeout(uploadTimeout); setIsUploading(false); }
             });
         };
 
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const text = event.target.result;
-                const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
-                
-                if (lines.length > 1) {
-                    const parseCSVLine = (line) => {
-                        const result = [];
-                        let cur = '';
-                        let inQuotes = false;
-                        for (let i = 0; i < line.length; i++) {
-                            if (line[i] === '"') inQuotes = !inQuotes;
-                            else if (line[i] === ',' && !inQuotes) { result.push(cur.trim()); cur = ''; }
-                            else cur += line[i];
-                        }
-                        result.push(cur.trim());
-                        return result;
-                    };
+        // Only do CSV duplicate check for CSV files - xlsx is binary and will corrupt
+        const fileName = importFile.name.toLowerCase();
+        const isCSV = fileName.endsWith('.csv') || fileName.endsWith('.txt');
 
-                    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/^"|"$/g, ''));
-                    const tagIndex = headers.findIndex(h => h === 'asset tag' || h === 'assettag');
-                    
-                    if (tagIndex !== -1) {
-                        let duplicateCount = 0;
-                        const existingTags = safeAssets.map(a => getSafeStr(a.asset_tag)).filter(Boolean);
-                        
-                        for (let i = 1; i < lines.length; i++) {
-                            const cols = parseCSVLine(lines[i]);
-                            if (cols.length > tagIndex) {
-                                const tagVal = getSafeStr(cols[tagIndex].replace(/^"|"$/g, ''));
-                                if (tagVal && existingTags.includes(tagVal)) {
-                                    duplicateCount++;
+        if (isCSV) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const text = event.target.result;
+                    const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+
+                    if (lines.length > 1) {
+                        const parseCSVLine = (line) => {
+                            const result = [];
+                            let cur = '';
+                            let inQuotes = false;
+                            for (let i = 0; i < line.length; i++) {
+                                if (line[i] === '"') inQuotes = !inQuotes;
+                                else if (line[i] === ',' && !inQuotes) { result.push(cur.trim()); cur = ''; }
+                                else cur += line[i];
+                            }
+                            result.push(cur.trim());
+                            return result;
+                        };
+
+                        const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/^"|"$/g, ''));
+                        const tagIndex = headers.findIndex(h => h === 'asset tag' || h === 'assettag');
+
+                        if (tagIndex !== -1) {
+                            let duplicateCount = 0;
+                            const existingTags = safeAssets.map(a => getSafeStr(a.asset_tag)).filter(Boolean);
+
+                            for (let i = 1; i < lines.length; i++) {
+                                const cols = parseCSVLine(lines[i]);
+                                if (cols.length > tagIndex) {
+                                    const tagVal = getSafeStr(cols[tagIndex].replace(/^"|"$/g, ''));
+                                    if (tagVal && existingTags.includes(tagVal)) {
+                                        duplicateCount++;
+                                    }
                                 }
                             }
-                        }
-                        
-                        if (duplicateCount > 0) {
-                            triggerConfirm(
-                                'Duplicate Assets Detected',
-                                `Warning: ${duplicateCount} duplicate asset(s) were found in your import file. Proceeding will update the existing records instead of creating new ones. Do you wish to continue?`,
-                                () => proceedWithImport(),
-                                'danger'
-                            );
-                            return; 
+
+                            if (duplicateCount > 0) {
+                                triggerConfirm(
+                                    'Duplicate Assets Detected',
+                                    `Warning: ${duplicateCount} duplicate asset(s) were found in your import file. Proceeding will update the existing records instead of creating new ones. Do you wish to continue?`,
+                                    () => proceedWithImport(),
+                                    'danger'
+                                );
+                                return;
+                            }
                         }
                     }
+                    proceedWithImport();
+                } catch (err) {
+                    proceedWithImport();
                 }
-                proceedWithImport();
-            } catch (err) {
-                // Fallback to normal upload if parsing fails
-                proceedWithImport();
-            }
-        };
-        reader.onerror = () => proceedWithImport();
-        reader.readAsText(importFile);
+            };
+            reader.onerror = () => proceedWithImport();
+            reader.readAsText(importFile);
+        } else {
+            // For xlsx/xls files, skip text parsing and proceed directly
+            proceedWithImport();
+        }
+    };
+
+    const handlePdfOutput = () => {
+        if (displayedAssets.length === 0) {
+            setAlertDialog({ isOpen: true, title: 'PDF Failed', message: 'No assets found for the current view.', type: 'error' });
+            return;
+        }
+        const query = displayedAssets.map(asset => `ids[]=${encodeURIComponent(asset.id)}`).join('&');
+        window.open(`${route('masterlist.pdf')}?${query}`, '_blank', 'noopener,noreferrer');
     };
 
     const handleExport = () => {
@@ -801,11 +884,28 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                         <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
                                         Import Assets
                                     </button>
+                                    <button onClick={openSavedImports} className="inline-flex items-center px-4 py-2 bg-white border border-indigo-300 rounded-md font-bold text-[10px] text-indigo-700 uppercase tracking-widest shadow-sm hover:bg-indigo-50 focus:outline-none transition ease-in-out duration-150 justify-center gap-2 whitespace-nowrap">
+                                        Saved Imports
+                                    </button>
                                 </>
                             )}
-                            <SecondaryButton onClick={handleExport} className="!border-gray-300 text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 shadow-sm py-2 justify-center gap-2 whitespace-nowrap">
+                            {!isAudit && (
+                                <>
+                                    {safeRejectedSubmissions.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsPhotoHistoryModalOpen(true)}
+                                            className="inline-flex items-center px-4 py-2 bg-white border border-red-300 rounded-md font-bold text-[10px] text-red-700 uppercase tracking-widest shadow-sm hover:bg-red-50 focus:outline-none transition ease-in-out duration-150 justify-center gap-2 whitespace-nowrap"
+                                        >
+                                            <svg className="w-4 h-4 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+                                            Photo History ({safeRejectedSubmissions.length})
+                                        </button>
+                                    )}
+                                </>
+                            )}
+                            <SecondaryButton onClick={handlePdfOutput} className="!border-gray-300 text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 shadow-sm py-2 justify-center gap-2 whitespace-nowrap">
                                 <svg className="w-4 h-4 text-indigo-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-                                Export
+                                Asset PDF
                             </SecondaryButton>
                         </div>
                     </div>
@@ -907,8 +1007,9 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
 
                         <div className="w-36">
                             <InputLabel value="Assigned To" className="font-black tracking-tighter text-xs" />
-                            <select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterPersonnel} onChange={e => setFilterPersonnel(e.target.value)}>
+                            <select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterPersonnel} onChange={e => { setFilterPersonnel(e.target.value); setCurrentPage(1); }}>
                                 <option value="">All Personnel</option>
+                                <option value="__unassigned__">Unassigned</option>
                                 {allPersonnel.map((p, idx) => <option key={idx} value={p}>{p}</option>)}
                             </select>
                         </div>
@@ -923,7 +1024,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                         </div>
                         
                         <div className="w-36"><InputLabel value="Condition" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterCondition} onChange={e => setFilterCondition(e.target.value)}><option value="">All</option><option value="Good">Good</option><option value="Broken">Broken</option><option value="For Repair">For Repair</option><option value="Missing">Missing</option></select></div>
-                        <div className="w-36"><InputLabel value="Branch" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterBranch} onChange={e => setFilterBranch(e.target.value)}><option value="">All Branches</option>{safeBranches.map((b, idx) => { if (!b) return null; const bn = typeof b === 'object' ? (b.name || '') : String(b); return bn ? <option key={idx} value={bn}>{bn}</option> : null; })}</select></div>
+                        <div className="w-36"><InputLabel value="Branch" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterBranch} onChange={e => { setFilterBranch(e.target.value); setCurrentPage(1); }}><option value="">All Branches</option>{branchOptions.map((branch, idx) => <option key={idx} value={branch}>{branch}</option>)}</select></div>
                         <div className="w-36"><InputLabel value="Category" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}><option value="">All Categories</option>{allCategories.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                         
                         {isSuperAdmin && (
@@ -978,7 +1079,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                 <thead className="bg-gray-100 sticky top-0 z-20 shadow-sm border-b border-gray-200">
                                     <tr>
                                         {canManageAssets && (
-                                            <th className="px-4 py-4 text-center w-6 whitespace-nowrap border-r border-gray-200"><input type="checkbox" className="rounded border-gray-300 text-indigo-600 shadow-sm h-4 w-4" checked={displayedAssets.length > 0 && selectedAssets.length === displayedAssets.length} onChange={(e) => e.target.checked ? handleSelectAll() : handleDeselectAll()} /></th>
+                                            <th className="px-4 py-4 text-center w-6 whitespace-nowrap border-r border-gray-200"><input type="checkbox" className="rounded border-gray-300 text-indigo-600 shadow-sm h-4 w-4" checked={paginatedAssets.length > 0 && paginatedAssets.every(asset => selectedAssets.includes(asset.id))} onChange={(e) => e.target.checked ? handleSelectAll() : paginatedAssets.forEach(asset => setSelectedAssets(prev => prev.filter(id => id !== asset.id)))} /></th>
                                         )}
                                         <th className="px-4 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-tighter whitespace-nowrap pl-4">Asset Name</th>
                                         {visibleColumns.assetTag && <th className="px-4 py-4 text-left text-xs font-black text-gray-500 uppercase tracking-tighter whitespace-nowrap">Asset Tag</th>}
@@ -1016,7 +1117,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                             </td>
                                         </tr>
                                     ) : (
-                                        displayedAssets.map((asset, index) => {
+                                        paginatedAssets.map((asset, index) => {
                                             if (!asset) return null;
                                             
                                             const depData = getDepreciationData(asset);
@@ -1127,10 +1228,15 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                         </div>
 
                         {/* 🟢 NEW: SCROLL FOOTER */}
-                        <div className="bg-white px-5 py-3 border-t border-gray-200 flex items-center justify-between">
-                            <p className="text-sm text-gray-500 font-medium">
-                                Showing all <span className="font-bold text-gray-900">{displayedAssets.length}</span> results. <span className="text-gray-400 text-xs ml-2">(Scroll vertically to view)</span>
-                            </p>
+                        <div className="bg-white px-5 py-3 border-t border-gray-200 flex flex-wrap gap-3 items-center justify-between">
+                            <p className="text-sm text-gray-500 font-medium">Showing <span className="font-bold text-gray-900">{displayedAssets.length ? ((currentPage - 1) * pageSize) + 1 : 0}–{Math.min(currentPage * pageSize, displayedAssets.length)}</span> of <span className="font-bold text-gray-900">{displayedAssets.length}</span> filtered result(s).</p>
+                            <div className="flex items-center gap-2">
+                                <label className="text-xs text-gray-500">Rows</label>
+                                <select className="rounded border-gray-300 py-1 text-xs" value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}><option value="25">25</option><option value="50">50</option><option value="100">100</option></select>
+                                <button type="button" disabled={currentPage === 1} onClick={() => changePage(currentPage - 1)} className="rounded border px-2 py-1 text-xs disabled:opacity-40">Previous</button>
+                                <span className="text-xs font-bold text-gray-600">Page {currentPage} of {totalPages}</span>
+                                <button type="button" disabled={currentPage === totalPages} onClick={() => changePage(currentPage + 1)} className="rounded border px-2 py-1 text-xs disabled:opacity-40">Next</button>
+                            </div>
                         </div>
                     </div>
                     
@@ -1322,13 +1428,14 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                         <div className="flex flex-col sm:flex-row gap-6 items-start">
                             <div className="w-full sm:w-1/3">
                                 <input 
-                                    type="file" accept="image/*"
+                                    type="file" accept="image/*" capture="environment"
                                     onChange={e => {
                                         setData('image', e.target.files[0]);
                                         if(e.target.files[0]) setImagePreview(URL.createObjectURL(e.target.files[0]));
                                     }}
                                     className="w-full block text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-xs file:font-black file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer border border-gray-200 rounded" 
                                 />
+                                <p className="mt-1 text-xs text-gray-500">On a phone, this opens the camera and requests permission when required. Existing image upload remains available.</p>
                                 {errors.image && <InputError message={errors.image} className="mt-2" />}
                             </div>
                             <div className="w-full sm:w-2/3">
@@ -1672,6 +1779,14 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                 required 
                             />
                         </div>
+                        <div>
+                            <InputLabel value="Fallback Branch (optional)" className="font-black text-xs" />
+                            <select value={importFallbackBranch} onChange={e => setImportFallbackBranch(e.target.value)} className="mt-2 block w-full rounded-md border-gray-300 text-sm font-bold">
+                                <option value="">Use workbook Branch value</option>
+                                {branchOptions.filter(branch => branch !== 'Unassigned').map(branch => <option key={branch} value={branch}>{branch}</option>)}
+                            </select>
+                            <p className="mt-1 text-xs text-gray-500">Branch prefix wins first: GH, MKT, or ALB. If no prefix exists, the workbook value is used, then this fallback.</p>
+                        </div>
                     </div>
                     
                     <div className="mt-8 flex justify-end gap-3 border-t pt-4">
@@ -1681,6 +1796,91 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                         </PrimaryButton>
                     </div>
                 </form>
+            </Modal>
+
+            <Modal show={isSavedImportsOpen} onClose={() => setIsSavedImportsOpen(false)} maxWidth="4xl">
+                <div className="p-6">
+                    <div className="flex items-center justify-between border-b pb-4">
+                        <div>
+                            <h2 className="text-xl font-black text-gray-900 uppercase tracking-wider">Saved Imports</h2>
+                            <p className="mt-1 text-sm text-gray-500">Download original workbooks or request a protected batch reversal.</p>
+                        </div>
+                        <SecondaryButton type="button" onClick={loadSavedImports} disabled={savedImportsLoading}>Refresh</SecondaryButton>
+                    </div>
+                    {savedImportsLoading ? (
+                        <div className="py-12 text-center text-sm font-bold text-gray-500">Loading import history...</div>
+                    ) : savedImports.length === 0 ? (
+                        <div className="py-12 text-center text-sm text-gray-500">No saved imports yet.</div>
+                    ) : (
+                        <div className="mt-5 overflow-x-auto">
+                            <table className="min-w-full text-left text-sm">
+                                <thead className="bg-gray-50 text-[10px] uppercase tracking-wider text-gray-500">
+                                    <tr><th className="px-3 py-3">Workbook</th><th className="px-3 py-3">Uploaded By</th><th className="px-3 py-3">Results</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Actions</th></tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {savedImports.map(batch => (
+                                        <tr key={batch.id}>
+                                            <td className="px-3 py-3"><div className="font-bold text-gray-900">{batch.original_filename}</div><div className="text-xs text-gray-500">{safeFormatDate(batch.created_at)}</div></td>
+                                            <td className="px-3 py-3 text-gray-700">{batch.uploader?.name || 'System'}</td>
+                                            <td className="px-3 py-3 text-xs text-gray-700">{batch.created_count || 0} created · {batch.updated_count || 0} updated</td>
+                                            <td className="px-3 py-3"><span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${batch.status === 'reversed' ? 'bg-gray-100 text-gray-600' : batch.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>{batch.status}</span></td>
+                                            <td className="px-3 py-3"><div className="flex flex-wrap gap-2"><a href={route('admin.assets.import-batches.download', batch.id)} className="text-xs font-black text-indigo-700 hover:underline">Download</a>{batch.status === 'completed' && <button type="button" onClick={() => requestImportReversal(batch)} className="text-xs font-black text-red-700 hover:underline">Request Reversal</button>}</div></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                    <div className="mt-6 flex justify-end border-t pt-4"><PrimaryButton type="button" onClick={() => setIsSavedImportsOpen(false)}>Close</PrimaryButton></div>
+                </div>
+            </Modal>
+
+            {/* PHOTO DECLINED HISTORY MODAL */}
+            <Modal show={isPhotoHistoryModalOpen} onClose={() => setIsPhotoHistoryModalOpen(false)} maxWidth="lg">
+                <div className="p-6">
+                    <div className="flex justify-between items-center mb-6 border-b pb-4">
+                        <h2 className="text-xl font-black text-gray-900">Photo Declined History</h2>
+                    </div>
+                    {safeRejectedSubmissions.length === 0 ? (
+                        <div className="text-center py-12">
+                            <svg className="mx-auto h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                            <p className="mt-4 text-gray-500 font-medium">No declined photo submissions</p>
+                            <p className="mt-1 text-sm text-gray-400">All your submissions have been approved or are still pending review.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                            {safeRejectedSubmissions.map(item => (
+                                <div key={item.id} className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded text-sm">{item.asset?.asset_tag}</span>
+                                                <span className="font-bold text-gray-900">{item.asset?.name}</span>
+                                            </div>
+                                            <p className="text-sm text-gray-600">{item.rejection_reason || 'No reason provided'}</p>
+                                            <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
+                                                <span>Submitted: {safeFormatDate(item.submitted_at || item.created_at)}</span>
+                                                <span>Reviewed: {safeFormatDate(item.reviewed_at)}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <img
+                                                src={item.temporary_path ? route('asset-photos.preview', item.id) : ''}
+                                                alt="Rejected photo"
+                                                className="h-16 w-24 object-cover rounded border border-red-300"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    <div className="mt-6 flex justify-end">
+                        <PrimaryButton onClick={() => setIsPhotoHistoryModalOpen(false)} className="font-black uppercase tracking-wider text-xs">
+                            Close
+                        </PrimaryButton>
+                    </div>
+                </div>
             </Modal>
 
             {/* CUSTOM SYSTEM ALERT MODAL */}

@@ -770,17 +770,22 @@ export const getPRPOLinks = (auth) => {
 export const getAssetLinks = (auth) => {
     const userRole = auth?.user?.role?.name?.toLowerCase().trim() || '';
     const userDepartment = auth?.user?.department?.name?.toLowerCase().trim() || '';
+    const userPosition = auth?.user?.position?.name?.toLowerCase().trim() || '';
+    const userName = auth?.user?.name?.toLowerCase().trim() || '';
 
     // Define who is allowed
     const isSuperAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'director of corporate services and operations';
-    const isAudit = userRole === 'audit';
+    const fullManagerNames = ['ralph ranie saura', 'reuben mikko s. capuno', 'patrick mimay', 'robert liton', 'donald rey saberon'];
+    const isFullManager = isSuperAdmin || fullManagerNames.includes(userName);
+    const isAudit = userRole.includes('audit') || userDepartment.includes('audit');
     const isIT = userDepartment === 'it' || userRole.includes('it');
-    const canSubmitPhotos = isIT || ['inventory', 'procurement', 'audit'].some(value => userDepartment.includes(value) || userRole.includes(value));
+    const isItIntern = isIT && (userRole.includes('intern') || userRole.includes('trainee') || userPosition.includes('intern') || userPosition.includes('trainee'));
+    const canEnterAssets = isFullManager || isIT || ['inventory', 'procurement', 'audit'].some(value => userDepartment.includes(value) || userRole.includes(value));
 
     const links = [];
 
     // Both Admin and Audit can see the overview page
-    if (isSuperAdmin || isAudit) {
+    if (isFullManager || (isIT && !isItIntern)) {
         links.push({
             label: 'Asset Overview',
             href: route('admin.assets.index'),
@@ -788,17 +793,23 @@ export const getAssetLinks = (auth) => {
         });
     }
 
-    // ONLY Super Admins/Directors get the Add Asset button
-    if (isSuperAdmin) {
+    if (isFullManager) {
         links.push({
             label: 'Add Asset',
+            href: '#',
+            active: false,
+            isAction: true,
+        });
+    } else if (canEnterAssets) {
+        links.push({
+            label: 'Asset Entry',
             href: '#',
             active: false,
             isAction: true, 
         });
     }
 
-    if (isIT || isSuperAdmin) {
+    if (isIT) {
         links.push({
             label: 'Asset Photo Review',
             href: route('asset-photos.review'),
@@ -806,10 +817,10 @@ export const getAssetLinks = (auth) => {
         });
     }
 
-    if (canSubmitPhotos) {
+    if (canEnterAssets) {
         links.push({
             label: 'Asset Photo Capture',
-            href: route('asset-photos.capture'),
+            href: isFullManager ? route('asset-photos.capture') : route('admin.assets.entry'),
             active: route().current('asset-photos.capture'),
         });
     }

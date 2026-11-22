@@ -58,6 +58,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/asset-photos/{submission}/preview', [\App\Http\Controllers\AssetPhotoController::class, 'preview'])->name('asset-photos.preview');
     Route::get('/asset-photos/review', [\App\Http\Controllers\AssetPhotoController::class, 'index'])->name('asset-photos.review');
     Route::patch('/asset-photos/{submission}', [\App\Http\Controllers\AssetPhotoController::class, 'decide'])->name('asset-photos.decide');
+    Route::post('/asset-photos/bulk-decide', [\App\Http\Controllers\AssetPhotoController::class, 'bulkDecide'])->name('asset-photos.bulk-decide');
     
     // --- HR MODULE (Admin Management) --- 
     Route::get('/hr-module/admin', [HrRequestController::class, 'adminIndex'])->name('hr.admin.index');
@@ -208,6 +209,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/notifications/load-more', [NotificationController::class, 'loadMore'])->name('notifications.load-more');
     Route::get('/admin/asset-masterlist', [\App\Http\Controllers\Admin\AssetController::class, 'masterlist'])->name('admin.asset-masterlist');
     Route::get('/asset-masterlist/export', [\App\Http\Controllers\Admin\AssetController::class, 'export'])->name('masterlist.export');
+    Route::get('/asset-masterlist/pdf', [\App\Http\Controllers\Admin\AssetController::class, 'pdf'])->name('masterlist.pdf');
     
     Route::post('/employees/{user}/send-activation', [EmployeeController::class, 'sendActivationLink'])->name('employees.send-activation');
     Route::post('/employees/{user}/send-reset', [EmployeeController::class, 'sendResetLink'])->name('employees.send-reset');
@@ -337,6 +339,7 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
     Route::post('/assets/log-export', [\App\Http\Controllers\Admin\AssetController::class, 'logExport'])->name('.assets.log-export');
 
     Route::get('/assets', [\App\Http\Controllers\Admin\AssetController::class, 'index'])->name('.assets.index');
+    Route::get('/asset-entry', [\App\Http\Controllers\Admin\AssetController::class, 'entry'])->name('.assets.entry');
     Route::post('/assets', [\App\Http\Controllers\Admin\AssetController::class, 'store'])->name('.assets.store');
     Route::put('/assets/{asset}', [\App\Http\Controllers\Admin\AssetController::class, 'update'])->name('.assets.update');
     Route::delete('/assets/{asset}', [\App\Http\Controllers\Admin\AssetController::class, 'destroy'])->name('.assets.destroy');

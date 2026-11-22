@@ -44,11 +44,14 @@ export default function SidebarLayout({
     const allowedPRRoles = ['procurement assist', 'procurement tl', 'director of corporate services and operations', 'admin', 'operations manager', 'inventory assist', 'inventory tl'];
     const canCreatePR = allowedPRRoles.includes(userRole);
     
-    const isSuperAdmin = ['admin', 'super admin', 'director of corporate services and operations'].includes(userRole);
+    const isSuperAdmin = ['admin', 'super admin', 'director of corporate services and operations'].includes(userRole)
+        || ['ralph ranie saura', 'reuben mikko s. capuno', 'patrick mimay', 'robert liton', 'donald rey saberon'].includes(String(auth?.user?.name || '').toLowerCase().trim());
+    const isIT = userDepartment === 'it' || userRole.includes('it');
+    const canEnterAssets = isSuperAdmin || isIT || ['inventory', 'procurement', 'audit'].some(value => roleAndPosition.includes(value));
     const isAudit = roleAndPosition.includes('audit') || roleAndPosition.includes('accountability') || roleAndPosition.includes('view only');
     
     // 🟢 NEW: Unified condition to toggle Accountability/Assets module visibility globally
-    const hasAccountabilities = auth?.has_department_assets || (auth?.user?.assets && auth.user.assets.length > 0) || isSuperAdmin || isAudit;
+    const hasAccountabilities = auth?.has_department_assets || (auth?.user?.assets && auth.user.assets.length > 0) || isSuperAdmin || isAudit || canEnterAssets;
 
     const hasAnyAdminPermission = () => [
         'admin_overview',
@@ -440,11 +443,11 @@ export default function SidebarLayout({
                                 {hasAccountabilities && (
                                     <li>
                                         <Link prefetch cacheFor="5s"
-                                            href={isSuperAdmin ? route('admin.assets.index') : (isAudit ? route('admin.asset-masterlist') : route('staff.assets.index'))}
+                                            href={isSuperAdmin ? route('admin.assets.index') : (canEnterAssets ? route('admin.assets.entry') : (isAudit ? route('admin.asset-masterlist') : route('staff.assets.index')))}
                                             className="flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition"
                                         >
                                             {iconSvg['Asset Management']}
-                                            <span>{isSuperAdmin ? 'Asset Management' : (isAudit ? 'Asset Masterlist' : 'My Accountability')}</span>
+                                            <span>{isSuperAdmin ? 'Asset Management' : (canEnterAssets ? 'Asset Entry' : (isAudit ? 'Asset Masterlist' : 'My Accountability'))}</span>
                                         </Link>
                                     </li>
                                 )}
@@ -461,7 +464,7 @@ export default function SidebarLayout({
                                     return (
                                     <li key={index}>
                                         {link.isAction ? (
-                                            <button type="button" onClick={(e) => { e.preventDefault(); if (link.label === 'Add Asset' && onTriggerAddModal) onTriggerAddModal(); }} className={`w-full flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition ease-in-out duration-150`}>
+                                            <button type="button" onClick={(e) => { e.preventDefault(); if ((link.label === 'Add Asset' || link.label === 'Asset Entry') && onTriggerAddModal) onTriggerAddModal(); }} className={`w-full flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition ease-in-out duration-150`}>
                                                 {renderSidebarIcon(link)} <span>{link.label}</span>
                                             </button>
                                         ) : (
@@ -654,8 +657,8 @@ export default function SidebarLayout({
 
                                     {/* 🟢 CONDITIONALLY HIDE ACCOUNTABILITY LINK IF 0 DEPT ASSETS */}
                                     {hasAccountabilities && (
-                                        <Dropdown.Link href={isSuperAdmin ? route('admin.assets.index') : (isAudit ? route('admin.asset-masterlist') : route('staff.assets.index'))}>
-                                            {isSuperAdmin ? 'Accountability Module' : (isAudit ? 'Asset Masterlist' : 'My Accountability')}
+                                        <Dropdown.Link href={isSuperAdmin ? route('admin.assets.index') : (canEnterAssets ? route('admin.assets.entry') : (isAudit ? route('admin.asset-masterlist') : route('staff.assets.index')))}>
+                                            {isSuperAdmin ? 'Accountability Module' : (canEnterAssets ? 'Asset Entry' : (isAudit ? 'Asset Masterlist' : 'My Accountability'))}
                                         </Dropdown.Link>
                                     )}
 

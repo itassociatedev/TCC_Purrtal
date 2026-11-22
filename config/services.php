@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'onedrive' => [
+        'tenant_id' => env('ONEDRIVE_TENANT_ID'),
+        'client_id' => env('ONEDRIVE_CLIENT_ID'),
+        'client_secret' => env('ONEDRIVE_CLIENT_SECRET'),
+        'user_id' => env('ONEDRIVE_USER_ID'),
+        'folder_path' => env('ONEDRIVE_FOLDER_PATH', 'TCC Purrtal/Asset Photos'),
+    ],
+
 ];
