@@ -41,6 +41,7 @@ class AppServiceProvider extends ServiceProvider
         \Illuminate\Support\Facades\Vite::prefetch(concurrency: 3);
 
         // Existing Observers
+        \App\Models\Asset::observe(\App\Observers\AuditObserver::class);
         \App\Models\User::observe(\App\Observers\AuditObserver::class);
         \App\Models\Announcement::observe(\App\Observers\AuditObserver::class);
         \App\Models\CompanyContent::observe(\App\Observers\AuditObserver::class);
