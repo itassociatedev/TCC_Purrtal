@@ -137,6 +137,13 @@ class User extends Authenticatable
         return $this->hasMany(Asset::class, 'user_id');
     }
 
+    public function accountableAssets(): BelongsToMany
+    {
+        return $this->belongsToMany(Asset::class, 'asset_user')
+            ->withPivot('is_team_leader')
+            ->withTimestamps();
+    }
+
     public function getAllowedModulesForUser(): array
     {
         if (!$this->role) {

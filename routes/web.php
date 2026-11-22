@@ -53,6 +53,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/hr-module/request', [HrRequestController::class, 'store'])->name('hr.store');
 
     Route::get('/my-assets', [\App\Http\Controllers\Staff\MyAssetController::class, 'index'])->name('staff.assets.index');
+    Route::post('/asset-photos', [\App\Http\Controllers\AssetPhotoController::class, 'submit'])->name('asset-photos.submit');
+    Route::get('/asset-photos/capture', [\App\Http\Controllers\AssetPhotoController::class, 'capture'])->name('asset-photos.capture');
+    Route::get('/asset-photos/{submission}/preview', [\App\Http\Controllers\AssetPhotoController::class, 'preview'])->name('asset-photos.preview');
+    Route::get('/asset-photos/review', [\App\Http\Controllers\AssetPhotoController::class, 'index'])->name('asset-photos.review');
+    Route::patch('/asset-photos/{submission}', [\App\Http\Controllers\AssetPhotoController::class, 'decide'])->name('asset-photos.decide');
     
     // --- HR MODULE (Admin Management) --- 
     Route::get('/hr-module/admin', [HrRequestController::class, 'adminIndex'])->name('hr.admin.index');
@@ -320,8 +325,15 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
 
     Route::post('/assets/bulk-transfer', [\App\Http\Controllers\Admin\AssetController::class, 'bulkTransfer'])->name('.assets.bulk-transfer');
     Route::post('/assets/bulk-delete', [\App\Http\Controllers\Admin\AssetController::class, 'bulkDelete'])->name('.assets.bulk-delete'); 
+    Route::post('/assets/unassign', [\App\Http\Controllers\Admin\AssetController::class, 'unassign'])->name('.assets.unassign');
+    Route::post('/assets/{asset}/accountability', [\App\Http\Controllers\Admin\AssetController::class, 'syncAccountability'])->name('.assets.accountability');
     Route::post('/assets/import', [\App\Http\Controllers\Admin\AssetController::class, 'import'])->name('.assets.import');
+    Route::post('/assets/import-workbook', [\App\Http\Controllers\Admin\AssetController::class, 'importSpreadsheet'])->name('.assets.import-workbook');
+    Route::get('/assets/import-batches', [\App\Http\Controllers\Admin\AssetImportBatchController::class, 'index'])->name('.assets.import-batches');
+    Route::get('/assets/import-batches/{batch}/download', [\App\Http\Controllers\Admin\AssetImportBatchController::class, 'download'])->name('.assets.import-batches.download');
+    Route::post('/assets/import-batches/{batch}/reverse', [\App\Http\Controllers\Admin\AssetImportBatchController::class, 'reverse'])->name('.assets.import-batches.reverse');
     Route::post('/assets/log-template', [\App\Http\Controllers\Admin\AssetController::class, 'logTemplateDownload'])->name('.assets.log-template');
+    Route::get('/assets/import-template', [\App\Http\Controllers\Admin\AssetController::class, 'downloadTemplate'])->name('.assets.template');
     Route::post('/assets/log-export', [\App\Http\Controllers\Admin\AssetController::class, 'logExport'])->name('.assets.log-export');
 
     Route::get('/assets', [\App\Http\Controllers\Admin\AssetController::class, 'index'])->name('.assets.index');

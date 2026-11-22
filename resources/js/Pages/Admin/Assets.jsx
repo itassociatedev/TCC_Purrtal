@@ -7,7 +7,8 @@ import SecondaryButton from '@/Components/SecondaryButton';
 import TextInput from '@/Components/TextInput';
 import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
-import { getAssetLinks } from '@/Config/navigation'; 
+import { getAssetLinks } from '@/Config/navigation';
+import AssetsAccountabilityModal from '@/Pages/Admin/AssetsAccountabilityModal'; 
 
 const getArray = (val) => {
     if (Array.isArray(val)) return val;
@@ -183,6 +184,8 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     const [viewingAsset, setViewingAsset] = useState(null);
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const [isBulkTransferModalOpen, setIsBulkTransferModalOpen] = useState(false);
+    const [isAccountabilityModalOpen, setIsAccountabilityModalOpen] = useState(false);
+    const [selectedAssetForAccountability, setSelectedAssetForAccountability] = useState(null);
     
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [importFile, setImportFile] = useState(null);
@@ -500,11 +503,28 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         );
     };
 
+    const handleUnassign = () => {
+        triggerConfirm(
+            'Unassign selected assets',
+            `Unassign ${selectedAssets.length} selected asset(s) and move them to In Storage?`,
+            () => router.post(route('admin.assets.unassign'), { ids: selectedAssets }, { preserveScroll: true, onSuccess: () => { setSelectedAssets([]); setShowOnlySelected(false); } }),
+            'danger'
+        );
+    };
+
+    const clearAllFilters = () => {
+        setSearch(''); setFilterCategory(''); setFilterDept(''); setFilterBranch('');
+        setFilterCondition(''); setFilterWarranty(''); setFilterPersonnel('');
+        setDateRangeType('All Time'); setCustomStartDate(''); setCustomEndDate('');
+    };
+
     const openAddModal = () => { setIsEditMode(false); reset(); setImagePreview(null); clearErrors(); setIsModalOpen(true); };
     const closeModal = () => { setIsModalOpen(false); setImagePreview(null); reset(); };
     const openViewModal = (asset) => { setViewingAsset(asset); setIsViewModalOpen(true); };
     const closeViewModal = () => { setIsViewModalOpen(false); setTimeout(() => setViewingAsset(null), 300); };
     const closeTransferModal = () => { setIsTransferModalOpen(false); reset(); };
+    const closeAccountabilityModal = () => { setIsAccountabilityModalOpen(false); setSelectedAssetForAccountability(null); };
+    const openAccountabilityModal = (asset) => { setSelectedAssetForAccountability(asset); setIsAccountabilityModalOpen(true); };
 
     const openEditModal = (asset) => {
         setIsEditMode(true); clearErrors();
@@ -579,7 +599,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
 
             const uploadTimeout = setTimeout(() => { setIsUploading(false); }, 10000);
 
-            router.post(route('admin.assets.import'), formData, {
+            router.post(route('admin.assets.import-workbook'), formData, {
                 forceFormData: true, preserveScroll: true,
                 onSuccess: () => { 
                     clearTimeout(uploadTimeout); 
@@ -773,7 +793,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
 
                             {canManageAssets && (
                                 <>
-                                    <a href="/asset_template.xlsx" download="Asset_Template.xlsx" className="inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-md font-bold text-[10px] text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none transition ease-in-out duration-150 justify-center gap-2 whitespace-nowrap">
+                                    <a href={route('assets.template')} download="Asset_Template.xlsx" className="inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-md font-bold text-[10px] text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none transition ease-in-out duration-150 justify-center gap-2 whitespace-nowrap">
                                         <svg className="w-4 h-4 text-indigo-300" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 110 2H7z" clipRule="evenodd" /></svg>
                                         Download Template
                                     </a>
@@ -918,6 +938,9 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                     </div>
 
                     <div className="flex items-center gap-3 mb-6 mt-2 border-b border-gray-200 pb-4">
+                        <button type="button" onClick={clearAllFilters} className="text-xs font-black uppercase tracking-wider text-gray-600 hover:text-indigo-800 bg-white px-4 py-2 rounded shadow-sm border border-gray-300">
+                            Remove All Filters
+                        </button>
                         {!isAudit && (
                             <>
                                 <button type="button" onClick={handleToggleSelectAll} className="text-xs font-black uppercase tracking-wider text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-4 py-2 rounded shadow-sm border border-indigo-200">
@@ -943,7 +966,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
 
                     {!isAudit && selectedAssets.length > 0 && (
                         <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-6 flex justify-between items-center animate-fade-in-down">
-                            <div className="flex items-center gap-4"><span className="font-bold text-indigo-800 text-sm px-2">{selectedAssets.length} asset(s) selected</span><div className="h-6 w-px bg-indigo-200"></div><div className="flex gap-2"><PrimaryButton onClick={openBulkTransferModal} className="bg-indigo-600 hover:bg-indigo-700 !py-1.5 !px-3 text-xs">Bulk Transfer</PrimaryButton><SecondaryButton onClick={handleBulkDelete} className="!border-red-200 !text-red-600 hover:!bg-red-50 !py-1.5 !px-3 text-xs font-bold">Bulk Delete</SecondaryButton></div></div>
+                            <div className="flex items-center gap-4"><span className="font-bold text-indigo-800 text-sm px-2">{selectedAssets.length} asset(s) selected</span><div className="h-6 w-px bg-indigo-200"></div><div className="flex gap-2"><PrimaryButton onClick={openBulkTransferModal} className="bg-indigo-600 hover:bg-indigo-700 !py-1.5 !px-3 text-xs">Bulk Transfer</PrimaryButton><SecondaryButton onClick={handleUnassign} className="!border-amber-200 !text-amber-700 hover:!bg-amber-50 !py-1.5 !px-3 text-xs font-bold">Unassign Selected</SecondaryButton><SecondaryButton onClick={handleBulkDelete} className="!border-red-200 !text-red-600 hover:!bg-red-50 !py-1.5 !px-3 text-xs font-bold">Bulk Delete</SecondaryButton></div></div>
                             <button onClick={handleDeselectAll} className="text-sm text-indigo-400 hover:text-indigo-600 font-medium px-2">Clear Selection</button>
                         </div>
                     )}
@@ -1091,6 +1114,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                                         <div className="flex justify-end items-center gap-3">
                                                             <button onClick={() => openTransferModal(asset)} className="text-emerald-600 hover:text-emerald-900 font-bold text-xs">Trans</button>
                                                             <button onClick={() => openEditModal(asset)} className="text-indigo-600 hover:text-indigo-900 font-bold text-xs">Edit</button>
+                                                            <button onClick={() => openAccountabilityModal(asset)} className="text-blue-600 hover:text-blue-900 font-bold text-xs">Acc</button>
                                                             <button onClick={() => handleDelete(asset?.id)} className="text-red-600 hover:text-red-900 font-bold text-xs">Del</button>
                                                         </div>
                                                     </td>
@@ -1629,7 +1653,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
             <Modal show={isImportModalOpen} onClose={closeImportModal} maxWidth="md">
                 <form onSubmit={handleImportSubmit} className="p-6">
                     <h2 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-wider">Upload Asset File</h2>
-                    <p className="text-sm font-bold text-gray-500 mb-4">Please upload your completed Asset Template in CSV format.</p>
+                    <p className="text-sm font-bold text-gray-500 mb-4">Upload the original Excel workbook or a CSV copy. The original file is retained for audit and reversal.</p>
                     
                     {importError && (
                         <div className="mb-4 bg-red-50 text-red-700 p-3 rounded-md text-sm border border-red-200">
@@ -1639,11 +1663,11 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
 
                     <div className="space-y-4">
                         <div>
-                            <InputLabel value="Select CSV File" className="font-black text-xs" />
+                            <InputLabel value="Select Excel or CSV File" className="font-black text-xs" />
                             <input 
                                 type="file" 
                                 className="w-full mt-2 block text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer border border-gray-300 rounded-md" 
-                                accept=".csv" 
+                                accept=".csv,.xlsx,.xls"
                                 onChange={e => setImportFile(e.target.files[0])} 
                                 required 
                             />
@@ -1682,6 +1706,17 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                     </div>
                 </div>
             </Modal>
+
+            <AssetsAccountabilityModal
+                show={isAccountabilityModalOpen}
+                onClose={closeAccountabilityModal}
+                asset={selectedAssetForAccountability}
+                users={safeUsers}
+                onSubmit={() => {
+                    // Refresh assets after accountability change
+                    router.get(route('admin.assets.index'), {}, { preserveState: true, preserveScroll: true });
+                }}
+            />
 
         </SidebarLayout>
     );

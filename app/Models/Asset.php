@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Asset extends Model
 {
@@ -16,7 +17,7 @@ class Asset extends Model
         'classification',
         'department',
         'branch',
-        'user_id', // 🟢 ADD THIS
+        'user_id',
         'assigned_personnel',
         'area',
         'purchase_date',
@@ -32,7 +33,9 @@ class Asset extends Model
         'serial_no',
         'color',
         'photo_path',
+        'image_path',
         'accountability_form',
+        'accountability_type',
     ];
 
     // This links the asset back to your PR/PO Supplier list!
@@ -45,5 +48,18 @@ class Asset extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function accountableUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'asset_user')
+            ->withPivot('is_team_leader')
+            ->withTimestamps()
+            ->orderByPivot('is_team_leader', 'desc');
+    }
+
+    public function photoSubmissions()
+    {
+        return $this->hasMany(AssetPhotoSubmission::class);
     }
 }

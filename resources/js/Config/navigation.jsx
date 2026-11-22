@@ -769,10 +769,13 @@ export const getPRPOLinks = (auth) => {
 // 🟢 SECURE ROLE-BASED ASSET LINKS
 export const getAssetLinks = (auth) => {
     const userRole = auth?.user?.role?.name?.toLowerCase().trim() || '';
+    const userDepartment = auth?.user?.department?.name?.toLowerCase().trim() || '';
 
     // Define who is allowed
     const isSuperAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'director of corporate services and operations';
     const isAudit = userRole === 'audit';
+    const isIT = userDepartment === 'it' || userRole.includes('it');
+    const canSubmitPhotos = isIT || ['inventory', 'procurement', 'audit'].some(value => userDepartment.includes(value) || userRole.includes(value));
 
     const links = [];
 
@@ -792,6 +795,22 @@ export const getAssetLinks = (auth) => {
             href: '#',
             active: false,
             isAction: true, 
+        });
+    }
+
+    if (isIT || isSuperAdmin) {
+        links.push({
+            label: 'Asset Photo Review',
+            href: route('asset-photos.review'),
+            active: route().current('asset-photos.review'),
+        });
+    }
+
+    if (canSubmitPhotos) {
+        links.push({
+            label: 'Asset Photo Capture',
+            href: route('asset-photos.capture'),
+            active: route().current('asset-photos.capture'),
         });
     }
 

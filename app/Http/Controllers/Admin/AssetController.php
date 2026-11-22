@@ -14,6 +14,11 @@ use App\Models\Department; // Make sure this is imported
 use App\Models\Branch;      // <-- This is the one missing causing the crash!
 use App\Models\SystemLog;   // 🟢 Added for tracking
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Models\AssetImportBatch;
+use App\Models\AssetImportItem;
+use App\Exports\AssetTemplateExport;
 
 class AssetController extends Controller
 {
@@ -27,13 +32,13 @@ class AssetController extends Controller
 
         return Inertia::render('Admin/Assets', [
             // 🟢 FIXED: Changed paginate(10) to get() so React receives all 100+ items
-            'assets' => Asset::with(['user', 'supplier'])->latest()->get(),
-            
+            'assets' => Asset::with(['user', 'supplier', 'accountableUsers'])->latest()->get(),
+
             // 🟢 CLEANED: Combined the unused variables you had earlier into the render array
             'suppliers' => Supplier::where('status', 'Active')->orderBy('name')->get(['id', 'name']),
-            'users' => User::with('department')->orderBy('name')->get(),
+            'users' => User::with(['department', 'position'])->orderBy('name')->get(),
             'branches' => Branch::all(),
-            'departments' => Department::all(), 
+            'departments' => Department::all(),
         ]);
     }
 
@@ -47,7 +52,7 @@ class AssetController extends Controller
             return redirect()->route('admin.assets.index');
         }
 
-        $assets = Asset::with(['supplier', 'user'])->latest()->get();
+        $assets = Asset::with(['supplier', 'user', 'accountableUsers'])->latest()->get();
         
         return Inertia::render('Admin/AssetMasterlist', [
             'assets' => $assets,
@@ -200,6 +205,117 @@ class AssetController extends Controller
         }
 
         return back()->with('success', 'Selected assets transferred successfully.');
+    }
+
+    public function unassign(Request $request)
+    {
+        $data = $request->validate(['ids' => ['required', 'array', 'min:1'], 'ids.*' => ['integer', 'exists:assets,id']]);
+        Asset::whereIn('id', $data['ids'])->update([
+            'user_id' => null,
+            'assigned_personnel' => null,
+            'asset_status' => 'In Storage',
+        ]);
+
+        DB::table('asset_user')->whereIn('asset_id', $data['ids'])->delete();
+        return back()->with('success', 'Selected assets were unassigned and moved to In Storage.');
+    }
+
+    public function syncAccountability(Request $request, Asset $asset)
+    {
+        $data = $request->validate([
+            'type' => ['required', 'in:personal,shared'],
+            'user_ids' => ['array'],
+            'user_ids.*' => ['integer', 'exists:users,id'],
+            'team_leader_id' => ['nullable', 'integer', 'exists:users,id'],
+        ]);
+
+        $ids = array_values(array_unique(array_map('intval', $data['user_ids'] ?? [])));
+        $leader = $data['team_leader_id'] ?? ($ids[0] ?? null);
+        $asset->update([
+            'accountability_type' => $data['type'],
+            'user_id' => $leader,
+            'assigned_personnel' => $leader ? User::find($leader)?->name : null,
+            'asset_status' => $ids ? 'Assigned' : 'In Storage',
+        ]);
+        $asset->accountableUsers()->sync(array_fill_keys($ids, ['is_team_leader' => false]));
+        if ($leader && in_array($leader, $ids, true)) {
+            $asset->accountableUsers()->updateExistingPivot($leader, ['is_team_leader' => true]);
+        }
+
+        return back()->with('success', 'Asset accountability updated.');
+    }
+
+    public function importSpreadsheet(Request $request)
+    {
+        $request->validate(['file' => ['required', 'file', 'mimes:csv,txt,xlsx,xls', 'max:20480']]);
+        $file = $request->file('file');
+        $storedPath = $file->store('asset-imports');
+        $batch = AssetImportBatch::create([
+            'uploaded_by' => Auth::id(),
+            'original_filename' => $file->getClientOriginalName(),
+            'stored_path' => $storedPath,
+            'file_hash' => hash_file('sha256', $file->getRealPath()),
+            'status' => 'processing',
+        ]);
+
+        try {
+            $rows = Excel::toArray(null, $file)[0] ?? [];
+            if (!$rows) abort(422, 'The workbook has no readable rows.');
+            $headers = array_map(fn ($header) => strtolower(trim((string) $header)), array_shift($rows));
+            $created = 0; $updated = 0;
+            $branchCodes = ['gh' => 'Greenhills', 'mkt' => 'Makati', 'alb' => 'Alabang'];
+
+            DB::transaction(function () use ($rows, $headers, $batch, $branchCodes, &$created, &$updated) {
+                foreach ($rows as $values) {
+                    $row = array_combine($headers, array_pad($values, count($headers), null));
+                    $tag = trim((string) ($row['asset tag'] ?? $row['assettag'] ?? $row['asset_tag'] ?? ''));
+                    $name = trim((string) ($row['asset name'] ?? $row['asst name'] ?? $row['name'] ?? ''));
+                    if ($tag === '' && $name === '') continue;
+                    if ($tag === '') $tag = 'AST-' . strtoupper(substr(hash('sha256', $name . microtime(true)), 0, 8));
+
+                    $prefix = strtolower((string) preg_replace('/-.*/', '', $tag));
+                    $branch = $branchCodes[$prefix] ?? trim((string) ($row['branch'] ?? '')) ?: null;
+                    $person = trim((string) ($row['assigned personnel'] ?? $row['assigned_personnel'] ?? $row['personnel'] ?? ''));
+                    $user = $person ? User::whereRaw('LOWER(name) = ?', [strtolower($person)])->first() : null;
+                    $asset = Asset::where('asset_tag', $tag)->first();
+                    $isNew = !$asset;
+                    $before = $asset?->getAttributes();
+                    $asset ??= new Asset();
+                    $asset->fill([
+                        'name' => $name ?: 'Unnamed Asset', 'asset_tag' => $tag,
+                        'serial_no' => $row['serial no.'] ?? $row['serial no'] ?? null,
+                        'model_no' => $row['model no.'] ?? $row['model no'] ?? null,
+                        'color' => $row['color'] ?? null, 'category' => $row['category'] ?? null,
+                        'classification' => $row['classification'] ?? null, 'department' => $row['department'] ?? null,
+                        'branch' => $branch, 'area' => $row['area'] ?? null, 'supplier_name' => $row['supplier'] ?? null,
+                        'assigned_personnel' => $person ?: null, 'user_id' => $user?->id,
+                        'purchase_date' => self::parseImportDate($row['purchased date'] ?? $row['purchase date'] ?? $row['purchase_date'] ?? null),
+                        'warranty_expiration' => self::parseImportDate($row['warranty exp.'] ?? $row['warranty exp'] ?? $row['warranty date'] ?? null),
+                        'condition' => $row['condition'] ?? 'Good', 'asset_status' => $person ? 'Assigned' : ($row['status'] ?? 'New'),
+                        'qty' => max(1, (int) ($row['qty'] ?? $row['quantity'] ?? 1)),
+                        'unit_value' => (float) preg_replace('/[^0-9.\-]/', '', (string) ($row['unit value'] ?? $row['value'] ?? 0)),
+                    ]);
+                    $asset->total_value = $asset->qty * $asset->unit_value;
+                    $asset->save();
+                    $afterHash = hash('sha256', json_encode($asset->getAttributes(), JSON_UNESCAPED_UNICODE));
+                    $batch->items()->create(['asset_id' => $asset->id, 'created_by_batch' => $isNew, 'before_values' => $before, 'after_hash' => $afterHash]);
+                    $isNew ? $created++ : $updated++;
+                }
+            });
+            $batch->update(['created_count' => $created, 'updated_count' => $updated, 'status' => 'completed']);
+            return back()->with('success', "Import complete: {$created} created, {$updated} updated.");
+        } catch (\Throwable $e) {
+            $batch->update(['status' => 'failed']);
+            Log::error('Asset workbook import failed', ['exception' => $e]);
+            return back()->withErrors(['file' => 'Import failed: ' . $e->getMessage()]);
+        }
+    }
+
+    private static function parseImportDate($value): ?string
+    {
+        if (!$value) return null;
+        if (is_numeric($value)) return date('Y-m-d', (int) (($value - 25569) * 86400));
+        return strtotime((string) $value) ? date('Y-m-d', strtotime((string) $value)) : null;
     }
 
     public function bulkDelete(Request $request)
@@ -531,5 +647,23 @@ class AssetController extends Controller
             Log::error("Failed to log template download: " . $e->getMessage());
             return back();
         }
+    }
+
+    public function downloadTemplate(Request $request)
+    {
+        try {
+            SystemLog::create([
+                'user_id' => Auth::id(),
+                'action' => 'Download',
+                'module' => 'Asset Management Module',
+                'description' => "Downloaded the Asset Import Template.",
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+        } catch (\Exception $e) {
+            Log::info("Template downloaded by User " . Auth::id());
+        }
+
+        return Excel::download(new AssetTemplateExport, 'asset_import_template.xlsx');
     }
 }
