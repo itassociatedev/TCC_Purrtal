@@ -56,6 +56,10 @@ class HandleInertiaRequests extends Middleware
         }
 
         $permissions = $this->getPermissionStrings($user);
+        $devSwitcherEmail = config('app.dev_switcher_email', env('DEV_ACCOUNT_SWITCHER_EMAIL', 'itassociate@catclinic.ph'));
+        $devSwitcherEnabled = app()->environment(['local', 'testing'])
+            && $user
+            && ($user->email === $devSwitcherEmail || $request->session()->has('dev_switcher_original_user_id'));
 
         return [
             ...parent::share($request),
@@ -75,7 +79,7 @@ class HandleInertiaRequests extends Middleware
                     'branches' => $user->branches,
 
                     // 🟢 ADDED: Send the user's assigned assets to React!
-                    'assets' => $user->assets,
+                    'assets' => $user->assets->merge($user->accountableAssets)->unique('id')->values(),
 
                     'is_rotating' => $user->is_rotating,
                     'image_path' => $user->image_path,
@@ -112,6 +116,15 @@ class HandleInertiaRequests extends Middleware
                 'serverDate' => fn() => \Carbon\Carbon::now()->toDateString(),
                 'serverNow' => fn() => \Carbon\Carbon::now()->toIso8601String(),
                 'timezone' => config('app.timezone'),
+            ],
+            'devAccountSwitcher' => [
+                'enabled' => $devSwitcherEnabled,
+                'isImpersonating' => $devSwitcherEnabled && $request->session()->has('dev_switcher_original_user_id'),
+                'currentUser' => $devSwitcherEnabled && $user ? [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                ] : null,
             ],
         ];
     }

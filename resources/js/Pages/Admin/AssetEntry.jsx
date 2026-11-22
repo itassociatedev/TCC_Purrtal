@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import PrimaryButton from '@/Components/PrimaryButton';
 import AssetsAddAssetModal from '@/Pages/Admin/AssetsAddAssetModal';
 import { getAssetLinks } from '@/Config/navigation';
 
-export default function AssetEntry({ suppliers = [], departments = [], branches = [] }) {
+export default function AssetEntry({ suppliers = [], departments = [], branches = [], rejectedPhotoSubmissions = [] }) {
     const { auth } = usePage().props;
     const [showAddModal, setShowAddModal] = useState(false);
     const assetLinks = getAssetLinks(auth);
@@ -19,12 +19,14 @@ export default function AssetEntry({ suppliers = [], departments = [], branches 
                     <p className="mt-2 text-sm text-gray-500">Enter a new asset and optionally take its photo using this phone.</p>
                     <PrimaryButton type="button" onClick={() => setShowAddModal(true)} className="mt-6 w-full justify-center">Open Asset Entry</PrimaryButton>
                 </section>
-                <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm">
-                    <h2 className="text-xl font-black text-gray-900">Capture an existing asset</h2>
-                    <p className="mt-2 text-sm text-gray-500">The capture page selects an asset that still needs a photo and lets you search for another one.</p>
-                    <Link href={route('asset-photos.capture')} className="mt-6 inline-flex w-full justify-center rounded-md bg-emerald-600 px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-emerald-700">Open Photo Capture</Link>
-                </section>
             </div>
+            <section className="mx-auto max-w-4xl rounded-2xl border border-red-100 bg-white p-6 shadow-sm">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div><h2 className="text-xl font-black text-gray-900">Rejected photo history</h2><p className="mt-1 text-sm text-gray-500">Review your rejected submissions and retake them when needed.</p></div>
+                    <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-black text-red-700">{rejectedPhotoSubmissions.length} rejected</span>
+                </div>
+                {rejectedPhotoSubmissions.length === 0 ? <p className="mt-4 text-sm text-gray-500">No rejected photo submissions.</p> : <div className="mt-4 space-y-3">{rejectedPhotoSubmissions.map(item => <div key={item.id} className="rounded-lg border border-red-100 bg-red-50 p-4"><div className="font-bold text-gray-900">{item.asset?.asset_tag} — {item.asset?.name}</div><p className="mt-1 text-sm text-red-800">{item.rejection_reason || 'No reason provided'}</p><p className="mt-1 text-xs text-gray-500">Reviewed by {item.reviewer?.name || 'IT reviewer'}</p><Link href={`${route('asset-photos.capture')}?asset_id=${item.asset_id}`} className="mt-2 inline-flex text-xs font-black text-indigo-700 hover:underline">Retake this photo</Link></div>)}</div>}
+            </section>
         </div>
         <AssetsAddAssetModal show={showAddModal} onClose={() => setShowAddModal(false)} suppliers={suppliers} departments={departments} branches={branches} onSubmit={() => setShowAddModal(false)} />
     </SidebarLayout>;

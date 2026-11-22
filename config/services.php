@@ -36,6 +36,7 @@ return [
     ],
 
     'onedrive' => [
+        'enabled' => (bool) env('ONEDRIVE_ENABLED', false),
         'tenant_id' => env('ONEDRIVE_TENANT_ID'),
         'client_id' => env('ONEDRIVE_CLIENT_ID'),
         'client_secret' => env('ONEDRIVE_CLIENT_SECRET'),

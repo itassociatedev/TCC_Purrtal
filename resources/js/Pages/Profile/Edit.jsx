@@ -3,10 +3,18 @@ import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head } from '@inertiajs/react';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm';
 import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm';
+import { useState } from 'react';
 
 export default function Edit({ auth, mustVerifyEmail, status }) {
 
     const dashboardLinks = getDashboardLinks();
+    const profileAssets = auth?.user?.assets || [];
+    const personalAssets = profileAssets.filter(asset => (asset?.accountability_type || 'personal') !== 'shared');
+    const sharedAssets = profileAssets.filter(asset => asset?.accountability_type === 'shared');
+    const [assetPage, setAssetPage] = useState(1);
+    const assetsPerPage = 5;
+    const pageCount = Math.max(1, Math.ceil(Math.max(personalAssets.length, sharedAssets.length) / assetsPerPage));
+    const pageItems = items => items.slice((assetPage - 1) * assetsPerPage, assetPage * assetsPerPage);
 
     return (
         <SidebarLayout
@@ -42,8 +50,8 @@ export default function Edit({ auth, mustVerifyEmail, status }) {
                                 </div>
                                 <div className="flex-1 flex justify-between items-center">
                                     <div>
-                                        <h2 className="text-lg font-medium text-gray-900">Recent Company Assets</h2>
-                                        <p className="mt-1 text-sm text-gray-600">The most recent company property assigned to your accountability.</p>
+                                        <h2 className="text-lg font-medium text-gray-900">Asset Accountability</h2>
+                                        <p className="mt-1 text-sm text-gray-600">Your current Personal and Shared Accountability assets.</p>
                                     </div>
                                     {(auth?.user?.assets || []).length > 5 && (
                                         <button onClick={() => window.location.href = route('staff.assets.index')} className="text-sm font-bold text-indigo-600 hover:text-indigo-900 hover:underline">
@@ -53,7 +61,11 @@ export default function Edit({ auth, mustVerifyEmail, status }) {
                                 </div>
                             </header>
                             
-                            <div className="mt-6">
+                            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+                                {[['Personal Accountability', personalAssets], ['Shared Accountability', sharedAssets]].map(([title, items]) => <div key={title} className="rounded-lg border border-gray-200 bg-gray-50 p-4"><div className="mb-2 flex items-center justify-between"><h3 className="font-black text-gray-900">{title}</h3><span className="text-xs font-bold text-indigo-600">{items.length}</span></div><ul className="divide-y divide-gray-200">{pageItems(items).map(asset => <li key={asset.id} className="py-2"><button onClick={() => window.location.href = route('staff.assets.index')} className="text-left"><p className="text-sm font-bold text-indigo-700">{asset.name}</p><p className="text-xs text-gray-500">{asset.asset_tag} · {asset.condition || 'Unknown'}</p></button></li>)}{pageItems(items).length === 0 && <li className="py-3 text-sm text-gray-500">No assets assigned.</li>}</ul></div>)}
+                            </div>
+                            {pageCount > 1 && <div className="mt-4 flex items-center justify-between"><button disabled={assetPage === 1} onClick={() => setAssetPage(page => Math.max(1, page - 1))} className="rounded border px-3 py-1 text-xs font-bold disabled:opacity-40">Previous</button><span className="text-xs font-bold text-gray-500">Page {assetPage} of {pageCount}</span><button disabled={assetPage === pageCount} onClick={() => setAssetPage(page => Math.min(pageCount, page + 1))} className="rounded border px-3 py-1 text-xs font-bold disabled:opacity-40">Next</button></div>}
+                            <div className="mt-6 hidden">
                                 {(auth?.user?.assets || []).length > 0 ? (
                                     <ul className="divide-y divide-gray-100 border border-gray-200 rounded-lg bg-gray-50 px-4 shadow-sm">
                                         {/* 🟢 SLICE TO GET ONLY THE LAST 5 ITEMS */}
@@ -93,12 +105,13 @@ export default function Edit({ auth, mustVerifyEmail, status }) {
                             
                             {(auth?.user?.assets || []).length > 0 && (
                                 <div className="mt-4 flex justify-end">
-                                     <button 
+                                    <button
                                         onClick={() => window.location.href = route('staff.assets.index')} 
                                         className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none disabled:opacity-25 transition ease-in-out duration-150"
                                     >
-                                        Open My Asset Masterlist
+                                        Open My Accountability
                                     </button>
+                                    <a href={route('staff.assets.accountability-pdf')} className="ml-2 inline-flex items-center px-4 py-2 bg-indigo-600 border border-indigo-600 rounded-md font-semibold text-xs text-white uppercase tracking-widest shadow-sm hover:bg-indigo-700">Download Accountability Form</a>
                                 </div>
                             )}
                         </section>

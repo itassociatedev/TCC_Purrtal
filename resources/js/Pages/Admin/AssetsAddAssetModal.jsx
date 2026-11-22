@@ -8,6 +8,7 @@ import SelectInput from '@/Components/SelectInput';
 
 export default function AddAssetModal({ show, onClose, suppliers, departments, branches, onSubmit }) {
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [imagePreview, setImagePreview] = useState('');
     const form = useForm({
         name: '',
         asset_tag: '',
@@ -56,6 +57,7 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
                         <h2 className="text-xl font-bold text-gray-900">Add New Asset</h2>
                         <SecondaryButton onClick={onClose}>Close</SecondaryButton>
                     </div>
+                    {Object.keys(form.errors).length > 0 && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{Object.values(form.errors).join(' ')}</div>}
 
                     <div className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -137,7 +139,7 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
                                     <option value="Excellent">Excellent</option>
                                     <option value="Good">Good</option>
                                     <option value="Fair">Fair</option>
-                                    <option value="Poor">Poor</option>
+                                    <option value="Poor">Poor</option><option value="Defective">Defective</option><option value="For checking">For checking</option>
                                 </select>
                             </div>
                         </div>
@@ -199,13 +201,8 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700">Asset Photo (optional)</label>
-                            <input
-                                type="file"
-                                accept="image/*"
-                                capture="environment"
-                                onChange={e => form.setData('image', e.target.files[0])}
-                                className="mt-1 w-full text-sm"
-                            />
+                            <label className="mt-1 flex cursor-pointer items-center justify-between rounded-lg border-2 border-dashed border-indigo-200 bg-indigo-50 px-4 py-3 hover:bg-indigo-100"><span className="text-sm font-black text-indigo-800">Choose photo or open camera</span><span className="rounded-md bg-indigo-600 px-3 py-2 text-xs font-black text-white">Choose file</span><input type="file" accept="image/*" capture="environment" onChange={e => { const file = e.target.files[0]; form.setData('image', file); setImagePreview(file ? URL.createObjectURL(file) : ''); }} className="sr-only" /></label>
+                            {imagePreview && <img src={imagePreview} alt="New asset preview" className="mt-3 max-h-48 w-full rounded-md object-contain border bg-gray-50 p-2" />}
                             <p className="mt-1 text-xs text-gray-500">On a phone, this opens the camera and requests permission when required. You may also choose an existing image.</p>
                         </div>
                     </div>

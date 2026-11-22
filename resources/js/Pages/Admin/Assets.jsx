@@ -21,7 +21,7 @@ const getSafeStr = (val) => {
     return String(val).toLowerCase().trim();
 };
 
-export default function Assets({ auth, assets, suppliers, branches, users, departments, rejectedPhotoSubmissions = [], canReviewPhotos = false }) {
+export default function Assets({ auth, assets, suppliers, branches, users, departments, leaderUserIds = [], rejectedPhotoSubmissions = [], canReviewPhotos = false }) {
     const assetLinks = typeof getAssetLinks === 'function' ? getAssetLinks(auth) : [];
     const { system } = usePage().props;
 
@@ -168,7 +168,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     }, []);
 
     const classifications = ['Capex', 'Non-Capex', 'Consumable'];
-    const conditions = ['Good', 'Broken', 'For Repair', 'Missing'];
+    const conditions = ['Good', 'Broken', 'For Repair', 'Defective', 'For checking', 'Missing'];
 
     const [search, setSearch] = useState('');
     const [filterCategory, setFilterCategory] = useState('');
@@ -184,6 +184,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     const [selectedAssets, setSelectedAssets] = useState([]);
     const [showOnlySelected, setShowOnlySelected] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
+    const paginationScrollY = useRef(null);
     const [pageSize, setPageSize] = useState(25);
 
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -217,13 +218,38 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     const { data, setData, post, put, delete: destroy, processing, reset, clearErrors, errors, setError } = useForm({
         id: '', name: '', asset_tag: '', category: '', classification: '', department: '',
         branch: '', user_id: '', assigned_personnel: '', area: '', purchase_date: '', supplier_id: '', supplier_name: '',
-        warranty_expiration: '', condition: 'Good', unit_value: 0, qty: 1, asset_status: 'New', 
+        warranty_expiration: '', condition: 'Good', unit_value: 0, qty: 1, asset_status: 'New',
+        accountability_type: 'personal', user_ids: [], team_leader_id: '',
         model_no: '', serial_no: '', color: '', image: null 
     });
 
     const bulkTransferForm = useForm({
-        ids: [], user_id: '', assigned_personnel: '', department: '', branch: '', area: '', asset_status: 'Assigned',
+        ids: [], user_id: '', user_ids: [], team_leader_id: '', accountability_type: 'personal', assigned_personnel: '', department: '', branch: '', area: '', asset_status: 'Assigned',
     });
+    const [lockedTransferIds, setLockedTransferIds] = useState([]);
+    const selectedTransferUsers = useMemo(() => (data?.user_ids || []).map(id => safeUsers.find(user => Number(user.id) === Number(id))).filter(Boolean), [data?.user_ids, safeUsers]);
+
+    useEffect(() => {
+        if (!isTransferModalOpen || data.accountability_type !== 'shared' || (!data.branch && !data.department)) return;
+        const branch = getSafeStr(data.branch);
+        const department = getSafeStr(data.department);
+        const autoSelected = safeUsers.filter(user => {
+            const userBranch = getSafeStr(user.branch?.name || user.branch || user.branch_name || user.branches?.[0]?.name);
+            const userDepartment = getSafeStr(user.department?.name || user.department);
+            return (!branch || userBranch === branch) && (!department || userDepartment === department);
+        }).map(user => Number(user.id));
+        const merged = [...new Set([...(data.user_ids || []).map(Number), ...autoSelected])];
+        if (merged.length !== (data.user_ids || []).length) setData('user_ids', merged);
+        const automaticLeader = autoSelected.find(id => leaderUserIds.map(Number).includes(id));
+        if (!data.team_leader_id && automaticLeader) setData('team_leader_id', automaticLeader);
+        const required = autoSelected.filter(id => leaderUserIds.map(Number).includes(id));
+        if (required.length) {
+            const nextLocked = [...new Set([...lockedTransferIds.map(Number), ...required])];
+            if (nextLocked.length !== lockedTransferIds.length) setLockedTransferIds(nextLocked);
+        }
+        const missingRequired = lockedTransferIds.filter(id => !merged.includes(Number(id)));
+        if (missingRequired.length) setData('user_ids', [...new Set([...merged, ...missingRequired.map(Number)])]);
+    }, [isTransferModalOpen, data.accountability_type, data.branch, data.department, safeUsers, leaderUserIds, lockedTransferIds]);
 
     const handleAddCategory = (e) => {
         e.preventDefault();
@@ -374,7 +400,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     const stats = useMemo(() => {
         let totalItems = 0; let totalValue = 0; let needsMaintenance = 0; let totalCurrentValue = 0; let totalAccumulatedDepreciation = 0;
         const branchBreakdown = {};
-        const conditionBreakdown = { 'Good': 0, 'Broken': 0, 'For Repair': 0, 'Missing': 0 };
+        const conditionBreakdown = { 'Good': 0, 'Broken': 0, 'For Repair': 0, 'Defective': 0, 'For checking': 0, 'Missing': 0 };
         const uniquePersonnel = new Set();
 
         safeBranches.forEach(b => {
@@ -419,7 +445,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
             if (asset?.user_id) uniquePersonnel.add(`id_${asset.user_id}`);
             else if (asset?.assigned_personnel) uniquePersonnel.add(`name_${getSafeStr(asset.assigned_personnel)}`);
 
-            if (['Broken', 'For Repair', 'Missing'].includes(asset?.condition)) needsMaintenance++;
+            if (['Broken', 'For Repair', 'Defective', 'For checking', 'Missing'].includes(asset?.condition)) needsMaintenance++;
 
             const branchKey = getBranchValue(asset?.branch) || 'Unassigned';
             if (!branchBreakdown[branchKey]) branchBreakdown[branchKey] = { items: 0, value: 0, currentValue: 0 };
@@ -491,10 +517,15 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     useEffect(() => {
         if (currentPage > totalPages) setCurrentPage(totalPages);
     }, [currentPage, totalPages]);
+    useEffect(() => {
+        if (paginationScrollY.current === null) return;
+        const scrollY = paginationScrollY.current;
+        paginationScrollY.current = null;
+        requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'auto' }));
+    }, [currentPage]);
     const changePage = (page) => {
-        const scrollY = window.scrollY;
+        paginationScrollY.current = window.scrollY;
         setCurrentPage(Math.max(1, Math.min(totalPages, page)));
-        requestAnimationFrame(() => window.scrollTo(0, scrollY));
     };
 
     const handleToggleSelectAll = () => {
@@ -516,7 +547,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     const handleBulkTransferSubmit = (e) => { 
         e.preventDefault(); 
         router.post(route('admin.assets.bulk-transfer'), 
-            { ids: selectedAssets, user_id: bulkTransferForm.data.user_id, branch: bulkTransferForm.data.branch, department: bulkTransferForm.data.department }, 
+            { ids: selectedAssets, user_id: bulkTransferForm.data.user_id, user_ids: bulkTransferForm.data.accountability_type === 'shared' ? bulkTransferForm.data.user_ids : [bulkTransferForm.data.user_id].filter(Boolean), team_leader_id: bulkTransferForm.data.accountability_type === 'shared' ? bulkTransferForm.data.team_leader_id : bulkTransferForm.data.user_id, accountability_type: bulkTransferForm.data.accountability_type, branch: bulkTransferForm.data.branch, department: bulkTransferForm.data.department },
             { preserveScroll: true, onSuccess: () => { closeBulkTransferModal(); setSelectedAssets([]); setShowOnlySelected(false); } }
         ); 
     };
@@ -576,11 +607,26 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
 
     const openTransferModal = (asset) => {
         clearErrors();
-        setData({ ...asset, user_id: '', assigned_personnel: '', department: '', branch: '', area: '', asset_status: 'Assigned', supplier_id: asset?.supplier_id || '' });
+        const existingIds = asset?.accountableUsers?.map(user => Number(user.id)) || (asset?.user_id ? [Number(asset.user_id)] : []);
+        const type = asset?.accountability_type === 'shared' ? 'shared' : 'personal';
+        setLockedTransferIds(type === 'shared' ? existingIds.filter(id => leaderUserIds.map(Number).includes(id)) : []);
+        setData({ ...asset, user_id: type === 'personal' ? (asset?.user_id || '') : '', user_ids: existingIds, team_leader_id: asset?.accountableUsers?.find(user => user.pivot?.is_team_leader)?.id || (type === 'personal' ? existingIds[0] || '' : ''), accountability_type: type, assigned_personnel: '', department: asset?.department || '', branch: getBranchValue(asset?.branch), area: asset?.area || '', asset_status: 'Assigned', supplier_id: asset?.supplier_id || '' });
+        setUserSearchTerm('');
         setIsTransferModalOpen(true);
     };
 
-    const handleTransferSubmit = (e) => { e.preventDefault(); put(route('admin.assets.update', data.id), { onSuccess: () => closeTransferModal() }); };
+    const handleTransferSubmit = (e) => {
+        e.preventDefault();
+        const ids = data.accountability_type === 'shared'
+            ? [...new Set([...(data.user_ids || []).map(Number), ...(data.team_leader_id ? [Number(data.team_leader_id)] : [])])]
+            : [data.user_id].filter(Boolean);
+        router.post(route('admin.assets.accountability', data.id), { type: data.accountability_type, user_ids: ids, team_leader_id: data.accountability_type === 'shared' ? data.team_leader_id : data.user_id, branch: data.branch, department: data.department, area: data.area }, { preserveScroll: true, onSuccess: () => closeTransferModal() });
+    };
+
+    const unassignTransferAsset = () => {
+        if (!data.id) return;
+        router.post(route('admin.assets.accountability', data.id), { type: 'personal', user_ids: [], team_leader_id: null, branch: data.branch, department: data.department, area: data.area }, { preserveScroll: true, onSuccess: () => closeTransferModal() });
+    };
     
     const handleSubmit = (e) => { 
         e.preventDefault(); 
@@ -889,9 +935,8 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                     </button>
                                 </>
                             )}
-                            {!isAudit && (
+                            {(canManageAssets || safeRejectedSubmissions.length > 0) && (
                                 <>
-                                    {safeRejectedSubmissions.length > 0 && (
                                         <button
                                             type="button"
                                             onClick={() => setIsPhotoHistoryModalOpen(true)}
@@ -900,7 +945,6 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                             <svg className="w-4 h-4 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
                                             Photo History ({safeRejectedSubmissions.length})
                                         </button>
-                                    )}
                                 </>
                             )}
                             <SecondaryButton onClick={handlePdfOutput} className="!border-gray-300 text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 shadow-sm py-2 justify-center gap-2 whitespace-nowrap">
@@ -1023,7 +1067,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                             </select>
                         </div>
                         
-                        <div className="w-36"><InputLabel value="Condition" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterCondition} onChange={e => setFilterCondition(e.target.value)}><option value="">All</option><option value="Good">Good</option><option value="Broken">Broken</option><option value="For Repair">For Repair</option><option value="Missing">Missing</option></select></div>
+                        <div className="w-36"><InputLabel value="Condition" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterCondition} onChange={e => setFilterCondition(e.target.value)}><option value="">All</option>{conditions.map(condition => <option key={condition} value={condition}>{condition}</option>)}</select></div>
                         <div className="w-36"><InputLabel value="Branch" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterBranch} onChange={e => { setFilterBranch(e.target.value); setCurrentPage(1); }}><option value="">All Branches</option>{branchOptions.map((branch, idx) => <option key={idx} value={branch}>{branch}</option>)}</select></div>
                         <div className="w-36"><InputLabel value="Category" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}><option value="">All Categories</option>{allCategories.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                         
@@ -1155,7 +1199,13 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
 
                                                 {visibleColumns.assignedPersonnel && (
                                                     <td className="px-4 py-4 whitespace-nowrap font-black text-indigo-700">
-                                                        {asset?.user?.name ? <span>{asset.user.name}</span> : (asset?.assigned_personnel ? <span>{asset.assigned_personnel}</span> : <span className="text-gray-400">-</span>)}
+                                                        {asset?.accountableUsers?.length ? (() => {
+                                                            const leader = asset.accountableUsers.find(user => user.pivot?.is_team_leader) || asset.accountableUsers[0];
+                                                            const others = Math.max(0, asset.accountableUsers.length - 1);
+                                                            return <span title={asset.accountableUsers.map(user => user.name).join(', ')}>
+                                                                {leader?.name || '-'}{asset.accountability_type === 'shared' && others > 0 ? <span className="ml-1 text-[10px] text-gray-500">+{others} shared</span> : null}
+                                                            </span>;
+                                                        })() : (asset?.user?.name ? <span>{asset.user.name}</span> : (asset?.assigned_personnel ? <span>{asset.assigned_personnel}</span> : <span className="text-gray-400">-</span>))}
                                                     </td>
                                                 )}
 
@@ -1312,7 +1362,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                 <select className="w-full mt-1 border-gray-300 rounded-md shadow-sm text-sm font-bold py-2" value={data.condition || 'Good'} onChange={e => setData('condition', e.target.value)}>
                                     <option value="Good">Good</option>
                                     <option value="Broken">Broken</option>
-                                    <option value="For Repair">For Repair</option>
+                                    <option value="For Repair">For Repair</option><option value="Defective">Defective</option><option value="For checking">For checking</option>
                                     <option value="Missing">Missing</option>
                                 </select>
                             </div>
@@ -1503,9 +1553,14 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                 <div className="flex justify-between border-b border-indigo-100 pb-2">
                                     <span className="text-gray-500 font-bold text-xs">Assigned To:</span> 
                                     <span className="font-black text-indigo-700 text-xs text-right">
-                                        {viewingAsset?.user ? viewingAsset?.user?.name : (viewingAsset?.assigned_personnel || '-')}
+                                        {viewingAsset?.accountableUsers?.length ? (
+                                            <span className="flex flex-col items-end gap-1">
+                                                {viewingAsset.accountableUsers.map((user, index) => <span key={user.id}>{user.name}{user.pivot?.is_team_leader ? <span className="ml-1 text-[10px] text-indigo-500">(Team Leader)</span> : null}</span>)}
+                                            </span>
+                                        ) : (viewingAsset?.user ? viewingAsset?.user?.name : (viewingAsset?.assigned_personnel || '-'))}
                                     </span>
                                 </div>
+                                <div className="flex justify-between border-b border-indigo-100 pb-2"><span className="text-gray-500 font-bold text-xs">Accountability:</span><span className="font-black text-gray-900 text-xs capitalize">{viewingAsset?.accountability_type || 'personal'}</span></div>
                                 <div className="flex justify-between border-b border-indigo-100 pb-2"><span className="text-gray-500 font-bold text-xs">Branch:</span> <span className="font-black text-gray-900 text-xs">{getBranchValue(viewingAsset?.branch) || 'N/A'}</span></div>
                                 <div className="flex justify-between border-b border-indigo-100 pb-2"><span className="text-gray-500 font-bold text-xs">Department:</span> <span className="font-black text-gray-900 text-xs">{viewingAsset?.department || 'N/A'}</span></div>
                                 <div className="flex justify-between pb-1"><span className="text-gray-500 font-bold text-xs">Area:</span> <span className="font-black text-gray-900 text-xs">{viewingAsset?.area || 'N/A'}</span></div>
@@ -1617,6 +1672,15 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                 <form onSubmit={handleBulkTransferSubmit} className="p-6">
                     <h2 className="text-xl font-black text-gray-900 mb-6 uppercase tracking-wider">Bulk Transfer Assets</h2>
                     <div className="space-y-4">
+                        <div className="flex gap-5 text-sm font-bold">
+                            <label className="flex items-center gap-2"><input type="radio" checked={bulkTransferForm.data.accountability_type === 'personal'} onChange={() => bulkTransferForm.setData({ accountability_type: 'personal', user_ids: [], team_leader_id: '' })} /> Personal</label>
+                            <label className="flex items-center gap-2"><input type="radio" checked={bulkTransferForm.data.accountability_type === 'shared'} onChange={() => bulkTransferForm.setData('accountability_type', 'shared')} /> Shared</label>
+                        </div>
+                        {bulkTransferForm.data.accountability_type === 'shared' && <div className="border rounded-md p-3 max-h-48 overflow-y-auto">
+                            <p className="text-xs text-gray-500 mb-2">Select all employees who will share these assets.</p>
+                            {safeUsers.map(user => <label key={user.id} className="flex items-center gap-2 py-1 text-sm"><input type="checkbox" checked={(bulkTransferForm.data.user_ids || []).map(Number).includes(Number(user.id))} onChange={() => { const ids = (bulkTransferForm.data.user_ids || []).map(Number); bulkTransferForm.setData('user_ids', ids.includes(Number(user.id)) ? ids.filter(id => id !== Number(user.id)) : [...ids, Number(user.id)]); }} />{user.name}</label>)}
+                            <select className="w-full mt-2 border-gray-300 rounded-md text-sm" value={bulkTransferForm.data.team_leader_id || ''} onChange={e => bulkTransferForm.setData('team_leader_id', e.target.value)}><option value="">Select team leader</option>{safeUsers.filter(user => (bulkTransferForm.data.user_ids || []).map(Number).includes(Number(user.id))).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</select>
+                        </div>}
                         <div className="relative">
                             <InputLabel value="New Assigned Personnel" className="font-black text-xs" />
                             <div className="relative mt-1">
@@ -1678,6 +1742,18 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                 <form onSubmit={handleTransferSubmit} className="p-6">
                     <h2 className="text-xl font-black text-gray-900 mb-6 uppercase tracking-wider">Transfer Asset</h2>
                     <div className="space-y-4">
+                        <div className="flex flex-wrap gap-5 text-sm font-bold">
+                            <label className="flex items-center gap-2"><input type="radio" checked={data.accountability_type === 'personal'} onChange={() => setData({ accountability_type: 'personal', user_ids: [], team_leader_id: '', user_id: '' })} /> Personal Accountability</label>
+                            <label className="flex items-center gap-2"><input type="radio" checked={data.accountability_type === 'shared'} onChange={() => setData('accountability_type', 'shared')} /> Shared Accountability</label>
+                        </div>
+                        {data.accountability_type === 'shared' && <div className="rounded-md border border-indigo-100 bg-indigo-50/50 p-3">
+                            <div className="flex items-center justify-between"><p className="text-xs font-bold text-gray-600">Shared employees</p><button type="button" className="text-xs font-bold text-red-700 underline" onClick={() => setData('user_ids', data.team_leader_id ? [Number(data.team_leader_id)] : [])}>Clear selected</button></div>
+                            <div className="mt-2 rounded-md border border-indigo-200 bg-white p-2"><p className="mb-1 text-[11px] font-black uppercase tracking-wide text-gray-500">Selected employees ({selectedTransferUsers.length})</p>{selectedTransferUsers.length ? <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto">{selectedTransferUsers.map(user => { const locked = Number(user.id) === Number(data.team_leader_id) || leaderUserIds.map(Number).includes(Number(user.id)); return <span key={user.id} className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-1 text-xs font-bold text-indigo-800">{user.name}{locked ? ' • required' : <button type="button" onClick={() => setData('user_ids', data.user_ids.filter(id => Number(id) !== Number(user.id)))} className="font-black text-red-600" aria-label={`Remove ${user.name}`}>×</button>}</span>; })}</div> : <p className="text-xs text-gray-500">No employees selected.</p>}</div>
+                            <select value="" onChange={e => { const id = Number(e.target.value); if (id && !data.user_ids.map(Number).includes(id)) setData('user_ids', [...data.user_ids, id]); }} className="mt-2 w-full rounded-md border-gray-300 text-sm"><option value="">Choose an employee to add…</option>{safeUsers.filter(user => !data.user_ids.map(Number).includes(Number(user.id)) && `${user.name} ${getSafeStr(user.position?.name || user.position)} ${getSafeStr(user.department?.name || user.department)}`.toLowerCase().includes(getSafeStr(userSearchTerm))).map(user => <option key={user.id} value={user.id}>{user.name} — {user.position?.name || user.position || 'No position'} ({user.department?.name || user.department || 'No department'})</option>)}</select>
+                            <input type="text" value={userSearchTerm} onChange={e => setUserSearchTerm(e.target.value)} className="mt-2 w-full rounded-md border-gray-300 text-sm" placeholder="Filter the employee dropdown by name, position, or department..." />
+                            <select className="mt-2 w-full rounded-md border-gray-300 text-sm" value={data.team_leader_id || ''} onChange={e => setData('team_leader_id', e.target.value)}><option value="">Select team leader</option>{safeUsers.filter(user => (data.user_ids || []).map(Number).includes(Number(user.id)) && leaderUserIds.map(Number).includes(Number(user.id))).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</select>
+                        </div>}
+                        {data.accountability_type === 'personal' && <>
                         <div className="relative">
                             <InputLabel value="New Assigned Personnel" className="font-black text-xs" />
                             <div className="relative mt-1">
@@ -1711,6 +1787,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                 </div>
                             )}
                         </div>
+                        </>}
 
                         <div>
                             <InputLabel value="New Branch" className="font-black text-xs" />
@@ -1751,7 +1828,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                     </div>
 
                     <div className="mt-8 flex justify-end gap-3 border-t pt-4">
-                        <SecondaryButton type="button" onClick={closeTransferModal} className="font-black uppercase tracking-wider text-xs">Cancel</SecondaryButton>
+                        <SecondaryButton type="button" onClick={unassignTransferAsset} className="mr-auto font-black uppercase tracking-wider text-xs !text-amber-700">Unassign</SecondaryButton><SecondaryButton type="button" onClick={closeTransferModal} className="font-black uppercase tracking-wider text-xs">Cancel</SecondaryButton>
                         <PrimaryButton type="submit" disabled={processing} className="font-black uppercase tracking-wider text-xs">Confirm</PrimaryButton>
                     </div>
                 </form>
@@ -1845,7 +1922,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                         <div className="text-center py-12">
                             <svg className="mx-auto h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
                             <p className="mt-4 text-gray-500 font-medium">No declined photo submissions</p>
-                            <p className="mt-1 text-sm text-gray-400">All your submissions have been approved or are still pending review.</p>
+                            <p className="mt-1 text-sm text-gray-400">No rejected photo submissions are currently available.</p>
                         </div>
                     ) : (
                         <div className="space-y-3 max-h-[500px] overflow-y-auto">
@@ -1859,6 +1936,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                             </div>
                                             <p className="text-sm text-gray-600">{item.rejection_reason || 'No reason provided'}</p>
                                             <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
+                                                <span>Submitted by: {item.submitter?.name || '—'}</span>
                                                 <span>Submitted: {safeFormatDate(item.submitted_at || item.created_at)}</span>
                                                 <span>Reviewed: {safeFormatDate(item.reviewed_at)}</span>
                                             </div>
@@ -1912,6 +1990,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                 onClose={closeAccountabilityModal}
                 asset={selectedAssetForAccountability}
                 users={safeUsers}
+                leaderUserIds={leaderUserIds}
                 onSubmit={() => {
                     // Refresh assets after accountability change
                     router.get(route('admin.assets.index'), {}, { preserveState: true, preserveScroll: true });

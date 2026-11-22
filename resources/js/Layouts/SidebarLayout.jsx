@@ -32,6 +32,7 @@ export default function SidebarLayout({
     };
 
     const { auth } = usePage().props;
+    const devAccountSwitcher = usePage().props.devAccountSwitcher;
 
     const safeSidebarLinks = Array.isArray(sidebarLinks) ? sidebarLinks : [];
     const safeNotifications = Array.isArray(auth?.notifications) ? auth.notifications : [];
@@ -46,7 +47,10 @@ export default function SidebarLayout({
     
     const isSuperAdmin = ['admin', 'super admin', 'director of corporate services and operations'].includes(userRole)
         || ['ralph ranie saura', 'reuben mikko s. capuno', 'patrick mimay', 'robert liton', 'donald rey saberon'].includes(String(auth?.user?.name || '').toLowerCase().trim());
-    const isIT = userDepartment === 'it' || userRole.includes('it');
+    const isIT = userDepartment === 'it'
+        || userDepartment.includes('information technology')
+        || userRole.includes('information technology')
+        || /(^|\s)it(\s|$)/i.test(`${userRole} ${userPosition}`);
     const canEnterAssets = isSuperAdmin || isIT || ['inventory', 'procurement', 'audit'].some(value => roleAndPosition.includes(value));
     const isAudit = roleAndPosition.includes('audit') || roleAndPosition.includes('accountability') || roleAndPosition.includes('view only');
     
@@ -161,6 +165,51 @@ export default function SidebarLayout({
 
     const user = auth?.user;
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+    const [showDevSwitcher, setShowDevSwitcher] = useState(false);
+    const [devSearch, setDevSearch] = useState('');
+    const [devUsers, setDevUsers] = useState([]);
+
+    useEffect(() => {
+        if (!showDevSwitcher || !devAccountSwitcher?.enabled) return;
+        const timer = setTimeout(async () => {
+            try {
+                const response = await axios.get(route('dev.account-switcher.users'), { params: { search: devSearch } });
+                setDevUsers(Array.isArray(response.data?.data) ? response.data.data : []);
+            } catch (error) {
+                setDevUsers([]);
+            }
+        }, 200);
+        return () => clearTimeout(timer);
+    }, [showDevSwitcher, devSearch, devAccountSwitcher?.enabled]);
+
+    const switchDevelopmentAccount = (targetId) => {
+        router.post(route('dev.account-switcher.switch', targetId), {}, { preserveScroll: true });
+    };
+
+    const restoreDevelopmentAccount = () => {
+        router.post(route('dev.account-switcher.restore'), {}, { preserveScroll: true });
+    };
+
+    const getDevelopmentGroups = () => {
+        const groups = { 'EVP / Higher Positions': [], 'Team Leaders': [], 'IT Department': [], 'IT Interns': [], 'Regular Employees': [] };
+        devUsers.forEach((target) => {
+            const role = String(target.role?.name || '').toLowerCase();
+            const position = String(target.position?.name || '').toLowerCase();
+            const directoryPosition = String(target.directory_position || '').toLowerCase();
+            const directoryBranch = String(target.directory_branch || '').toLowerCase();
+            const department = String(target.department?.name || '').toLowerCase();
+            const leadershipText = role + ' ' + position + ' ' + directoryPosition;
+            const isIntern = (department.includes('it') || role.includes('it') || position.includes('it') || directoryBranch.includes('it department')) && (leadershipText.includes('intern') || leadershipText.includes('trainee'));
+            const isHigher = directoryPosition.includes('executive vice president') || directoryPosition.includes('president') || directoryPosition.includes('chairman') || directoryPosition.includes('chief') || leadershipText.includes('evp') || leadershipText.includes('director') || leadershipText.includes('vice president');
+            const isTeamLeader = directoryPosition.includes('team leader') || leadershipText.includes('team leader') || leadershipText.includes('team lead') || leadershipText.includes('supervisor') || leadershipText.includes('manager') || leadershipText.includes('department head') || leadershipText.includes(' tl');
+            if (isIntern) groups['IT Interns'].push(target);
+            else if (isHigher) groups['EVP / Higher Positions'].push(target);
+            else if (isTeamLeader) groups['Team Leaders'].push(target);
+            else if (department.includes('it') || role.includes('it') || position.includes('it') || directoryBranch.includes('it department') || directoryPosition.includes('it ')) groups['IT Department'].push(target);
+            else groups['Regular Employees'].push(target);
+        });
+        return groups;
+    };
 
     // 🟢 CHECK: Identify which Quick Links the user has access to
     const showDocumentQuickLink = canViewModuleCard(auth, 'documents');
@@ -264,6 +313,10 @@ export default function SidebarLayout({
         'Asset Masterlist': (<svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>),
         'Asset Overview': (<svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" /></svg>),
         'Add Asset': (<svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>),
+        'Asset Entry': (<svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M8 8h8M8 12h8M8 16h4" /></svg>),
+        'Asset Photo Capture': (<svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4 7h3l1.5-2h7L17 7h3v12H4V7Z" /><circle cx="12" cy="13" r="3.5" /></svg>),
+        'Asset Photo Review': (<svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="m5 12 4 4L19 6" /><path strokeLinecap="round" strokeLinejoin="round" d="M4 4h16v16H4z" /></svg>),
+        'Photo History': (<svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l2.5 2.5M20 12a8 8 0 1 1-2.34-5.66" /><path strokeLinecap="round" strokeLinejoin="round" d="M20 4v5h-5" /></svg>),
         // Icons restored from the block that was commented out in the Oct 25 merge
         'Access Control': (
             <svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -525,6 +578,26 @@ export default function SidebarLayout({
 
                     {/* Right Side Header Items - Reduced gap on mobile */}
                     <div className="flex flex-1 items-center justify-end gap-1.5 sm:gap-3">
+                        {devAccountSwitcher?.enabled && (
+                            <Dropdown>
+                                <Dropdown.Trigger>
+                                    <button type="button" onClick={() => setShowDevSwitcher(value => !value)} className="inline-flex h-[36px] sm:h-[42px] items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 sm:px-3 text-[10px] sm:text-xs font-black uppercase tracking-wide text-amber-800 shadow-sm hover:bg-amber-100" aria-label="Development account switcher">
+                                        <span>DEV</span>
+                                        <svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293 1.414 1.414-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+                                    </button>
+                                </Dropdown.Trigger>
+                                <Dropdown.Content align="right" width="96">
+                                    <div className="w-[min(24rem,90vw)] p-3" onClick={event => event.stopPropagation()}>
+                                        <div className="flex items-center justify-between gap-2"><div><p className="text-xs font-black uppercase tracking-wide text-amber-800">Development accounts</p><p className="text-[10px] text-gray-500">{devAccountSwitcher.currentUser?.name}</p></div>{devAccountSwitcher.isImpersonating && <button type="button" onClick={restoreDevelopmentAccount} className="text-[10px] font-bold text-indigo-700 hover:underline">Return</button>}</div>
+                                        <input value={devSearch} onChange={event => setDevSearch(event.target.value)} placeholder="Search name, position, department..." className="mt-3 w-full rounded border-gray-300 text-xs" />
+                                        <div className="mt-2 max-h-[min(28rem,65vh)] overflow-y-auto rounded border border-gray-200 bg-white">
+                                            {Object.entries(getDevelopmentGroups()).map(([groupName, targets]) => targets.length > 0 && <div key={groupName}><div className="sticky top-0 border-b border-gray-100 bg-gray-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-gray-500">{groupName}</div>{targets.map(target => <button type="button" key={target.id} onClick={() => switchDevelopmentAccount(target.id)} className="block w-full border-b border-gray-50 px-2 py-2 text-left text-xs hover:bg-amber-50"><span className="block font-bold text-gray-800">{target.name}</span><span className="block text-gray-500">{target.position?.name || 'No position'} · {target.department?.name || 'No department'}</span></button>)}</div>)}
+                                            {!devUsers.length && <p className="px-2 py-3 text-xs text-gray-500">No matching users.</p>}
+                                        </div>
+                                    </div>
+                                </Dropdown.Content>
+                            </Dropdown>
+                        )}
 
                         {/* 🔽 Wrapped Notifications Dropdown 🔽 */}
                         <div className="mobile-notification-fix">

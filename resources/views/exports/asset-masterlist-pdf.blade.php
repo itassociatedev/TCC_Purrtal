@@ -28,7 +28,10 @@
             @php
                 $photo = $asset->image_path;
                 if ($photo && !str_starts_with($photo, 'http')) $photo = asset('storage/' . ltrim($photo, '/'));
-                $person = $asset->user?->name ?: ($asset->assigned_personnel ?: 'Unassigned');
+                $people = $asset->accountableUsers->sortByDesc(fn ($user) => (int) ($user->pivot?->is_team_leader ?? false));
+                $person = $people->isNotEmpty()
+                    ? $people->map(fn ($user) => $user->name . (($user->pivot?->is_team_leader ?? false) ? ' (Team Leader)' : ''))->implode(', ')
+                    : ($asset->user?->name ?: ($asset->assigned_personnel ?: 'Unassigned'));
                 $value = $asset->total_value ?: (($asset->unit_value ?: 0) * ($asset->qty ?: 1));
             @endphp
             <tr>

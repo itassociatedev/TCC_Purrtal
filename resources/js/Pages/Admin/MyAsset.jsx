@@ -19,13 +19,15 @@ const getSafeStr = (val) => {
     return String(val).toLowerCase().trim();
 };
 
-export default function MyAssets({ auth, myAssets }) {
+export default function MyAssets({ auth, myAssets, personalAssets = [], sharedAssets = [] }) {
     const assetLinks = typeof getAssetLinks === 'function' ? getAssetLinks(auth) : []; 
     const departmentName = auth?.user?.department?.name || auth?.user?.department || 'Your Department';
     const isSuperAdmin = ['admin', 'super admin', 'director of corporate services and operations'].includes(String(auth?.user?.role?.name || auth?.user?.role || '').toLowerCase().trim());
     
     // SAFE DATA ARRAYS
     const rawAssets = getArray(myAssets);
+    const personalAssetList = getArray(personalAssets);
+    const sharedAssetList = getArray(sharedAssets);
 
     const getBranchValue = (branchData) => {
         if (!branchData) return '';
@@ -477,9 +479,21 @@ export default function MyAssets({ auth, myAssets }) {
                             </select>
                         </div>
                         
-                        <div className="w-36"><InputLabel value="Condition" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterCondition} onChange={e => setFilterCondition(e.target.value)}><option value="">All</option><option value="Good">Good</option><option value="Broken">Broken</option><option value="For Repair">For Repair</option><option value="Missing">Missing</option></select></div>
+                        <div className="w-36"><InputLabel value="Condition" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterCondition} onChange={e => setFilterCondition(e.target.value)}><option value="">All</option><option value="Good">Good</option><option value="Broken">Broken</option><option value="For Repair">For Repair</option><option value="Defective">Defective</option><option value="For checking">For checking</option><option value="Missing">Missing</option></select></div>
                         <div className="w-36"><InputLabel value="Branch" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterBranch} onChange={e => setFilterBranch(e.target.value)}><option value="">All Branches</option>{safeBranches.map((b, idx) => { if (!b) return null; const bn = typeof b === 'object' ? (b.name || '') : String(b); return bn ? <option key={idx} value={bn}>{bn}</option> : null; })}</select></div>
                         <div className="w-36"><InputLabel value="Category" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}><option value="">All Categories</option>{allCategories.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <div className="flex justify-end mb-3"><a href={route('staff.assets.accountability-pdf')} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-xs font-black uppercase tracking-wider text-white hover:bg-indigo-700">View / Print Accountability PDF</a></div>
+                        {[['Personal Accountability', personalAssetList], ['Shared Accountability', sharedAssetList]].map(([title, items]) => (
+                            <section key={title} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                                <div className="flex justify-between items-center mb-3"><h3 className="font-black text-gray-900">{title}</h3><span className="text-xs font-bold text-indigo-600">{items.length} asset{items.length === 1 ? '' : 's'}</span></div>
+                                <div className="max-h-36 overflow-y-auto divide-y divide-gray-100">
+                                    {items.length ? items.map(asset => <button key={asset.id} type="button" onClick={() => openViewModal(asset)} className="w-full text-left py-2 text-sm hover:bg-indigo-50 px-2 rounded"><span className="font-bold text-indigo-700">{asset.name}</span><span className="ml-2 text-xs text-gray-500">{asset.asset_tag}</span></button>) : <p className="text-sm text-gray-500 py-2">No assets in this section.</p>}
+                                </div>
+                            </section>
+                        ))}
                     </div>
 
                     <div className="flex items-center gap-3 mb-6 mt-2 border-b border-gray-200 pb-4">

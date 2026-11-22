@@ -21,7 +21,9 @@ use App\Models\AssetImportItem;
 use App\Exports\AssetTemplateExport;
 
 use App\Models\AssetPhotoSubmission;
+use App\Models\OrgChartMember;
 use App\Support\AssetAccess;
+use Illuminate\Support\Str;
 
 class AssetController extends Controller
 {
@@ -31,18 +33,30 @@ class AssetController extends Controller
         if (!AssetAccess::canViewOverview($user)) return redirect()->route('admin.assets.entry');
 
         $isIt = AssetAccess::isIt($user);
+        $orgLeaderNames = OrgChartMember::query()->get(['name', 'position'])
+            ->filter(fn ($member) => preg_match('/(team leader|supervisor|manager|head|director|chief|president)/i', $member->position ?? ''))
+            ->pluck('name')
+            ->map(fn ($name) => strtolower(trim($name)));
+        $leaderUserIds = User::query()->get(['id', 'name'])
+            ->filter(fn ($employee) => $orgLeaderNames->contains(strtolower(trim($employee->name))))
+            ->pluck('id')
+            ->values()
+            ->all();
+
+        $rejectedPhotos = AssetPhotoSubmission::with(['asset:id,name,asset_tag', 'submitter:id,name', 'reviewer:id,name'])
+            ->where('status', 'rejected');
+        if (!AssetAccess::canReviewPhotos($user) && !AssetAccess::isFullManager($user)) {
+            $rejectedPhotos->where('submitted_by', $user->id);
+        }
 
         return Inertia::render('Admin/Assets', [
-            'assets' => Asset::with(['user', 'supplier', 'accountableUsers'])->latest()->get(),
+            'assets' => Asset::with(['user', 'supplier', 'accountableUsers.department', 'accountableUsers.position'])->latest()->get(),
             'suppliers' => Supplier::where('status', 'Active')->orderBy('name')->get(['id', 'name']),
-            'users' => User::with(['department', 'position'])->orderBy('name')->get(),
+            'users' => User::with(['department', 'position', 'branches'])->orderBy('name')->get(),
+            'leaderUserIds' => $leaderUserIds,
             'branches' => Branch::all(),
             'departments' => Department::all(),
-            'rejectedPhotoSubmissions' => AssetPhotoSubmission::with('asset:id,name,asset_tag')
-                ->where('submitted_by', $user->id)
-                ->where('status', 'rejected')
-                ->latest()
-                ->get(),
+            'rejectedPhotoSubmissions' => $rejectedPhotos->latest()->get(),
             'canReviewPhotos' => $isIt,
         ]);
     }
@@ -56,6 +70,11 @@ class AssetController extends Controller
             'suppliers' => Supplier::where('status', 'Active')->orderBy('name')->get(['id', 'name']),
             'branches' => Branch::all(),
             'departments' => Department::all(),
+            'rejectedPhotoSubmissions' => AssetPhotoSubmission::with(['asset:id,name,asset_tag', 'submitter:id,name', 'reviewer:id,name'])
+                ->where('submitted_by', $user->id)
+                ->where('status', 'rejected')
+                ->latest()
+                ->get(),
         ]);
     }
 
@@ -108,8 +127,6 @@ class AssetController extends Controller
 
         // 泙 HANDLE IMAGE SAVE
         if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('assets/images', 'public');
-            $asset->image_path = $path;
         }
 
         if (!empty($asset->purchase_date) && !empty($asset->warranty_expiration)) {
@@ -121,6 +138,16 @@ class AssetController extends Controller
 
         $asset->total_value = ($asset->unit_value * $asset->qty);
         $asset->save();
+
+        if ($request->hasFile('image')) {
+            $pendingPath = 'asset-photos/pending/' . Str::uuid() . '.' . $request->file('image')->extension();
+            Storage::disk('local')->put($pendingPath, $request->file('image')->get());
+            AssetPhotoSubmission::create([
+                'asset_id' => $asset->id,
+                'submitted_by' => $request->user()->id,
+                'temporary_path' => $pendingPath,
+            ]);
+        }
 
         return back()->with('success', 'Asset created successfully.');
     }
@@ -173,6 +200,19 @@ class AssetController extends Controller
         $asset->total_value = ($asset->unit_value * $asset->qty);
         $asset->save();
 
+        // Keep the legacy single-assignee transfer form in sync with the
+        // many-to-many accountability records. Shared assignments use the
+        // dedicated accountability editor.
+        if ($request->has('user_id')) {
+            $assignedId = $request->input('user_id') ? (int) $request->input('user_id') : null;
+            $asset->accountability_type = 'personal';
+            $asset->user_id = $assignedId;
+            $asset->assigned_personnel = $assignedId ? User::find($assignedId)?->name : null;
+            $asset->asset_status = $assignedId ? 'Assigned' : 'In Storage';
+            $asset->save();
+            $asset->accountableUsers()->sync($assignedId ? [$assignedId => ['is_team_leader' => false, 'accountability_type' => 'personal']] : []);
+        }
+
         return back()->with('success', 'Asset updated successfully.');
     }
 
@@ -191,20 +231,43 @@ class AssetController extends Controller
 
     public function bulkTransfer(Request $request)
     {
-        $request->validate([
+        $data = $request->validate([
             'ids' => 'required|array',
             'ids.*' => 'exists:assets,id',
             'user_id' => 'nullable|exists:users,id',
+            'accountability_type' => 'nullable|in:personal,shared',
+            'user_ids' => 'nullable|array',
+            'user_ids.*' => 'integer|exists:users,id',
+            'team_leader_id' => 'nullable|integer|exists:users,id',
             'branch' => 'nullable|string|max:255',
             'department' => 'nullable|string|max:255',
         ]);
 
-        Asset::whereIn('id', $request->ids)->update([
-            'user_id' => $request->user_id ?: null,
-            'branch' => $request->branch ?: null,
-            'department' => $request->department ?: null,
-            'asset_status' => 'Assigned',
-        ]);
+        $ids = array_values(array_unique(array_map('intval', $data['user_ids'] ?? [])));
+        if (!$ids && !empty($data['user_id'])) $ids = [(int) $data['user_id']];
+        $type = $data['accountability_type'] ?? 'personal';
+        if ($type === 'personal') $ids = array_slice($ids, 0, 1);
+        $leader = !empty($data['team_leader_id']) ? (int) $data['team_leader_id'] : ($type === 'personal' ? ($ids[0] ?? null) : null);
+        if ($type === 'shared' && (!$ids || !$leader)) {
+            return back()->withErrors(['team_leader_id' => 'Select at least one employee and a team leader for shared accountability.']);
+        }
+        if ($leader && !in_array($leader, $ids, true)) $ids[] = $leader;
+
+        foreach (Asset::whereIn('id', $data['ids'])->get() as $asset) {
+            $asset->update([
+                'user_id' => $leader,
+                'assigned_personnel' => $leader ? User::find($leader)?->name : null,
+                'branch' => $data['branch'] ?? null,
+                'department' => $data['department'] ?? null,
+                'accountability_type' => $type,
+                'asset_status' => $ids ? 'Assigned' : 'In Storage',
+            ]);
+            $pivotData = array_fill_keys($ids, ['is_team_leader' => false, 'accountability_type' => $type]);
+            $asset->accountableUsers()->sync($pivotData);
+            if ($leader && in_array($leader, $ids, true)) {
+                $asset->accountableUsers()->updateExistingPivot($leader, ['is_team_leader' => true, 'accountability_type' => $type]);
+            }
+        }
 
         // 🟢 RECORD ACTION TO SYSTEM LOGS
         try {
@@ -244,14 +307,28 @@ class AssetController extends Controller
             'user_ids' => ['array'],
             'user_ids.*' => ['integer', 'exists:users,id'],
             'team_leader_id' => ['nullable', 'integer', 'exists:users,id'],
+            'branch' => ['nullable', 'string', 'max:255'],
+            'department' => ['nullable', 'string', 'max:255'],
+            'area' => ['nullable', 'string', 'max:255'],
         ]);
 
         $ids = array_values(array_unique(array_map('intval', $data['user_ids'] ?? [])));
-        $leader = $data['team_leader_id'] ?? ($ids[0] ?? null);
+        if ($data['type'] === 'personal') {
+            $ids = array_slice($ids, 0, 1);
+            $leader = $ids[0] ?? null;
+        } else {
+            if (count($ids) < 1) return back()->withErrors(['user_ids' => 'Select at least one employee for shared accountability.']);
+            $leader = !empty($data['team_leader_id']) ? (int) $data['team_leader_id'] : null;
+            if (!$leader) return back()->withErrors(['team_leader_id' => 'Select the team leader for shared accountability.']);
+            if (!in_array($leader, $ids, true)) $ids[] = $leader;
+        }
         $asset->update([
             'accountability_type' => $data['type'],
             'user_id' => $leader,
             'assigned_personnel' => $leader ? User::find($leader)?->name : null,
+            'branch' => $data['branch'] ?? $asset->branch,
+            'department' => $data['department'] ?? $asset->department,
+            'area' => $data['area'] ?? $asset->area,
             'asset_status' => $ids ? 'Assigned' : 'In Storage',
         ]);
         // Sync pivot with accountability_type included
@@ -698,7 +775,7 @@ class AssetController extends Controller
         $ids = collect($request->input('ids', []))->map(fn ($id) => (int) $id)->filter()->unique()->values();
         abort_if($ids->isEmpty(), 422, 'No assets were selected for the PDF.');
 
-        $assets = Asset::with(['user', 'supplier'])->whereIn('id', $ids)->orderBy('asset_tag')->get();
+        $assets = Asset::with(['user', 'supplier', 'accountableUsers'])->whereIn('id', $ids)->orderBy('asset_tag')->get();
 
         return response()->view('exports.asset-masterlist-pdf', [
             'assets' => $assets,

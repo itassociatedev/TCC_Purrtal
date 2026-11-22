@@ -38,6 +38,7 @@ use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\Admin\AttendanceSettingsController;
+use App\Http\Controllers\DevelopmentAccountSwitcherController;
 
 Route::get('/', function () {
     return Inertia::render('Auth/Login', []);
@@ -48,11 +49,18 @@ Route::post('/forgot-password-notify', [AuthenticatedSessionController::class, '
 
 Route::middleware(['auth', 'verified'])->group(function () {
 
+    Route::middleware('throttle:60,1')->prefix('dev/account-switcher')->name('dev.account-switcher.')->group(function () {
+        Route::get('/users', [DevelopmentAccountSwitcherController::class, 'users'])->name('users');
+        Route::post('/switch/{target}', [DevelopmentAccountSwitcherController::class, 'switch'])->name('switch');
+        Route::post('/restore', [DevelopmentAccountSwitcherController::class, 'restore'])->name('restore');
+    });
+
     // --- HR MODULE (User Requests) ---
     Route::get('/hr-module', [HrRequestController::class, 'index'])->name('hr.index');
     Route::post('/hr-module/request', [HrRequestController::class, 'store'])->name('hr.store');
 
     Route::get('/my-assets', [\App\Http\Controllers\Staff\MyAssetController::class, 'index'])->name('staff.assets.index');
+    Route::get('/my-assets/accountability-pdf', [\App\Http\Controllers\Staff\MyAssetController::class, 'accountabilityPdf'])->name('staff.assets.accountability-pdf');
     Route::post('/asset-photos', [\App\Http\Controllers\AssetPhotoController::class, 'submit'])->name('asset-photos.submit');
     Route::get('/asset-photos/capture', [\App\Http\Controllers\AssetPhotoController::class, 'capture'])->name('asset-photos.capture');
     Route::get('/asset-photos/{submission}/preview', [\App\Http\Controllers\AssetPhotoController::class, 'preview'])->name('asset-photos.preview');

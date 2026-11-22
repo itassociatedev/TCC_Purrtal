@@ -23,8 +23,14 @@ class AssetAccess
 
     public static function isIt($user): bool
     {
-        return self::value($user?->department?->name) === 'it'
-            || str_contains(self::value($user?->role?->name), 'it');
+        $department = self::value($user?->department?->name);
+        $role = self::value($user?->role?->name);
+        $position = self::value($user?->position?->name);
+
+        return $department === 'it'
+            || str_contains($department, 'information technology')
+            || str_contains($role, 'information technology')
+            || preg_match('/(^|\s)it(\s|$)/i', $role . ' ' . $position) === 1;
     }
 
     public static function isItIntern($user): bool

@@ -54,6 +54,9 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    // Development-only account allowed to use the local account switcher.
+    'dev_switcher_email' => env('DEV_ACCOUNT_SWITCHER_EMAIL', 'itassociate@catclinic.ph'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

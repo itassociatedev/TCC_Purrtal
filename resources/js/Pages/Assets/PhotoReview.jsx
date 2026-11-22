@@ -1,11 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
+import { getAssetLinks } from '@/Config/navigation';
 import Modal from '@/Components/Modal';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
 
 export default function PhotoReview({ pendingSubmissions, rejectedSubmissions, pendingCount }) {
+    const { auth } = usePage().props;
+    const assetLinks = getAssetLinks(auth);
     const [tab, setTab] = useState('pending');
     const [selected, setSelected] = useState([]);
     const [rejecting, setRejecting] = useState(false);
@@ -22,7 +25,7 @@ export default function PhotoReview({ pendingSubmissions, rejectedSubmissions, p
         router.post(route('asset-photos.bulk-decide'), { ids, decision, reason: message }, { preserveScroll: true, onSuccess: () => setSelected([]) });
     };
 
-    return <SidebarLayout activeModule="Assets" header={<h2 className="font-semibold text-xl text-gray-800">Asset Photo Review</h2>}>
+    return <SidebarLayout activeModule="Assets" sidebarLinks={assetLinks} header={<h2 className="font-semibold text-xl text-gray-800">Asset Photo Review</h2>}>
         <Head title="Asset Photo Review" />
         <div className="min-h-[calc(100dvh-8rem)] pb-[calc(env(safe-area-inset-bottom)+2rem)] py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">

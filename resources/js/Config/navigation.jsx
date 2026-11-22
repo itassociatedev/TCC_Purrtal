@@ -778,7 +778,10 @@ export const getAssetLinks = (auth) => {
     const fullManagerNames = ['ralph ranie saura', 'reuben mikko s. capuno', 'patrick mimay', 'robert liton', 'donald rey saberon'];
     const isFullManager = isSuperAdmin || fullManagerNames.includes(userName);
     const isAudit = userRole.includes('audit') || userDepartment.includes('audit');
-    const isIT = userDepartment === 'it' || userRole.includes('it');
+    const isIT = userDepartment === 'it'
+        || userDepartment.includes('information technology')
+        || userRole.includes('information technology')
+        || /(^|\s)it(\s|$)/i.test(`${userRole} ${userPosition}`);
     const isItIntern = isIT && (userRole.includes('intern') || userRole.includes('trainee') || userPosition.includes('intern') || userPosition.includes('trainee'));
     const canEnterAssets = isFullManager || isIT || ['inventory', 'procurement', 'audit'].some(value => userDepartment.includes(value) || userRole.includes(value));
 
@@ -803,9 +806,8 @@ export const getAssetLinks = (auth) => {
     } else if (canEnterAssets) {
         links.push({
             label: 'Asset Entry',
-            href: '#',
+            href: route('admin.assets.entry'),
             active: false,
-            isAction: true, 
         });
     }
 
@@ -820,7 +822,7 @@ export const getAssetLinks = (auth) => {
     if (canEnterAssets) {
         links.push({
             label: 'Asset Photo Capture',
-            href: isFullManager ? route('asset-photos.capture') : route('admin.assets.entry'),
+            href: route('asset-photos.capture'),
             active: route().current('asset-photos.capture'),
         });
     }

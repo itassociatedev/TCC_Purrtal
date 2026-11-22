@@ -27,7 +27,7 @@ class AdminMiddleware
         $module = $this->resolveAdminModule($request);
 
         if ($module !== null) {
-            if ($this->userCanAccessAdminModule($user, $module)) {
+            if ($this->userCanAccessAdminModule($user, $module, $request)) {
                 return $next($request);
             }
 
@@ -43,7 +43,7 @@ class AdminMiddleware
             ->with('error', 'Unauthorized access. Admin privileges are required to access this module.');
     }
 
-    private function userCanAccessAdminModule($user, ?string $module): bool
+    private function userCanAccessAdminModule($user, ?string $module, Request $request): bool
     {
         if ($user->canAccessModule($module)) {
             return true;

@@ -140,7 +140,8 @@ class User extends Authenticatable
     public function accountableAssets(): BelongsToMany
     {
         return $this->belongsToMany(Asset::class, 'asset_user')
-            ->withPivot('is_team_leader')
+            ->withPivot('is_team_leader', 'accountability_type')
+            ->orderByPivot('is_team_leader', 'desc')
             ->withTimestamps();
     }
 
