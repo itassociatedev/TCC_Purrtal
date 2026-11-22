@@ -36,8 +36,8 @@ class AuditObserver
             // Duty Meal Module
             \App\Models\DutyMeal::class => 'Duty Meal Module',
 
-            // 🟢 Asset Management Module
-            \App\Models\Asset::class => 'Asset Management',
+            // Asset Management Module
+            \App\Models\Asset::class => 'Asset Management Module',
 
             default => 'System',
         };

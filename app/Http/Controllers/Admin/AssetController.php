@@ -100,20 +100,6 @@ class AssetController extends Controller
         $asset->total_value = ($asset->unit_value * $asset->qty);
         $asset->save();
 
-        // 🟢 RECORD ACTION TO SYSTEM LOGS
-        try {
-            SystemLog::create([
-                'user_id' => Auth::id(),
-                'action' => 'Create',
-                'module' => 'Accountability Management Module',
-                'description' => "Created new asset: {$asset->asset_tag} ({$asset->name}).",
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent()
-            ]);
-        } catch (\Exception $e) {
-            Log::info("Asset created by User " . Auth::id() . " - Tag: {$asset->asset_tag}");
-        }
-
         return back()->with('success', 'Asset created successfully.');
     }
 
@@ -165,20 +151,6 @@ class AssetController extends Controller
         $asset->total_value = ($asset->unit_value * $asset->qty);
         $asset->save();
 
-        // 🟢 RECORD ACTION TO SYSTEM LOGS
-        try {
-            SystemLog::create([
-                'user_id' => Auth::id(),
-                'action' => 'Update',
-                'module' => 'Accountability Management Module',
-                'description' => "Updated asset: {$asset->asset_tag}.",
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent()
-            ]);
-        } catch (\Exception $e) {
-            Log::info("Asset updated by User " . Auth::id() . " - Tag: {$asset->asset_tag}");
-        }
-
         return back()->with('success', 'Asset updated successfully.');
     }
 
@@ -191,20 +163,6 @@ class AssetController extends Controller
         
         $assetTag = $asset->asset_tag; // Save tag for the log before object is deleted
         $asset->delete();
-
-        // 🟢 RECORD ACTION TO SYSTEM LOGS (Using request helper)
-        try {
-            SystemLog::create([
-                'user_id' => Auth::id(),
-                'action' => 'Delete',
-                'module' => 'Accountability Management Module',
-                'description' => "Deleted asset: {$assetTag}.",
-                'ip_address' => request()->ip(),
-                'user_agent' => request()->userAgent()
-            ]);
-        } catch (\Exception $e) {
-            Log::info("Asset deleted by User " . Auth::id() . " - Tag: {$assetTag}");
-        }
 
         return back()->with('success', 'Asset deleted successfully.');
     }
