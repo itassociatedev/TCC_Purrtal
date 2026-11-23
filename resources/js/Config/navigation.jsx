@@ -813,9 +813,9 @@ export const getAssetLinks = (auth) => {
 
     if (isIT) {
         links.push({
-            label: 'Asset Photo Review',
-            href: route('asset-photos.review'),
-            active: route().current('asset-photos.review'),
+            label: 'Asset Review',
+            href: route('asset-photo-review.index'),
+            active: route().current('asset-photo-review.*'),
         });
     }
 

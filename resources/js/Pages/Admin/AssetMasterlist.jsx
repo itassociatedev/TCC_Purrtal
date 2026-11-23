@@ -225,7 +225,7 @@ export default function AssetMasterlist({ auth, assets }) {
     const stats = useMemo(() => {
         let totalItems = 0; let totalValue = 0; let needsMaintenance = 0; let totalCurrentValue = 0; let totalAccumulatedDepreciation = 0;
         const branchBreakdown = {};
-        const conditionBreakdown = { 'Good': 0, 'Broken': 0, 'For Repair': 0, 'Missing': 0 };
+        const conditionBreakdown = { 'Good': 0, 'Broken': 0, 'For Repair': 0, 'Defective': 0, 'For checking': 0, 'Missing': 0 };
         const uniquePersonnel = new Set(); // 🟢 PERSONNEL SET APPLIED HERE
 
         safeBranches.forEach(b => {
@@ -543,7 +543,7 @@ export default function AssetMasterlist({ auth, assets }) {
                             </select>
                         </div>
                         
-                        <div className="w-36"><InputLabel value="Condition" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterCondition} onChange={e => setFilterCondition(e.target.value)}><option value="">All</option><option value="Good">Good</option><option value="Broken">Broken</option><option value="For Repair">For Repair</option><option value="Missing">Missing</option></select></div>
+                        <div className="w-36"><InputLabel value="Condition" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterCondition} onChange={e => setFilterCondition(e.target.value)}><option value="">All</option><option value="Good">Good</option><option value="Broken">Broken</option><option value="For Repair">For Repair</option><option value="Defective">Defective</option><option value="For checking">For checking</option><option value="Missing">Missing</option></select></div>
                         <div className="w-36"><InputLabel value="Branch" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterBranch} onChange={e => setFilterBranch(e.target.value)}><option value="">All Branches</option>{safeBranches.map((b, idx) => { if (!b) return null; const bn = typeof b === 'object' ? (b.name || '') : String(b); return bn ? <option key={idx} value={bn}>{bn}</option> : null; })}</select></div>
                         <div className="w-36"><InputLabel value="Category" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}><option value="">All Categories</option>{categories.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                         <div className="w-36"><InputLabel value="Department" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterDept} onChange={e => setFilterDept(e.target.value)}><option value="">All Depts</option>{departments.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
@@ -639,7 +639,15 @@ export default function AssetMasterlist({ auth, assets }) {
                                                 {visibleColumns.status && <td className="px-4 py-4 font-black whitespace-nowrap text-gray-900">{asset?.asset_status || 'New'}</td>}
                                                 {visibleColumns.condition && (
                                                     <td className="px-4 py-4 whitespace-nowrap">
-                                                        <span className={`px-2.5 py-1 inline-flex text-xs font-black uppercase tracking-widest rounded border ${asset.condition === 'Good' ? 'bg-green-50 text-green-700 border-green-200' : asset.condition === 'Broken' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>{asset.condition || 'Unknown'}</span>
+                                                        <span className={`px-2.5 py-1 inline-flex text-xs font-black uppercase tracking-widest rounded border ${
+                                                            asset.condition === 'Good' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                            asset.condition === 'Broken' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                            asset.condition === 'For Repair' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                            asset.condition === 'Defective' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                            asset.condition === 'For checking' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                            asset.condition === 'Missing' ? 'bg-gray-100 text-gray-700 border-gray-300' :
+                                                            'bg-yellow-50 text-yellow-700 border-yellow-200'
+                                                        }`}>{asset.condition || 'Unknown'}</span>
                                                     </td>
                                                 )}
                                                 {visibleColumns.assignedPersonnel && (
@@ -758,11 +766,13 @@ export default function AssetMasterlist({ auth, assets }) {
                             </div>
                             <div className="flex flex-col items-end gap-2">
                                 <span className={`px-4 py-1.5 inline-flex text-[10px] font-black uppercase tracking-widest rounded-full border ${
-                                    viewingAsset?.condition === 'Good' ? 'bg-green-50 text-green-700 border-green-200' : 
-                                    viewingAsset?.condition === 'Broken' ? 'bg-red-50 text-red-700 border-red-200' : 
-                                    viewingAsset?.condition === 'For Repair' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
-                                    viewingAsset?.condition === 'Missing' ? 'bg-gray-100 text-gray-700 border-gray-300' : 
-                                    'bg-gray-50 text-gray-700 border-gray-200'
+                                    viewingAsset?.condition === 'Good' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                    viewingAsset?.condition === 'Broken' ? 'bg-red-50 text-red-700 border-red-200' :
+                                    viewingAsset?.condition === 'For Repair' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                    viewingAsset?.condition === 'Defective' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                    viewingAsset?.condition === 'For checking' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                    viewingAsset?.condition === 'Missing' ? 'bg-gray-100 text-gray-700 border-gray-300' :
+                                    'bg-yellow-50 text-yellow-700 border-yellow-200'
                                 }`}>
                                     {viewingAsset?.condition || 'Unknown'}
                                 </span>

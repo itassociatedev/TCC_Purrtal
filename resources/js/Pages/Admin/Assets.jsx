@@ -1186,11 +1186,13 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                                 {visibleColumns.condition && (
                                                     <td className="px-4 py-4 whitespace-nowrap">
                                                         <span className={`px-2.5 py-1 inline-flex text-[10px] font-black tracking-widest uppercase rounded border ${
-                                                            asset?.condition === 'Good' ? 'bg-green-50 text-green-700 border-green-200' : 
-                                                            asset?.condition === 'Broken' ? 'bg-red-50 text-red-700 border-red-200' : 
-                                                            asset?.condition === 'For Repair' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
-                                                            asset?.condition === 'Missing' ? 'bg-gray-100 text-gray-700 border-gray-300' : 
-                                                            'bg-gray-50 text-gray-700 border-gray-200'
+                                                            asset?.condition === 'Good' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                            asset?.condition === 'Broken' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                            asset?.condition === 'For Repair' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                            asset?.condition === 'Defective' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                            asset?.condition === 'For checking' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                            asset?.condition === 'Missing' ? 'bg-gray-100 text-gray-700 border-gray-300' :
+                                                            'bg-yellow-50 text-yellow-700 border-yellow-200'
                                                         }`}>
                                                             {asset?.condition || 'Unknown'}
                                                         </span>
@@ -1524,11 +1526,13 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                             </div>
                             <div className="flex flex-col items-end gap-2">
                                 <span className={`px-4 py-1.5 inline-flex text-[10px] font-black uppercase tracking-widest rounded-full border ${
-                                    viewingAsset?.condition === 'Good' ? 'bg-green-50 text-green-700 border-green-200' : 
-                                    viewingAsset?.condition === 'Broken' ? 'bg-red-50 text-red-700 border-red-200' : 
-                                    viewingAsset?.condition === 'For Repair' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 
-                                    viewingAsset?.condition === 'Missing' ? 'bg-gray-100 text-gray-700 border-gray-300' : 
-                                    'bg-gray-50 text-gray-700 border-gray-200'
+                                    viewingAsset?.condition === 'Good' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                    viewingAsset?.condition === 'Broken' ? 'bg-red-50 text-red-700 border-red-200' :
+                                    viewingAsset?.condition === 'For Repair' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                    viewingAsset?.condition === 'Defective' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                    viewingAsset?.condition === 'For checking' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                    viewingAsset?.condition === 'Missing' ? 'bg-gray-100 text-gray-700 border-gray-300' :
+                                    'bg-yellow-50 text-yellow-700 border-yellow-200'
                                 }`}>
                                     {viewingAsset?.condition || 'Unknown'}
                                 </span>
@@ -1934,19 +1938,15 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                                 <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded text-sm">{item.asset?.asset_tag}</span>
                                                 <span className="font-bold text-gray-900">{item.asset?.name}</span>
                                             </div>
-                                            <p className="text-sm text-gray-600">{item.rejection_reason || 'No reason provided'}</p>
+                                            <p className="text-sm text-gray-600">{item.rejection_reason || 'No rejection message was provided.'}</p>
                                             <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
                                                 <span>Submitted by: {item.submitter?.name || '—'}</span>
                                                 <span>Submitted: {safeFormatDate(item.submitted_at || item.created_at)}</span>
                                                 <span>Reviewed: {safeFormatDate(item.reviewed_at)}</span>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <img
-                                                src={item.temporary_path ? route('asset-photos.preview', item.id) : ''}
-                                                alt="Rejected photo"
-                                                className="h-16 w-24 object-cover rounded border border-red-300"
-                                            />
+                                        <div className="flex h-16 w-24 items-center justify-center rounded border border-red-200 bg-white px-2 text-center text-[10px] text-gray-500">
+                                            Rejected image deleted
                                         </div>
                                     </div>
                                 </div>

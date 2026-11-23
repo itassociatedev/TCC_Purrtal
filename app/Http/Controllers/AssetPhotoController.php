@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Asset;
 use App\Models\AssetPhotoSubmission;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use App\Services\OneDriveAssetPhotoService;
@@ -16,16 +17,26 @@ class AssetPhotoController extends Controller
     public function capture(Request $request)
     {
         abort_unless(AssetAccess::canEnter($request->user()), 403);
+        $user = $request->user();
         $assets = Asset::select('id', 'name', 'asset_tag', 'image_path')->orderBy('asset_tag')->get();
         $pendingAssetIds = AssetPhotoSubmission::where('status', 'pending')->pluck('asset_id');
         $requestedAsset = $assets->firstWhere('id', (int) $request->query('asset_id'));
         $nextAsset = $requestedAsset && blank($requestedAsset->image_path) && !$pendingAssetIds->contains($requestedAsset->id)
             ? $requestedAsset
             : $assets->first(fn ($asset) => blank($asset->image_path) && !$pendingAssetIds->contains($asset->id));
+
+        // Entry users see only their own rejected submissions here. Reviewers
+        // can access the broader history from the separate review screen.
+        $rejectedQuery = AssetPhotoSubmission::with(['asset:id,name,asset_tag', 'submitter:id,name', 'reviewer:id,name'])
+            ->where('status', 'rejected');
+        if (!AssetAccess::isFullManager($user)) {
+            $rejectedQuery->where('submitted_by', $user->id);
+        }
+
         return Inertia::render('Assets/PhotoCapture', [
             'assets' => $assets,
             'nextAssetId' => $nextAsset?->id,
-            'rejectedSubmissions' => AssetPhotoSubmission::with(['asset:id,name,asset_tag', 'submitter:id,name', 'reviewer:id,name'])->where('submitted_by', $request->user()->id)->where('status', 'rejected')->latest()->get(),
+            'rejectedSubmissions' => $rejectedQuery->latest()->get(),
         ]);
     }
 
@@ -34,10 +45,17 @@ class AssetPhotoController extends Controller
         $user = $request->user();
         abort_unless(AssetAccess::canReviewPhotos($user), 403);
 
+        // Rejected history visibility: IT interns + full-access see all; others see only own
+        $rejectedQuery = AssetPhotoSubmission::with(['asset:id,name,asset_tag', 'submitter:id,name', 'reviewer:id,name'])
+            ->where('status', 'rejected');
+        if (!AssetAccess::isItIntern($user) && !AssetAccess::isFullManager($user)) {
+            $rejectedQuery->where('submitted_by', $user->id);
+        }
+
         return Inertia::render('Assets/PhotoReview', [
             'pendingCount' => AssetPhotoSubmission::where('status', 'pending')->count(),
             'pendingSubmissions' => AssetPhotoSubmission::with(['asset:id,name,asset_tag', 'submitter:id,name'])->where('status', 'pending')->latest()->paginate(25),
-            'rejectedSubmissions' => AssetPhotoSubmission::with(['asset:id,name,asset_tag', 'submitter:id,name', 'reviewer:id,name'])->where('status', 'rejected')->latest()->paginate(25),
+            'rejectedSubmissions' => $rejectedQuery->latest()->paginate(25),
         ]);
     }
 
@@ -68,8 +86,8 @@ class AssetPhotoController extends Controller
         if ($error) return back()->withErrors(['photo' => $error]);
 
         return back()->with('success', $data['decision'] === 'approved'
-            ? (config('services.onedrive.enabled') ? 'Photo approved and uploaded to OneDrive.' : 'Photo approved and saved locally while OneDrive integration is on hold.')
-            : 'Photo rejected and returned to the submitter.');
+            ? (config('services.onedrive.enabled') ? 'Photo approved and uploaded to OneDrive.' : 'Photo approved and saved locally.')
+            : 'Photo rejected.');
     }
 
     public function bulkDecide(Request $request)
@@ -103,7 +121,21 @@ class AssetPhotoController extends Controller
     private function applyDecision(AssetPhotoSubmission $submission, string $decision, ?string $reason, int $reviewerId): ?string
     {
         if ($decision === 'rejected') {
-            $submission->update(['status' => 'rejected', 'rejection_reason' => $reason, 'reviewed_by' => $reviewerId, 'reviewed_at' => now()]);
+            // Rejected originals are not needed for history; retain only the
+            // submission metadata and optional reviewer message in the DB.
+            if (filled($submission->temporary_path) && Storage::disk('local')->exists($submission->temporary_path)) {
+                if (!Storage::disk('local')->delete($submission->temporary_path)) {
+                    return 'The rejected photo could not be deleted from temporary storage. It remains pending; please retry.';
+                }
+            }
+
+            $submission->update([
+                'status' => 'rejected',
+                'rejection_reason' => $reason,
+                'reviewed_by' => $reviewerId,
+                'reviewed_at' => now(),
+                'temporary_path' => '',
+            ]);
             return null;
         }
 
@@ -125,8 +157,14 @@ class AssetPhotoController extends Controller
         }
 
         $asset->update(['image_path' => $uploaded['url'], 'photo_path' => $uploaded['url']]);
-        Storage::disk('local')->delete($submission->temporary_path);
-        $submission->update(['status' => 'approved', 'reviewed_by' => $reviewerId, 'reviewed_at' => now(), 'onedrive_item_id' => $uploaded['item_id'], 'onedrive_url' => $uploaded['url']]);
+        if (filled($submission->temporary_path) && Storage::disk('local')->exists($submission->temporary_path)
+            && !Storage::disk('local')->delete($submission->temporary_path)) {
+            Log::warning('Approved asset photo uploaded but temporary file could not be deleted.', [
+                'submission_id' => $submission->id,
+                'asset_id' => $asset->id,
+            ]);
+        }
+        $submission->update(['status' => 'approved', 'reviewed_by' => $reviewerId, 'reviewed_at' => now(), 'onedrive_item_id' => $uploaded['item_id'], 'onedrive_url' => $uploaded['url'], 'temporary_path' => '']);
         return null;
     }
 
@@ -171,6 +209,7 @@ class AssetPhotoController extends Controller
     {
         $user = $request->user();
         abort_unless(AssetAccess::canReviewPhotos($user) || (AssetAccess::canEnter($user) && $submission->submitted_by === $user->id), 403);
+        abort_unless($submission->status === 'pending' && filled($submission->temporary_path), 404);
         abort_unless(Storage::disk('local')->exists($submission->temporary_path), 404);
         return response()->file(Storage::disk('local')->path($submission->temporary_path));
     }

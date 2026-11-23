@@ -93,6 +93,7 @@ class HandleInertiaRequests extends Middleware
                     'acl_modules' => $permissions,
                     'acl_permissions' => $this->getAclPermissionLevels($user),
                     'has_admin_acl_access' => $this->userHasAdminModuleAccess($user),
+                    'asset_permissions' => $this->getAssetPermissions($user),
                 ] : null,
 
                 // FIX: Only attempt to fetch notifications if $user is NOT null!
@@ -222,5 +223,47 @@ class HandleInertiaRequests extends Middleware
         ];
 
         return count(array_intersect($this->getPermissionStrings($user), $adminModuleKeys)) > 0;
+    }
+
+    /**
+     * Get asset management permissions for the user
+     */
+    protected function getAssetPermissions($user): array
+    {
+        if (!$user) {
+            return [
+                'canViewAssetManagement' => false,
+                'canAddAssetRecords' => false,
+                'canManageAssetRecords' => false,
+                'canReviewAssetPhotos' => false,
+                'canViewRejectedAssetPhotos' => false,
+            ];
+        }
+
+        $role = $user->role;
+        if (!$role) {
+            return [
+                'canViewAssetManagement' => false,
+                'canAddAssetRecords' => false,
+                'canManageAssetRecords' => false,
+                'canReviewAssetPhotos' => false,
+                'canViewRejectedAssetPhotos' => false,
+            ];
+        }
+
+        // Check ACL permissions for asset management
+        $aclPermission = $role->adminAcls()
+            ->whereRaw('LOWER(TRIM(module)) = ?', ['asset_management'])
+            ->first();
+
+        $level = $aclPermission ? strtolower(trim($aclPermission->permission_level)) : 'no_access';
+
+        return [
+            'canViewAssetManagement' => in_array($level, ['full', 'edit', 'view'], true),
+            'canAddAssetRecords' => in_array($level, ['full', 'edit'], true),
+            'canManageAssetRecords' => in_array($level, ['full', 'edit'], true),
+            'canReviewAssetPhotos' => in_array($level, ['full', 'edit'], true),
+            'canViewRejectedAssetPhotos' => in_array($level, ['full', 'edit', 'view'], true),
+        ];
     }
 }

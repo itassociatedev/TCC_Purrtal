@@ -61,12 +61,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/my-assets', [\App\Http\Controllers\Staff\MyAssetController::class, 'index'])->name('staff.assets.index');
     Route::get('/my-assets/accountability-pdf', [\App\Http\Controllers\Staff\MyAssetController::class, 'accountabilityPdf'])->name('staff.assets.accountability-pdf');
+    // Asset Photo Routes - both unprefixed and admin-prefixed for compatibility
     Route::post('/asset-photos', [\App\Http\Controllers\AssetPhotoController::class, 'submit'])->name('asset-photos.submit');
     Route::get('/asset-photos/capture', [\App\Http\Controllers\AssetPhotoController::class, 'capture'])->name('asset-photos.capture');
     Route::get('/asset-photos/{submission}/preview', [\App\Http\Controllers\AssetPhotoController::class, 'preview'])->name('asset-photos.preview');
     Route::get('/asset-photos/review', [\App\Http\Controllers\AssetPhotoController::class, 'index'])->name('asset-photos.review');
     Route::patch('/asset-photos/{submission}', [\App\Http\Controllers\AssetPhotoController::class, 'decide'])->name('asset-photos.decide');
     Route::post('/asset-photos/bulk-decide', [\App\Http\Controllers\AssetPhotoController::class, 'bulkDecide'])->name('asset-photos.bulk-decide');
+
+    // Admin-prefixed aliases for photo review (matching transcript's preferred route names)
+    Route::get('/asset-photo-review', [\App\Http\Controllers\AssetPhotoController::class, 'index'])->name('asset-photo-review.index');
+    Route::post('/asset-photo-review', [\App\Http\Controllers\AssetPhotoController::class, 'submit'])->name('asset-photo-review.submit');
+    // Register fixed paths before the {submission} route so "bulk-decide" is not
+    // mistaken for a submission ID (which caused the reject action to 404).
+    Route::post('/asset-photo-review/bulk-decide', [\App\Http\Controllers\AssetPhotoController::class, 'bulkDecide'])->name('asset-photo-review.bulk-decide');
+    Route::post('/asset-photo-review/{submission}', [\App\Http\Controllers\AssetPhotoController::class, 'decide'])->whereNumber('submission')->name('asset-photo-review.decide');
+    Route::get('/asset-photo-review/{submission}/preview', [\App\Http\Controllers\AssetPhotoController::class, 'preview'])->name('asset-photo-review.preview');
     
     // --- HR MODULE (Admin Management) --- 
     Route::get('/hr-module/admin', [HrRequestController::class, 'adminIndex'])->name('hr.admin.index');

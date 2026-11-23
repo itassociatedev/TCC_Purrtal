@@ -82,9 +82,12 @@ export default function Edit({ auth, mustVerifyEmail, status }) {
                                                 </div>
                                                 <div className="flex items-center gap-3">
                                                     <span className={`px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-wider border shadow-sm ${
-                                                        asset?.condition === 'Good' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
-                                                        asset?.condition === 'Broken' ? 'bg-red-50 text-red-700 border-red-200' : 
-                                                        asset?.condition === 'Missing' ? 'bg-gray-100 text-gray-700 border-gray-300' : 
+                                                        asset?.condition === 'Good' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                        asset?.condition === 'Broken' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                        asset?.condition === 'For Repair' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                        asset?.condition === 'Defective' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                        asset?.condition === 'For checking' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                        asset?.condition === 'Missing' ? 'bg-gray-100 text-gray-700 border-gray-300' :
                                                         'bg-yellow-50 text-yellow-700 border-yellow-200'
                                                     }`}>
                                                         {asset?.condition || 'Unknown'}

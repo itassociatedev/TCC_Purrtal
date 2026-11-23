@@ -19,11 +19,11 @@ use Maatwebsite\Excel\Facades\Excel;
 use App\Models\AssetImportBatch;
 use App\Models\AssetImportItem;
 use App\Exports\AssetTemplateExport;
-
 use App\Models\AssetPhotoSubmission;
 use App\Models\OrgChartMember;
 use App\Support\AssetAccess;
 use Illuminate\Support\Str;
+use App\Services\AccountabilityPdfService;
 
 class AssetController extends Controller
 {
@@ -45,7 +45,8 @@ class AssetController extends Controller
 
         $rejectedPhotos = AssetPhotoSubmission::with(['asset:id,name,asset_tag', 'submitter:id,name', 'reviewer:id,name'])
             ->where('status', 'rejected');
-        if (!AssetAccess::canReviewPhotos($user) && !AssetAccess::isFullManager($user)) {
+        // Rejected history visibility: submitter sees own; IT interns + full-access see all
+        if (!AssetAccess::isItIntern($user) && !AssetAccess::isFullManager($user)) {
             $rejectedPhotos->where('submitted_by', $user->id);
         }
 
@@ -66,15 +67,23 @@ class AssetController extends Controller
         $user = Auth::user();
         abort_unless(AssetAccess::canEnter($user), 403);
 
+        // Non-admin entry users see only their own rejected-photo history.
+        $rejectedPhotos = AssetPhotoSubmission::with(['asset:id,name,asset_tag', 'submitter:id,name', 'reviewer:id,name'])
+            ->where('status', 'rejected');
+        if (!AssetAccess::isFullManager($user)) {
+            $rejectedPhotos->where('submitted_by', $user->id);
+        }
+
         return Inertia::render('Admin/AssetEntry', [
+            // Entry-only roles can submit photos for any existing asset, but do
+            // not receive the full asset-management record creation privileges.
+            'assets' => Asset::select('id', 'name', 'asset_tag', 'image_path')->orderBy('asset_tag')->get(),
             'suppliers' => Supplier::where('status', 'Active')->orderBy('name')->get(['id', 'name']),
             'branches' => Branch::all(),
             'departments' => Department::all(),
-            'rejectedPhotoSubmissions' => AssetPhotoSubmission::with(['asset:id,name,asset_tag', 'submitter:id,name', 'reviewer:id,name'])
-                ->where('submitted_by', $user->id)
-                ->where('status', 'rejected')
-                ->latest()
-                ->get(),
+            'rejectedPhotoSubmissions' => $rejectedPhotos->latest()->get(),
+            'canEnterAssets' => true,
+            'canAddAssetRecords' => AssetAccess::canEnter($user),
         ]);
     }
 
@@ -97,6 +106,8 @@ class AssetController extends Controller
 
     public function store(Request $request)
     {
+        abort_unless(AssetAccess::canEnter($request->user()), 403);
+
         $request->validate([
             'name' => 'required|string|max:255',
             'asset_tag' => 'required|string|max:255|unique:assets',
@@ -836,5 +847,105 @@ class AssetController extends Controller
         }
 
         return Excel::download(new AssetTemplateExport, 'asset_import_template.xlsx');
+    }
+
+    /**
+     * Handle photo submission from the Asset Entry page
+     * Delegates to AssetPhotoController logic for consistency
+     */
+    public function submitPhoto(Request $request)
+    {
+        abort_unless(AssetAccess::canEnter($request->user()), 403);
+
+        $data = $request->validate([
+            'asset_id' => ['required', 'exists:assets,id'],
+            'photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+        ]);
+
+        $photo = $request->file('photo');
+        $path = 'asset-photos/pending/' . Str::uuid() . '.jpg';
+        Storage::disk('local')->put($path, $this->compressedJpeg($photo));
+        AssetPhotoSubmission::create(['asset_id' => $data['asset_id'], 'submitted_by' => $request->user()->id, 'temporary_path' => $path]);
+
+        return back()->with('success', 'Photo submitted for IT review.');
+    }
+
+    /**
+     * Show/preview a photo submission
+     */
+    public function showPhoto(Request $request, AssetPhotoSubmission $submission)
+    {
+        $user = $request->user();
+        abort_unless(AssetAccess::canReviewPhotos($user) || (AssetAccess::canEnter($user) && $submission->submitted_by === $user->id), 403);
+        abort_unless(Storage::disk('local')->exists($submission->temporary_path), 404);
+        return response()->file(Storage::disk('local')->path($submission->temporary_path));
+    }
+
+    /**
+     * Download the original import file for a batch
+     */
+    public function downloadImportBatch(Request $request, AssetImportBatch $batch)
+    {
+        abort_unless(AssetAccess::canViewOverview($request->user()), 403);
+
+        if (!Storage::disk('local')->exists($batch->stored_path)) {
+            abort(404, 'Import file not found.');
+        }
+
+        return Storage::disk('local')->download($batch->stored_path, $batch->original_filename);
+    }
+
+    /**
+     * Delete an import batch and optionally its records
+     */
+    public function deleteImportBatch(Request $request, AssetImportBatch $batch)
+    {
+        abort_unless(AssetAccess::canViewOverview($request->user()), 403);
+
+        if (Storage::disk('local')->exists($batch->stored_path)) {
+            Storage::disk('local')->delete($batch->stored_path);
+        }
+
+        $batch->items()->delete();
+        $batch->delete();
+
+        return back()->with('success', 'Import batch deleted.');
+    }
+
+    private function compressedJpeg($file): string
+    {
+        $bytes = $file->get();
+        if (! function_exists('imagecreatefromstring') || ! function_exists('imagejpeg')) return $bytes;
+        $info = @getimagesizefromstring($bytes);
+        if (!$info || empty($info[0]) || empty($info[1])) return $bytes;
+        $memoryLimit = $this->memoryLimitBytes(ini_get('memory_limit'));
+        $estimated = (int) $info[0] * (int) $info[1] * 6;
+        if ($memoryLimit > 0 && memory_get_usage(true) + $estimated > (int) ($memoryLimit * 0.72)) return $bytes;
+        $image = @imagecreatefromstring($bytes);
+        if (! $image) return $bytes;
+        $width = imagesx($image); $height = imagesy($image); $max = 2200;
+        if ($width > $max || $height > $max) {
+            $scale = min($max / $width, $max / $height);
+            $targetWidth = max(1, (int) ($width * $scale));
+            $targetHeight = max(1, (int) ($height * $scale));
+            $targetMemory = $targetWidth * $targetHeight * 6;
+            if ($memoryLimit > 0 && memory_get_usage(true) + $targetMemory > (int) ($memoryLimit * 0.82)) {
+                imagedestroy($image);
+                return $bytes;
+            }
+            $resized = imagecreatetruecolor($targetWidth, $targetHeight);
+            imagecopyresampled($resized, $image, 0, 0, 0, 0, imagesx($resized), imagesy($resized), $width, $height);
+            imagedestroy($image); $image = $resized;
+        }
+        ob_start(); imagejpeg($image, null, 82); $compressed = ob_get_clean(); imagedestroy($image);
+        return $compressed ?: $bytes;
+    }
+
+    private function memoryLimitBytes(?string $limit): int
+    {
+        if (!$limit || $limit === '-1') return 0;
+        $unit = strtolower(substr($limit, -1));
+        $value = (float) $limit;
+        return (int) ($unit === 'g' ? $value * 1024 * 1024 * 1024 : ($unit === 'm' ? $value * 1024 * 1024 : ($unit === 'k' ? $value * 1024 : $value)));
     }
 }

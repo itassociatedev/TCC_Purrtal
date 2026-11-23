@@ -19,7 +19,22 @@ class ProfileController extends Controller
     public function edit(Request $request): Response
     {
         // 🟢 Safely load the assets and pass them directly to the page
-        $userWithAssets = $request->user()->load('assets');
+        $userWithAssets = $request->user()->load(['assets', 'accountableAssets']);
+        $accountableAssets = $userWithAssets->accountableAssets->keyBy('id');
+        $profileAssets = $userWithAssets->assets
+            ->merge($userWithAssets->accountableAssets)
+            ->unique('id')
+            ->values()
+            ->map(function ($asset) use ($accountableAssets) {
+                $assignment = $accountableAssets->get($asset->id);
+                $asset->setAttribute(
+                    'accountability_type',
+                    $assignment?->pivot?->accountability_type ?? $asset->accountability_type ?? 'personal'
+                );
+
+                return $asset;
+            });
+        $userWithAssets->setRelation('assets', $profileAssets);
 
         return Inertia::render('Profile/Edit', [
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
