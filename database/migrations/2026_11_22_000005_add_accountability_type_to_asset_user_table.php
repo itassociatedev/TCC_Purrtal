@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasColumn('asset_user', 'accountability_type')) {
+            return;
+        }
+
         Schema::table('asset_user', function (Blueprint $table) {
             $table->string('accountability_type', 20)->default('personal')->after('user_id');
         });
@@ -15,6 +19,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (!Schema::hasColumn('asset_user', 'accountability_type')) {
+            return;
+        }
+
         Schema::table('asset_user', function (Blueprint $table) {
             $table->dropColumn('accountability_type');
         });

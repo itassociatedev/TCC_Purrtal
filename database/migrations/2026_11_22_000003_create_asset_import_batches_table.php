@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('asset_import_batches')) {
+            return;
+        }
+
         Schema::create('asset_import_batches', function (Blueprint $table) {
             $table->id();
             $table->foreignId('uploaded_by')->nullable()->constrained('users')->nullOnDelete();

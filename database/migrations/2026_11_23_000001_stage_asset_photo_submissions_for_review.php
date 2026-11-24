@@ -9,6 +9,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasColumn('asset_photo_submissions', 'submission_type')) {
+            return;
+        }
+
         Schema::table('asset_photo_submissions', function (Blueprint $table) {
             $table->foreignId('asset_id')->nullable()->change();
             $table->string('submission_type', 30)->default('photo_update')->after('asset_id');
@@ -18,6 +22,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (!Schema::hasColumn('asset_photo_submissions', 'submission_type')) {
+            return;
+        }
+
         if (DB::table('asset_photo_submissions')->whereNull('asset_id')->exists()) {
             throw new RuntimeException('Cannot roll back staged asset photo submissions while unapproved new asset drafts exist. Resolve them first.');
         }
