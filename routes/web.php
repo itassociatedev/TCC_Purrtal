@@ -65,6 +65,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/asset-photos', [\App\Http\Controllers\AssetPhotoController::class, 'submit'])->name('asset-photos.submit');
     Route::get('/asset-photos/capture', [\App\Http\Controllers\AssetPhotoController::class, 'capture'])->name('asset-photos.capture');
     Route::get('/asset-photos/{submission}/preview', [\App\Http\Controllers\AssetPhotoController::class, 'preview'])->name('asset-photos.preview');
+    Route::get('/assets/{asset}/photo', [\App\Http\Controllers\AssetPhotoController::class, 'showApproved'])->name('assets.photo.show');
     Route::get('/asset-photos/review', [\App\Http\Controllers\AssetPhotoController::class, 'index'])->name('asset-photos.review');
     Route::patch('/asset-photos/{submission}', [\App\Http\Controllers\AssetPhotoController::class, 'decide'])->name('asset-photos.decide');
     Route::post('/asset-photos/bulk-decide', [\App\Http\Controllers\AssetPhotoController::class, 'bulkDecide'])->name('asset-photos.bulk-decide');

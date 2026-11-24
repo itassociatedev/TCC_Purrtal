@@ -128,15 +128,13 @@ export default function AssetEntry({ assets = [], suppliers = [], departments = 
                     <div className="mt-4 space-y-3">
                         {rejectedPhotoSubmissions.map(item => (
                             <div key={item.id} className="rounded-lg border border-red-100 bg-red-50 p-4">
-                                <div className="font-bold text-gray-900">{item.asset?.asset_tag} — {item.asset?.name}</div>
+                                <div className="font-bold text-gray-900">{item.asset?.asset_tag || item.asset_data?.asset_tag || 'New asset'} — {item.asset?.name || item.asset_data?.name}</div>
                                 <p className="mt-1 text-sm text-red-800">{item.rejection_reason || 'No rejection message was provided.'}</p>
                                 <p className="mt-1 text-xs text-gray-500">Submitted by {item.submitter?.name || 'you'} · Reviewed by {item.reviewer?.name || 'IT reviewer'}{item.reviewed_at ? ` · ${new Date(item.reviewed_at).toLocaleString()}` : ''}</p>
-                                <button
+                                {item.asset_id ? <button
                                     onClick={() => router.visit(`${route('asset-photos.capture')}?asset_id=${item.asset_id}`)}
                                     className="mt-2 inline-flex text-xs font-black text-indigo-700 hover:underline"
-                                >
-                                    Retake this photo
-                                </button>
+                                >Retake this photo</button> : <p className="mt-2 text-xs font-semibold text-gray-600">Re-enter this asset and resubmit the photo for review.</p>}
                             </div>
                         ))}
                     </div>

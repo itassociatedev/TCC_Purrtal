@@ -41,7 +41,13 @@ return [
         'client_id' => env('ONEDRIVE_CLIENT_ID'),
         'client_secret' => env('ONEDRIVE_CLIENT_SECRET'),
         'user_id' => env('ONEDRIVE_USER_ID'),
+        'site_id' => env('ONEDRIVE_SITE_ID'),
         'folder_path' => env('ONEDRIVE_FOLDER_PATH', 'TCC Purrtal/Asset Photos'),
+        'branch_folders' => [
+            'GH' => env('ONEDRIVE_BRANCH_FOLDER_GH', 'Greenhills'),
+            'MKT' => env('ONEDRIVE_BRANCH_FOLDER_MKT', 'Makati'),
+            'ALB' => env('ONEDRIVE_BRANCH_FOLDER_ALB', 'Alabang'),
+        ],
     ],
 
 ];

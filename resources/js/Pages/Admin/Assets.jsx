@@ -9,6 +9,7 @@ import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
 import { getAssetLinks } from '@/Config/navigation';
 import AssetsAccountabilityModal from '@/Pages/Admin/AssetsAccountabilityModal'; 
+import assetPhotoUrl from '@/Utils/assetPhotoUrl';
 
 const getArray = (val) => {
     if (Array.isArray(val)) return val;
@@ -19,6 +20,14 @@ const getArray = (val) => {
 const getSafeStr = (val) => {
     if (val === null || val === undefined) return '';
     return String(val).toLowerCase().trim();
+};
+
+const leaderPriority = (user) => {
+    const position = getSafeStr(user?.position?.name || user?.position);
+    if (/team leader|\btl\b/.test(position)) return 0;
+    if (/supervisor/.test(position)) return 1;
+    if (/manager|\bhead\b/.test(position)) return 2;
+    return 3;
 };
 
 export default function Assets({ auth, assets, suppliers, branches, users, departments, leaderUserIds = [], rejectedPhotoSubmissions = [], canReviewPhotos = false }) {
@@ -226,30 +235,47 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     const bulkTransferForm = useForm({
         ids: [], user_id: '', user_ids: [], team_leader_id: '', accountability_type: 'personal', assigned_personnel: '', department: '', branch: '', area: '', asset_status: 'Assigned',
     });
-    const [lockedTransferIds, setLockedTransferIds] = useState([]);
+    const transferScopeRef = useRef(null);
     const selectedTransferUsers = useMemo(() => (data?.user_ids || []).map(id => safeUsers.find(user => Number(user.id) === Number(id))).filter(Boolean), [data?.user_ids, safeUsers]);
+    const transferLeaderCandidates = useMemo(() => {
+        const selectedLeaders = selectedTransferUsers.filter(user => leaderUserIds.map(Number).includes(Number(user.id)));
+        const candidates = selectedLeaders.length ? selectedLeaders : selectedTransferUsers;
+        return [...candidates].sort((a, b) => leaderPriority(a) - leaderPriority(b));
+    }, [leaderUserIds, selectedTransferUsers]);
 
     useEffect(() => {
-        if (!isTransferModalOpen || data.accountability_type !== 'shared' || (!data.branch && !data.department)) return;
+        if (!isTransferModalOpen) {
+            transferScopeRef.current = null;
+            return;
+        }
+        if (data.accountability_type !== 'shared') {
+            transferScopeRef.current = null;
+            return;
+        }
+
         const branch = getSafeStr(data.branch);
         const department = getSafeStr(data.department);
-        const autoSelected = safeUsers.filter(user => {
-            const userBranch = getSafeStr(user.branch?.name || user.branch || user.branch_name || user.branches?.[0]?.name);
-            const userDepartment = getSafeStr(user.department?.name || user.department);
-            return (!branch || userBranch === branch) && (!department || userDepartment === department);
-        }).map(user => Number(user.id));
-        const merged = [...new Set([...(data.user_ids || []).map(Number), ...autoSelected])];
-        if (merged.length !== (data.user_ids || []).length) setData('user_ids', merged);
-        const automaticLeader = autoSelected.find(id => leaderUserIds.map(Number).includes(id));
-        if (!data.team_leader_id && automaticLeader) setData('team_leader_id', automaticLeader);
-        const required = autoSelected.filter(id => leaderUserIds.map(Number).includes(id));
-        if (required.length) {
-            const nextLocked = [...new Set([...lockedTransferIds.map(Number), ...required])];
-            if (nextLocked.length !== lockedTransferIds.length) setLockedTransferIds(nextLocked);
+        const scopeKey = `${branch}|${department}`;
+        if (transferScopeRef.current === scopeKey) return;
+        const previousScope = transferScopeRef.current;
+        transferScopeRef.current = scopeKey;
+        if (!branch && !department) {
+            if (previousScope !== null) setData({ ...data, user_ids: [], team_leader_id: '' });
+            return;
         }
-        const missingRequired = lockedTransferIds.filter(id => !merged.includes(Number(id)));
-        if (missingRequired.length) setData('user_ids', [...new Set([...merged, ...missingRequired.map(Number)])]);
-    }, [isTransferModalOpen, data.accountability_type, data.branch, data.department, safeUsers, leaderUserIds, lockedTransferIds]);
+
+        const autoSelected = safeUsers.filter(user => {
+            const userBranches = [user.branch?.name || user.branch, user.branch_name, ...(user.branches || []).map(item => item?.name || item)];
+            const userDepartment = getSafeStr(user.department?.name || user.department);
+            const matchesBranch = !branch || userBranches.some(value => getSafeStr(value?.name || value) === branch);
+            return matchesBranch && (!department || userDepartment === department);
+        });
+        const userIds = autoSelected.map(user => Number(user.id));
+        const automaticLeader = autoSelected
+            .filter(user => leaderUserIds.map(Number).includes(Number(user.id)))
+            .sort((a, b) => leaderPriority(a) - leaderPriority(b))[0];
+        setData({ ...data, user_ids: userIds, team_leader_id: automaticLeader?.id || '' });
+    }, [isTransferModalOpen, data.accountability_type, data.branch, data.department, safeUsers, leaderUserIds]);
 
     const handleAddCategory = (e) => {
         e.preventDefault();
@@ -592,7 +618,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         setData({ 
             ...asset, supplier_id: asset?.supplier_id || '', user_id: asset?.user_id || '', branch: getBranchValue(asset?.branch), image: null 
         });
-        setImagePreview(asset.image_path ? (asset.image_path.startsWith('http') ? asset.image_path : `/storage/${asset.image_path}`) : null);
+        setImagePreview(assetPhotoUrl(asset));
         
         if (asset.category && !allCategories.includes(asset.category)) {
             setCustomCategories(prev => [...prev, asset.category]);
@@ -609,7 +635,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         clearErrors();
         const existingIds = asset?.accountableUsers?.map(user => Number(user.id)) || (asset?.user_id ? [Number(asset.user_id)] : []);
         const type = asset?.accountability_type === 'shared' ? 'shared' : 'personal';
-        setLockedTransferIds(type === 'shared' ? existingIds.filter(id => leaderUserIds.map(Number).includes(id)) : []);
+        transferScopeRef.current = null;
         setData({ ...asset, user_id: type === 'personal' ? (asset?.user_id || '') : '', user_ids: existingIds, team_leader_id: asset?.accountableUsers?.find(user => user.pivot?.is_team_leader)?.id || (type === 'personal' ? existingIds[0] || '' : ''), accountability_type: type, assigned_personnel: '', department: asset?.department || '', branch: getBranchValue(asset?.branch), area: asset?.area || '', asset_status: 'Assigned', supplier_id: asset?.supplier_id || '' });
         setUserSearchTerm('');
         setIsTransferModalOpen(true);
@@ -1607,7 +1633,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                 <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-wider mb-4">Attached Image</h4>
                                 <div className="w-full bg-gray-100 rounded-xl border border-gray-200 overflow-hidden flex items-center justify-center shadow-inner p-2">
                                     <img 
-                                        src={viewingAsset.image_path.startsWith('http') ? viewingAsset.image_path : `/storage/${viewingAsset.image_path}`} 
+                                        src={assetPhotoUrl(viewingAsset)}
                                         alt={viewingAsset?.name} 
                                         className="w-full h-auto max-h-[800px] object-contain rounded-lg" 
                                         onError={(e) => {
@@ -1752,10 +1778,10 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                         </div>
                         {data.accountability_type === 'shared' && <div className="rounded-md border border-indigo-100 bg-indigo-50/50 p-3">
                             <div className="flex items-center justify-between"><p className="text-xs font-bold text-gray-600">Shared employees</p><button type="button" className="text-xs font-bold text-red-700 underline" onClick={() => setData('user_ids', data.team_leader_id ? [Number(data.team_leader_id)] : [])}>Clear selected</button></div>
-                            <div className="mt-2 rounded-md border border-indigo-200 bg-white p-2"><p className="mb-1 text-[11px] font-black uppercase tracking-wide text-gray-500">Selected employees ({selectedTransferUsers.length})</p>{selectedTransferUsers.length ? <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto">{selectedTransferUsers.map(user => { const locked = Number(user.id) === Number(data.team_leader_id) || leaderUserIds.map(Number).includes(Number(user.id)); return <span key={user.id} className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-1 text-xs font-bold text-indigo-800">{user.name}{locked ? ' • required' : <button type="button" onClick={() => setData('user_ids', data.user_ids.filter(id => Number(id) !== Number(user.id)))} className="font-black text-red-600" aria-label={`Remove ${user.name}`}>×</button>}</span>; })}</div> : <p className="text-xs text-gray-500">No employees selected.</p>}</div>
+                            <div className="mt-2 rounded-md border border-indigo-200 bg-white p-2"><p className="mb-1 text-[11px] font-black uppercase tracking-wide text-gray-500">Selected employees ({selectedTransferUsers.length})</p>{selectedTransferUsers.length ? <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto">{selectedTransferUsers.map(user => { const isTeamLeader = Number(user.id) === Number(data.team_leader_id); return <span key={user.id} className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-1 text-xs font-bold text-indigo-800">{user.name}{isTeamLeader ? ' • team leader' : <button type="button" onClick={() => setData({ ...data, user_ids: data.user_ids.filter(id => Number(id) !== Number(user.id)), team_leader_id: Number(data.team_leader_id) === Number(user.id) ? '' : data.team_leader_id })} className="font-black text-red-600" aria-label={`Remove ${user.name}`}>×</button>}</span>; })}</div> : <p className="text-xs text-gray-500">No employees selected.</p>}</div>
                             <select value="" onChange={e => { const id = Number(e.target.value); if (id && !data.user_ids.map(Number).includes(id)) setData('user_ids', [...data.user_ids, id]); }} className="mt-2 w-full rounded-md border-gray-300 text-sm"><option value="">Choose an employee to add…</option>{safeUsers.filter(user => !data.user_ids.map(Number).includes(Number(user.id)) && `${user.name} ${getSafeStr(user.position?.name || user.position)} ${getSafeStr(user.department?.name || user.department)}`.toLowerCase().includes(getSafeStr(userSearchTerm))).map(user => <option key={user.id} value={user.id}>{user.name} — {user.position?.name || user.position || 'No position'} ({user.department?.name || user.department || 'No department'})</option>)}</select>
                             <input type="text" value={userSearchTerm} onChange={e => setUserSearchTerm(e.target.value)} className="mt-2 w-full rounded-md border-gray-300 text-sm" placeholder="Filter the employee dropdown by name, position, or department..." />
-                            <select className="mt-2 w-full rounded-md border-gray-300 text-sm" value={data.team_leader_id || ''} onChange={e => setData('team_leader_id', e.target.value)}><option value="">Select team leader</option>{safeUsers.filter(user => (data.user_ids || []).map(Number).includes(Number(user.id)) && leaderUserIds.map(Number).includes(Number(user.id))).map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</select>
+                            <select className="mt-2 w-full rounded-md border-gray-300 text-sm" value={data.team_leader_id || ''} onChange={e => setData('team_leader_id', e.target.value)}><option value="">Select team leader</option>{transferLeaderCandidates.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}</select>
                         </div>}
                         {data.accountability_type === 'personal' && <>
                         <div className="relative">

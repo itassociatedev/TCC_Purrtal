@@ -4,9 +4,9 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
     server: {
-        host: '0.0.0.0',
+        host: '0.0.0.0', // Listen on all network interfaces
         hmr: {
-            host: '192.168.0.114',
+            host: 'localhost', // Keep HMR on localhost to prevent EPIPE
         },
     },
     plugins: [

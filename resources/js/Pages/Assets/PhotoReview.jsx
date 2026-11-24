@@ -18,6 +18,16 @@ export default function PhotoReview({ pendingSubmissions, rejectedSubmissions, p
     const pendingRows = Array.isArray(pendingSubmissions) ? pendingSubmissions : (pendingSubmissions?.data || []);
     const rejectedRows = Array.isArray(rejectedSubmissions) ? rejectedSubmissions : (rejectedSubmissions?.data || []);
     const rows = tab === 'pending' ? pendingRows : rejectedRows;
+    const reviewFields = submission => {
+        const data = submission.asset_data || submission.asset || {};
+        return [
+            ['Category', data.category], ['Classification', data.classification], ['Branch', data.branch], ['Department', data.department],
+            ['Condition', data.condition], ['Serial / model', [data.serial_no, data.model_no].filter(Boolean).join(' / ')],
+            ['Color', data.color], ['Assigned to', data.assigned_personnel], ['Area', data.area], ['Supplier', data.supplier_name],
+            ['Purchase date', data.purchase_date], ['Warranty expiry', data.warranty_expiration],
+            ['Status', data.asset_status], ['Quantity', data.qty], ['Unit value', data.unit_value], ['Total value', data.total_value],
+        ].filter(([, value]) => value !== undefined && value !== null && value !== '');
+    };
     const selectableIds = useMemo(() => pendingRows.map(row => row.id), [pendingRows]);
     const allSelected = tab === 'pending' && selectableIds.length > 0 && selectableIds.every(id => selected.includes(id));
     const toggleSelected = id => setSelected(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
@@ -122,8 +132,8 @@ export default function PhotoReview({ pendingSubmissions, rejectedSubmissions, p
                                     {rejectedRows.map(submission => (
                                         <tr key={submission.id}>
                                             <td className="whitespace-nowrap px-4 py-3">
-                                                <div className="font-bold text-gray-900">{submission.asset?.name || 'Asset unavailable'}</div>
-                                                <div className="font-mono text-xs text-indigo-600">{submission.asset?.asset_tag || '—'}</div>
+                                                <div className="font-bold text-gray-900">{submission.asset?.name || submission.asset_data?.name || 'Asset unavailable'}</div>
+                                                <div className="font-mono text-xs text-indigo-600">{submission.asset?.asset_tag || submission.asset_data?.asset_tag || '—'}</div>
                                             </td>
                                             <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">{submission.submitter?.name || '—'}</td>
                                             <td className="max-w-md px-4 py-3 text-sm text-gray-700">{submission.rejection_reason || 'No rejection message was provided.'}</td>
@@ -194,12 +204,22 @@ export default function PhotoReview({ pendingSubmissions, rejectedSubmissions, p
                                     </div>
 
                                     <div className="p-4">
-                                        <div className="font-bold text-gray-900 truncate" title={submission.asset?.name || 'Asset unavailable'}>
-                                            {submission.asset?.name || 'Asset unavailable'}
+                                        <div className="font-bold text-gray-900 truncate" title={submission.asset?.name || submission.asset_data?.name || 'Asset unavailable'}>
+                                            {submission.asset?.name || submission.asset_data?.name || 'Asset unavailable'}
                                         </div>
                                         <div className="font-mono text-xs text-indigo-600 mt-0.5">
-                                            {submission.asset?.asset_tag || '—'}
+                                            {submission.asset?.asset_tag || submission.asset_data?.asset_tag || '—'}
                                         </div>
+                                        <span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide ${submission.submission_type === 'new_asset' ? 'bg-indigo-100 text-indigo-700' : submission.submission_type === 'asset_update' ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-700'}`}>
+                                            {submission.submission_type === 'new_asset' ? 'New asset + photo' : submission.submission_type === 'asset_update' ? 'Asset update + photo' : 'Photo update'}
+                                        </span>
+                                        {reviewFields(submission).length > 0 && (
+                                            <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 rounded-md border border-gray-200 bg-white p-3 text-xs">
+                                                {reviewFields(submission).map(([label, value]) => (
+                                                    <div key={label} className="min-w-0"><dt className="font-bold text-gray-400">{label}</dt><dd className="truncate font-semibold text-gray-700" title={String(value)}>{value}</dd></div>
+                                                ))}
+                                            </dl>
+                                        )}
                                         <div className="mt-2 flex items-center gap-2 text-sm text-gray-600">
                                             <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />

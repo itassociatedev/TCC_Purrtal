@@ -27,7 +27,10 @@
         @foreach($assets as $asset)
             @php
                 $photo = $asset->image_path;
-                if ($photo && !str_starts_with($photo, 'http')) $photo = asset('storage/' . ltrim($photo, '/'));
+                $approvedPhoto = $asset->photoSubmissions->where('status', 'approved')->whereNotNull('onedrive_item_id')->sortByDesc('reviewed_at')->first();
+                if ($approvedPhoto) $photo = route('assets.photo.show', $asset->id);
+                elseif ($photo && str_starts_with($photo, '/')) $photo = url($photo);
+                elseif ($photo && !str_starts_with($photo, 'http')) $photo = asset('storage/' . ltrim($photo, '/'));
                 $people = $asset->accountableUsers->sortByDesc(fn ($user) => (int) ($user->pivot?->is_team_leader ?? false));
                 $person = $people->isNotEmpty()
                     ? $people->map(fn ($user) => $user->name . (($user->pivot?->is_team_leader ?? false) ? ' (Team Leader)' : ''))->implode(', ')
@@ -35,7 +38,7 @@
                 $value = $asset->total_value ?: (($asset->unit_value ?: 0) * ($asset->qty ?: 1));
             @endphp
             <tr>
-                <td>@if($photo)<img class="photo" src="{{ $photo }}" alt="Asset photo">@else—@endif</td>
+                <td>@if($photo)<a href="{{ $photo }}"><img class="photo" src="{{ $photo }}" alt="View asset photo"></a>@else—@endif</td>
                 <td><strong>{{ $asset->name }}</strong><br>{{ $asset->category ?: '—' }}</td>
                 <td class="tag nowrap">{{ $asset->asset_tag }}</td>
                 <td>{{ $asset->serial_no ?: '—' }}<br>{{ $asset->model_no ?: '—' }}</td>

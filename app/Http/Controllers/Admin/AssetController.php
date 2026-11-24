@@ -20,7 +20,6 @@ use App\Models\AssetImportBatch;
 use App\Models\AssetImportItem;
 use App\Exports\AssetTemplateExport;
 use App\Models\AssetPhotoSubmission;
-use App\Models\OrgChartMember;
 use App\Support\AssetAccess;
 use Illuminate\Support\Str;
 use App\Services\AccountabilityPdfService;
@@ -33,12 +32,9 @@ class AssetController extends Controller
         if (!AssetAccess::canViewOverview($user)) return redirect()->route('admin.assets.entry');
 
         $isIt = AssetAccess::isIt($user);
-        $orgLeaderNames = OrgChartMember::query()->get(['name', 'position'])
-            ->filter(fn ($member) => preg_match('/(team leader|supervisor|manager|head|director|chief|president)/i', $member->position ?? ''))
-            ->pluck('name')
-            ->map(fn ($name) => strtolower(trim($name)));
-        $leaderUserIds = User::query()->get(['id', 'name'])
-            ->filter(fn ($employee) => $orgLeaderNames->contains(strtolower(trim($employee->name))))
+        $users = User::with(['department', 'position', 'branches'])->orderBy('name')->get();
+        $leaderUserIds = $users
+            ->filter(fn ($employee) => preg_match('/(team leader|(?:^|\s)tl(?:\s|$)|supervisor|manager|head|director|chief|president)/i', $employee->position?->name ?? ''))
             ->pluck('id')
             ->values()
             ->all();
@@ -50,14 +46,17 @@ class AssetController extends Controller
             $rejectedPhotos->where('submitted_by', $user->id);
         }
 
+        $rejectedPhotoSubmissions = $rejectedPhotos->latest()->get();
+        $this->attachDraftAssetData($rejectedPhotoSubmissions);
+
         return Inertia::render('Admin/Assets', [
             'assets' => Asset::with(['user', 'supplier', 'accountableUsers.department', 'accountableUsers.position'])->latest()->get(),
             'suppliers' => Supplier::where('status', 'Active')->orderBy('name')->get(['id', 'name']),
-            'users' => User::with(['department', 'position', 'branches'])->orderBy('name')->get(),
+            'users' => $users,
             'leaderUserIds' => $leaderUserIds,
             'branches' => Branch::all(),
             'departments' => Department::all(),
-            'rejectedPhotoSubmissions' => $rejectedPhotos->latest()->get(),
+            'rejectedPhotoSubmissions' => $rejectedPhotoSubmissions,
             'canReviewPhotos' => $isIt,
         ]);
     }
@@ -74,6 +73,9 @@ class AssetController extends Controller
             $rejectedPhotos->where('submitted_by', $user->id);
         }
 
+        $rejectedPhotoSubmissions = $rejectedPhotos->latest()->get();
+        $this->attachDraftAssetData($rejectedPhotoSubmissions);
+
         return Inertia::render('Admin/AssetEntry', [
             // Entry-only roles can submit photos for any existing asset, but do
             // not receive the full asset-management record creation privileges.
@@ -81,7 +83,7 @@ class AssetController extends Controller
             'suppliers' => Supplier::where('status', 'Active')->orderBy('name')->get(['id', 'name']),
             'branches' => Branch::all(),
             'departments' => Department::all(),
-            'rejectedPhotoSubmissions' => $rejectedPhotos->latest()->get(),
+            'rejectedPhotoSubmissions' => $rejectedPhotoSubmissions,
             'canEnterAssets' => true,
             'canAddAssetRecords' => AssetAccess::canEnter($user),
         ]);
@@ -108,7 +110,7 @@ class AssetController extends Controller
     {
         abort_unless(AssetAccess::canEnter($request->user()), 403);
 
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'asset_tag' => 'required|string|max:255|unique:assets',
             'category' => 'nullable|string|max:255',
@@ -134,12 +136,9 @@ class AssetController extends Controller
         ]);
 
         $asset = new Asset();
-        $asset->fill($request->except('image'));
+        $asset->fill(collect($validated)->except('image')->all());
 
         // 泙 HANDLE IMAGE SAVE
-        if ($request->hasFile('image')) {
-        }
-
         if (!empty($asset->purchase_date) && !empty($asset->warranty_expiration)) {
             $pDate = strtotime($asset->purchase_date);
             $wDate = strtotime($asset->warranty_expiration);
@@ -148,24 +147,28 @@ class AssetController extends Controller
         }
 
         $asset->total_value = ($asset->unit_value * $asset->qty);
-        $asset->save();
 
         if ($request->hasFile('image')) {
-            $pendingPath = 'asset-photos/pending/' . Str::uuid() . '.' . $request->file('image')->extension();
-            Storage::disk('local')->put($pendingPath, $request->file('image')->get());
-            AssetPhotoSubmission::create([
-                'asset_id' => $asset->id,
-                'submitted_by' => $request->user()->id,
-                'temporary_path' => $pendingPath,
-            ]);
+            $duplicatePendingTag = AssetPhotoSubmission::where('submission_type', 'new_asset')
+                ->where('status', 'pending')->get()
+                ->contains(fn ($submission) => strcasecmp((string) ($submission->asset_data['asset_tag'] ?? ''), (string) $asset->asset_tag) === 0);
+            if ($duplicatePendingTag) {
+                return back()->withErrors(['asset_tag' => 'This asset tag is already waiting for IT approval.']);
+            }
+
+            $this->stageAssetPhoto($request, null, 'new_asset', $asset->getAttributes());
+
+            return back()->with('success', 'Asset details and photo were submitted for IT review. The asset will appear after approval.');
         }
+
+        $asset->save();
 
         return back()->with('success', 'Asset created successfully.');
     }
 
     public function update(Request $request, Asset $asset)
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'asset_tag' => 'required|string|max:255|unique:assets,asset_tag,' . $asset->id,
             'category' => 'nullable|string|max:255',
@@ -190,17 +193,25 @@ class AssetController extends Controller
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
         ]);
 
+        if ($request->hasFile('image')) {
+            if (AssetPhotoSubmission::where('asset_id', $asset->id)->where('status', 'pending')->exists()) {
+                return back()->withErrors(['image' => 'This asset already has a photo or asset update waiting for IT review.']);
+            }
+
+            $pendingAsset = clone $asset;
+            $pendingAsset->fill(collect($validated)->except('image')->all());
+            if (!empty($pendingAsset->purchase_date) && !empty($pendingAsset->warranty_expiration)) {
+                $pendingAsset->deviation = round((strtotime($pendingAsset->warranty_expiration) - strtotime($pendingAsset->purchase_date)) / 86400) . ' Days';
+            }
+            $pendingAsset->total_value = ($pendingAsset->unit_value * $pendingAsset->qty);
+            $this->stageAssetPhoto($request, $asset->id, 'asset_update', $pendingAsset->getAttributes());
+
+            return back()->with('success', 'Asset changes and photo were submitted for IT review. Current asset details remain unchanged until approval.');
+        }
+
         $asset->fill($request->except('image'));
 
         // 泙 HANDLE IMAGE UPDATE
-        if ($request->hasFile('image')) {
-            if ($asset->image_path && Storage::disk('public')->exists($asset->image_path)) {
-                Storage::disk('public')->delete($asset->image_path);
-            }
-            $path = $request->file('image')->store('assets/images', 'public');
-            $asset->image_path = $path;
-        }
-
         if (!empty($asset->purchase_date) && !empty($asset->warranty_expiration)) {
             $pDate = strtotime($asset->purchase_date);
             $wDate = strtotime($asset->warranty_expiration);
@@ -670,7 +681,7 @@ class AssetController extends Controller
             Log::info("Asset records exported by User " . Auth::id());
         }
 
-        $assets = Asset::with(['user', 'supplier'])->latest()->get();
+        $assets = Asset::with(['user', 'supplier', 'photoSubmissions'])->latest()->get();
         $fileName = "assets_records_export_" . date('Y-m-d') . ".csv";
 
         $headers = [
@@ -692,7 +703,7 @@ class AssetController extends Controller
                 'Category', 'Status', 'Condition', 'Assigned Personnel', 
                 'Department', 'Branch', 'Area', 'Supplier', 'Purchased Date', 
                 'Warranty Exp.', 'Depreciation (Months)', 'Qty', 'Unit Value', 'Total Value',
-                'Acc. Depreciation', 'Current Book Value'
+                'Acc. Depreciation', 'Current Book Value', 'Photo Link'
             ]);
 
             foreach ($assets as $asset) {
@@ -774,7 +785,8 @@ class AssetController extends Controller
                     $unitValue,
                     $originalValue,
                     number_format($accumulated, 2, '.', ''),
-                    number_format($current, 2, '.', '')
+                    number_format($current, 2, '.', ''),
+                    $this->assetPhotoLink($asset)
                 ]);
             }
             fclose($file);
@@ -786,7 +798,7 @@ class AssetController extends Controller
         $ids = collect($request->input('ids', []))->map(fn ($id) => (int) $id)->filter()->unique()->values();
         abort_if($ids->isEmpty(), 422, 'No assets were selected for the PDF.');
 
-        $assets = Asset::with(['user', 'supplier', 'accountableUsers'])->whereIn('id', $ids)->orderBy('asset_tag')->get();
+        $assets = Asset::with(['user', 'supplier', 'accountableUsers', 'photoSubmissions'])->whereIn('id', $ids)->orderBy('asset_tag')->get();
 
         return response()->view('exports.asset-masterlist-pdf', [
             'assets' => $assets,
@@ -910,6 +922,56 @@ class AssetController extends Controller
         $batch->delete();
 
         return back()->with('success', 'Import batch deleted.');
+    }
+
+    private function stageAssetPhoto(Request $request, ?int $assetId, string $type, array $assetData): void
+    {
+        $file = $request->file('image');
+        $contents = $this->compressedJpeg($file);
+        $image = @getimagesizefromstring($contents);
+        $extensions = [IMAGETYPE_JPEG => 'jpg', IMAGETYPE_PNG => 'png', IMAGETYPE_WEBP => 'webp'];
+        $extension = $extensions[$image[2] ?? null] ?? strtolower($file->extension() ?: 'jpg');
+        $path = 'asset-photos/pending/' . Str::uuid() . '.' . $extension;
+        if (!Storage::disk('local')->put($path, $contents)) {
+            throw new \RuntimeException('The temporary asset photo could not be stored.');
+        }
+
+        try {
+            AssetPhotoSubmission::create([
+                'asset_id' => $assetId,
+                'submission_type' => $type,
+                'asset_data' => $assetData,
+                'submitted_by' => $request->user()->id,
+                'temporary_path' => $path,
+            ]);
+        } catch (\Throwable $exception) {
+            Storage::disk('local')->delete($path);
+            throw $exception;
+        }
+    }
+
+    private function assetPhotoLink(Asset $asset): string
+    {
+        $approved = $asset->photoSubmissions
+            ->where('status', 'approved')
+            ->whereNotNull('onedrive_item_id')
+            ->sortByDesc('reviewed_at')
+            ->first();
+        if ($approved) return route('assets.photo.show', $asset->id);
+        if (empty($asset->image_path)) return '-';
+        if (str_starts_with($asset->image_path, '/')) return url($asset->image_path);
+        if (preg_match('/^https?:\/\//i', $asset->image_path)) return $asset->image_path;
+
+        return Storage::disk('public')->url($asset->image_path);
+    }
+
+    private function attachDraftAssetData($submissions): void
+    {
+        $submissions->each(function (AssetPhotoSubmission $submission) {
+            if (!$submission->asset && $submission->asset_data) {
+                $submission->setRelation('asset', new Asset($submission->asset_data));
+            }
+        });
     }
 
     private function compressedJpeg($file): string

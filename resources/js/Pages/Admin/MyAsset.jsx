@@ -7,6 +7,7 @@ import InputLabel from '@/Components/InputLabel';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
 import { getAssetLinks } from '@/Config/navigation'; 
+import assetPhotoUrl from '@/Utils/assetPhotoUrl';
 
 const getArray = (val) => {
     if (Array.isArray(val)) return val;
@@ -796,7 +797,7 @@ export default function MyAssets({ auth, myAssets, personalAssets = [], sharedAs
                                 <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-wider mb-4">Attached Image</h4>
                                 <div className="w-full bg-gray-100 rounded-xl border border-gray-200 overflow-hidden flex items-center justify-center shadow-inner p-2">
                                     <img 
-                                        src={viewingAsset.image_path.startsWith('http') ? viewingAsset.image_path : `/storage/${viewingAsset.image_path}`} 
+                                        src={assetPhotoUrl(viewingAsset)}
                                         alt={viewingAsset?.name} 
                                         className="w-full h-auto max-h-[800px] object-contain rounded-lg" 
                                         onError={(e) => {
