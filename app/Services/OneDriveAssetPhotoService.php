@@ -20,7 +20,9 @@ class OneDriveAssetPhotoService
         $extension = strtolower(preg_replace('/[^a-z0-9]/i', '', $extension) ?: 'jpg');
         // Upload to a new, deterministic versioned name. The previous approved
         // image stays intact until the database approval commits successfully.
-        $filename = 'asset-'.$asset->id.'-'.$revision.'.'.$extension;
+        $assetTag = preg_replace('/[^a-z0-9._-]+/i', '-', trim((string) $asset->asset_tag)) ?? '';
+        $assetTag = trim($assetTag, '.-_');
+        $filename = ($assetTag !== '' ? $assetTag : 'asset-'.$asset->id).'-'.$revision.'.'.$extension;
         $folder = trim((string) ($config['folder_path'] ?? ''), '/').'/'.trim((string) $branchFolder, '/');
         $path = collect(array_filter([$folder, $filename]))
             ->flatMap(fn (string $part) => explode('/', $part))
@@ -28,8 +30,8 @@ class OneDriveAssetPhotoService
             ->implode('/');
 
         $response = Http::withToken($this->token())
-            ->withHeaders(['Content-Type' => $mimeType])
-            ->put($this->driveRoot($config).'/root:/'.$path.':/content', $contents)
+            ->withBody($contents, $mimeType)
+            ->put($this->driveRoot($config).'/root:/'.$path.':/content')
             ->throw();
 
         return [

@@ -200,6 +200,8 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     const [isEditMode, setIsEditMode] = useState(false);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [viewingAsset, setViewingAsset] = useState(null);
+    const [isAssetPhotoExpanded, setIsAssetPhotoExpanded] = useState(false);
+    const [assetPhotoLoadFailed, setAssetPhotoLoadFailed] = useState(false);
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const [isBulkTransferModalOpen, setIsBulkTransferModalOpen] = useState(false);
     const [isAccountabilityModalOpen, setIsAccountabilityModalOpen] = useState(false);
@@ -607,8 +609,17 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
 
     const openAddModal = () => { setIsEditMode(false); reset(); setImagePreview(null); clearErrors(); setIsModalOpen(true); };
     const closeModal = () => { setIsModalOpen(false); setImagePreview(null); reset(); };
-    const openViewModal = (asset) => { setViewingAsset(asset); setIsViewModalOpen(true); };
-    const closeViewModal = () => { setIsViewModalOpen(false); setTimeout(() => setViewingAsset(null), 300); };
+    const openViewModal = (asset) => {
+        setViewingAsset(asset);
+        setAssetPhotoLoadFailed(false);
+        setIsAssetPhotoExpanded(false);
+        setIsViewModalOpen(true);
+    };
+    const closeViewModal = () => {
+        setIsViewModalOpen(false);
+        setIsAssetPhotoExpanded(false);
+        setTimeout(() => setViewingAsset(null), 300);
+    };
     const closeTransferModal = () => { setIsTransferModalOpen(false); reset(); };
     const closeAccountabilityModal = () => { setIsAccountabilityModalOpen(false); setSelectedAssetForAccountability(null); };
     const openAccountabilityModal = (asset) => { setSelectedAssetForAccountability(asset); setIsAccountabilityModalOpen(true); };
@@ -864,6 +875,8 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
             } catch (e) { console.log('Export logged locally'); }
         }
     };
+
+    const viewingAssetPhoto = viewingAsset ? assetPhotoUrl(viewingAsset) : null;
 
     if (!isAllowedToView) {
         return (
@@ -1568,6 +1581,47 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                             </div>
                         </div>
 
+                        {viewingAssetPhoto && !assetPhotoLoadFailed ? (
+                            <button
+                                type="button"
+                                onClick={() => setIsAssetPhotoExpanded(true)}
+                                aria-label={`View full photo for ${viewingAsset?.name || 'this asset'}`}
+                                className="mb-6 flex w-full items-center gap-4 rounded-xl border border-gray-200 bg-gray-50 p-3 text-left transition hover:border-indigo-300 hover:bg-indigo-50/50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                            >
+                                <img
+                                    src={viewingAssetPhoto}
+                                    alt=""
+                                    className="h-20 w-24 shrink-0 rounded-lg border border-gray-200 bg-white object-cover"
+                                    onError={() => setAssetPhotoLoadFailed(true)}
+                                />
+                                <span className="min-w-0 flex-1">
+                                    <span className="block text-sm font-bold text-gray-900">Asset photo</span>
+                                    <span className="mt-1 block text-xs text-gray-500">Click to view full size</span>
+                                </span>
+                                <svg className="h-5 w-5 shrink-0 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3M9 9h6v6H9z" />
+                                </svg>
+                            </button>
+                        ) : (
+                            <div role="status" className="mb-6 flex items-center gap-3 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3">
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-gray-400 ring-1 ring-gray-200">
+                                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" d="M4 5.75A1.75 1.75 0 0 1 5.75 4h12.5A1.75 1.75 0 0 1 20 5.75v12.5A1.75 1.75 0 0 1 18.25 20H5.75A1.75 1.75 0 0 1 4 18.25V5.75Z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" d="m5 16 4.5-4.5a1.5 1.5 0 0 1 2.12 0L16 16m-2.5-2.5 1.38-1.38a1.5 1.5 0 0 1 2.12 0L20 15" />
+                                        <circle cx="9" cy="8.5" r="1.25" strokeWidth="1.7" />
+                                    </svg>
+                                </span>
+                                <span className="min-w-0">
+                                    <span className="block text-sm font-bold text-gray-700">
+                                        {assetPhotoLoadFailed ? 'Photo unavailable' : 'No photo linked to this asset'}
+                                    </span>
+                                    <span className="mt-0.5 block text-xs text-gray-500">
+                                        {assetPhotoLoadFailed ? 'The approved OneDrive photo could not be loaded.' : 'An approved OneDrive photo will appear here.'}
+                                    </span>
+                                </span>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 text-sm">
                             <div className="space-y-4 bg-gray-50 p-5 rounded-lg border border-gray-100">
                                 <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-wider mb-2">Specifications</h4>
@@ -1628,28 +1682,44 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                             </div>
                         </div>
 
-                        {viewingAsset?.image_path && (
-                            <div className="mt-8 pt-6 border-t border-gray-100">
-                                <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-wider mb-4">Attached Image</h4>
-                                <div className="w-full bg-gray-100 rounded-xl border border-gray-200 overflow-hidden flex items-center justify-center shadow-inner p-2">
-                                    <img 
-                                        src={assetPhotoUrl(viewingAsset)}
-                                        alt={viewingAsset?.name} 
-                                        className="w-full h-auto max-h-[800px] object-contain rounded-lg" 
-                                        onError={(e) => {
-                                            e.target.onerror = null; 
-                                            e.target.src = "https://placehold.co/800x400/eeeeee/999999?text=Image+Not+Found+-+Run+storage:link";
-                                        }}
-                                    />
-                                </div>
-                            </div>
-                        )}
-
                         <div className="mt-8 flex justify-end">
                             <PrimaryButton type="button" onClick={closeViewModal} className="font-black tracking-widest uppercase text-xs">Close</PrimaryButton>
                         </div>
                     </div>
                 )}
+            </Modal>
+
+            <Modal
+                show={isAssetPhotoExpanded && Boolean(viewingAssetPhoto) && !assetPhotoLoadFailed}
+                onClose={() => setIsAssetPhotoExpanded(false)}
+                maxWidth="7xl"
+            >
+                <div className="overflow-hidden rounded-2xl bg-gray-950">
+                    <div className="flex items-center justify-between gap-4 px-5 py-4 text-white">
+                        <div className="min-w-0">
+                            <p className="truncate text-sm font-bold">{viewingAsset?.name}</p>
+                            <p className="mt-0.5 text-xs text-gray-400">{viewingAsset?.asset_tag}</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setIsAssetPhotoExpanded(false)}
+                            aria-label="Close full-size asset photo"
+                            className="rounded-full p-2 text-gray-300 transition hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-white"
+                        >
+                            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m6 6 12 12M18 6 6 18" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div className="flex min-h-[50vh] max-h-[78vh] items-center justify-center bg-black px-3 py-4 sm:px-6">
+                        <img
+                            src={viewingAssetPhoto}
+                            alt={`${viewingAsset?.name || 'Asset'} (${viewingAsset?.asset_tag || ''})`}
+                            className="max-h-[72vh] max-w-full rounded-lg object-contain"
+                            onError={() => setAssetPhotoLoadFailed(true)}
+                        />
+                    </div>
+                </div>
             </Modal>
 
             <Modal show={isAddCategoryModalOpen} onClose={() => setIsAddCategoryModalOpen(false)} maxWidth="sm">

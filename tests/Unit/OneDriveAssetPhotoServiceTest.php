@@ -20,22 +20,25 @@ beforeEach(function () {
     ]);
 });
 
-it('uploads to the configured branch folder using a stable asset id and submission version', function () {
+it('uploads to the configured branch folder using the asset tag and submission version', function () {
     Http::fake([
         'https://login.microsoftonline.com/*' => Http::response(['access_token' => 'test-token']),
         'https://graph.microsoft.com/v1.0/*' => Http::response(['id' => 'drive-item-44', 'webUrl' => 'https://onedrive.example.test/item']),
     ]);
     $asset = new Asset(['branch' => 'Greenhills', 'asset_tag' => 'GH-00044']);
     $asset->id = 44;
+    $imageBytes = "\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\xFF\xD9";
 
-    $result = app(OneDriveAssetPhotoService::class)->upload($asset, 'jpeg-bytes', 'image/jpeg', 'jpg', 91);
+    $result = app(OneDriveAssetPhotoService::class)->upload($asset, $imageBytes, 'image/jpeg', 'jpg', 91);
 
     expect($result['item_id'])->toBe('drive-item-44')
-        ->and($result['filename'])->toBe('asset-44-91.jpg')
+        ->and($result['filename'])->toBe('GH-00044-91.jpg')
         ->and($result['branch_code'])->toBe('GH');
 
     Http::assertSent(fn ($request) => $request->method() === 'PUT'
-        && str_contains($request->url(), 'Asset%20Photos/Greenhills/asset-44-91.jpg:/content')
+        && str_contains($request->url(), 'Asset%20Photos/Greenhills/GH-00044-91.jpg:/content')
+        && $request->body() === $imageBytes
+        && $request->hasHeader('Content-Type', 'image/jpeg')
         && $request->hasHeader('Authorization', 'Bearer test-token'));
 });
 
@@ -49,8 +52,9 @@ it('uses the asset tag branch code if the branch name is missing', function () {
 
     $result = app(OneDriveAssetPhotoService::class)->upload($asset, 'jpeg-bytes', 'image/jpeg', 'jpg', 92);
 
-    expect($result['branch_code'])->toBe('MKT');
-    Http::assertSent(fn ($request) => str_contains($request->url(), 'Asset%20Photos/Makati/asset-45-92.jpg:/content'));
+    expect($result['branch_code'])->toBe('MKT')
+        ->and($result['filename'])->toBe('MKT-00045-92.jpg');
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'Asset%20Photos/Makati/MKT-00045-92.jpg:/content'));
 });
 
 it('refuses to upload an asset whose branch cannot be routed safely', function () {
