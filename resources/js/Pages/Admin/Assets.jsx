@@ -886,13 +886,13 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
             sidebarLinks={assetLinks} 
             onTriggerAddModal={canManageAssets ? openAddModal : null} 
             header={
-                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center w-full gap-4">
+                <div className="flex flex-col 2xl:flex-row justify-between items-start 2xl:items-center w-full gap-4">
                     <h2 className="font-semibold text-xl text-gray-800 leading-tight">
                         {isSuperAdmin ? 'Accountability Module' : 'My Accountability'} 
                         {!canManageAssets && <span className="text-xs ml-2 bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full uppercase tracking-wider">{userDepartment || 'Department'} View</span>}
                     </h2>
                     
-                    <div className="flex flex-col lg:flex-row items-center gap-3 w-full xl:w-auto">
+                    <div className="flex flex-col lg:flex-row lg:flex-wrap items-center gap-3 w-full 2xl:w-auto">
                         <div className="flex items-center bg-white border border-gray-300 rounded-md shadow-sm px-3 py-1.5 w-full lg:w-auto">
                             <svg className="w-4 h-4 text-indigo-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                             <select className="border-none p-0 text-sm font-bold text-gray-700 focus:ring-0 bg-transparent pr-8 cursor-pointer" value={dateRangeType} onChange={e => { setDateRangeType(e.target.value); if (e.target.value !== 'Custom Range') { setCustomStartDate(''); setCustomEndDate(''); }}}>
@@ -907,7 +907,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                             </div>
                         )}
 
-                        <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto mt-2 sm:mt-0 relative">
+                        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 w-full lg:w-auto mt-2 sm:mt-0 relative">
                             <div ref={dropdownRef} className="relative">
                                 <SecondaryButton onClick={openColumnDropdown} className="!border-gray-300 text-gray-700 bg-white hover:bg-gray-50 shadow-sm py-2 justify-center gap-2 whitespace-nowrap h-full">
                                     <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>
@@ -986,7 +986,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
             <div className="py-6 sm:py-12">
                 <div className="max-w-[100rem] mx-auto sm:px-6 lg:px-8">
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-6 mb-6">
                         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-center gap-4">
                             <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg></div>
                             <div><p className="text-[11px] font-black text-gray-500 uppercase tracking-tighter">Total Assets</p><p className="text-2xl font-black text-gray-900">{stats.totalItems}</p></div>
