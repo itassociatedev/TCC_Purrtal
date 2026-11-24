@@ -237,6 +237,15 @@ class AssetPhotoController extends Controller
                 Log::warning('Previous OneDrive asset photo could not be removed after replacement.', ['submission_id' => $submission->id]);
             }
         }
+        // Give the new photo its final name (the asset tag) now that the old file is gone.
+        // The photo is stored by item id, so a failed rename only leaves a temporary file name.
+        if (! empty($uploaded['item_id']) && ! empty($uploaded['final_filename'])) {
+            try {
+                app(OneDriveAssetPhotoService::class)->rename($uploaded['item_id'], $uploaded['final_filename']);
+            } catch (\Throwable $e) {
+                Log::warning('Approved asset photo could not be renamed to its asset tag.', ['submission_id' => $submission->id, 'exception' => $e->getMessage()]);
+            }
+        }
         if ($oldImagePath && str_starts_with($oldImagePath, '/storage/')) {
             Storage::disk('public')->delete(substr($oldImagePath, strlen('/storage/')));
         }

@@ -18,9 +18,13 @@ class OneDriveAssetPhotoService
         }
 
         $extension = strtolower(preg_replace('/[^a-z0-9]/i', '', $extension) ?: 'jpg');
-        // Upload to a new, deterministic versioned name. The previous approved
-        // image stays intact until the database approval commits successfully.
-        $filename = 'asset-'.$asset->id.'-'.$revision.'.'.$extension;
+        // The final name is the asset tag (GH-00034.jpg). The upload first goes to a
+        // temporary versioned name so a replacement never overwrites the current approved
+        // image; call rename() with `final_filename` once the approval has committed and
+        // the previous image is removed.
+        $stem = AssetTagGenerator::fileSafe((string) $asset->asset_tag) ?: 'asset-'.$asset->id;
+        $finalFilename = $stem.'.'.$extension;
+        $filename = $stem.'.pending-'.$revision.'.'.$extension;
         $folder = trim((string) ($config['folder_path'] ?? ''), '/').'/'.trim((string) $branchFolder, '/');
         $path = collect(array_filter([$folder, $filename]))
             ->flatMap(fn (string $part) => explode('/', $part))
@@ -36,8 +40,25 @@ class OneDriveAssetPhotoService
             'item_id' => $response->json('id'),
             'url' => $response->json('webUrl'),
             'filename' => $filename,
+            'final_filename' => $finalFilename,
             'branch_code' => $branchCode,
         ];
+    }
+
+    /** Give an uploaded item its final file name (the item id, which the database stores, does not change). */
+    public function rename(string $itemId, string $filename): void
+    {
+        $config = config('services.onedrive');
+        if ((blank($config['site_id'] ?? null) && blank($config['user_id'] ?? null)) || blank($itemId) || blank($filename)) {
+            return;
+        }
+
+        Http::withToken($this->token())
+            ->patch($this->driveRoot($config).'/items/'.rawurlencode($itemId), [
+                'name' => $filename,
+                '@microsoft.graph.conflictBehavior' => 'fail',
+            ])
+            ->throw();
     }
 
     public function download(string $itemId): array

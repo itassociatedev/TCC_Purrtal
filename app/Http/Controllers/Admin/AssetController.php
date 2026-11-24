@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Asset;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Services\AssetTagGenerator;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Log;
@@ -112,7 +113,7 @@ class AssetController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'asset_tag' => 'required|string|max:255|unique:assets',
+            'asset_tag' => 'nullable|string|max:255|unique:assets',
             'category' => 'nullable|string|max:255',
             'classification' => 'nullable|string|max:255',
             'department' => 'nullable|string|max:255',
@@ -138,6 +139,15 @@ class AssetController extends Controller
         $asset = new Asset();
         $asset->fill(collect($validated)->except('image')->all());
 
+        // A blank tag is generated from the branch (GH-00378). A typed tag is kept as is.
+        if (blank($asset->asset_tag)) {
+            $branchCode = AssetTagGenerator::codeForBranch($asset->branch);
+            if (! $branchCode) {
+                return back()->withErrors(['asset_tag' => 'Enter an asset tag, or choose Greenhills, Makati or Alabang as the branch so a tag can be generated.']);
+            }
+            $asset->asset_tag = app(AssetTagGenerator::class)->next($branchCode);
+        }
+
         // 泙 HANDLE IMAGE SAVE
         if (!empty($asset->purchase_date) && !empty($asset->warranty_expiration)) {
             $pDate = strtotime($asset->purchase_date);
@@ -146,6 +156,9 @@ class AssetController extends Controller
             $asset->deviation = $diff . ' Days';
         }
 
+        // unit_value is optional in the form but the column is NOT NULL.
+        $asset->unit_value = $asset->unit_value ?? 0;
+        $asset->qty = $asset->qty ?? 1;
         $asset->total_value = ($asset->unit_value * $asset->qty);
 
         if ($request->hasFile('image')) {
@@ -158,12 +171,12 @@ class AssetController extends Controller
 
             $this->stageAssetPhoto($request, null, 'new_asset', $asset->getAttributes());
 
-            return back()->with('success', 'Asset details and photo were submitted for IT review. The asset will appear after approval.');
+            return back()->with('success', 'Asset details and photo were submitted for IT review with tag ' . $asset->asset_tag . '. The asset will appear after approval.');
         }
 
         $asset->save();
 
-        return back()->with('success', 'Asset created successfully.');
+        return back()->with('success', 'Asset created successfully with tag ' . $asset->asset_tag . '.');
     }
 
     public function update(Request $request, Asset $asset)
@@ -431,7 +444,14 @@ class AssetController extends Controller
                     $tag = trim((string) ($row['tag'] ?? $row['asset tag'] ?? $row['assettag'] ?? $row['asset_tag'] ?? ''));
                     $name = trim((string) ($row['name'] ?? $row['asset name'] ?? $row['asst name'] ?? ''));
                     if ($tag === '' && $name === '') continue;
-                    if ($tag === '') $tag = 'AST-' . strtoupper(substr(hash('sha256', $name . microtime(true)), 0, 8));
+                    if ($tag === '') {
+                        // No tag in the workbook: use the next branch number (GH-00378) when the branch
+                        // is known; otherwise keep the old random placeholder so the row still imports.
+                        $tagBranchCode = AssetTagGenerator::codeForBranch(trim((string) ($row['branch'] ?? '')) ?: $workbookBranch ?: $fallbackBranch);
+                        $tag = $tagBranchCode
+                            ? app(AssetTagGenerator::class)->next($tagBranchCode)
+                            : 'AST-' . strtoupper(substr(hash('sha256', $name . microtime(true)), 0, 8));
+                    }
 
                     $prefix = strtolower((string) preg_replace('/-.*/', '', $tag));
                     $branch = self::branchFromAssetTag($tag, $branchCodes)
@@ -584,7 +604,10 @@ class AssetController extends Controller
                 if (empty($assetTag) && empty($assetName)) continue;
 
                 if (empty($assetTag)) {
-                    $assetTag = 'AST-' . strtoupper(substr(md5(uniqid()), 0, 6));
+                    $tagBranchCode = AssetTagGenerator::codeForBranch(trim($row['branch'] ?? ''));
+                    $assetTag = $tagBranchCode
+                        ? app(AssetTagGenerator::class)->next($tagBranchCode)
+                        : 'AST-' . strtoupper(substr(md5(uniqid()), 0, 6));
                 }
                 if (empty($assetName)) {
                     $assetName = 'Unnamed Asset';

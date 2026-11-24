@@ -66,8 +66,9 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
                                 <TextInput value={form.data.name} onChange={e => form.setData('name', e.target.value)} className="mt-1 w-full" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Asset Tag *</label>
-                                <TextInput value={form.data.asset_tag} onChange={e => form.setData('asset_tag', e.target.value)} className="mt-1 w-full" placeholder="e.g., AST-12345" />
+                                <label className="block text-sm font-medium text-gray-700">Asset Tag</label>
+                                <TextInput value={form.data.asset_tag} onChange={e => form.setData('asset_tag', e.target.value)} className="mt-1 w-full" placeholder="Leave blank to auto-generate (e.g., GH-00378)" />
+                                <p className="mt-1 text-xs text-gray-500">If blank, the next tag for the selected branch is assigned automatically.</p>
                             </div>
                         </div>
 
@@ -89,7 +90,8 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Branch</label>
-                                <TextInput value={form.data.branch} onChange={e => form.setData('branch', e.target.value)} className="mt-1 w-full" />
+                                <TextInput value={form.data.branch} onChange={e => form.setData('branch', e.target.value)} className="mt-1 w-full" list="asset-branch-options" placeholder="Greenhills, Makati or Alabang" />
+                                <datalist id="asset-branch-options"><option value="Greenhills" /><option value="Makati" /><option value="Alabang" /></datalist>
                             </div>
                         </div>
 
