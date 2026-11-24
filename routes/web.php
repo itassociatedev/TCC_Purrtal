@@ -559,7 +559,8 @@ Route::prefix('prpo')->name('prpo.')->middleware(['auth'])->group(function () {
     Route::prefix('attendance')->middleware(['auth'])->group(function () {
     Route::get('/overview', [AttendanceController::class, 'overview'])->name('attendance.overview');
     Route::get('/setup-schedule', [AttendanceController::class, 'setupSchedule'])->name('attendance.setup-schedule');
-    Route::get('/schedule-view', [AttendanceController::class, 'scheduleView'])->name('attendance.schedule-view');
+    // Schedule View was merged into Setup Schedule (view-only for schedule_view access); keep old links working
+    Route::get('/schedule-view', fn () => redirect()->route('attendance.setup-schedule'))->name('attendance.schedule-view');
     Route::get('/calendar', [AttendanceController::class, 'calendar'])->name('attendance.calendar');
 });
 

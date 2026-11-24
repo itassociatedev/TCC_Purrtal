@@ -1,17 +1,22 @@
 <?php
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Support\Facades\{DB, Schema};
+use Illuminate\Support\Facades\{DB, Log, Schema};
 
 return new class extends Migration {
     public function up(): void
     {
         DB::transaction(function () {
             $employee = DB::table('roles')->whereRaw('LOWER(TRIM(name)) = ?', ['employee'])->first();
-            if (!$employee) throw new \RuntimeException('The existing employee role is required.');
+            // A fresh database (CI, new installs) has no roles yet, so there is nothing to convert.
+            if (!$employee) return;
             $mapping = ['IT TL' => 'IT Team Leader', 'IT Member' => 'IT Associate', 'IT Intern' => 'IT Intern'];
             foreach ($mapping as $roleName => $positionName) {
                 $position = DB::table('positions')->whereRaw('LOWER(TRIM(name)) = ?', [strtolower($positionName)])->orderBy('id')->first();
-                if (!$position) throw new \RuntimeException('Existing IT position required: '.$positionName);
+                if (!$position) {
+                    // Never stop a deploy halfway: leave this role and its users untouched and report it.
+                    Log::warning("use_positions_for_ticket_access: position \"{$positionName}\" not found; role \"{$roleName}\" was left unchanged.");
+                    continue;
+                }
                 $role = DB::table('roles')->whereRaw('LOWER(TRIM(name)) = ?', [strtolower($roleName)])->first();
                 $emails = ['IT TL' => 'it-tl@tcc.local', 'IT Member' => 'it-member@tcc.local', 'IT Intern' => 'it-intern@tcc.local'];
                 // Preserve IDs, passwords, departments, branch links, tickets and account status.
