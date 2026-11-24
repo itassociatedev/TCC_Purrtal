@@ -1,6 +1,6 @@
 # Task Module leaderboard scoring
 
-Implemented 21 November 2026. This applies to Task Module scoring, not IT Ticketing SLA calculations. Approval, assignment, review and handover eligibility continue to use the existing Task Module permissions.
+Implemented 21 November 2026; ownership allocation updated 24 November 2026. This applies to Task Module scoring, not IT Ticketing SLA calculations. Approval, assignment, review and handover eligibility continue to use the existing Task Module permissions.
 
 ## Approved defaults
 
@@ -27,15 +27,17 @@ Priority is frozen at the first completed approval. Existing edit permissions go
 
 ## Ownership allocation
 
-The original assignee initially holds 100% of the task share. An accepted handover transfers 20% (configurable) of the current holder's remaining share to the recipient. A to B to C produces A 80%, B 16%, C 4%. If the final task earns 0.80, these awards are 0.64, 0.128 and 0.032 points. Earlier shares remain intact. Repeated transfers and returns to an earlier holder are flagged for review, not silently rejected.
+The original assignee initially holds 100%. Once a handover to another person is accepted, one fixed pool of 50% (configurable) of the final earned points is reserved. The original owner retains 50%; the pool is split equally among all distinct accepted recipients. A to B gives 50/50; A to B to C gives 50/25/25; A to B to C to D gives 50/16.666.../16.666.../16.666.... For a task earning 0.80 points, two recipients receive 0.20 each and the original assignee receives 0.40. There is no additional ownership-criterion penalty.
 
-Acceptance reserves allocation only; points remain zero until eligible completion. Pending, declined and cancelled requests do not transfer shares. Each acceptance records previous owner, recipient, acceptance time, reserved percentage and shares. Recalculation can redistribute the final shares under the selected policy; the prior reservation and recalculation are both audited.
+Later acceptances redistribute the same pool rather than cutting each holder's share again. Repeated recipients are counted once, and a return to the original assignee does not grant the original owner an additional pool share. Repeated or returning-owner transfers remain flagged for review. First-acceptance order resolves residual micro-shares deterministically, keeping the exact total at 100% rather than truncating three equal shares to 16.66% each.
 
-Points use integer micro-points (1,000,000 = 1 point). Share rounding uses largest remainder allocation so the sum awarded exactly equals the task's earned units. Displayed points use four decimals and percentages use two; calculations and ranking use the integer ledger, not rounded text. Group and period filters sum those same allocations. Completion counts belong to the final completing assignee; earlier handover holders may receive points with zero completed tasks. Allocation department/branch snapshots retain where each ownership portion was recorded. Period filters use completed/approved dates, not submission dates.
+Acceptance reserves allocation only; points remain zero until eligible completion. Pending, declined and cancelled requests do not affect the pool. Each acceptance records previous owner, recipient, acceptance time, pool percentage and reserved shares. Settings recalculation can change the configured pool size; prior reservations and results remain audited. The `equal_handover_pool_v2` allocation-rule marker identifies the new method. The additive 2026_11_23_000001_equalize_task_handover_pool migration updates existing recorded states once and writes before/after ownership_pool_recalculation audit entries without changing task status, history, policy version or earned task points. Deleted awards are not restored and missing legacy evidence is not invented.
+
+Points use integer micro-points (1,000,000 = 1 point). Share rounding uses largest remainder allocation so the sum awarded exactly equals the task's earned units. Displayed points use two decimals and percentages use two; calculations and ranking use the integer ledger, not rounded text. Group and period filters sum those same allocations. Completion counts belong to the final completing assignee; earlier handover holders may receive points with zero completed tasks. Allocation department/branch snapshots retain where each ownership portion was recorded. Period filters use completed/approved dates, not submission dates.
 
 ## Admin Workspace Setup
 
-The Leaderboard Scoring section is server-backed and restricted to active portal Admin accounts. The four fixed weights are displayed and must total 100%. Administrators can configure increasing lateness bounds with non-increasing scores, the deduction per return (0-20), and the transfer percentage (0-100). The final lateness bracket must be unbounded. A sample calculation is visible before Save.
+The Leaderboard Scoring section is server-backed and restricted to active portal Admin accounts. The four fixed weights are displayed and must total 100%. Administrators can configure increasing lateness bounds with non-increasing scores, the deduction per return (0-20), and the handover pool percentage (0-100). The final lateness bracket must be unbounded. A sample calculation is visible before Save.
 
 Newly created tasks only: existing tasks retain their policy version, including unfinished tasks. Also recalculate existing completed tasks: existing Completed records are reevaluated using the new version; incomplete historical evidence still earns zero. In-progress records retain their previous version. Policy changes use optimistic version checking; a stale edit returns 409 and must be reloaded. Settings changes and recalculation counts are written to system_logs and detailed task_scoring_audits. No task status is changed by recalculation.
 
@@ -66,7 +68,20 @@ Apply the scoring migration before testing these screens:
 
 ```powershell
 php artisan migrate --path=database/migrations/2026_11_21_000001_create_task_scoring_records.php
+php artisan migrate --path=database/migrations/2026_11_23_000001_equalize_task_handover_pool.php
 npm run build
 ```
 
 The migration is additive and does not rewrite task records. Keep this change off beta until acceptance testing is complete.
+
+
+24 November 2026: Corrected leaderboard column sizing after adding Leaderboard Points. The normal table budgets six columns, including Share; Needs attention uses a separate five-column layout. Percentages and overdue text no longer occupy the same horizontal space. Existing narrow-screen table scrolling is preserved.
+
+
+24 November 2026: Employee/intern previews now suppress leaderboard navigation, dashboard preview and full leaderboard even when the authenticated administrator has leaderboard permission. `leaderboardAccess.mjs` intersects the server capability with the effective preview role/position; previews never grant access. Direct navigation falls back to Dashboard. Existing backend 403 checks remain authoritative for real employee/intern requests. Regression: tests/leaderboard-access.test.mjs and TaskScoringWorkflowTest employee/intern denials.
+
+
+24 November 2026: Task leaderboard points display two decimal places in the table, podium, dashboard preview, pie legend, Presenter View, score breakdown/exports and admin sample calculation. Exact micro-point storage, ranking, allocation and share calculations remain unchanged; displayed rounded subtotals can differ from rounded totals.
+
+
+24 November 2026: Increased the configured handover pool/default from 20% to 50%. The original assignee keeps 50% once another recipient accepts; the other 50% is divided equally among distinct accepted recipients. Without an accepted handover the owner keeps 100%. The four rubric weights remain 30/30/20/20 and total earned task points are unchanged. The local policy was versioned through the admin settings workflow with completed-task recalculation, retaining before/after audits. Existing installations must save the new pool under Workspace Setup > Leaderboard Scoring and choose recalculation to update old completed awards; changing the source default alone does not replace a saved database policy.

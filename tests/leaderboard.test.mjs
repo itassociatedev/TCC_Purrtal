@@ -147,9 +147,9 @@ test('missing historical scores and Low completions count but never manufacture 
  assert.equal(board.total,2);assert.equal(board.totalUnits,0);assert.ok(board.rows.every(r=>r.points===0&&r.unscored===1));
 });
 test('handover allocations are conserved across people and group filters without duplicate awards',()=>{
- const scoring={eligible:true,earned_units:800000,allocations:[{id:1,name:'Alex',department:'IT',branch:'Makati',units:800000,awarded_units:640000},{id:2,name:'Bea',department:'HR',branch:'Alabang',units:160000,awarded_units:128000},{id:3,name:'Cara',department:'IT',branch:'Makati',units:40000,awarded_units:32000}]};
+ const scoring={eligible:true,earned_units:800000,allocations:[{id:1,name:'Alex',department:'IT',branch:'Makati',units:500000,awarded_units:400000},{id:2,name:'Bea',department:'HR',branch:'Alabang',units:250000,awarded_units:200000},{id:3,name:'Cara',department:'IT',branch:'Makati',units:250000,awarded_units:200000}]};
  const t=task(503,'Cara',{scoring});const people=buildLeaderboard([t,t]);assert.equal(people.total,1);assert.equal(people.totalUnits,800000);assert.equal(people.rows.find(r=>r.name==='Alex').completed,0);
- assert.equal(buildLeaderboard([t],{department:'IT'}).totalUnits,672000);assert.equal(buildLeaderboard([t],{branch:'Alabang'}).totalUnits,128000);
+ assert.equal(buildLeaderboard([t],{department:'IT'}).totalUnits,600000);assert.equal(buildLeaderboard([t],{branch:'Alabang'}).totalUnits,200000);
  assert.equal(buildLeaderboard([t],{group:'departments'}).totalUnits,800000);assert.equal(buildLeaderboard([t],{from:'2026-10-26'}).totalUnits,0);
  assert.equal(people.rows.reduce((n,r)=>n+r.scoreEntries.reduce((v,e)=>v+e.awardedUnits,0),0),800000);
 });

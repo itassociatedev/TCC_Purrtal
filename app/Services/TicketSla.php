@@ -115,7 +115,7 @@ class TicketSla
         if (!$ticket->sla_policy) return;
 
         $state = $ticket->sla_state;
-        foreach (['resolved_at', 'resolved_by', 'resolution_result', 'resolution_documentation',
+        foreach (['resolved_at', 'resolved_by', 'resolution_score', 'resolution_result', 'resolution_documentation',
             'confirmed_at', 'workaround_accepted_at', 'paused_at', 'pause_reason'] as $key) {
             unset($state[$key]);
         }
@@ -233,10 +233,12 @@ class TicketSla
                 $this->stop($state, $clock);
                 $state['resolved_at'] = $this->stamp();
                 $state['resolved_by'] = $actor->id;
+                // Freeze priority and points at permanent resolution; later edits cannot rewrite the award.
+                $state['resolution_score'] = TicketResolutionScore::capture($ticket->priority,$actor->id,$state['resolved_at']);
                 $state['resolution_documentation'] = $documentation;
                 $state['paused_at'] = null;
                 $state['pause_reason'] = null;
-                $this->activity($ticket, $actor, 'resolved', $documentation['resolution_details'], $documentation);
+                $this->activity($ticket, $actor, 'resolved', $documentation['resolution_details'], $documentation + ['resolution_score'=>$state['resolution_score']]);
                 $this->notify($ticket, 'Resolved. Please verify service and reply with confirmation or any continuing issue.');
             }
             if ($closing) {
@@ -252,7 +254,7 @@ class TicketSla
                 $state['resolved_at'] = null;
                 $state['workaround_accepted_at'] = null;
                 $state['confirmed_at'] = null;
-                unset($state['resolution_result']);
+                unset($state['resolution_result'], $state['resolution_score']);
                 $state['paused_at'] = null;
                 $state['pause_reason'] = null;
                 $state['running_since'] = $this->stamp();
@@ -296,6 +298,14 @@ class TicketSla
             $ticket->sla_state = $state;
         } elseif (!in_array($action, ['save', 'update', 'reopen'])) {
             throw ValidationException::withMessages(['action' => 'Existing tickets are excluded from SLA tracking.']);
+        }
+        // Older untracked tickets still earn resolution points; SLA tracking remains disabled for them.
+        if (!$clock && $desired==='resolved' && $oldStatus!=='resolved') {
+            $state=$ticket->sla_state ?? [];
+            $state['resolved_at']=$this->stamp();$state['resolved_by']=$actor->id;
+            $state['resolution_score']=TicketResolutionScore::capture($ticket->priority,$actor->id,$state['resolved_at']);
+            $ticket->sla_state=$state;
+            $this->activity($ticket,$actor,'resolved',$data['note'] ?? 'Ticket resolved.',['resolution_score'=>$state['resolution_score']]);
         }
         if ($desired !== $oldStatus) {
             $this->activity($ticket, $actor, 'status_changed', $data['note'] ?? 'Status updated.', ['from' => $oldStatus, 'to' => $desired]);

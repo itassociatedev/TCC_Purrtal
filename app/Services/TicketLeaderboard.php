@@ -19,7 +19,7 @@ class TicketLeaderboard
         $within = fn ($date) => !$start || ($date && \Carbon\CarbonImmutable::parse($date)->betweenIncluded($start, $end));
         // Start from the roster so IT staff with zero resolutions still appear.
         $members = TicketAccess::members($preview)->with(['role', 'branches', 'branch'])->get();
-        $rows = $members->mapWithKeys(fn ($u) => [$u->id => ['id' => $u->id, 'name' => $u->name, 'role' => $u->position?->name, 'branches' => $u->branches->pluck('name')->push($u->branch?->name)->filter()->unique()->sort()->implode(', '), 'resolved' => 0, 'overdue' => 0, 'rating_count' => 0, 'rating_average' => null, 'sla_response_average' => null, 'sla_resolution_average' => null, 'sla_response_count' => 0, 'sla_resolution_count' => 0]])->all();
+        $rows = $members->mapWithKeys(fn ($u) => [$u->id => ['id' => $u->id, 'name' => $u->name, 'role' => $u->position?->name, 'branches' => $u->branches->pluck('name')->push($u->branch?->name)->filter()->unique()->sort()->implode(', '), 'points' => 0, 'unscored' => 0, 'resolved' => 0, 'overdue' => 0, 'rating_count' => 0, 'rating_average' => null, 'sla_response_average' => null, 'sla_resolution_average' => null, 'sla_response_count' => 0, 'sla_resolution_count' => 0]])->all();
         abort_if($memberId !== null && !isset($rows[$memberId]), 404);
         $detailMember = $memberId !== null ? $rows[$memberId] : null;
         $entries = [];
@@ -31,10 +31,15 @@ class TicketLeaderboard
             if (in_array($ticket->status, ['resolved', 'closed'])) {
                 // Actual resolver gets credit, even when assignment later changes.
                 // Count each currently completed ticket once; reopened work is excluded.
-                $resolver = $ticket->sla_state['resolved_by'] ?? $ticket->activities->first()?->actor_id;
-                $resolvedAt = $ticket->sla_state['resolved_at'] ?? $ticket->activities->first()?->created_at;
+                $latestResolution=$ticket->activities->sortByDesc('id')->first();
+                $resolver = $ticket->sla_state['resolved_by'] ?? $latestResolution?->actor_id;
+                $resolvedAt = $ticket->sla_state['resolved_at'] ?? $latestResolution?->created_at;
                 if (isset($rows[$resolver]) && $within($resolvedAt)) {
                     $rows[$resolver]['resolved']++;
+                    // Sum one frozen award per currently completed ticket, credited to its recorded resolver.
+                    $award=$ticket->sla_state['resolution_score'] ?? null;
+                    if ($award && (int)($award['resolved_by'] ?? 0)===(int)$resolver) $rows[$resolver]['points']+=(int)$award['points'];
+                    else $rows[$resolver]['unscored']++;
                     // Use the same completed-ticket cohort and recorded resolver as the ranking.
                     // Missing milestones are excluded, not counted as zero-second results.
                     $snapshot = $sla->snapshot($ticket);
@@ -88,16 +93,16 @@ class TicketLeaderboard
         unset($row);
         $total = array_sum(array_column($rows, 'resolved'));
         $rows = array_values($rows);
-        usort($rows, fn ($a, $b) => ($b['resolved'] <=> $a['resolved']) ?: strcasecmp($a['name'], $b['name']) ?: ($a['id'] <=> $b['id']));
+        usort($rows, fn ($a, $b) => ($b['points'] <=> $a['points']) ?: strcasecmp($a['name'], $b['name']) ?: ($a['id'] <=> $b['id']));
         $rank = 0; $last = null;
         foreach ($rows as $index => &$row) {
-            if ($last !== $row['resolved']) $rank = $index + 1;
-            $last = $row['resolved'];
+            if ($last !== $row['points']) $rank = $index + 1;
+            $last = $row['points'];
             $row['rank'] = $rank;
             $row['percentage'] = $total ? round($row['resolved'] / $total * 100, 2) : 0;
         }
         unset($row);
-        return ['members' => $rows, 'total_resolved' => $total, 'period' => $period, 'from' => $start?->toIso8601String(), 'to' => $end->toIso8601String(),
+        return ['members' => $rows, 'total_resolved' => $total, 'total_points'=>array_sum(array_column($rows,'points')), 'period' => $period, 'from' => $start?->toIso8601String(), 'to' => $end->toIso8601String(),
             'detail' => $detailMember && $detail ? $this->detailPage($detailMember, $detail, $entries, $page, $sla, $exporting) : null];
     }
 
@@ -134,12 +139,12 @@ class TicketLeaderboard
     {
         if (!empty($data['detail'])) return $this->exportDetail($data);
 
-        $rows = [['Rank', 'Employee', 'Role', 'Branches', 'Resolved tickets', 'Contribution (%)', 'Average rating / 5', 'Rated tickets', 'Overdue tickets', 'Average response (support minutes)', 'Average resolution (support minutes)', 'Response samples', 'Resolution samples']];
-        foreach ($data['members'] as $member) $rows[] = [$member['rank'], $member['name'], $member['role'], $member['branches'], $member['resolved'], number_format($member['percentage'], 2, '.', ''), $member['rating_average'] ?? 'Not rated yet', $member['rating_count'], $member['overdue'], isset($member['sla_response_average']) ? round($member['sla_response_average'] / 60, 2) : 'N/A', isset($member['sla_resolution_average']) ? round($member['sla_resolution_average'] / 60, 2) : 'N/A', $member['sla_response_count'], $member['sla_resolution_count']];
+        $rows = [['Rank', 'Employee', 'Role', 'Branches', 'Leaderboard points', 'Unscored resolutions', 'Resolved tickets', 'Contribution (%)', 'Average rating / 5', 'Rated tickets', 'Overdue tickets', 'Average response (support minutes)', 'Average resolution (support minutes)', 'Response samples', 'Resolution samples']];
+        foreach ($data['members'] as $member) $rows[] = [$member['rank'], $member['name'], $member['role'], $member['branches'], $member['points'], $member['unscored'], $member['resolved'], number_format($member['percentage'], 2, '.', ''), $member['rating_average'] ?? 'Not rated yet', $member['rating_count'], $member['overdue'], isset($member['sla_response_average']) ? round($member['sla_response_average'] / 60, 2) : 'N/A', isset($member['sla_resolution_average']) ? round($member['sla_resolution_average'] / 60, 2) : 'N/A', $member['sla_response_count'], $member['sla_resolution_count']];
         return app(TicketWorkbook::class)->download([
             'Leaderboard' => $rows,
             'Scope' => [['Setting', 'Value'], ['Period', $data['period']], ['From', $data['from'] ?? 'All time'], ['As of', $data['to']], ['Environment', $preview ? 'Preview' : 'Live'],
-                ['Resolved date', 'Latest resolution date; currently resolved/closed tickets only'], ['Ratings date', 'Feedback submission date; latest feedback per ticket'], ['Overdue date', 'Ticket creation date; currently open overdue assignments'], ['Total resolved', $data['total_resolved']], ['SLA averages', 'Support time on currently resolved/closed tickets resolved in the selected period; credited to resolver; missing milestones excluded'], ['Other table filters', 'Do not apply to leaderboard']],
+                ['Resolved date', 'Latest resolution date; currently resolved/closed tickets only'], ['Ratings date', 'Feedback submission date; latest feedback per ticket'], ['Overdue date', 'Ticket creation date; currently open overdue assignments'], ['Total resolved', $data['total_resolved']], ['Total points',$data['total_points']], ['Ranking','Frozen priority points at resolution; later priority/settings edits do not change awards'], ['SLA averages', 'Support time on currently resolved/closed tickets resolved in the selected period; credited to resolver; missing milestones excluded'], ['Other table filters', 'Do not apply to leaderboard']],
         ], 'tcc-it-leaderboard-'.$data['period'].'-'.now('Asia/Manila')->format('Ymd-His').'.xlsx');
     }
 
@@ -154,7 +159,7 @@ class TicketLeaderboard
         };
         $rows = $type === 'ratings'
             ? [['Ticket ID', 'Subject', 'Rating / 5', 'Comment', 'Submitted']]
-            : [['Ticket ID', 'Subject', 'Status', 'Location', 'Assigned to', $type === 'resolved' ? 'Resolved' : 'Created']];
+            : [['Ticket ID', 'Subject', 'Status', 'Location', 'Assigned to', $type === 'resolved' ? 'Resolved' : 'Created', 'Resolution priority', 'Resolution points']];
 
         foreach ($detail['entries'] as $entry) {
             if ($type === 'ratings') {
@@ -162,7 +167,7 @@ class TicketLeaderboard
             } else {
                 $ticket = $entry['ticket'];
                 $rows[] = [$ticket->ticket_code, $ticket->subject, ucfirst(str_replace('_', ' ', $ticket->status)),
-                    $ticket->affectedLocationName(), $ticket->assignee?->name, $entry['at']];
+                    $ticket->affectedLocationName(), $ticket->assignee?->name, $entry['at'], $ticket->sla_state['resolution_score']['label'] ?? 'Not recorded', $ticket->sla_state['resolution_score']['points'] ?? 'Not scored'];
             }
         }
 

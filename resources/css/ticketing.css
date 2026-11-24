@@ -550,3 +550,10 @@ html[data-clinic-theme=dark] .ticketing .leaderboard-place-1 { --podium-color: #
 html[data-clinic-theme=dark] .ticketing .leaderboard-place-2 { --podium-color: #bdc9df; border-color: #56657c; background: #252e3d; }
 html[data-clinic-theme=dark] .ticketing .leaderboard-place-3 { --podium-color: #dfb194; border-color: #755b4a; background: #322b2d; }
 html[data-clinic-theme=dark] .ticketing .leaderboard-overdue { color: #fdba74; }
+
+/* Archived priority cards remain useful for historical filtering without mixing with active choices. */
+.ticket-priority-group { margin-top: 18px; }
+.ticket-priority-group h4 { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
+
+/* View and optional review actions share one row and wrap together on narrow screens. */
+.ticket-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }

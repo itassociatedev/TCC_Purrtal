@@ -1,5 +1,15 @@
 # Ticketing change history
 
+## 24 November 2026 - Review dismissed popups later
+
+Eligible closed tickets now offer Leave A Review from ticket details. Dismissal suppresses the automatic prompt but allows a later manual review. One submitted rating per ticket is enforced under a row lock, and the option disappears after submission. Existing ownership, half-star, optional-comment and IT rating rules remain unchanged; no data migration. Added backend and frontend regression coverage.
+
+
+## 24 November 2026 - Priority-based leaderboard points and descriptions
+
+Added supervisor-managed points and descriptions per priority. Defaults are Critical 20, High 10, Medium 5 and Low 1; creation choices show optional descriptions. Permanent resolution freezes priority/points/resolver; later edits do not rewrite the award. Reopening/revision suspends completion credit and re-resolution replaces the award. Leaderboard ranks by points while retaining counts, ratings and count-based pie shares. Summary/detail exports show scores, and historical resolved/closed tickets receive an audited backfill where resolution evidence exists. Added isolated scoring tests and updated priority regression fixtures. This change is local pending user testing; no push.
+
+
 ## 21 November 2026 - EVP access follows position
 
 Changed the EVP leaderboard/all-branch exception from database role to the existing Executive Vice President position. Verified employee 377 now has leaderboard access while a role-only EVP identity does not. Assigned the existing EVP position to the named local EVP test account, preserving its database role and password; updated repeatable local seeders. No new roles or positions. Expanded rollback-only permission regression; comments/docs updated. No push performed.

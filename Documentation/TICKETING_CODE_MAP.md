@@ -298,3 +298,19 @@ Focused checks: [workload and deep links](../tests/verify-ticket-workload-filter
 ## 21 November 2026 - EVP position capability
 
 TicketAccess::canViewLeaderboard now checks `ticketing.leaderboard_viewer_positions` against User::position. Branch access reuses the capability and no longer treats the EVP database role as an exception. LocalEvpAccountSeeder and LocalRoleAccountsSeeder resolve the existing EVP position; no title/role creation occurs. The EVP regression covers employee 377, position-based access with admin role, denial for role-only EVP identities, all-branch access and unchanged management/export denials.
+
+
+## 24 November 2026 - Priority-based resolution points
+
+- `app/Services/TicketResolutionScore.php`: frozen award capture and audited historical-priority reconstruction.
+- `app/Services/TicketSla.php`: capture on resolution; clear on reopening/revision; resolved activity evidence.
+- `app/Services/TicketLeaderboard.php`: point aggregation/ranking, separate completion counts, exports and resolver attribution.
+- `app/Models/TicketPriority.php`, `TicketPrioritySettings.php`, `TicketPriorityController.php`: integer score, description and supervisor validation.
+- `database/migrations/2026_11_24_000001_add_ticket_priority_scoring.php`: priority fields, initial scores and existing-ticket backfill.
+- `resources/js/Components/TicketSlaSettings.jsx`: admin score/description inputs; `TicketLeaderboard.jsx`: points, podium and captured-score drill-down; `resources/js/Pages/Tickets/Index.jsx`: creation dropdown descriptions; `TicketController.php`: description props.
+- `tests/Feature/TicketPriorityScoringTest.php`: defaults, permission/validation boundaries, freeze, reopen, historical backfill, custom priority, archival, rankings, periods, exports and closure.
+
+
+## 24 November 2026 - Recover dismissed ticket reviews
+
+`TicketAccess::feedbackResolverId/canLeaveFeedback` centralize resolver attribution and manual-review eligibility. `TicketController` adds `can_submit_feedback` to list/deep-link tickets and treats `feedback_dismissed` separately from submitted `feedback` under the existing ticket row lock. `Tickets/Index.jsx` shares TicketRowActions between desktop rows/mobile tiles and shows Leave A Review beside View for eligible closed tickets and reuses `TicketRatingDialog` from TicketFeedbackQueue.jsx. No new routes or database columns. Tests: tests/Feature/TicketFeedbackRecoveryTest.php and the updated form submission regression.

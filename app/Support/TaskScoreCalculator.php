@@ -6,16 +6,21 @@ class TaskScoreCalculator
 {
     public const SCALE = 1000000;
     public static function allocations(array $owner, array $transfers, float $percent): array {
-        $shares = [(string)$owner['id'] => $owner + ['units'=>self::SCALE]];
+        // Reserve one fixed pool, shared equally by distinct accepted recipients.
+        // Returning to an earlier owner never creates another share or reduces the original owner's share.
+        $ownerKey=(string)$owner['id']; $recipients=[]; $current=$ownerKey;
         foreach ($transfers as $transfer) {
-            $from = (string)$transfer['from']['id']; $to = (string)$transfer['to']['id'];
-            if (!isset($shares[$from])) throw new \RuntimeException('Handover owner evidence is inconsistent.');
-            $units = (int)floor($shares[$from]['units'] * $percent / 100);
-            $shares[$from]['units'] -= $units;
-            $shares[$to] ??= $transfer['to'] + ['units'=>0];
-            $shares[$to]['units'] += $units;
+            if ((string)$transfer['from']['id'] !== $current) throw new \RuntimeException('Handover owner evidence is inconsistent.');
+            $current=(string)$transfer['to']['id'];
+            if ($current !== $ownerKey) $recipients[$current] ??= $transfer['to'];
         }
-        return array_values($shares);
+        if (!$recipients) return [$owner + ['units'=>self::SCALE]];
+        $pool=(int)round(self::SCALE*$percent/100);
+        $shares=[$owner + ['units'=>self::SCALE-$pool]];
+        // Assign residual micro-shares in first-acceptance order so the total stays exactly 100%.
+        $each=intdiv($pool,count($recipients)); $remainder=$pool%count($recipients);
+        foreach (array_values($recipients) as $i=>$recipient) $shares[]=$recipient + ['units'=>$each+($i<$remainder?1:0)];
+        return $shares;
     }
     public static function calculate(array $task, array $evidence, array $policy, bool $hasChildren = false): array {
         $submissions = $evidence['submissions'] ?? []; $last = $submissions ? end($submissions) : null;
@@ -28,7 +33,7 @@ class TaskScoreCalculator
         elseif ($hasChildren || (($task['template'] ?? '') === 'collaborative' && empty($task['parentId']))) $reason = 'excluded_coordination';
         elseif ($priority === 'Low') $reason = 'excluded_low';
         elseif (empty($evidence['complete']) || !$last || empty($evidence['owner']['id']) || empty($evidence['approved_at']) || empty($task['due']) || !in_array($priority, ['Critical','High','Medium'])) $reason = 'incomplete_records';
-        $result = ['eligible'=>false, 'reason'=>$reason, 'task_id'=>$task['taskCode'] ?? $task['id'] ?? '', 'title'=>$task['title'] ?? '',
+        $result = ['allocation_rule'=>'equal_handover_pool_v2', 'eligible'=>false, 'reason'=>$reason, 'task_id'=>$task['taskCode'] ?? $task['id'] ?? '', 'title'=>$task['title'] ?? '',
             'priority'=>$priority, 'deadline'=>$task['due'] ?? null, 'submission_at'=>$last['at'] ?? null, 'submissions'=>$submissions,
             'returns'=>$evidence['returns'] ?? [], 'return_count'=>$returns, 'return_deduction'=>min(20,$returns*$policy['return_deduction']),
             'scores'=>['time'=>0,'priority'=>0,'returns'=>0,'ownership'=>0], 'percentage'=>0, 'earned_units'=>0,

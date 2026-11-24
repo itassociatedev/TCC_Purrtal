@@ -56,7 +56,7 @@ try {
         } }],
     });
     writeFileSync(bundlePath, output.outputFiles[0].text);
-    const { TicketEditor, TicketScreen } = await import(pathToFileURL(bundlePath).href);
+    const { TicketEditor, TicketScreen, TicketRowActions } = await import(pathToFileURL(bundlePath).href);
     const base = { id: 42, creator_id: 1, assigned_to: 3, subject: 'Test issue', employee_name: 'Requester',
         description: 'Description', category: 'Hardware', status: 'in_progress', priority: 'medium',
         sla: { enabled: true }, sla_state: {}, activities: [] };
@@ -105,6 +105,21 @@ try {
         assert.ok(closed, `${action}: successful save closes dialog`);
         console.log(`PASS: ${action} submits through the installed Inertia hook`);
     }
+
+    state.input = {}; state.page = {};
+    for (const eligible of [true, false]) {
+        let opened=0,reviewed=null;
+        const ticket={...base,status:'closed',can_submit_feedback:eligible};
+        const tree=capture(TicketRowActions,{ticket,action:'View',onOpen:()=>opened++,onReview:t=>reviewed=t.id});
+        const buttons=nodes(tree,n=>n.type==='button');
+        assert.equal(buttons[0].props.children,'View');buttons[0].props.onClick();assert.equal(opened,1);
+        const reviews=buttons.filter(n=>n.props.children==='Leave A Review');
+        assert.equal(reviews.length,eligible?1:0);
+        if(eligible){assert.equal(buttons[1],reviews[0]);reviews[0].props.onClick();assert.equal(reviewed,42);}
+        const editor=capture(TicketEditor,{ticket,role:'employee',members:[],actor:{id:1},ticketRoute:()=>'/tickets/42',onClose(){}});
+        assert.equal(nodes(editor,n=>n.type==='button'&&n.props.children==='Leave A Review').length,0);
+    }
+    console.log('PASS: review sits beside View only for eligible tickets and is absent from ticket details');
 
     for (const creationRole of ['employee', 'member', 'leader']) {
     requests.length = 0;

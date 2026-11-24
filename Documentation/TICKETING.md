@@ -56,7 +56,7 @@ During an active grant, the member can choose **Assign / priority / status** in 
 
 IT Supervisors can **Reject** a ticket submitted by an IT member or **Send back for revision** with a required comment. Rejected tickets stay in the ticket list and are excluded from leaderboard counts. The creator receives a notification linking to **Pending revisions**, where they can edit their intake details and resubmit. Resubmission preserves the ticket ID, category, and location, returns it to In progress, and resumes the resolution timer with its accumulated support time.
 
-IT Supervisors can open **Admin → Locations** to view the clinic branch codes and add ticket locations with unique names and codes. New codes require exactly three ASCII letters or digits and are saved in uppercase. Extra locations are stored separately from the branch directory and are available to everyone on the Create ticket page. The existing branch rules still apply to clinic branches.
+IT Supervisors can open **Admin → Locations** to view the clinic branch codes and add ticket locations with unique names and codes. New codes require exactly three ASCII letters (A-Z; no digits or symbols) and are saved in uppercase. Extra locations are stored separately from the branch directory and are available to everyone on the Create ticket page. The existing branch rules still apply to clinic branches.
 
 Use **Remove** to retire a custom location from new ticket requests. Existing tickets retain that location and can still be filtered by it. Retired names and codes remain reserved for ticket history.
 
@@ -117,9 +117,18 @@ Successful non-IT submissions redirect to the dashboard with a one-time, dismiss
 
 ### Leaderboard
 
+Leaderboard rank and podium order now use frozen **resolution points**, separate from resolved-ticket counts. Initial values: Critical 20, High 10, Medium 5, Low 1. IT Supervisors configure each priority's integer points (0-1,000,000) and optional description (up to 500 characters) under Admin > SLA & priorities. New custom priorities have an explicit score field, defaulting to 0; archived priority scores never rewrite existing awards. Descriptions appear as `Priority - Description` only in the Create Ticket priority selector, with normal labels when blank.
+
+`TicketSla::apply` captures current priority, label, current admin points, resolver and resolution instant in `tickets.sla_state.resolution_score` when permanent resolution is recorded, including a supervisor correction in the same save. This uses live points at resolution, independently of the saved SLA targets. The resolved activity retains the same score evidence. Later priority/label/score edits and ticket closure cannot rewrite the snapshot. Workaround acceptance alone does not award resolution points. Resolved and closed tickets contribute one award each; reopening removes completion credit and clears the current tracked score, and re-resolution replaces it. Rejected and revision-held tickets are excluded. Resubmission clears prior resolution evidence. Actual resolver, not current assignee, receives points.
+
+The 2026_11_24_000001_add_ticket_priority_scoring migration adds `ticket_priorities.score_points` and `description`, seeds the four initial scores, and backfills existing resolved/closed tickets once. `TicketResolutionScore::backfill` recovers the priority at the latest resolution by reversing later recorded priority changes, records the award and a `resolution_score_backfilled` activity, and never overwrites an existing snapshot. A ticket without a recorded resolver/resolution instant remains unscored; records with no resolvable owner remain outside attribution. Historical awards use the initial configured points at migration time because older tickets did not have scoring settings. Unknown historical priority keys receive 0 points.
+
+Leaderboard points open the existing resolved-ticket drill-down, now showing the captured priority and points for each ticket. Main and drill-down XLSX exports include points; the summary also identifies counted resolutions missing score evidence. Date filters still use resolution date. The pie and Share column remain explicitly based on resolved-ticket counts, not points, so counts, points and ratings are not conflated. Validation is in `tests/Feature/TicketPriorityScoringTest.php` (isolated SQLite); existing priority-setting/order regression fixtures include the points field.
+
+
 The main table includes average response and resolution **support minutes**, to two decimals, with eligible sample counts. These are calculated from the same resolved/closed-ticket cohort and selected resolution-date range as the ranking, credited to the recorded resolver. Response times describe that cohort, even if another person acknowledged the tickets. Missing milestones are excluded separately per metric and display N/A when there are no samples. Reopened and review-held tickets are excluded. XLSX includes the averages/counts. The chart uses exact-count filled SVG sectors, including shares above 50% and the full-circle case.
 
-Current server checks in this checkout restrict the leaderboard to the supervisor workflow role; EVP still uses the employee workflow and does not gain this view automatically.
+Leaderboard viewing is position-based: IT Supervisor and Executive Vice President positions may view it; only authorized IT staff may use the existing export actions.
 
 Each employee drill-down has an XLSX export for the selected date range and view: resolved tickets, overdue tickets, or ratings and comments. The export includes all matching rows across pages.
 
@@ -128,15 +137,15 @@ IT supervisors and Executive Vice Presidents can view `/tickets/leaderboard`, im
 - Podium cards have a common baseline and stationary heights in rank order. Only the cat icons bob, and reduced-motion preferences suppress that animation. The pie legend footer shows total resolutions and total share (100.00% with resolutions, 0.00% without).
 - Click a member’s resolved count, overdue text or rating to open a detail view for that member and calendar period. All three drill-downs open full ticket details from the subject, including ratings rows. Ratings show the latest counted score per ticket and its comment. The views paginate at 15 entries. Clickable leaderboard values have no underline and retain keyboard focus styling.
 
-- Top cats podium: second left/silver, first center/gold, third right/bronze, with cat medals. Only positive-resolution members occupy podium slots; missing places show an empty state.
+- Top cats podium: second left/silver, first center/gold, third right/bronze, with cat medals. Only positive-point members occupy podium slots; missing places show an empty state.
 - Pie chart and legend: member names, resolved counts and contribution percentages, using exact counts for segment sizes.
-- Ranking table: rank, employee name/role/branches, tickets resolved, contribution share, average resolver rating out of five with rated-ticket count, and attention/overdue work. Top-three cards also show average rating. Members without feedback show Not rated yet (0 rated tickets).
+- Ranking table: rank, employee name/role/branches, leaderboard points, tickets resolved, contribution share, average resolver rating out of five with rated-ticket count, and attention/overdue work. Top-three cards also show average rating. Members without feedback show Not rated yet (0 rated tickets).
 - The leaderboard includes the current IT member, IT intern and IT team leader roster, including staff with zero resolutions.
 - Selected-period resolved/closed tickets count once for `sla_state.resolved_by`, falling back to the latest resolved activity actor. Current assignee is never substituted for resolver.
 - Reopened tickets are excluded until resolved again. Historical events are not counted as separate resolutions.
 - Leaderboard ratings use the latest feedback per ticket in the selected live/preview environment, attributed to frozen resolved_by or the preceding resolved activity actor. Half-star values are retained in averages, displayed to one decimal. Reassignment does not move ratings. Existing feedback remains attributed even if its ticket is reopened; completion counts still exclude reopened work. Ratings do not affect ranking, podium order or pie shares.
 - Contribution = each person's resolutions ÷ all ranked staff resolutions. Zero denominator yields 0%.
-- Equal totals share competition rank; names then IDs break display ties. The podium displays at most three members, even if more tie.
+- Equal point totals share competition rank; names then IDs break display ties. The podium displays at most three members, even if more tie.
 - Overdue = current open assignments with an enabled, incomplete, breached resolution SLA. Accepted workarounds are not outstanding overdue work. Historical breaches on completed tickets are not this column's definition.
 - Ranking explanations are expandable. The page matches the supplied white-card/pale-blue-table reference and adapts to narrow screens. A Day/Week/Month/Year/All time selector uses current calendar periods in Asia/Manila (All time is default). Resolution counts use latest resolution date; ratings use feedback-submission date; overdue counts use ticket creation date and current overdue state. Top three, ranking and pie shares recalculate. Export leaderboard XLSX downloads the same selected-period member rows with a Scope sheet.
 
@@ -220,8 +229,8 @@ The old Rate the resolving IT staff dropdown option is removed from the visible 
 - Submit requires a deliberate nonzero rating; supplying feedback itself is optional. Close, Escape, overlay dismissal or Skip advances the queue.
 - Rating eligibility uses the actual resolver and configured ticket workflow roles. Nobody can rate themselves. IT members cannot rate another IT member. An IT team leader may rate an IT member who resolved a ticket that leader requested; this does not grant rating access to tickets requested by someone else. Ordinary employee feedback remains available. The queue excludes ineligible tickets, and direct submissions are rejected under the same policy. Existing ratings are not rewritten.
 - Queue is independent of table filtering/pagination, scoped to creator + live/preview environment, ordered by closure time then ID. A known recorded resolver is required.
-- Skip persists `feedback_dismissed` without fabricating a rating. A submitted rating stores `rating` and frozen `resolved_by` in activity JSON; no rating column/migration is required for half stars.
-- Closed-state, ownership and duplicate guards are rechecked under a row lock. Repeated submits cannot create additional ratings. Rated or dismissed tickets are not prompted again after a later reopen/closure cycle.
+- Skip persists `feedback_dismissed` without fabricating a rating or consuming the review opportunity. Eligible requesters can later choose **Leave A Review** beside **View** in the closed ticket row or mobile tile. This reuses the half-star popup; comments remain optional and appear for three stars or lower. A submitted rating stores `rating` and frozen `resolved_by` in activity JSON; no rating column/migration is required for half stars.
+- Closed-state, ownership and duplicate guards are rechecked under a row lock. Repeated submits cannot create additional ratings. Only an actual `feedback` event blocks future reviews; dismissal alone does not. Rated or dismissed tickets are not automatically prompted again after a later reopen/closure cycle. The manual review button is absent after submission, including after reopening and closing again. Only the ticket creator can review, with the existing self/IT-peer restrictions.
 - Member averages and leader workload use latest feedback per ticket for historical compatibility and actual resolver attribution. Older feedback can fall back to the preceding resolved activity, never current assignee.
 - Existing Modal/Headless UI handles focus, dismissal and scroll locking. Queue refresh happens through ticket-module polling, not a global popup on every unrelated application page or a websocket push.
 
@@ -541,3 +550,15 @@ The dedicated Locations admin screen excludes soft-deleted locations after remov
 ### EVP position rather than portal role (21 November 2026)
 
 The Executive Vice President exception now checks the existing HR position, independently of portal role. Employee 377 (admin role, Executive Vice President position) can view the leaderboard. An EVP database role alone with no matching position grants neither this viewing exception nor the EVP all-branch exception. EVP position holders retain all-branch ticket selection; ticket administration, export, assignment and closure remain restricted to IT workflows. The local evp@tcc.local dummy was assigned the existing EVP position without changing its role/password; local account seeders use that position as well. No roles or positions were created.
+
+
+24 November 2026: IT Supervisor/member dashboard priority cards are grouped into Active Priorities and Archived Priorities using active-choice keys from the server. Archived cards use gray styling, retain counts and historical filters, and the archived group is hidden when empty. Active cards retain priority colors. Automatic refresh updates group membership after archive/restore.
+
+
+24 November 2026: The IT Supervisor dashboard Open Tickets group includes a Pending revision widget. Its count uses revision_requested tickets in the same live/test environment as other supervisor statistics, shows a two-decimal percentage of all tickets, refreshes with leaderSummary, and opens All Tickets with the Pending revision status filter. Member and employee dashboards are unchanged.
+
+
+24 November 2026: Added manual recovery of dismissed reviews from the ticket list, beside View. `TicketAccess::canLeaveFeedback` supplies server-owned eligibility on ticket list/deep-link records, and the screen-level review action reuses `TicketRatingDialog`. Dismissal remains idempotent and suppresses only the automatic queue. `TicketController::update` locks the ticket and blocks a second feedback record regardless of dismissal or reopen history. Review submission closes the popup and refreshes row eligibility; the automatic queue is suppressed while manual review is open. No schema migration or removal of existing reviews is required. Tests: TicketFeedbackRecoveryTest.php, ticket-form-submission.test.mjs and ticket-rating-dialog.test.mjs.
+
+
+24 November 2026: Moved Leave A Review out of ticket details and beside View in desktop rows/mobile tiles. Shared TicketRowActions renders both buttons, with server-owned eligibility unchanged. Manual dismissal advances local queue suppression before persisting the dismissal, preventing an immediate duplicate automatic prompt.

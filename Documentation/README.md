@@ -7,6 +7,8 @@
 
 ## Ticketing system documentation
 
+24 November update: per-priority leaderboard points and descriptions; awards freeze the priority/score at resolution, with audited historical backfill and separate resolution counts. See the ticketing guide and code map.
+
 Current implementation reference, audited 19 November 2026:
 
 - [Ticketing guide](TICKETING.md): screens, permissions, lifecycle, fields, filters, XLSX, schema and operations.

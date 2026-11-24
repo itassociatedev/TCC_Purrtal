@@ -27,7 +27,7 @@ class TaskScoreCalculatorTest extends TestCase
     public function test_successive_transfers_preserve_shares_and_do_not_double_deduct(): void {
         $a=$this->evidence()['owner'];$b=[...$a,'id'=>2,'name'=>'B'];$c=[...$a,'id'=>3,'name'=>'C'];
         $r=Score::calculate($this->task(),$this->evidence(['transfers'=>[['from'=>$a,'to'=>$b],['from'=>$b,'to'=>$c]]]),$this->policy());
-        $this->assertSame([800000,160000,40000],array_column($r['allocations'],'awarded_units'));
+        $this->assertSame([500000,250000,250000],array_column($r['allocations'],'awarded_units'));
         $this->assertSame(20,$r['scores']['ownership']);
         for($i=0;$i<=100;$i++) {
             $p=[...$this->policy(),'handover_percent'=>$i/3];
@@ -35,6 +35,18 @@ class TaskScoreCalculatorTest extends TestCase
             $this->assertSame($r['earned_units'],array_sum(array_column($r['allocations'],'awarded_units')));
             $this->assertSame(1000000,array_sum(array_column($r['allocations'],'units')));
         }
+    }
+    public function test_fixed_pool_is_equal_for_three_recipients_and_does_not_reward_repeat_transfers(): void {
+        $a=$this->evidence()['owner'];$b=[...$a,'id'=>2,'name'=>'B'];$c=[...$a,'id'=>3,'name'=>'C'];$d=[...$a,'id'=>4,'name'=>'D'];
+        $transfers=[['from'=>$a,'to'=>$b],['from'=>$b,'to'=>$c],['from'=>$c,'to'=>$d]];
+        $r=Score::calculate($this->task(),$this->evidence(['transfers'=>$transfers]),$this->policy());
+        $this->assertSame([500000,166667,166667,166666],array_column($r['allocations'],'units'));
+        $this->assertSame(1000000,array_sum(array_column($r['allocations'],'awarded_units')));
+        $transfers[]=['from'=>$d,'to'=>$b];$transfers[]=['from'=>$b,'to'=>$a];
+        $again=Score::allocations($a,$transfers,50);$this->assertSame([500000,166667,166667,166666],array_column($again,'units'));
+        $this->assertCount(4,$again);
+        $low=Score::calculate($this->task(['priority'=>'Low']),$this->evidence(['transfers'=>$transfers]),$this->policy());$this->assertSame([],$low['allocations']);
+        $this->assertSame([1000000],array_column(Score::allocations($a,[],50),'units'));
     }
     public function test_unfinished_legacy_reports_sample_and_parent_receive_no_points(): void {
         foreach(['Pending Approval','Not Started','In Progress','Pending Review','Revision Needed','Denied','Dismissed'] as $status)$this->assertSame(0,Score::calculate($this->task(['status'=>$status]),$this->evidence(),$this->policy())['earned_units']);

@@ -22,11 +22,7 @@ class TicketController extends Controller
 
     private function feedbackResolverId(Ticket $ticket): ?int
     {
-        // Attribute feedback to the recorded resolver, never the current assignee.
-        $id = $ticket->sla_state['resolved_by'] ?? ($ticket->relationLoaded('activities')
-            ? $ticket->activities->firstWhere('type', 'resolved')?->actor_id
-            : $ticket->activities()->where('type', 'resolved')->value('actor_id'));
-        return $id ? (int) $id : null;
+        return TicketAccess::feedbackResolverId($ticket);
     }
 
     public function index(Request $request)
@@ -118,6 +114,7 @@ class TicketController extends Controller
                 'not_started' => (int) ($statusCounts['not_started'] ?? 0),
                 'in_progress' => (int) ($statusCounts['in_progress'] ?? 0),
                 'resolved' => (int) ($statusCounts['resolved'] ?? 0),
+                'revision_requested' => (int) ($statusCounts['revision_requested'] ?? 0),
             ];
         }
         // Priority dashboard counts use the same personal/team scope as status counts.
@@ -354,6 +351,7 @@ class TicketController extends Controller
             $selectedTicket = $detailQuery->findOrFail($filters['selected_ticket']);
             $selectedTicket->setAttribute('member_submission', $role === 'leader' && $selectedTicket->isMemberSubmission());
             $selectedTicket->setAttribute('sla', $sla->snapshot($selectedTicket));
+            $selectedTicket->setAttribute('can_submit_feedback', TicketAccess::canLeaveFeedback($selectedTicket,$actor));
         }
         return Inertia::render('Tickets/Index', [
             // One-time receipt after a successful non-IT submission; not an SLA acknowledgement.
@@ -377,8 +375,9 @@ class TicketController extends Controller
             'memberSummary' => $memberSummary,
             'employeeSummary' => $employeeSummary,
             'creationPage' => $request->routeIs('tickets.create'),
-            'ticketRole' => $role, 'tickets' => $query->paginate($pageSize, ['*'], 'page', $perPage === 'all' ? 1 : null)->withQueryString()->through(function ($ticket) use ($sla, $role) {
+            'ticketRole' => $role, 'tickets' => $query->paginate($pageSize, ['*'], 'page', $perPage === 'all' ? 1 : null)->withQueryString()->through(function ($ticket) use ($sla, $role, $actor) {
                 $ticket->setAttribute('member_submission', $role === 'leader' && $ticket->isMemberSubmission());
+                $ticket->setAttribute('can_submit_feedback', TicketAccess::canLeaveFeedback($ticket,$actor));
                 $ticket->setAttribute('sla', $sla->snapshot($ticket));
                 return $ticket;
             }),
@@ -400,6 +399,7 @@ class TicketController extends Controller
             'slaPolicy' => TicketPrioritySettings::policy(),
             'priorityLabels' => TicketPrioritySettings::labels(),
             'selectablePriorityLabels' => TicketPrioritySettings::labels(true),
+            'priorityDescriptions' => array_map(fn($target)=>$target['description'] ?? '',TicketPrioritySettings::targets(true)),
             'prioritySettings' => $view === 'sla_settings' ? \App\Models\TicketPriority::orderBy('sort_order')->orderBy('id')->get() : [],
             // The module uses this identity while the surrounding layout keeps auth.user.
             'ticketUser' => $actor->only(['id', 'name', 'branch_id']) + ['department' => $actor->department?->name],
@@ -526,7 +526,7 @@ class TicketController extends Controller
         }
         $location = $request->validate([
             'name' => ['required', 'string', 'max:120', Rule::unique('ticket_locations'), Rule::unique('branches')],
-            'code' => ['required', 'string', 'size:3', 'alpha_num:ascii', Rule::unique('ticket_locations'), Rule::notIn(array_values(TicketLocation::BRANCH_CODES))],
+            'code' => ['required', 'string', 'size:3', 'alpha:ascii', Rule::unique('ticket_locations'), Rule::notIn(array_values(TicketLocation::BRANCH_CODES))],
         ]);
         TicketLocation::create($location);
 
@@ -716,15 +716,17 @@ class TicketController extends Controller
             $sla = app(TicketSla::class);
             if ($requesterAction) {
                 $resolver = null;
-                // Skipping is not a rating. A row lock makes rating/dismissal idempotent.
+                // A row lock prevents duplicate reviews, including submissions from multiple tabs.
+                // Dismissal suppresses the automatic queue only; it never blocks a later manual review.
                 if (in_array($action, ['feedback', 'dismiss_feedback'])) {
                     if ($locked->status !== 'closed') throw \Illuminate\Validation\ValidationException::withMessages(['action' => 'This ticket is no longer closed.']);
                     $resolver = $this->feedbackResolverId($locked);
                     $recipient = $resolver ? User::with('role')->find($resolver) : null;
                     if (!$recipient) throw \Illuminate\Validation\ValidationException::withMessages(['rating' => 'This ticket has no recorded IT resolver.']);
                     abort_unless(TicketAccess::canRateResolver($actor, $recipient), 403, 'Self-ratings and ratings between IT members are not allowed.');
-                    if ($locked->activities()->whereIn('type', ['feedback', 'feedback_dismissed'])->exists()) return;
+                    if ($locked->activities()->where('type', 'feedback')->exists()) return;
                     if ($action === 'dismiss_feedback') {
+                        if ($locked->activities()->where('type','feedback_dismissed')->exists()) return;
                         $sla->activity($locked, $actor, 'feedback_dismissed', 'Requester skipped the optional rating.');
                         return;
                     }

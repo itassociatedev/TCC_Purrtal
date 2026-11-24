@@ -51,6 +51,25 @@ class TicketAccess
         return self::role($user);
     }
 
+    public static function feedbackResolverId(\App\Models\Ticket $ticket): ?int
+    {
+        $id=$ticket->sla_state['resolved_by'] ?? ($ticket->relationLoaded('activities')
+            ? $ticket->activities->where('type','resolved')->sortByDesc('id')->first()?->actor_id
+            : $ticket->activities()->where('type','resolved')->latest('id')->value('actor_id'));
+        return $id ? (int)$id : null;
+    }
+
+    public static function canLeaveFeedback(\App\Models\Ticket $ticket, User $requester): bool
+    {
+        if ($ticket->status!=='closed' || (int)$ticket->creator_id!==(int)$requester->id) return false;
+        // Dismissal hides the automatic prompt, but does not consume the one permitted review.
+        $rated=$ticket->relationLoaded('activities') ? $ticket->activities->contains('type','feedback') : $ticket->activities()->where('type','feedback')->exists();
+        if ($rated) return false;
+        $id=self::feedbackResolverId($ticket);
+        $resolver=$id ? User::with('position')->find($id) : null;
+        return $resolver && self::canRateResolver($requester,$resolver);
+    }
+
     public static function canRateResolver(User $requester, User $resolver): bool
     {
         // Requester ownership is checked separately. A team leader may rate an

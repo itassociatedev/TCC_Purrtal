@@ -84,7 +84,7 @@ class TaskScoringWorkflowTest extends TestCase
         $accepted=$service->act($peer,['key'=>$pending['_serverKey'],'version'=>$pending['_serverVersion'],'action'=>'accept'],$access);
         $this->assertSame(0,$accepted['scoring']['earned_units']);
         $done=$this->approve($this->submit($accepted,$peer));
-        $this->assertSame([800000,200000],array_column($done['scoring']['allocations'],'awarded_units'));
+        $this->assertSame([500000,500000],array_column($done['scoring']['allocations'],'awarded_units'));
         $this->assertSame(20,$done['scoring']['scores']['ownership']);
     }
     public function test_reversal_and_recalculation_are_audited_without_inventing_legacy_evidence(): void {
@@ -169,7 +169,17 @@ class TaskScoringWorkflowTest extends TestCase
             $task=$service->act($owner,['key'=>$task['_serverKey'],'version'=>$task['_serverVersion'],'action'=>'request','recipient'=>$recipient->name,'notes'=>'Continue the work.'],$access);
             $task=$service->act($recipient,['key'=>$task['_serverKey'],'version'=>$task['_serverVersion'],'action'=>'accept'],$access);$owner=$recipient;
         }
-        $done=$this->approve($this->submit($task,$last));$this->assertSame([800000,160000,40000],array_column($done['scoring']['allocations'],'awarded_units'));
+        $done=$this->approve($this->submit($task,$last));$this->assertSame([500000,250000,250000],array_column($done['scoring']['allocations'],'awarded_units'));
         $this->assertNotEmpty($done['scoring']['review_flags']);$this->assertSame(2,DB::table('task_scoring_audits')->where('event','accepted_handover')->count());
+    }
+
+    public function test_pool_migration_recalculates_recorded_awards_once_and_keeps_task_history(): void {
+        $done=$this->approve($this->submit($this->createTask()));$record=TaskModuleRecord::first();$payload=$record->payload;$version=$record->version;
+        $state=DB::table('task_scoring_states')->where('task_record_id',$record->id)->first();$result=json_decode($state->result,true);unset($result['allocation_rule']);
+        DB::table('task_scoring_states')->where('task_record_id',$record->id)->update(['result'=>json_encode($result)]);
+        $migration=require database_path('migrations/2026_11_23_000001_equalize_task_handover_pool.php');$migration->up();$migration->up();
+        $score=\App\Services\TaskScoring::snapshot($record);$this->assertSame('equal_handover_pool_v2',$score['allocation_rule']);$this->assertSame(940000,$score['earned_units']);
+        $this->assertSame(1,DB::table('task_scoring_audits')->where('event','ownership_pool_recalculation')->count());
+        $this->assertSame($version,$record->fresh()->version);$this->assertSame($payload,$record->fresh()->payload);
     }
 }

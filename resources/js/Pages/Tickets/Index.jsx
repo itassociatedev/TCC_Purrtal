@@ -3,7 +3,7 @@ import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useId, useRef, useState } from 'react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import TicketSubmissionAcknowledgement from '@/Components/TicketSubmissionAcknowledgement';
-import TicketFeedbackQueue from '@/Components/TicketFeedbackQueue';
+import TicketFeedbackQueue, { TicketRatingDialog } from '@/Components/TicketFeedbackQueue';
 import TicketLeaderboard from '@/Components/TicketLeaderboard';
 import TicketWorkbookControls from '@/Components/TicketWorkbookControls';
 import TicketSlaPerformance from '@/Components/TicketSlaPerformance';
@@ -19,7 +19,7 @@ const ticketColumns = [
     ['priority', 'Priority', 7], ['branch', 'Branch', 6], ['creator', 'Ticket Creator', 8], ['assignee', 'Assigned To', 8],
 ];
 
-const labels = { not_started: 'Not started', in_progress: 'In progress', resolved: 'Resolved', closed: 'Closed', revision_requested: 'Pending revision', rejected: 'Denied' };
+const labels = { not_started: 'Not started', in_progress: 'In progress', resolved: 'Resolved', closed: 'Closed', revision_requested: 'Pending revision', rejected: 'Rejected' };
 
 // Thin outline icons match the reference: muted blue normally, black when active.
 // Inline SVG stays crisp at sidebar size and needs no image or icon dependency.
@@ -41,7 +41,15 @@ function TicketSidebarIcon({ kind, active }) {
     return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" style={{ color: active ? '#111111' : '#5262a1', flexShrink: 0 }}><path d={paths[kind] || paths.all} /></svg>;
 }
 
-function TicketTile({ ticket, action, onOpen }) {
+// Shared actions keep desktop rows and mobile tiles aligned with the same review eligibility.
+export function TicketRowActions({ticket,action,onOpen,onReview}) {
+    return <div className="ticket-row-actions">
+        <button type="button" className="ticket-edit" aria-label={`${action} ticket: ${ticket.subject}`} onClick={onOpen}>{action}</button>
+        {ticket.can_submit_feedback && <button type="button" className="ticket-edit" onClick={()=>onReview(ticket)}>Leave A Review</button>}
+    </div>;
+}
+
+function TicketTile({ ticket, action, onOpen, onReview }) {
     const priorityLabels = usePage().props.priorityLabels || defaultPriorityLabels;
     const assignee = ticket.assignee?.name || 'Unassigned';
     const initials = assignee.split(/\s+/).slice(0, 2).map(part => part[0]).join('');
@@ -74,7 +82,7 @@ function TicketTile({ ticket, action, onOpen }) {
         </dl>
         <footer>
             <span className={`ticket-status ${ticket.status}`}>{labels[ticket.status]}</span>
-            <button type="button" className="ticket-edit" aria-label={`${action} ticket: ${ticket.subject}`} onClick={onOpen}>{action}</button>
+            <TicketRowActions ticket={ticket} action={action} onOpen={onOpen} onReview={onReview} />
         </footer>
     </article>;
 }
@@ -357,7 +365,7 @@ function TicketLocations({ branches, branchCodes, locations }) {
                     <tr>
                         <td data-label="New location"><input aria-label="New location name" required maxLength={120} value={form.data.name} onChange={e => form.setData('name', e.target.value)} />
                             {form.errors.name && <p className="ticket-error" role="alert">{form.errors.name}</p>}</td>
-                        <td data-label="Code"><input aria-label="New location code" title="Enter exactly three letters or digits" required minLength={3} maxLength={3} pattern="[A-Za-z0-9]{3}" value={form.data.code} onChange={e => form.setData('code', e.target.value.toUpperCase())} />
+                        <td data-label="Code"><input aria-label="New location code" title="Enter exactly three letters" required minLength={3} maxLength={3} pattern="[A-Za-z]{3}" value={form.data.code} onChange={e => form.setData('code', e.target.value.toUpperCase())} />
                             {form.errors.code && <p className="ticket-error" role="alert">{form.errors.code}</p>}</td>
                         <td />
                     </tr>
@@ -448,7 +456,7 @@ function TicketHandover({ members, handovers, today }) {
     </section>;
 }
 
-export function TicketScreen({ canViewLeaderboard = false, selectedTicket = null, priorityLabels = defaultPriorityLabels, selectablePriorityLabels = priorityLabels, prioritySettings = [], submissionAcknowledgement = null, prioritySummary = null, pendingFeedback = [], leaderboard = null, pendingImport = null, leaderSummary = null, memberRating = null, memberSummary = null, employeeSummary = null, creationPage = false, departments = [], filterBranches = [], ticketLocations = [], branchCodes = {}, ticketRole, tickets, filters, categories, branches, members, reports, memberWorkloads = [], slaReport, slaPolicy, ticketUser, canAssignDuringHandover = false, handoverMembers = [], handovers = [], handoverToday = null }) {
+export function TicketScreen({ canViewLeaderboard = false, selectedTicket = null, priorityDescriptions = {}, priorityLabels = defaultPriorityLabels, selectablePriorityLabels = priorityLabels, prioritySettings = [], submissionAcknowledgement = null, prioritySummary = null, pendingFeedback = [], leaderboard = null, pendingImport = null, leaderSummary = null, memberRating = null, memberSummary = null, employeeSummary = null, creationPage = false, departments = [], filterBranches = [], ticketLocations = [], branchCodes = {}, ticketRole, tickets, filters, categories, branches, members, reports, memberWorkloads = [], slaReport, slaPolicy, ticketUser, canAssignDuringHandover = false, handoverMembers = [], handovers = [], handoverToday = null }) {
     const { auth } = usePage().props;
     // Module content uses the test identity; SidebarLayout keeps the real admin session.
     const actor = ticketUser || auth.user;
@@ -481,6 +489,16 @@ export function TicketScreen({ canViewLeaderboard = false, selectedTicket = null
     const dateErrors = usePage().props.errors || {};
     const [search, setSearch] = useState(filters.search);
     const [selected, setSelected] = useState(selectedTicket);
+    const [reviewTicket,setReviewTicket]=useState(null);
+    const [manualFeedbackDone,setManualFeedbackDone]=useState([]);
+    const finishManualReview=id=>{
+        setManualFeedbackDone(ids=>ids.includes(id)?ids:[...ids,id]);
+        setReviewTicket(null);
+    };
+    const skipManualReview=id=>{
+        finishManualReview(id);
+        router.patch(ticketRoute('update',{ticket:id}),{action:'dismiss_feedback'},{preserveScroll:true,preserveState:true});
+    };
     // Notification navigation can select a record outside the current table page.
     useEffect(() => { setSelected(selectedTicket); }, [selectedTicket]);
     const [filtersOpen, setFiltersOpen] = useState(false);
@@ -498,7 +516,7 @@ export function TicketScreen({ canViewLeaderboard = false, selectedTicket = null
         if (revisions) window.scrollTo(0, 0);
     };
     // Creation has its own route; the list never contains the intake form.
-    useEffect(() => { if (creationPage || ['admin', 'locations', 'handover', 'sla_settings'].includes(filters.view)) return; const timer = setInterval(() => { if (!selected && !document.hidden) router.reload({ only: ['canAssignDuringHandover', 'handoverMembers', 'handovers', 'handoverToday', 'tickets', 'slaReport', 'reports', 'memberWorkloads', 'employeeSummary', 'memberSummary', 'leaderSummary', 'memberRating', 'leaderboard', 'pendingFeedback', 'prioritySummary', 'priorityLabels', 'selectablePriorityLabels', 'slaPolicy'] }); }, 60000); return () => clearInterval(timer); }, [selected, creationPage, filters.view]);
+    useEffect(() => { if (creationPage || ['admin', 'locations', 'handover', 'sla_settings'].includes(filters.view)) return; const timer = setInterval(() => { if (!selected && !reviewTicket && !document.hidden) router.reload({ only: ['canAssignDuringHandover', 'handoverMembers', 'handovers', 'handoverToday', 'tickets', 'slaReport', 'reports', 'memberWorkloads', 'employeeSummary', 'memberSummary', 'leaderSummary', 'memberRating', 'leaderboard', 'pendingFeedback', 'prioritySummary', 'priorityLabels', 'selectablePriorityLabels', 'slaPolicy'] }); }, 60000); return () => clearInterval(timer); }, [selected, reviewTicket, creationPage, filters.view]);
     // Build the form for this role; Laravel independently validates every submitted field.
     const form = useForm({ branch_id: branches.find(b => b.id === actor.branch_id)?.id || branches[0]?.id || (ticketLocations.length ? `location:${ticketLocations[0].id}` : ''), subject: '', description: '', category: '', priority: '',
         employee_department: actor.department || '', affected_asset: '', operational_impact: '',
@@ -619,9 +637,18 @@ export function TicketScreen({ canViewLeaderboard = false, selectedTicket = null
                     </dl></div>}
                     {(member || leader) && <section className="ticket-priority-dashboard" aria-labelledby="priority-dashboard-title">
                     <h3 id="priority-dashboard-title">Tickets by priority</h3><p>{member ? 'All tickets assigned to you' : 'All team tickets'} · Select a priority to view matching tickets.</p>
-                    <div className="ticket-priority-grid">{Object.entries(priorityLabels).map(([value, label]) => [value, label, ({ critical: 'red', high: 'yellow', medium: 'blue', low: 'green' })[value] || 'blue']).map(([value, label, color]) =>
-                        <Link key={value} className={`ticket-stat employee-stat-${color}`} href={ticketRoute('index', { view: member ? 'assigned' : 'all', priority_filter: value, branch_filter: '', location_filter: '', status_filter: 'all', closed_period: '', date_from: '', date_to: '' })}><span className="ticket-stat-label">{label}</span><strong>{prioritySummary?.[value] ?? 0}</strong></Link>
-                    )}</div>
+                    {/* Active choices and historical-only priorities stay separate, using the same live server props. */}
+                    {[['active', 'Active Priorities'], ['archived', 'Archived Priorities']].map(([group, title]) => {
+                        const entries = Object.entries(priorityLabels).filter(([key]) => (Object.hasOwn(selectablePriorityLabels, key)) === (group === 'active'));
+                        if (!entries.length) return null;
+                        return <section key={group} className="ticket-priority-group" aria-labelledby={`priority-${group}-title`}>
+                            <h4 id={`priority-${group}-title`}>{title}</h4>
+                            <div className="ticket-priority-grid">{entries.map(([value, label]) => {
+                                const color = group === 'archived' ? 'gray' : (({ critical: 'red', high: 'yellow', medium: 'blue', low: 'green' })[value] || 'blue');
+                                return <Link key={value} className={`ticket-stat employee-stat-${color}`} href={ticketRoute('index', { view: member ? 'assigned' : 'all', priority_filter: value, branch_filter: '', location_filter: '', status_filter: 'all', closed_period: '', date_from: '', date_to: '' })}><span className="ticket-stat-label">{label}</span><strong>{prioritySummary?.[value] ?? 0}</strong></Link>;
+                            })}</div>
+                        </section>;
+                    })}
                 </section>}
                 </section>
                 <section className="ticket-dashboard-group" aria-labelledby="dashboard-open-tickets">
@@ -629,7 +656,7 @@ export function TicketScreen({ canViewLeaderboard = false, selectedTicket = null
                     {renderDashboardCards([
                         ['open', 'Open tickets', 'blue'], ['not_started', 'Not started', 'red'], ['in_progress', 'In progress', 'yellow'],
                         ['resolved', 'Resolved', 'green', 'Awaiting closure'],
-                        ...(leader ? [['unassigned', 'Unassigned active', 'blue', 'Not started or in progress', reports?.['Unassigned active']]] : []),
+                        ...(leader ? [['revision_requested', 'Pending revision', 'gray', 'Awaiting creator corrections'], ['unassigned', 'Unassigned active', 'blue', 'Not started or in progress', reports?.['Unassigned active']]] : []),
                     ])}
                 </section>
                 {member && <div className="ticket-member-own-rating" aria-label="Your resolver rating">
@@ -663,7 +690,7 @@ export function TicketScreen({ canViewLeaderboard = false, selectedTicket = null
                     <label>Affected system, equipment, application or service<input required maxLength={255} value={form.data.affected_asset} onChange={e => form.setData('affected_asset', e.target.value)} /></label>
                     <label>Ticket category<select required value={form.data.category} onChange={e => form.setData('category', e.target.value)}><option value="" disabled>Select category</option>{categories.map(c => <option key={c} value={c}>{c}{categoryExamples[c] ? ` (e.g. ${categoryExamples[c]})` : ''}</option>)}</select></label>
                     {/* Initial priority starts the SLA target immediately; leadership can reclassify without resetting time. */}
-                    <label>Initial priority<select required value={form.data.priority} onChange={e => form.setData('priority', e.target.value)}><option value="" disabled>Select priority</option>{Object.entries(selectablePriorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                    <label>Initial priority<select required value={form.data.priority} onChange={e => form.setData('priority', e.target.value)}><option value="" disabled>Select priority</option>{Object.entries(selectablePriorityLabels).map(([value, label]) => <option key={value} value={value}>{label}{priorityDescriptions[value] ? ` - ${priorityDescriptions[value]}` : ''}</option>)}</select></label>
                     <label>Details of issue<textarea required rows={5} maxLength={10000} placeholder="Describe what happened or the service you need…" value={form.data.description} onChange={e => form.setData('description', e.target.value)} /></label>
                     
                     
@@ -690,7 +717,7 @@ export function TicketScreen({ canViewLeaderboard = false, selectedTicket = null
                             <form className="ticket-search" onSubmit={e => { e.preventDefault(); router.get(ticketRoute('index', { view: filters.view, search }), {}, { preserveState: true }); }}><input aria-label="Search tickets" placeholder="Search ticket ID, subject or description…" maxLength={180} value={search} onChange={e => setSearch(e.target.value)} /><button className="ticket-secondary">Search</button></form>
                             {/* Dashboard cards and this selector share the same server-side filter. */}
                             {!revisions && <label className="ticket-page-size">Ticket status<select value={filters.status_filter || 'all'} onChange={e => router.get(ticketRoute('index', { view: filters.view, search, status_filter: e.target.value, closed_period: '' }), {}, { preserveState: true, preserveScroll: true })}>
-                                {Object.entries({ all: 'All statuses', open: 'Open tickets', closed: 'Closed tickets', not_started: 'Not started', in_progress: 'In progress', resolved: 'Resolved', ...(!employee ? { revision_requested: 'Pending revision', rejected: 'Denied' } : {}), ...(leader ? { unassigned: 'Unassigned active' } : {}) }).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                                {Object.entries({ all: 'All statuses', open: 'Open tickets', closed: 'Closed tickets', not_started: 'Not started', in_progress: 'In progress', resolved: 'Resolved', ...(!employee ? { revision_requested: 'Pending revision', rejected: 'Rejected' } : {}), ...(leader ? { unassigned: 'Unassigned active' } : {}) }).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                             </select></label>}
                             <label className="ticket-page-size">Priority<select value={filters.priority_filter || 'all'} onChange={e => router.get(ticketRoute('index', { view: filters.view, search, priority_filter: e.target.value }), {}, { preserveState: true, preserveScroll: true })}>
                                 {Object.entries({ all: 'All priorities', ...priorityLabels }).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -741,7 +768,7 @@ export function TicketScreen({ canViewLeaderboard = false, selectedTicket = null
                         </div>
                         </div>
                         <div className="ticket-tile-grid" aria-label="Tickets">
-                            {tickets.data.map(ticket => <TicketTile key={ticket.id} ticket={ticket} action={actionForTicket(ticket)} onOpen={() => openTicket(ticket)} />)}
+                            {tickets.data.map(ticket => <TicketTile key={ticket.id} ticket={ticket} action={actionForTicket(ticket)} onOpen={() => openTicket(ticket)} onReview={setReviewTicket} />)}
                         </div>
                         <div className="ticket-list-table-wrap">
                             <table className="ticket-list-table" role="table" aria-label="Tickets">
@@ -755,7 +782,7 @@ export function TicketScreen({ canViewLeaderboard = false, selectedTicket = null
                                     const action = actionForTicket(t);
                                     const openRow = () => openTicket(t);
                                     return <tr role="row" key={t.id}>
-                                        <td role="cell" data-label="Ticket subject" className="ticket-subject-cell"><span className="ticket-number">#{t.ticket_code}</span><strong><button type="button" className="ticket-subject-trigger" onClick={openRow}>{t.subject}</button></strong><button type="button" className="ticket-edit" aria-label={`${action} ticket: ${t.subject}`} onClick={openRow}>{action}</button></td>
+                                        <td role="cell" data-label="Ticket subject" className="ticket-subject-cell"><span className="ticket-number">#{t.ticket_code}</span><strong><button type="button" className="ticket-subject-trigger" onClick={openRow}>{t.subject}</button></strong><TicketRowActions ticket={t} action={action} onOpen={openRow} onReview={setReviewTicket} /></td>
                                         <td role="cell" data-label="Ticket description" className="ticket-description-cell"><p className="ticket-description">{t.description}</p><details className="ticket-intake-expand"><summary>Request details</summary><TicketIntakeDetails ticket={t} /></details></td>
                                         <td role="cell" data-label="Category"><span className="ticket-category">{t.category}</span></td>
                                         <td role="cell" data-label="Status"><span className={`ticket-status ${t.status}`}>{labels[t.status]}</span></td>
@@ -780,7 +807,8 @@ export function TicketScreen({ canViewLeaderboard = false, selectedTicket = null
             </div>
         </main>
         {receipt && <TicketSubmissionAcknowledgement ticket={receipt} supportHours={slaPolicy} onClose={() => setReceipt(null)} />}
-        {!receipt && !selected && !creationPage && <TicketFeedbackQueue key={`${actor.id}`} tickets={pendingFeedback} ticketRoute={ticketRoute} />}
+        {!receipt && !selected && !reviewTicket && !creationPage && <TicketFeedbackQueue key={`${actor.id}`} tickets={pendingFeedback.filter(ticket=>!manualFeedbackDone.includes(ticket.id))} ticketRoute={ticketRoute} />}
+        {reviewTicket && <TicketRatingDialog key={reviewTicket.id} ticket={reviewTicket} remaining={1} ticketRoute={ticketRoute} onSkip={skipManualReview} onDone={finishManualReview} />}
         {selected && !revisions && <TicketEditor key={selected.id} ticket={selected} role={ticketRole} members={members} canAssignDuringHandover={canAssignDuringHandover} handoverMembers={handoverMembers} actor={actor} ticketRoute={ticketRoute} onClose={() => setSelected(null)} />}
     </SidebarLayout>;
 }

@@ -6,7 +6,7 @@ import TicketRemovalConfirmation from '@/Components/TicketRemovalConfirmation';
 function PriorityForm({ priority, order }) {
     const [confirmRemoval, setConfirmRemoval] = useState(false);
     const removal = useForm({});
-    const form = useForm({ label: priority?.label || '', response_hours: priority ? Number((priority.response_seconds / 3600).toFixed(6)) : '',
+    const form = useForm({ label: priority?.label || '', score_points: priority?.score_points ?? 0, description: priority?.description || '', response_hours: priority ? Number((priority.response_seconds / 3600).toFixed(6)) : '',
         resolution_hours: priority ? Number((priority.resolution_seconds / 3600).toFixed(6)) : '', update_hours: priority?.update_seconds ? Number((priority.update_seconds / 3600).toFixed(6)) : '',
         sort_order: priority?.sort_order || order });
     // Other cards may shift after a save/removal; refresh only the server-owned position.
@@ -31,6 +31,8 @@ function PriorityForm({ priority, order }) {
         <form onSubmit={submit} className="ticket-priority-settings-form">
             <fieldset disabled={Boolean(priority?.archived_at)} className="ticket-priority-settings-fields">
             <label>Priority name<input required maxLength={80} value={form.data.label} onChange={e => form.setData('label', e.target.value)} /></label>
+            <label>Leaderboard points<input required type="number" min="0" max="1000000" step="1" value={form.data.score_points} onChange={e => form.setData('score_points', e.target.value)} /></label>
+            <label>Priority description (optional)<textarea maxLength={500} value={form.data.description} onChange={e => form.setData('description', e.target.value)} /></label>
             <label>Urgency order (1 is highest)<input required type="number" min="1" max="10000" step="1" value={form.data.sort_order} onChange={e => form.setData('sort_order', e.target.value)} /></label>
             <label>Response target (support hours)<input required type="number" min="0.000001" max="8760" step="any" value={form.data.response_hours} onChange={e => form.setData('response_hours', e.target.value)} /></label>
             <label>Resolution target (support hours)<input required type="number" min={form.data.response_hours || 0.000001} max="8760" step="any" value={form.data.resolution_hours} onChange={e => form.setData('resolution_hours', e.target.value)} /></label>
@@ -46,7 +48,7 @@ function PriorityForm({ priority, order }) {
 
 export default function TicketSlaSettings({ priorities }) {
     return <div>
-        <div className="ticket-card-heading"><div><h1>SLA &amp; priorities</h1><p>Enter all durations in support hours. Fractions are allowed (for example, 0.5 hours). Existing tickets keep their saved targets; a priority change adopts the latest target without resetting elapsed time. Completed milestones stay preserved.</p><p>Remove deletes an unused priority or archives a used one. Archived priorities can be restored. At least one priority must remain active. Urgency order is a position: inserting or moving a priority automatically shifts the others. All priorities, including archived ones, have unique positions. Values beyond the list append to the end. The Critical priority retains its supervisor-approved workaround workflow.</p></div></div>
+        <div className="ticket-card-heading"><div><h1>SLA &amp; priorities</h1><p>Points are captured at resolution and credited to the resolver. Later changes to priority or points do not change completed awards. Descriptions appear beside priorities in Create Ticket. Enter all durations in support hours. Fractions are allowed (for example, 0.5 hours). Existing tickets keep their saved targets; a priority change adopts the latest target without resetting elapsed time. Completed milestones stay preserved.</p><p>Remove deletes an unused priority or archives a used one. Archived priorities can be restored. At least one priority must remain active. Urgency order is a position: inserting or moving a priority automatically shifts the others. All priorities, including archived ones, have unique positions. Values beyond the list append to the end. The Critical priority retains its supervisor-approved workaround workflow.</p></div></div>
         <div className="ticket-priority-settings-grid">{priorities.map(priority => <PriorityForm key={priority.id} priority={priority} />)}<PriorityForm order={Math.max(0, ...priorities.map(p => p.sort_order)) + 1} /></div>
     </div>;
 }
