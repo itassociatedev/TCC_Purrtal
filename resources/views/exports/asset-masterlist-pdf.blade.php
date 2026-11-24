@@ -22,7 +22,7 @@
     <h1>Asset Masterlist</h1>
     <div class="meta">Generated {{ $generatedAt->format('M d, Y h:i A') }} · {{ $assets->count() }} asset record(s)</div>
     <table>
-        <thead><tr><th>Photo</th><th>Asset</th><th>Tag</th><th>Serial / Model</th><th>Assignment</th><th>Location</th><th>Status</th><th>Condition</th><th>Value</th></tr></thead>
+        <thead><tr><th>Photo</th><th>Asset</th><th>Tag</th><th>Serial / Model</th><th>Assignment</th><th>Location</th><th>Status</th><th>Condition</th><th>Value</th><th>Remarks</th></tr></thead>
         <tbody>
         @foreach($assets as $asset)
             @php
@@ -47,6 +47,7 @@
                 <td>{{ $asset->asset_status ?: 'New' }}</td>
                 <td>{{ $asset->condition ?: 'Good' }}</td>
                 <td class="nowrap">₱{{ number_format((float) $value, 2) }}</td>
+                <td>{{ $asset->remarks ?: '—' }}</td>
             </tr>
         @endforeach
         </tbody>

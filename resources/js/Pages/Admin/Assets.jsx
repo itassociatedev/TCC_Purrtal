@@ -229,7 +229,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         branch: '', user_id: '', assigned_personnel: '', area: '', purchase_date: '', supplier_id: '', supplier_name: '',
         warranty_expiration: '', condition: 'Good', unit_value: 0, qty: 1, asset_status: 'New',
         accountability_type: 'personal', user_ids: [], team_leader_id: '',
-        model_no: '', serial_no: '', color: '', image: null 
+        model_no: '', serial_no: '', color: '', remarks: '', image: null
     });
 
     const bulkTransferForm = useForm({
@@ -1401,6 +1401,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                             <div><InputLabel value="Model No." /><TextInput className="w-full mt-1 text-sm font-bold" value={data.model_no || ''} onChange={e => setData('model_no', e.target.value)} /></div>
                             <div><InputLabel value="Serial No." /><TextInput className="w-full mt-1 text-sm font-mono font-bold" value={data.serial_no || ''} onChange={e => setData('serial_no', e.target.value)} /></div>
                             <div><InputLabel value="Color" /><TextInput className="w-full mt-1 text-sm font-bold" value={data.color || ''} onChange={e => setData('color', e.target.value)} /></div>
+                            <div><InputLabel value="Remarks" /><textarea rows={3} maxLength={1000} className="w-full mt-1 border-gray-300 rounded-md shadow-sm text-sm" value={data.remarks || ''} onChange={e => setData('remarks', e.target.value)} placeholder="Optional notes about this asset" />{errors?.remarks && <p className="mt-1 text-xs font-bold text-red-600">{errors.remarks}</p>}</div>
                             <div>
                                 <InputLabel value="Asset Status" />
                                 <select className="w-full mt-1 border-gray-300 rounded-md shadow-sm text-sm font-bold py-2" value={data.asset_status || 'New'} onChange={e => setData('asset_status', e.target.value)}>
@@ -1575,7 +1576,8 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                 <div className="flex justify-between border-b border-gray-200 pb-2"><span className="text-gray-500 font-bold text-xs">Classification:</span> <span className="font-black text-gray-900 text-xs">{viewingAsset?.classification || 'N/A'}</span></div>
                                 <div className="flex justify-between border-b border-gray-200 pb-2"><span className="text-gray-500 font-bold text-xs">Model No:</span> <span className="font-black text-gray-900 text-xs">{viewingAsset?.model_no || 'N/A'}</span></div>
                                 <div className="flex justify-between border-b border-gray-200 pb-2"><span className="text-gray-500 font-bold text-xs">Serial No:</span> <span className="font-black font-mono text-gray-900 text-xs">{viewingAsset?.serial_no || 'N/A'}</span></div>
-                                <div className="flex justify-between pb-1"><span className="text-gray-500 font-bold text-xs">Color:</span> <span className="font-black text-gray-900 text-xs">{viewingAsset?.color || 'N/A'}</span></div>
+                                <div className="flex justify-between border-b border-gray-200 pb-2"><span className="text-gray-500 font-bold text-xs">Color:</span> <span className="font-black text-gray-900 text-xs">{viewingAsset?.color || 'N/A'}</span></div>
+                                <div className="pb-1"><span className="text-gray-500 font-bold text-xs">Remarks:</span> <p className="mt-1 whitespace-pre-line break-words font-black text-gray-900 text-xs">{viewingAsset?.remarks || 'None'}</p></div>
                             </div>
 
                             <div className="space-y-4 bg-indigo-50/50 p-5 rounded-lg border border-indigo-50">

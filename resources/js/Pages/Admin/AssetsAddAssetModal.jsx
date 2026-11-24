@@ -28,6 +28,7 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
         model_no: '',
         serial_no: '',
         color: '',
+        remarks: '',
         image: null,
     });
 
@@ -199,6 +200,11 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
                                 <label className="block text-sm font-medium text-gray-700">Color</label>
                                 <TextInput value={form.data.color} onChange={e => form.setData('color', e.target.value)} className="mt-1 w-full" />
                             </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Remarks</label>
+                            <textarea rows={3} maxLength={1000} value={form.data.remarks} onChange={e => form.setData('remarks', e.target.value)} className="mt-1 w-full border-gray-300 rounded-md shadow-sm text-sm" placeholder="Optional notes about this asset" />
                         </div>
 
                         <div>

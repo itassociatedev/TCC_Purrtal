@@ -132,8 +132,9 @@ class AssetController extends Controller
             'model_no' => 'nullable|string|max:255',
             'serial_no' => 'nullable|string|max:255',
             'color' => 'nullable|string|max:255',
+            'remarks' => 'nullable|string|max:1000',
             'user_id' => 'nullable|exists:users,id',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120', // 泙 Validates image
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120', //泙 Validates image
         ]);
 
         $asset = new Asset();
@@ -203,6 +204,7 @@ class AssetController extends Controller
             'model_no' => 'nullable|string|max:255',
             'serial_no' => 'nullable|string|max:255',
             'color' => 'nullable|string|max:255',
+            'remarks' => 'nullable|string|max:1000',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
         ]);
 
@@ -222,9 +224,12 @@ class AssetController extends Controller
             return back()->with('success', 'Asset changes and photo were submitted for IT review. Current asset details remain unchanged until approval.');
         }
 
+        // Imported assets keep the employee only as text (assigned_personnel) with no linked user.
+        // Remember that, so saving an edit does not read the empty user_id as "unassign".
+        $previousUserId = $asset->user_id;
         $asset->fill($request->except('image'));
 
-        // 泙 HANDLE IMAGE UPDATE
+        //泙 HANDLE IMAGE UPDATE
         if (!empty($asset->purchase_date) && !empty($asset->warranty_expiration)) {
             $pDate = strtotime($asset->purchase_date);
             $wDate = strtotime($asset->warranty_expiration);
@@ -238,7 +243,7 @@ class AssetController extends Controller
         // Keep the legacy single-assignee transfer form in sync with the
         // many-to-many accountability records. Shared assignments use the
         // dedicated accountability editor.
-        if ($request->has('user_id')) {
+        if ($request->has('user_id') && ($request->input('user_id') || $previousUserId)) {
             $assignedId = $request->input('user_id') ? (int) $request->input('user_id') : null;
             $asset->accountability_type = 'personal';
             $asset->user_id = $assignedId;
