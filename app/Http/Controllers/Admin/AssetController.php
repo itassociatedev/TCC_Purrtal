@@ -826,11 +826,50 @@ class AssetController extends Controller
         $ids = collect($request->input('ids', []))->map(fn ($id) => (int) $id)->filter()->unique()->values();
         abort_if($ids->isEmpty(), 422, 'No assets were selected for the PDF.');
 
-        $assets = Asset::with(['user', 'supplier', 'accountableUsers', 'photoSubmissions'])->whereIn('id', $ids)->orderBy('asset_tag')->get();
+        $assets = Asset::with(['user.department', 'user.branches', 'accountableUsers.department', 'accountableUsers.branches'])
+            ->whereIn('id', $ids)
+            ->get()
+            ->sort(fn ($a, $b) => strnatcasecmp((string) $a->asset_tag, (string) $b->asset_tag))
+            ->values();
 
-        return response()->view('exports.asset-masterlist-pdf', [
-            'assets' => $assets,
-            'generatedAt' => now(),
+        // Group by accountable employee: asset_user pivot rows, plus assets.user_id when it has no pivot row.
+        $employees = [];
+        $unassigned = collect();
+        foreach ($assets as $asset) {
+            $people = $asset->accountableUsers->keyBy('id');
+            if ($asset->user && ! $people->has($asset->user->id)) {
+                $people->put($asset->user->id, $asset->user);
+            }
+            if ($people->isEmpty()) {
+                $unassigned->push($asset);
+
+                continue;
+            }
+            foreach ($people as $person) {
+                $type = $person->pivot?->accountability_type ?? $asset->accountability_type ?? 'personal';
+                $employees[$person->id] ??= ['user' => $person, 'personal' => collect(), 'shared' => collect(), 'lead' => []];
+                $employees[$person->id][$type === 'shared' ? 'shared' : 'personal']->push($asset);
+                if ($person->pivot?->is_team_leader) {
+                    $employees[$person->id]['lead'][$asset->id] = true;
+                }
+            }
+        }
+
+        $forms = collect($employees)
+            ->map(function ($form) {
+                // Shared assets this employee leads come first; tag order is otherwise kept.
+                $form['shared'] = $form['shared']->sortBy(fn ($asset) => isset($form['lead'][$asset->id]) ? 0 : 1)->values();
+
+                return $form;
+            })
+            ->sortBy(fn ($form) => mb_strtolower((string) $form['user']->name))
+            ->values();
+
+        $pdf = app(\App\Services\AssetAccountabilityFormPdfService::class)->render($forms, $unassigned);
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="asset-accountability-forms-'.now()->format('Ymd').'.pdf"',
         ]);
     }
 
