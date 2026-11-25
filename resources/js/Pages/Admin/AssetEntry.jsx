@@ -104,7 +104,7 @@ export default function AssetEntry({ assets = [], suppliers = [], departments = 
                             <span className="rounded-md bg-indigo-600 px-3 py-2 text-xs font-black text-white">Choose file</span>
                             <input required type="file" accept="image/*" capture="environment" onChange={choosePhoto} className="sr-only" />
                         </label>
-                        <p className="mt-1 text-xs text-gray-500">On a phone, this requests camera permission when required. Existing image upload remains available.</p>
+                        <p className="mt-1 text-xs text-gray-500">On a phone, this requests camera permission when required. JPG, PNG, or WebP photos up to 10 MB are accepted.</p>
                         {previewUrl && <div className="mt-3 rounded-lg border bg-gray-50 p-3"><p className="mb-2 text-xs font-black uppercase tracking-wide text-gray-500">Photo preview</p><img src={previewUrl} alt="Selected asset preview" className="max-h-64 w-full rounded-md object-contain" /></div>}
                         {form.errors.photo && <p className="mt-1 text-sm font-bold text-red-600">{form.errors.photo}</p>}
                     </div>

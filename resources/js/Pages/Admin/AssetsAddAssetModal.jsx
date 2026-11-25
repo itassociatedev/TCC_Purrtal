@@ -203,7 +203,7 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
                             <label className="block text-sm font-medium text-gray-700">Asset Photo (optional)</label>
                             <label className="mt-1 flex cursor-pointer items-center justify-between rounded-lg border-2 border-dashed border-indigo-200 bg-indigo-50 px-4 py-3 hover:bg-indigo-100"><span className="text-sm font-black text-indigo-800">Choose photo or open camera</span><span className="rounded-md bg-indigo-600 px-3 py-2 text-xs font-black text-white">Choose file</span><input type="file" accept="image/*" capture="environment" onChange={e => { const file = e.target.files[0]; form.setData('image', file); setImagePreview(file ? URL.createObjectURL(file) : ''); }} className="sr-only" /></label>
                             {imagePreview && <img src={imagePreview} alt="New asset preview" className="mt-3 max-h-48 w-full rounded-md object-contain border bg-gray-50 p-2" />}
-                            <p className="mt-1 text-xs text-gray-500">On a phone, this opens the camera and requests permission when required. You may also choose an existing image.</p>
+                            <p className="mt-1 text-xs text-gray-500">On a phone, this opens the camera when available. Use a JPG, PNG, or WebP image up to 5 MB.</p>
                         </div>
                     </div>
 
