@@ -29,14 +29,15 @@ it('builds the asset roll sheet starting at B2 with grouped headers, text tags a
         ->and($sheet->getCell('P10')->getValue())->toBe('=N10*O10')
         ->and($sheet->getCell('P6')->getValue())->toBe('=SUM(P10:P11)')
         ->and($sheet->getCell('W10')->getValue())->toBe('Hallway')
-        ->and($sheet->getFreezePane())->toBe('D10');
+        ->and($sheet->getFreezePane())->toBe('A10');
 });
 
-it('does not split the title across the frozen columns', function () {
+it('freezes only the header rows, so no vertical divider cuts through the title or grouped headers', function () {
     $sheet = app(AssetMasterlistWorkbook::class)->build(collect())->getActiveSheet();
 
-    // The frozen area is columns A to C; the title is merged entirely to the right of it.
-    expect($sheet->getMergeCells())->toHaveKey('D2:O2');
+    // 'A10' freezes rows 1 to 9 and no columns.
+    expect($sheet->getFreezePane())->toBe('A10')
+        ->and($sheet->getMergeCells())->toHaveKey('D2:O2');
 });
 
 it('writes text cells as text so a value starting with = or + is never a formula', function () {

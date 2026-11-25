@@ -34,7 +34,7 @@ class AssetMasterlistWorkbook
 
     /** Column key => [letter, header, width]. Column A is the left margin. */
     private const COLUMNS = [
-        'num' => ['B', '#', 6],
+        'num' => ['B', '#', 9],
         'name' => ['C', 'Name', 32],
         'tag' => ['D', 'Tag', 18],
         'branch' => ['E', 'Branch', 15],
@@ -90,8 +90,9 @@ class AssetMasterlistWorkbook
         $this->rows($sheet, $assets);
 
         $sheet->setAutoFilter($this->col('num').self::HEADER_ROW.':'.$this->col('photo').($assets->isEmpty() ? self::HEADER_ROW : $last));
-        // Keep the title block and column headers in view, plus the margin, # and Name columns (like the masterfile).
-        $sheet->freezePane('D'.self::FIRST_DATA_ROW);
+        // Keep the title block and column headers in view while scrolling down. No columns are frozen, so there is
+        // no vertical divider cutting through the title and the grouped headers.
+        $sheet->freezePane('A'.self::FIRST_DATA_ROW);
         $sheet->getPageSetup()->setOrientation('landscape')->setFitToWidth(1)->setFitToHeight(0);
         $sheet->getPageSetup()->setRowsToRepeatAtTopByStartAndEnd(self::GROUP_ROW, self::HEADER_ROW);
         $sheet->getSheetView()->setZoomScale(90);
