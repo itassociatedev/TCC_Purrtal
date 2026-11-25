@@ -142,7 +142,7 @@ test('IT team combines branches while other teams keep branch choices',()=>{
 });
 
 
-test('missing historical scores and Low completions count but never manufacture points',()=>{
+test('missing historical scores and legacy excluded Low completions never manufacture points',()=>{
  const board=buildLeaderboard([task(501,'Alex',{scoring:null}),task(502,'Bea',{priority:'Low',scoring:{eligible:false,reason:'excluded_low',earned_units:0,allocations:[]}})]);
  assert.equal(board.total,2);assert.equal(board.totalUnits,0);assert.ok(board.rows.every(r=>r.points===0&&r.unscored===1));
 });
@@ -157,4 +157,12 @@ test('reopened work removes points and demo scores never bleed into actual resul
  assert.equal(buildLeaderboard([task(504,'Alex',{status:'In Progress'})]).totalUnits,0);
  const employees=[{id:1,name:'Alex',department:'IT',branch:'Makati'}],fixtures=leaderboardDemoTasks(employees,'2026-10-25');
  assert.equal(buildLeaderboard(fixtures,{employees}).totalUnits,0);assert.ok(buildLeaderboard(fixtures,{employees,demo:true}).totalUnits>0);
+});
+
+
+test('ten-point final-completer records credit no earlier owner and include Low points',()=>{
+ const make=(id,name,points,priority)=>task(id,name,{priority,scoring:{scoring_model:'points_10',eligible:true,earned_units:points*1000000,allocations:[{id:name,name,department:'IT',branch:'Makati',units:1000000,awarded_units:points*1000000}]}});
+ const board=buildLeaderboard([make(601,'Intern',10,'Critical'),make(602,'Member',6.5,'High'),make(603,'Member',3,'Low')]);
+ assert.equal(board.totalPoints,19.5);assert.equal(board.rows[0].name,'Intern');assert.equal(board.rows[0].points,10);assert.equal(board.rows[1].points,9.5);assert.equal(board.total,3);
+ assert.equal(board.rows[0].share,51.28);assert.equal(board.rows[1].share,48.72);
 });

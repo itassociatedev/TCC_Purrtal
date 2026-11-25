@@ -314,3 +314,12 @@ TicketAccess::canViewLeaderboard now checks `ticketing.leaderboard_viewer_positi
 ## 24 November 2026 - Recover dismissed ticket reviews
 
 `TicketAccess::feedbackResolverId/canLeaveFeedback` centralize resolver attribution and manual-review eligibility. `TicketController` adds `can_submit_feedback` to list/deep-link tickets and treats `feedback_dismissed` separately from submitted `feedback` under the existing ticket row lock. `Tickets/Index.jsx` shares TicketRowActions between desktop rows/mobile tiles and shows Leave A Review beside View for eligible closed tickets and reuses `TicketRatingDialog` from TicketFeedbackQueue.jsx. No new routes or database columns. Tests: tests/Feature/TicketFeedbackRecoveryTest.php and the updated form submission regression.
+
+
+## 24 November 2026 - Ticket Time Completion points
+
+- `TicketResolutionScore::deadline`: reconstructs active support segments from receipt/activity and projects the saved allowance, preserving holds/reopen gaps. `capture`: frozen Priority + calendar-lateness Time score and evidence. `backfill`: one-time audited upgrade.
+- `TicketPriority`, `TicketPriorityController`, `TicketPrioritySettings`: time_completion_points and bounded point settings. `TicketSla`: captures effective deadline at permanent resolution.
+- `2026_11_24_000002_add_ticket_completion_scoring.php`: Time field/defaults and historic award upgrades.
+- `TicketSlaSettings.jsx`: Time Completion field/explanation. `TicketLeaderboard.jsx` and `TicketLeaderboard.php`: score component/deadline display and export.
+- `TicketPriorityScoringTest.php`: timing boundaries, calendar overnight gaps, corrections, holds, validation and frozen awards.

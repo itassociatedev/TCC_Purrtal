@@ -71,7 +71,7 @@ export function buildLeaderboard(tasks,{group='people',department='All',branch='
   scored.add(String(task.id));
   const date=completionDate(task);if((from||to)&&!date||from&&date<from||to&&date>to)continue;
   let score=task.scoring;
-  if(demo)score={eligible:true,percentage:94,earned_units:940000,scores:{time:30,priority:24,returns:20,ownership:20},return_count:0,return_deduction:0,priority:'High',submission_at:task.completedAt,deadline:task.due,allocations:[{id:task.assignee,name:task.assignee,department:task.department,branch:task.branch,units:1000000,awarded_units:940000}],policy_version:'DEMO'};
+  if(demo)score={eligible:true,scoring_model:'points_10',maximum_points:10,percentage:70,earned_units:7000000,scores:{time:2,priority:4,returns:1},return_count:0,return_deduction:0,priority:'High',submission_at:task.completedAt,deadline:task.due,allocations:[{id:task.assignee,name:task.assignee,department:task.department,branch:task.branch,units:1000000,awarded_units:7000000}],policy_version:'DEMO'};
   if(!score?.eligible)continue;
   for(const allocation of score.allocations||[]){
    const person=peopleById.get(String(allocation.id))||peopleByName.get(allocation.name);

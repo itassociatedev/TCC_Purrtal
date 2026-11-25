@@ -557,3 +557,54 @@ html[data-clinic-theme=dark] .ticketing .leaderboard-overdue { color: #fdba74; }
 
 /* View and optional review actions share one row and wrap together on narrow screens. */
 .ticket-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+
+/* Resolution detail now has seven columns; budget each one and wrap long headers. */
+.ticketing .leaderboard-detail .leaderboard-table th { white-space: normal; overflow-wrap: anywhere; line-height: 1.5; vertical-align: middle; }
+@media (min-width: 701px) {
+ .ticketing .leaderboard-detail .leaderboard-resolved-table th:first-child { width: 30%; }
+ .ticketing .leaderboard-detail .leaderboard-resolved-table th:nth-child(2) { width: 10%; }
+ .ticketing .leaderboard-detail .leaderboard-resolved-table th:nth-child(3) { width: 10%; }
+ .ticketing .leaderboard-detail .leaderboard-resolved-table th:nth-child(4) { width: 14%; }
+ .ticketing .leaderboard-detail .leaderboard-resolved-table th:nth-child(5) { width: 12%; }
+ .ticketing .leaderboard-detail .leaderboard-resolved-table th:nth-child(6) { width: 14%; }
+ .ticketing .leaderboard-detail .leaderboard-resolved-table th:last-child { width: 10%; }
+}
+
+/* Ticket dialogs may render outside .ticketing, so theme both roots explicitly. */
+html[data-clinic-theme=dark] :is(.ticketing,.ticket-dialog,.ticket-rating-dialog) {
+  --clinic-dark-surface:#1d2532; --clinic-dark-subtle:#263143;
+  --clinic-dark-border:#46536a; --clinic-dark-ink:#e2e8f0; --clinic-dark-muted:#a9b5c7;
+  color:#e2e8f0; color-scheme:dark;
+}
+html[data-clinic-theme=dark] :is(.ticket-card,.ticket-dialog,.ticket-rating-dialog,.ticket-member-card,.ticket-admin-dashboard-card) {background:#1d2532;color:#e2e8f0;border-color:#46536a}
+html[data-clinic-theme=dark] :is(.ticket-search,.ticket-table-toolbar,.ticket-filters-panel,.ticket-closure-summary,.ticket-reports article,.ticket-priority-settings-form,.ticket-priority-removal) {background:#263143;color:#e2e8f0;border-color:#46536a}
+html[data-clinic-theme=dark] :is(.ticketing,.ticket-dialog,.ticket-rating-dialog) :is(input,select,textarea) {background:#111b29;color:#e2e8f0;border-color:#46536a;box-shadow:none}
+html[data-clinic-theme=dark] :is(.ticketing,.ticket-dialog,.ticket-rating-dialog) :is(input,textarea)::placeholder {color:#a9b5c7;opacity:1}
+html[data-clinic-theme=dark] .ticketing input[readonly],html[data-clinic-theme=dark] .ticketing :disabled {background:#263143;color:#a9b5c7}
+html[data-clinic-theme=dark] :is(.ticket-secondary,.ticket-filter-toggle,.ticket-admin-nav a,.ticket-pagination a,.ticket-pagination>div>span) {background:#263143;color:#e2e8f0;border-color:#46536a}
+html[data-clinic-theme=dark] .ticket-edit {background:#302c57;color:#c7c2ff;border-color:#7167b5}
+html[data-clinic-theme=dark] :is(.ticketing,.ticket-dialog) :is(th,td),html[data-clinic-theme=dark] :is(.ticket-tabs,.ticket-pagination,.ticket-activity,.ticket-activity article,.ticket-intake-details>div) {border-color:#354153}
+html[data-clinic-theme=dark] .ticketing th {background:#263143;color:#becce2}
+html[data-clinic-theme=dark] :is(.ticketing,.ticket-dialog) :is(label,dt,small),html[data-clinic-theme=dark] :is(.ticket-page-heading p,.ticket-card-heading p,.ticket-number,.ticket-date,.ticket-muted,.ticket-field-help,.ticket-stat-caption,.ticket-activity small,.ticket-empty,.ticket-tabs a,.ticket-form-note,.ticket-eyebrow) {color:#a9b5c7}
+html[data-clinic-theme=dark] :is(.ticket-intake-details dd,.ticket-description,.ticket-empty h3,.ticket-closure-summary h3,.ticket-dashboard-group-heading,.ticket-member-name h3) {color:#e2e8f0}
+html[data-clinic-theme=dark] :is(.ticket-intake-details a,.ticket-tabs .active,.ticket-closure-summary dd) {color:#b9b2ff}
+html[data-clinic-theme=dark] .ticket-category {background:#203958;color:#bfdbfe;border-color:#426893}
+html[data-clinic-theme=dark] .ticket-member-avatar {background:#382e56;color:#ddd6fe}
+html[data-clinic-theme=dark] .ticket-member-assigned {background:#203958;color:#bfdbfe}
+html[data-clinic-theme=dark] .ticket-member-resolved {background:#193e32;color:#bbf7d0}
+html[data-clinic-theme=dark] .ticket-member-rate {background:#382e56;color:#ddd6fe}
+/* Preserve each statistic's meaning with a dark tinted surface and brighter text. */
+html[data-clinic-theme=dark] .ticket-stat {--stat-color:#c7d2fe;--stat-bg:#292f50;--stat-border:#515b88}
+html[data-clinic-theme=dark] .ticket-stat-amber {--stat-color:#fde68a;--stat-bg:#3b3021;--stat-border:#766038}
+html[data-clinic-theme=dark] .ticket-stat-blue {--stat-color:#bfdbfe;--stat-bg:#203451;--stat-border:#42638c}
+html[data-clinic-theme=dark] .ticket-stat-green {--stat-color:#bbf7d0;--stat-bg:#193b2e;--stat-border:#3b7255}
+html[data-clinic-theme=dark] .ticket-stat-teal {--stat-color:#99f6e4;--stat-bg:#193b3c;--stat-border:#34716e}
+html[data-clinic-theme=dark] .ticket-stat-violet {--stat-color:#ddd6fe;--stat-bg:#332b4d;--stat-border:#65568c}
+html[data-clinic-theme=dark] .ticket-stat-pink {--stat-color:#fbcfe8;--stat-bg:#40283b;--stat-border:#80516f}
+html[data-clinic-theme=dark] :is(.ticket-status.closed,.ticket-status.not_started) {color:#becce2}
+html[data-clinic-theme=dark] .ticket-status.in_progress {color:#b9b2ff}
+html[data-clinic-theme=dark] .ticket-status.resolved {color:#86efac}
+html[data-clinic-theme=dark] :is(.ticket-error,.ticket-priority.critical) {color:#fda4af}
+html[data-clinic-theme=dark] .ticket-priority.high {color:#fcd34d}
+html[data-clinic-theme=dark] .ticket-overlay {background:#020617b3}
+html[data-clinic-theme=dark] :is(.ticketing,.ticket-dialog,.ticket-rating-dialog) :is(button,a,input,select,textarea,summary):focus-visible {outline:2px solid #a5b4fc;outline-offset:2px}

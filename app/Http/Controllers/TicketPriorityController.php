@@ -51,7 +51,8 @@ class TicketPriorityController extends Controller
             'response_hours' => ['required', 'numeric', 'gt:0', 'max:8760'],
             'resolution_hours' => ['required', 'numeric', 'gt:0', 'max:8760', 'gte:response_hours'],
             'update_hours' => ['nullable', 'numeric', 'gt:0', 'max:8760'],
-            'score_points' => ['required', 'integer', 'min:0', 'max:1000000'],
+            'score_points' => ['required', 'integer', 'min:0', 'max:7'],
+            'time_completion_points' => ['required', 'integer', 'min:0', 'max:3'],
             'description' => ['nullable', 'string', 'max:500'],
             'sort_order' => ['required', 'integer', 'min:1', 'max:10000'],
         ]);
@@ -71,7 +72,7 @@ class TicketPriorityController extends Controller
             }
             $priority->key = $key;
         }
-        \App\Services\TicketPriorityOrdering::save($priority, ['label' => $data['label'], 'score_points'=>(int)$data['score_points'], 'description'=>trim($data['description'] ?? ''),
+        \App\Services\TicketPriorityOrdering::save($priority, ['label' => $data['label'], 'score_points'=>(int)$data['score_points'], 'time_completion_points'=>(int)$data['time_completion_points'], 'description'=>trim($data['description'] ?? ''),
             'response_seconds' => $seconds['response'], 'resolution_seconds' => $seconds['resolution'],
             'update_seconds' => $seconds['update']], (int) $data['sort_order']);
         return back()->with('success', 'SLA priority saved. New tickets use these targets; existing ticket targets are preserved.');

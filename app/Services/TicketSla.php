@@ -234,7 +234,7 @@ class TicketSla
                 $state['resolved_at'] = $this->stamp();
                 $state['resolved_by'] = $actor->id;
                 // Freeze priority and points at permanent resolution; later edits cannot rewrite the award.
-                $state['resolution_score'] = TicketResolutionScore::capture($ticket->priority,$actor->id,$state['resolved_at']);
+                $state['resolution_score'] = TicketResolutionScore::capture($ticket->priority,$actor->id,$state['resolved_at'],TicketResolutionScore::deadline($ticket,$ticket->priority,false,$state['resolved_at']));
                 $state['resolution_documentation'] = $documentation;
                 $state['paused_at'] = null;
                 $state['pause_reason'] = null;
@@ -303,7 +303,7 @@ class TicketSla
         if (!$clock && $desired==='resolved' && $oldStatus!=='resolved') {
             $state=$ticket->sla_state ?? [];
             $state['resolved_at']=$this->stamp();$state['resolved_by']=$actor->id;
-            $state['resolution_score']=TicketResolutionScore::capture($ticket->priority,$actor->id,$state['resolved_at']);
+            $state['resolution_score']=TicketResolutionScore::capture($ticket->priority,$actor->id,$state['resolved_at'],TicketResolutionScore::deadline($ticket,$ticket->priority,false,$state['resolved_at']));
             $ticket->sla_state=$state;
             $this->activity($ticket,$actor,'resolved',$data['note'] ?? 'Ticket resolved.',['resolution_score'=>$state['resolution_score']]);
         }

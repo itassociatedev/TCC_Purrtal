@@ -144,7 +144,7 @@ class TicketLeaderboard
         return app(TicketWorkbook::class)->download([
             'Leaderboard' => $rows,
             'Scope' => [['Setting', 'Value'], ['Period', $data['period']], ['From', $data['from'] ?? 'All time'], ['As of', $data['to']], ['Environment', $preview ? 'Preview' : 'Live'],
-                ['Resolved date', 'Latest resolution date; currently resolved/closed tickets only'], ['Ratings date', 'Feedback submission date; latest feedback per ticket'], ['Overdue date', 'Ticket creation date; currently open overdue assignments'], ['Total resolved', $data['total_resolved']], ['Total points',$data['total_points']], ['Ranking','Frozen priority points at resolution; later priority/settings edits do not change awards'], ['SLA averages', 'Support time on currently resolved/closed tickets resolved in the selected period; credited to resolver; missing milestones excluded'], ['Other table filters', 'Do not apply to leaderboard']],
+                ['Resolved date', 'Latest resolution date; currently resolved/closed tickets only'], ['Ratings date', 'Feedback submission date; latest feedback per ticket'], ['Overdue date', 'Ticket creation date; currently open overdue assignments'], ['Total resolved', $data['total_resolved']], ['Total points',$data['total_points']], ['Ranking','Frozen Priority plus calendar-time Completion points at permanent resolution; later priority/settings edits do not change awards'], ['SLA averages', 'Support time on currently resolved/closed tickets resolved in the selected period; credited to resolver; missing milestones excluded'], ['Other table filters', 'Do not apply to leaderboard']],
         ], 'tcc-it-leaderboard-'.$data['period'].'-'.now('Asia/Manila')->format('Ymd-His').'.xlsx');
     }
 
@@ -159,7 +159,7 @@ class TicketLeaderboard
         };
         $rows = $type === 'ratings'
             ? [['Ticket ID', 'Subject', 'Rating / 5', 'Comment', 'Submitted']]
-            : [['Ticket ID', 'Subject', 'Status', 'Location', 'Assigned to', $type === 'resolved' ? 'Resolved' : 'Created', 'Resolution priority', 'Resolution points']];
+            : [['Ticket ID', 'Subject', 'Status', 'Location', 'Assigned to', $type === 'resolved' ? 'Resolved' : 'Created', 'Resolution priority', 'Priority points', 'Time Completion points', 'Resolution deadline', 'Calendar hours late', 'Total resolution points']];
 
         foreach ($detail['entries'] as $entry) {
             if ($type === 'ratings') {
@@ -167,7 +167,7 @@ class TicketLeaderboard
             } else {
                 $ticket = $entry['ticket'];
                 $rows[] = [$ticket->ticket_code, $ticket->subject, ucfirst(str_replace('_', ' ', $ticket->status)),
-                    $ticket->affectedLocationName(), $ticket->assignee?->name, $entry['at'], $ticket->sla_state['resolution_score']['label'] ?? 'Not recorded', $ticket->sla_state['resolution_score']['points'] ?? 'Not scored'];
+                    $ticket->affectedLocationName(), $ticket->assignee?->name, $entry['at'], $ticket->sla_state['resolution_score']['label'] ?? 'Not recorded', $ticket->sla_state['resolution_score']['priority_points'] ?? 'Not recorded', $ticket->sla_state['resolution_score']['time_points'] ?? 'Not recorded', $ticket->sla_state['resolution_score']['resolution_deadline'] ?? 'Not recorded', isset($ticket->sla_state['resolution_score']['lateness_seconds']) ? round($ticket->sla_state['resolution_score']['lateness_seconds']/3600,2) : 'Not recorded', $ticket->sla_state['resolution_score']['points'] ?? 'Not scored'];
             }
         }
 

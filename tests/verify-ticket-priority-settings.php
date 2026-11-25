@@ -23,7 +23,7 @@ try {
     };
     $check = function ($ok, $message) { if (!$ok) throw new RuntimeException($message); echo 'PASS: '.$message.PHP_EOL; };
     $controller = app(App\Http\Controllers\TicketPriorityController::class);
-    $input = ['label' => 'Settings verification '.bin2hex(random_bytes(4)), 'score_points'=>10, 'description'=>'Priority validation fixture', 'response_hours' => 0.25, 'resolution_hours' => 0.5, 'update_hours' => '', 'sort_order' => 9];
+    $input = ['label' => 'Settings verification '.bin2hex(random_bytes(4)), 'score_points'=>4, 'time_completion_points'=>3, 'description'=>'Priority validation fixture', 'response_hours' => 0.25, 'resolution_hours' => 0.5, 'update_hours' => '', 'sort_order' => 9];
     foreach ([$employee, $member] as $actor) {
         try { $controller->store($req($actor, $input)); throw new RuntimeException('Unauthorized settings accepted'); }
         catch (HttpException $e) { $check($e->getStatusCode() === 403, 'Non-supervisor cannot change global priorities'); }

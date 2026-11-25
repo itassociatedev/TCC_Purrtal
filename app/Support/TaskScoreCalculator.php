@@ -23,6 +23,7 @@ class TaskScoreCalculator
         return $shares;
     }
     public static function calculate(array $task, array $evidence, array $policy, bool $hasChildren = false): array {
+        $pointModel=($policy['model'] ?? '')==='points_10';
         $submissions = $evidence['submissions'] ?? []; $last = $submissions ? end($submissions) : null;
         $returns = count($evidence['returns'] ?? []);
         $priority = $evidence['completion_priority'] ?? ($task['priority'] ?? '');
@@ -31,12 +32,15 @@ class TaskScoreCalculator
         elseif (!empty($task['sample']) || !empty($task['sampleKey']) || str_starts_with($task['id'] ?? '', 'leaderboard-demo-') || str_starts_with($task['title'] ?? '', '[Sample]')
             || in_array($task['template'] ?? '', ['it-opening-rounds','narrative-report','daily-operations','intern-weekly-report']) || str_starts_with($task['template'] ?? '', 'daily-custom-')) $reason = 'excluded_report_or_sample';
         elseif ($hasChildren || (($task['template'] ?? '') === 'collaborative' && empty($task['parentId']))) $reason = 'excluded_coordination';
-        elseif ($priority === 'Low') $reason = 'excluded_low';
-        elseif (empty($evidence['complete']) || !$last || empty($evidence['owner']['id']) || empty($evidence['approved_at']) || empty($task['due']) || !in_array($priority, ['Critical','High','Medium'])) $reason = 'incomplete_records';
-        $result = ['allocation_rule'=>'equal_handover_pool_v2', 'eligible'=>false, 'reason'=>$reason, 'task_id'=>$task['taskCode'] ?? $task['id'] ?? '', 'title'=>$task['title'] ?? '',
+        elseif (!$pointModel && $priority === 'Low') $reason = 'excluded_low';
+        elseif (empty($evidence['complete']) || !$last || empty($evidence['owner']['id']) || empty($evidence['approved_at']) || empty($task['due']) || !in_array($priority, $pointModel?['Critical','High','Medium','Low']:['Critical','High','Medium'])) $reason = 'incomplete_records';
+        // Old percentage policies remain reproducible until an explicit audited recalculation.
+        $returnScore=$pointModel?0:max(0,20-$returns*$policy['return_deduction']);
+        if($pointModel) foreach($policy['return_brackets'] as $bracket){if($bracket['max_returns']===null || $returns<=$bracket['max_returns']){$returnScore=$bracket['score'];break;}}
+        $result = ['scoring_model'=>$pointModel?'points_10':'percentage_v1', 'maximum_points'=>$pointModel?10:1, 'allocation_mode'=>$policy['allocation_mode'] ?? 'equal_pool', 'allocation_rule'=>($policy['allocation_mode'] ?? '')==='final_completer'?'final_completer_v1':'equal_handover_pool_v2', 'eligible'=>false, 'reason'=>$reason, 'task_id'=>$task['taskCode'] ?? $task['id'] ?? '', 'title'=>$task['title'] ?? '',
             'priority'=>$priority, 'deadline'=>$task['due'] ?? null, 'submission_at'=>$last['at'] ?? null, 'submissions'=>$submissions,
-            'returns'=>$evidence['returns'] ?? [], 'return_count'=>$returns, 'return_deduction'=>min(20,$returns*$policy['return_deduction']),
-            'scores'=>['time'=>0,'priority'=>0,'returns'=>0,'ownership'=>0], 'percentage'=>0, 'earned_units'=>0,
+            'returns'=>$evidence['returns'] ?? [], 'return_count'=>$returns, 'return_deduction'=>($pointModel?1:20)-$returnScore,
+            'scores'=>$pointModel?['time'=>0,'priority'=>0,'returns'=>0]:['time'=>0,'priority'=>0,'returns'=>0,'ownership'=>0], 'percentage'=>0, 'earned_units'=>0,
             'allocations'=>[], 'transfers'=>$evidence['transfers'] ?? [], 'review_flags'=>$evidence['flags'] ?? [], 'approved_at'=>$evidence['approved_at'] ?? null];
         if ($reason) return $result;
         try {
@@ -44,13 +48,21 @@ class TaskScoreCalculator
             $submitted = CarbonImmutable::parse($last['at']);
             $late = max(0, $submitted->getTimestamp() - $deadline->getTimestamp());
         } catch (\Throwable $e) { $result['reason']='incomplete_records'; return $result; }
-        $time = 30;
+        $time = $pointModel?2:30;
         if ($late > 0) foreach ($policy['lateness'] as $bracket) {
             if ($bracket['max_hours'] === null || $late <= $bracket['max_hours']*3600) { $time=$bracket['score']; break; }
         }
-        $scores = ['time'=>$time, 'priority'=>['Critical'=>30,'High'=>24,'Medium'=>18][$priority], 'returns'=>max(0,20-$returns*$policy['return_deduction']), 'ownership'=>20];
-        $percentage = array_sum($scores); $earned = (int)round($percentage/100*self::SCALE);
-        $shares = self::allocations($evidence['owner'], $evidence['transfers'] ?? [], $policy['handover_percent']);
+        $scores = $pointModel ? ['time'=>$time,'priority'=>$policy['priority_scores'][$priority],'returns'=>$returnScore]
+            : ['time'=>$time,'priority'=>['Critical'=>30,'High'=>24,'Medium'=>18][$priority],'returns'=>$returnScore,'ownership'=>20];
+        $total = array_sum($scores);
+        $percentage=$pointModel?$total/10*100:$total;
+        // Ten-point policies award their raw sum, without dividing the points by 100.
+        $earned = (int)round(($pointModel?$total:$total/100)*self::SCALE);
+        if(($policy['allocation_mode'] ?? '')==='final_completer') {
+            $transfers=$evidence['transfers'] ?? [];
+            $person=$evidence['completer'] ?? ($transfers ? end($transfers)['to'] : $evidence['owner']);
+            $shares=[$person+['units'=>self::SCALE]];
+        } else $shares = self::allocations($evidence['owner'], $evidence['transfers'] ?? [], $policy['handover_percent']);
         // Allocate whole micro-points by largest remainder; never round shares independently.
         $used=0;
         foreach ($shares as &$share) { $raw=$earned*$share['units']; $share['awarded_units']=(int)floor($raw/self::SCALE); $share['remainder']=$raw%self::SCALE; $used+=$share['awarded_units']; }

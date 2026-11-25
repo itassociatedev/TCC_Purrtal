@@ -14,7 +14,7 @@ try {
     $check = function ($ok, $message) { if (!$ok) throw new RuntimeException($message); echo 'PASS: '.$message.PHP_EOL; };
     $request = function ($label, $position) use ($app, $leader) {
         $r = Request::create('/tickets/admin/priorities', 'POST', ['label' => $label, 'sort_order' => $position,
-            'score_points'=>10, 'description'=>'Priority validation fixture', 'response_hours' => 0.25, 'resolution_hours' => 1, 'update_hours' => null]);
+            'score_points'=>4, 'time_completion_points'=>3, 'description'=>'Priority validation fixture', 'response_hours' => 0.25, 'resolution_hours' => 1, 'update_hours' => null]);
         $r->setUserResolver(fn () => $leader); $r->setLaravelSession($app['session']->driver()); return $r;
     };
     $dense = function () use ($check) {

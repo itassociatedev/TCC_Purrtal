@@ -2,6 +2,8 @@
 
 ## Task Module documentation
 
+Current Task rubric: maximum 10 raw points (Time 2 + Priority 7 + Returns 1), with all earned points credited to the final completer. Low can earn up to 3. See the scoring reference for the confirmed rules and versioned recalculation.
+
 - [Leaderboard scoring](../docs/task-module-scoring.md): approved rubric, settings, evidence, handovers, audit trail, permissions and validation.
 - [Task workflow](../docs/task-module-flowcharts.md): task lifecycle and review permissions.
 

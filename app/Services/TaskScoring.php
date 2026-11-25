@@ -57,15 +57,16 @@ class TaskScoring
             if (!$state) $e['owner']=$from;
             $shares=TaskScoreCalculator::allocations($e['owner'],$e['transfers'],$policy['handover_percent']);
             if (count($e['transfers']) || in_array($to['id'],array_column($shares,'id'),true)) $e['flags'][]='Repeated or returning-owner handover requires review.';
-            $transfer=['from'=>$from,'to'=>$to,'at'=>now()->toIso8601String(),'percent'=>$policy['handover_percent']];
+            $transfer=['from'=>$from,'to'=>$to,'at'=>now()->toIso8601String(),'percent'=>($policy['allocation_mode'] ?? '')==='final_completer'?100:$policy['handover_percent'], 'allocation_mode'=>$policy['allocation_mode'] ?? 'equal_pool'];
             $e['transfers'][]=$transfer;
-            $transfer['reserved_allocations']=TaskScoreCalculator::allocations($e['owner'],$e['transfers'],$policy['handover_percent']);
+            $transfer['reserved_allocations']=($policy['allocation_mode'] ?? '')==='final_completer' ? [$to+['units'=>TaskScoreCalculator::SCALE]] : TaskScoreCalculator::allocations($e['owner'],$e['transfers'],$policy['handover_percent']);
             $events[]=['type'=>'accepted_handover',...$transfer];
         }
         if (($task['status'] ?? '') === 'Completed' && ($previous['status'] ?? '') !== 'Completed') {
             $e['completion_priority'] ??= $task['priority']; $e['approved_at']=now()->toIso8601String();
             $events[]=['type'=>'approved_completion','actor_id'=>$actor->id,'at'=>$e['approved_at']];
         }
+        if (($task['status'] ?? '')==='Completed') $e['completer']=$this->person($record->assignee_id,$task);
         $children=TaskModuleRecord::where('payload->parentId',$task['id'] ?? null)->exists();
         $result=TaskScoreCalculator::calculate($task,$e,$policy,$children);
         $before=$state ? json_decode($state->result,true) : null;

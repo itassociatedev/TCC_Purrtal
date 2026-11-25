@@ -1,5 +1,10 @@
 # Ticketing change history
 
+## 24 November 2026 - Ticket Time Completion scoring
+
+Superseded priority-only 20/10/5/1 awards with Priority 7/4/2/0 plus Time Completion 3/2/1/0 (maximum 10). Supervisors configure a per-priority on-time score. SLA deadlines preserve support windows/recorded holds, while the user-confirmed late brackets count calendar hours. Permanent resolution freezes all components and metadata. Existing resolved/closed awards are upgraded with before/after audits; missing time evidence never assumes full credit. Updated details, exports, docs and regression coverage. No push.
+
+
 ## 24 November 2026 - Review dismissed popups later
 
 Eligible closed tickets now offer Leave A Review from ticket details. Dismissal suppresses the automatic prompt but allows a later manual review. One submitted rating per ticket is enforced under a row lock, and the option disappears after submission. Existing ownership, half-star, optional-comment and IT rating rules remain unchanged; no data migration. Added backend and frontend regression coverage.
@@ -426,3 +431,6 @@ Added TicketAdminDashboard.jsx with colored navigation cards for Locations, Hand
 Preserved local ticketing work in b1ae29a and backup branch codex/ticketing-before-merge-20261119 before merging remote commit 90b5282 (including bc7a5e9 notification recipient/feed fixes). Kept incoming task/report/workspace/import changes alongside the local admin dashboard, unique priority ordering/archive/restore, confirmation dialogs, notification replay guards and numeric route constraints. Resolved the single SidebarLayout.jsx conflict by combining the dedicated IT feed/preview read endpoint with asynchronous read-before-navigation and rollback/error feedback. Environment backups, local launcher edits, process files and LOCAL_SETUP.md were excluded from commits.
 
 Applied the specific additive 2026_11_15_000001_create_task_id_settings.php migration locally because the incoming Task ID feature requires task_module_settings/task_id_sequences. The workbook missing-heading test now expects the existing ValidationException rather than the obsolete HttpException. Build, 26 JavaScript tests, 15 isolated PHP workbook/task-release-safety tests (52 assertions), and ten installed-schema ticketing regression scripts passed. Temporary SQLite extensions were enabled only for test commands; regular PHP configuration was not edited. The incoming TaskModuleEmailTest suite is not green: the unmodified version includes past fixed due dates; diagnostic fixed-clock execution also exposed stale workflow expectations/missing fixture tables. Task email production code and tests were retained exactly as incoming. These are known incoming-suite limitations, not resolved by this merge. No browser verification performed.
+
+### Dark-mode styling
+Added ticket-scoped dark surfaces, readable controls and table headers, muted text contrast, tinted dashboard statistics, workload cards and dialog styling. Detached ticket dialogs receive the same theme variables. Changes affect presentation only.

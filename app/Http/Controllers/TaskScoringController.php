@@ -14,23 +14,31 @@ class TaskScoringController extends Controller
     }
     public function show(Request $r) {
         $this->authorizeAdmin($r); $policy=TaskScoring::policy();
-        return response()->json(['version'=>$policy->id,'settings'=>json_decode($policy->policy,true)]);
+        // An older saved version can be upgraded explicitly without rewriting its historical policy.
+        $settings=json_decode($policy->policy,true);
+        return response()->json(['version'=>$policy->id,'settings'=>($settings['model'] ?? '')==='points_10'?$settings:config('task-scoring')]);
     }
     public function update(Request $r) {
         $this->authorizeAdmin($r);
-        $d=$r->validate(['version'=>'required|integer|min:1','weights'=>'required|array','weights.time'=>'required|numeric','weights.priority'=>'required|numeric','weights.returns'=>'required|numeric','weights.ownership'=>'required|numeric',
-            'lateness'=>'required|array|min:1|max:12','lateness.*.max_hours'=>'present|nullable|numeric|gt:0|max:87600','lateness.*.score'=>'required|numeric|min:0|max:30',
-            'return_deduction'=>'required|numeric|min:0|max:20','handover_percent'=>'required|numeric|min:0|max:100','application'=>'required|in:new,recalculate']);
-        if (array_sum($d['weights'])!=100 || $d['weights']!=config('task-scoring.weights')) throw ValidationException::withMessages(['weights'=>'The fixed weights must be 30 / 30 / 20 / 20 and total 100%.']);
-        $previous=0; $score=30; $last=count($d['lateness'])-1;
-        foreach ($d['lateness'] as $i=>$b) {
-            if (($i===$last && $b['max_hours']!==null) || ($i<$last && ($b['max_hours']===null || $b['max_hours']<=$previous)) || $b['score']>$score) throw ValidationException::withMessages(['lateness'=>'Use increasing hour bounds, non-increasing scores, and an unbounded final bracket.']);
-            $previous=$b['max_hours'] ?? $previous; $score=$b['score'];
+        $d=$r->validate([
+            'version'=>'required|integer|min:1','weights'=>'required|array','weights.time'=>'required|numeric','weights.priority'=>'required|numeric','weights.returns'=>'required|numeric',
+            'lateness'=>'required|array|min:1|max:12','lateness.*.max_hours'=>'present|nullable|numeric|gt:0|max:87600','lateness.*.score'=>'required|numeric|min:0|max:2',
+            'return_brackets'=>'required|array|min:2|max:12','return_brackets.*.max_returns'=>'present|nullable|integer|min:0|max:10000','return_brackets.*.score'=>'required|numeric|min:0|max:1',
+            'application'=>'required|in:new,recalculate',
+        ]);
+        if (array_sum($d['weights'])!=10 || $d['weights']!=config('task-scoring.weights')) throw ValidationException::withMessages(['weights'=>'Fixed maxima must be Time 2, Priority 7, Returns 1: 10 points total.']);
+        foreach (['lateness'=>['max_hours',2],'return_brackets'=>['max_returns',1]] as $key=>[$bound,$maximum]) {
+            $previous=$key==='lateness'?0:-1;$score=$maximum;$last=count($d[$key])-1;
+            foreach($d[$key] as $i=>$bracket) {
+                if(($i===$last && $bracket[$bound]!==null) || ($i<$last && ($bracket[$bound]===null || $bracket[$bound]<=$previous)) || $bracket['score']>$score) throw ValidationException::withMessages([$key=>'Use increasing bounds, non-increasing scores, and an unbounded final bracket.']);
+                $previous=$bracket[$bound] ?? $previous;$score=$bracket['score'];
+            }
         }
+        if($d['return_brackets'][0]['max_returns']!=0 || $d['return_brackets'][0]['score']!=1) throw ValidationException::withMessages(['return_brackets'=>'Zero formal returns must earn the full 1 point.']);
         return DB::transaction(function () use($d,$r) {
             $old=DB::table('task_scoring_policies')->orderByDesc('id')->lockForUpdate()->first();
             abort_if((int)$old->id!==(int)$d['version'],409,'Scoring settings changed. Reload before saving.');
-            $policy=array_intersect_key($d,array_flip(['weights','lateness','return_deduction','handover_percent']));
+            $policy=[...config('task-scoring'),...array_intersect_key($d,array_flip(['weights','lateness','return_brackets']))];
             $id=DB::table('task_scoring_policies')->insertGetId(['policy'=>json_encode($policy),'actor_id'=>$r->user()->id,'application'=>$d['application'],'created_at'=>now(),'updated_at'=>now()]);
             $count=0;
             if ($d['application']==='recalculate') {

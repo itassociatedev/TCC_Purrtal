@@ -229,3 +229,6 @@ Recurring tasks create separate records; they do not erase the previous period's
 ## Interface wording (20 November 2026)
 
 Decorative dashboard greetings, taglines, task-form introductions and cat-themed list/leaderboard phrases were removed or replaced with plain headings and empty-state messages. Functional workflow instructions, counts, filters and permission rules remain unchanged.
+
+
+24 November 2026: The scoring rubric now uses raw Time (0-2) + Priority (0/2/4/7) + Returns (0/0.5/1) points, maximum 10. The user confirmed full final-completer allocation after handovers, superseding the former 50% shared pool. Low can earn up to 3 points. See task-module-scoring.md for rules, policy migration, examples and tests. Role preview remains restored for local testing.

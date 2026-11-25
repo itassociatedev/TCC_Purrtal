@@ -159,3 +159,8 @@ Migration 2026_11_19_000002_make_ticket_priority_order_unique.php normalizes exi
 ## Position-based authorization and alert recipients (20 November 2026)
 
 TicketAccess now derives the workflow solely from the HR position: IT Team Leader is supervisor; other IT-prefixed positions are members; other/missing positions are employees. Lifecycle and scheduler notification routing calls the same classifier, so actual IT staff using admin/employee portal roles are recognized consistently. Active-recipient filters remain in place. Timing calculations, targets, historical milestone results and stored ticket identities are unchanged by this migration. Supervisor-only administration, closure and Critical workaround acceptance remain restricted to the supervisor position. EVP's separate read-only leaderboard capability does not grant these actions.
+
+
+## 24 November 2026 - Time Completion leaderboard points
+
+SLA & priorities now exposes Priority points (0-7) and Time Completion points (on-time cap 0-3). Defaults 7/4/2/0 plus time 3/2/1/0 produce at most 10 ticket points. The support clock establishes the resolution deadline, retaining recorded revision/pause/reopen gaps; the late brackets use elapsed calendar hours after that deadline, including nights. Missing deadline evidence earns zero completion points. The resulting components and deadline are frozen at permanent resolution; this scoring layer does not alter SLA targets, compliance, response timing or the existing resolution milestone behavior. See TICKETING.md and TicketResolutionScore.php.

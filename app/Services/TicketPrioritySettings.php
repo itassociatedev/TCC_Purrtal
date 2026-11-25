@@ -10,7 +10,7 @@ class TicketPrioritySettings
     {
         if (!Schema::hasTable('ticket_priorities')) return config('ticket-sla.targets');
         return TicketPriority::when($activeOnly, fn ($query) => $query->whereNull('archived_at'))->orderBy('sort_order')->orderBy('id')->get()->mapWithKeys(fn ($p) => [$p->key => [
-            'label' => $p->label, 'description'=>$p->description ?? '', 'score_points'=>$p->score_points ?? 0, 'response' => $p->response_seconds,
+            'label' => $p->label, 'description'=>$p->description ?? '', 'score_points'=>$p->score_points ?? 0, 'time_completion_points'=>$p->time_completion_points ?? 3, 'response' => $p->response_seconds,
             'resolution' => $p->resolution_seconds, 'update' => $p->update_seconds,
         ]])->all();
     }
