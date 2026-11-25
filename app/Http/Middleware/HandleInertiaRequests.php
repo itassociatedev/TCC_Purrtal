@@ -126,7 +126,7 @@ class HandleInertiaRequests extends Middleware
                 'ticketUnreadNotificationsCount' => $user ? $user->notifications()->where('type', \App\Notifications\TicketNotification::class)->whereNull('read_at')->count() : 0,
                 'totalNotificationsCount' => $user ? \App\Http\Controllers\NotificationController::portalNotifications($user)->count() : 0,
 
-                // 🟢 NEW: Global visibility flag for the Accountability Module
+                // 🟢 NEW: Global visibility flag for the Asset Management module
                 'has_department_assets' => $hasDepartmentAssets,
                 'has_assets_schema' => $assetsSchemaReady,
             ],

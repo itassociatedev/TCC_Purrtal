@@ -1064,7 +1064,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
             header={
                 <div className="flex flex-col 2xl:flex-row justify-between items-start 2xl:items-center w-full gap-4">
                     <h2 className="font-semibold text-xl text-gray-800 leading-tight">
-                        {isSuperAdmin ? 'Accountability Module' : 'My Accountability'} 
+                        {isSuperAdmin ? 'Asset Management' : 'My Accountability'} 
                         {!canManageAssets && <span className="text-xs ml-2 bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full uppercase tracking-wider">{userDepartment || 'Department'} View</span>}
                     </h2>
                     
@@ -1090,7 +1090,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                 </div>
             }
         >
-            <Head title={isSuperAdmin ? "Accountability Module" : "My Accountability"} />
+            <Head title={isSuperAdmin ? "Asset Management" : "My Accountability"} />
             <div className="py-6 sm:py-12">
                 <div className="max-w-[100rem] mx-auto sm:px-6 lg:px-8">
 

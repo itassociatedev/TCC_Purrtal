@@ -370,7 +370,7 @@ export default function AssetMasterlist({ auth, assets }) {
             header={
                 <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center w-full gap-4">
                     <h2 className="font-semibold text-xl text-gray-800 leading-tight">
-                        Accountability Module <span className="text-xs ml-2 bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full uppercase tracking-wider">Read Only</span>
+                        Asset Management <span className="text-xs ml-2 bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full uppercase tracking-wider">Read Only</span>
                     </h2>
                     
                     <div className="flex flex-col lg:flex-row items-center gap-3 w-full xl:w-auto">
@@ -439,7 +439,7 @@ export default function AssetMasterlist({ auth, assets }) {
                 </div>
             }
         >
-            <Head title="Accountability Module" />
+            <Head title="Asset Management" />
             <div className="py-6 sm:py-12">
                 <div className="max-w-[100rem] mx-auto sm:px-6 lg:px-8">
 

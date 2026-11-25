@@ -393,7 +393,7 @@ export default function SidebarLayout({
             : activeModule === 'Admin'
             ? 'Admin Module'
                         : activeModule === 'Assets'
-                            ? (isSuperAdmin ? 'Accountability Module' : 'My Accountability')
+                            ? (isSuperAdmin ? 'Asset Management' : 'My Accountability')
                         : activeModule === 'Asset Masterlist'
                             ? 'Asset Masterlist'
             : activeModule === 'Attendance'
@@ -636,7 +636,7 @@ export default function SidebarLayout({
 
                                     {hasAccountabilities && isAccountabilityAdmin && (
                                         <Dropdown.Link href={isSuperAdmin ? route('admin.assets.index') : (canEnterAssets ? route('admin.assets.entry') : route('admin.asset-masterlist'))}>
-                                            {isSuperAdmin ? 'Accountability Module' : (canEnterAssets ? 'Asset Entry' : 'Asset Masterlist')}
+                                            {isSuperAdmin ? 'Asset Management' : (canEnterAssets ? 'Asset Entry' : 'Asset Masterlist')}
                                         </Dropdown.Link>
                                     )}
 
