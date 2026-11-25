@@ -1,0 +1,12 @@
+@media (max-width: 767px) {
+    table.mobile-record-tiles { display: block; width: 100%; min-width: 0 !important; border: 0; }
+    table.mobile-record-tiles > thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    table.mobile-record-tiles > tbody { display: grid; gap: 12px; padding: 12px; background: transparent; }
+    table.mobile-record-tiles > tbody > tr { display: grid; gap: 10px; min-width: 0; padding: 16px; border: 1px solid #dce1eb; border-radius: 12px; background: var(--clinic-surface, white); box-shadow: 0 1px 3px #00000008; }
+    table.mobile-record-tiles > tbody > tr > td { display: block; padding: 0 !important; min-width: 0; white-space: normal !important; overflow-wrap: anywhere; border: 0; }
+    table.mobile-record-tiles > tbody > tr > td::before { content: attr(data-label); display: block; font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 4px; }
+    table.mobile-record-tiles > tbody > tr > td[data-label=""]::before { display: none; }
+    table.mobile-record-tiles > tbody > tr > td input, table.mobile-record-tiles > tbody > tr > td select { max-width: 100%; }
+    .dark table.mobile-record-tiles > tbody > tr { background: #1e293b; border-color: #475569; }
+    .dark table.mobile-record-tiles > tbody > tr > td::before { color: #aabbd0; }
+}

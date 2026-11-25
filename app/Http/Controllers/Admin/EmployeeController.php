@@ -392,15 +392,15 @@ class EmployeeController extends Controller
 
     public function import(Request $request)
     {
-        $request->validate(['import_file' => 'required|mimes:xlsx,xls,csv|max:10240']);
+        $request->validate(['import_file' => 'required|mimes:xlsx|max:10240']);
         
         try {
-            Excel::import(new UsersImport, $request->file('import_file'));
+            Excel::import(new UsersImport(\App\Support\WorkbookLayout::headingRow($request->file('import_file')->getRealPath())), $request->file('import_file'));
             
             return back()->with('success', 'Employees imported successfully.');
             
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to import. Please check your Excel format.');
+            return back()->with('error', \App\Support\ImportFeedback::message($e));
         }
     }
 

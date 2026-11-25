@@ -7,13 +7,36 @@ use Inertia\Inertia;
 
 class NotificationController extends Controller
 {
+    // Keep portal list/count/read-all/clear operations separate from the ticket feed.
+    public static function portalNotifications(\App\Models\User $user)
+    {
+        return $user->notifications()->where('type', '!=', \App\Notifications\TicketNotification::class);
+    }
+
+    public static function ticketRecipient(Request $request): \App\Models\User
+    {
+        $user = $request->user();
+        if (!$request->filled('preview_person')) return $user;
+        abort_unless(app()->environment(['local', 'testing']) && config('task_module.preview_enabled') && strtolower(trim($user->role?->name ?? '')) === 'admin', 403);
+        return \App\Models\User::where('status', 'Active')
+            ->where('name', $request->string('preview_person')->toString())->firstOrFail();
+    }
+
+    /** Clear only the signed-in user's portal notification history. */
+    public function clear(Request $request)
+    {
+        self::portalNotifications($request->user())->delete();
+
+        return response()->json(['success' => true]);
+    }
+
     /**
-     * Display a paginated list of all notifications.
+     * Display regular portal notifications; ticket alerts have a separate feed.
      */
     public function index(Request $request)
     {
         // Fetches 15 notifications per page
-        $notifications = $request->user()->notifications()->paginate(15);
+        $notifications = self::portalNotifications($request->user())->paginate(15);
 
         return Inertia::render('Notifications/Index', [
             'notifications' => $notifications,
@@ -41,11 +64,11 @@ class NotificationController extends Controller
     }
 
     /**
-     * Mark all unread notifications as read for the authenticated user.
+     * Mark regular unread notifications as read without changing ticket alerts.
      */
     public function markAllAsRead(Request $request)
     {
-        $request->user()->unreadNotifications->markAsRead();
+        self::portalNotifications($request->user())->whereNull('read_at')->update(['read_at' => now()]);
 
         // If called via Axios, return JSON. If called via normal Inertia visit, redirect back.
         if ($request->wantsJson()) {
@@ -60,7 +83,7 @@ class NotificationController extends Controller
         $offset = $request->query('offset', 20); // Default to skipping the first 20
         $limit = 20; // Fetch the next 20
 
-        $notifications = $request->user()->notifications()
+        $notifications = self::portalNotifications($request->user())
             ->latest()
             ->skip($offset)
             ->take($limit)

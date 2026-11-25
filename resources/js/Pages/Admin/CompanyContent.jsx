@@ -910,6 +910,7 @@ export default function CompanyContent({ auth, contents = [], contentTypes = [] 
         >
             <Head title="Company Content" />
 
+
             <div className="py-12">
                 <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
                     <div className="mb-6 flex items-center justify-between">

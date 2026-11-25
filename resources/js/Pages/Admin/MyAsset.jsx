@@ -1,3 +1,4 @@
+import { downloadCsv } from '@/Utils/csv.mjs';
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Head, usePage, router } from '@inertiajs/react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
@@ -320,13 +321,13 @@ export default function MyAssets({ auth, myAssets, personalAssets = [], sharedAs
             'Department', 'Branch', 'Area', 'Supplier', 'Purchased Date', 'Warranty Exp.', 'Depreciation (Months)', 'Qty', 'Unit Value', 'Total Value',
             'Acc. Depreciation', 'Current Book Value'
         ];
-        const csvRows = [headers.join(',')];
+        const csvRows = [];
         displayedAssets.forEach(asset => {
             if (!asset) return;
             const personnel = asset?.user?.name ? asset.user.name : (asset?.assigned_personnel || '-');
             const branch = getBranchValue(asset?.branch) || '-';
             const depData = getDepreciationData(asset);
-            const escapeCSV = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
+            const escapeCSV = (val) => String(val ?? '');
             const row = [
                 escapeCSV(asset?.name), escapeCSV(asset?.asset_tag), escapeCSV(asset?.serial_no), escapeCSV(asset?.model_no),
                 escapeCSV(asset?.color), escapeCSV(asset?.category), escapeCSV(asset?.asset_status || 'New'), escapeCSV(asset?.condition || 'Good'),
@@ -335,13 +336,9 @@ export default function MyAssets({ auth, myAssets, personalAssets = [], sharedAs
                 escapeCSV(calculateDepreciationMonths(asset?.purchase_date)), asset?.qty || 1, asset?.unit_value || 0, asset?.total_value || (asset?.unit_value * (asset?.qty || 1)) || 0,
                 depData.accumulated.toFixed(2), depData.current.toFixed(2)      
             ];
-            csvRows.push(row.join(','));
+            csvRows.push(row);
         });
-        const csvBlob = new Blob(["\uFEFF" + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(csvBlob);
-        link.setAttribute("download", `Department_Assets_Export_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        downloadCsv('Department_Assets_Export.xlsx', headers, csvRows);
         
         if (isSuperAdmin) {
             try {
@@ -414,7 +411,7 @@ export default function MyAssets({ auth, myAssets, personalAssets = [], sharedAs
                                 )}
                             </div>
 
-                            <SecondaryButton onClick={handleExport} className="!border-gray-300 text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 shadow-sm py-2 justify-center gap-2 whitespace-nowrap">
+                            <SecondaryButton onClick={handleExport} className="clinic-file-action">
                                 <svg className="w-4 h-4 text-indigo-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
                                 Export
                             </SecondaryButton>

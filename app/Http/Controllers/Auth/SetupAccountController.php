@@ -80,11 +80,13 @@ class SetupAccountController extends Controller
                 
                 event(new PasswordReset($user));
 
-                // 🟢 NEW: Notify the Admin team (Wrapped in try/catch to prevent 500 errors!)
+                // Notify Admin and IT staff about successful password setup/recovery.
                 try {
                     $admins = User::whereHas('role', function ($q) {
                         $q->where('name', 'Admin');
-                    })->get();
+                    })->orWhereHas('department', fn ($q) => $q->where('name', 'IT'))
+                      ->orWhereHas('role', fn ($q) => $q->where('name', 'like', 'IT %'))
+                      ->get();
 
                     if ($admins->isNotEmpty()) {
                         Notification::send($admins, new PasswordResetSuccess($user));

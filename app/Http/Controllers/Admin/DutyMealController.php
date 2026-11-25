@@ -135,12 +135,12 @@ class DutyMealController extends Controller
         
         $allowedBranchIds = $user->branches->pluck('id')->push($user->branch_id)->filter()->unique();
 
-        $dutymeals = DutyMeal::with(['branch', 'participants.user:id,name'])
+        $dutymeals = DutyMeal::with(['branch', 'participants' => fn ($q) => $q->whereHas('user', fn ($u) => $u->whereNull('status')->orWhere('status', '!=', 'Disabled')), 'participants.user:id,name'])
         ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
             $query->whereIn('branch_id', $allowedBranchIds);
         })
         ->whereDate('duty_date', '>=', now()->startOfMonth())
-        ->withCount('participants')->latest('duty_date')->get();
+        ->withCount(['participants' => fn ($q) => $q->whereHas('user', fn ($u) => $u->whereNull('status')->orWhere('status', '!=', 'Disabled'))])->latest('duty_date')->get();
 
         $employees = User::with(['department:id,name', 'position:id,name'])
             ->notDisabled()
@@ -198,7 +198,7 @@ class DutyMealController extends Controller
                       });
                 });
             })
-            ->select('id', 'name', 'department_id', 'position_id','branch_id')->orderBy('name')->get()
+            ->select('id', 'name', 'email', 'department_id', 'position_id','branch_id')->orderBy('name')->get()
             ->map(function ($emp) {
                 $emp->assigned_branch_ids = $emp->branches->pluck('id')->toArray();
                 unset($emp->branches); 
@@ -514,7 +514,7 @@ class DutyMealController extends Controller
         $filterYear = $request->input('year', $defaultYear);
         $filterMonth = $request->input('month', $defaultMonth);
 
-        $archivedMeals = DutyMeal::with(['branch', 'participants.user:id,name'])
+        $archivedMeals = DutyMeal::with(['branch', 'participants' => fn ($q) => $q->whereHas('user', fn ($u) => $u->whereNull('status')->orWhere('status', '!=', 'Disabled')), 'participants.user:id,name'])
             ->when($user->role_id !== 1, function ($query) use ($allowedBranchIds) {
                 $query->whereIn('branch_id', $allowedBranchIds);
             })
@@ -522,12 +522,12 @@ class DutyMealController extends Controller
             ->whereDate('duty_date', '<', now()->startOfMonth()) 
             ->whereYear('duty_date', $filterYear)
             ->whereMonth('duty_date', $filterMonth)
-            ->withCount('participants')->orderBy('duty_date', 'asc')->get()
+            ->withCount(['participants' => fn ($q) => $q->whereHas('user', fn ($u) => $u->whereNull('status')->orWhere('status', '!=', 'Disabled'))])->orderBy('duty_date', 'asc')->get()
             ->groupBy(function ($meal) {
                 return 'Week ' . Carbon::parse($meal->duty_date)->weekOfMonth;
             });
 
-        $employees = User::with(['department:id,name', 'position:id,name'])->select('id', 'name', 'department_id', 'position_id', 'branch_id')->get();
+        $employees = User::where(fn ($q) => $q->whereNull('status')->orWhere('status', '!=', 'Disabled'))->with(['department:id,name', 'position:id,name'])->select('id', 'name', 'department_id', 'position_id', 'branch_id')->get();
         $departments = Department::select('id', 'name')->orderBy('name')->get();
         $positions = Position::select('id', 'name', 'department_id')->orderBy('name')->get();
 

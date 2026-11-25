@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Inertia\Middleware;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -35,13 +36,24 @@ class HandleInertiaRequests extends Middleware
         $user = $request->user();
 
         $hasDepartmentAssets = false;
+        $assetsSchemaReady = false;
+        $sharedAssetsReady = false;
 
-        // If the user is logged in, load their relationships from the database!
+        // Load shared account relationships. Asset data is optional until the
+        // accountability migrations have been applied to this database.
         if ($user) {
-            // Eager-load relationships used in shared Inertia props.
-            $user->load(['role', 'role.adminAcls', 'position', 'department', 'branch', 'branches', 'assets']);
+            $user->load(['role', 'role.adminAcls', 'position', 'department', 'branch', 'branches']);
 
-            // 🟢 Determine if user or department has any assigned assets to toggle module visibility
+            try {
+                $assetsSchemaReady = Schema::hasTable('assets') && Schema::hasColumn('assets', 'user_id');
+                $sharedAssetsReady = $assetsSchemaReady && Schema::hasTable('asset_user');
+            } catch (\Throwable $e) {
+                $assetsSchemaReady = false;
+            }
+
+            if ($assetsSchemaReady) {
+                $user->load('assets');
+
             try {
                 $deptName = is_object($user->department) ? ($user->department->name ?? '') : (is_string($user->department) ? $user->department : '');
 
@@ -49,10 +61,10 @@ class HandleInertiaRequests extends Middleware
                     ->where('department', $deptName)
                     ->orWhere('user_id', $user->id)
                     ->exists();
-            } catch (\Exception $e) {
-                // Failsafe in case table is migrating or doesn't exist yet
+                } catch (\Throwable $e) {
                 $hasDepartmentAssets = false;
             }
+        }
         }
 
         $permissions = $this->getPermissionStrings($user);
@@ -62,6 +74,7 @@ class HandleInertiaRequests extends Middleware
             && ($user->email === $devSwitcherEmail || $request->session()->has('dev_switcher_original_user_id'));
 
         return [
+            'taskPreviewEnabled' => app()->environment(['local', 'testing']) && config('task_module.preview_enabled') && strtolower(trim($user?->role?->name ?? '')) === 'admin',
             ...parent::share($request),
             'auth' => [
                 'user' => $user ? [
@@ -71,6 +84,8 @@ class HandleInertiaRequests extends Middleware
 
                     // Now we send the FULL role, position, and department objects to React!
                     'role' => $user->role,
+                    // Ticket views follow the HR position independently of portal ACL roles.
+                    'ticketing_role' => \App\Services\TicketAccess::role($user),
                     'position' => $user->position,
                     'department' => $user->department,
 
@@ -79,7 +94,10 @@ class HandleInertiaRequests extends Middleware
                     'branches' => $user->branches,
 
                     // 🟢 ADDED: Send the user's assigned assets to React!
-                    'assets' => $user->assets->merge($user->accountableAssets)->unique('id')->values(),
+                    // Personal assets plus shared accountability; empty until the asset tables exist.
+                    'assets' => $assetsSchemaReady
+                        ? ($sharedAssetsReady ? $user->assets->merge($user->accountableAssets)->unique('id')->values() : $user->assets)
+                        : [],
 
                     'is_rotating' => $user->is_rotating,
                     'image_path' => $user->image_path,
@@ -97,19 +115,37 @@ class HandleInertiaRequests extends Middleware
                 ] : null,
 
                 // FIX: Only attempt to fetch notifications if $user is NOT null!
-                'notifications' => $user ? $user->notifications()->latest()->take(20)->get() : [],
+                'notifications' => $user ? \App\Http\Controllers\NotificationController::portalNotifications($user)->latest()->take(20)->get() : [],
 
                 // FIX: Matched the key to your React code
-                'unreadNotificationsCount' => $user ? $user->unreadNotifications()->count() : 0,
+                'unreadNotificationsCount' => $user ? \App\Http\Controllers\NotificationController::portalNotifications($user)->whereNull('read_at')->count() : 0,
 
-                // NEW: Tell React exactly how many notifications exist in total
-                'totalNotificationsCount' => $user ? $user->notifications()->count() : 0,
+                // Regular-feed totals must match its filtered rows and pagination.
+                // Ticket alerts have their own bell, including for non-IT requesters.
+                'ticketNotifications' => $user ? $user->notifications()->where('type', \App\Notifications\TicketNotification::class)->latest()->take(30)->get() : [],
+                'ticketUnreadNotificationsCount' => $user ? $user->notifications()->where('type', \App\Notifications\TicketNotification::class)->whereNull('read_at')->count() : 0,
+                'totalNotificationsCount' => $user ? \App\Http\Controllers\NotificationController::portalNotifications($user)->count() : 0,
 
                 // 🟢 NEW: Global visibility flag for the Accountability Module
                 'has_department_assets' => $hasDepartmentAssets,
+                'has_assets_schema' => $assetsSchemaReady,
             ],
 
             'flash' => [
+                // Identify the notification event, not just its wording. Repeated saves
+                // get fresh IDs; partial reloads retaining old props cannot replay it.
+                'id' => function () use ($request) {
+                    if (!$request->session()->has('success') && !$request->session()->has('error')) return null;
+                    $id = $request->session()->get('ui_flash_event_id');
+                    if (!$id) {
+                        $id = (string) \Illuminate\Support\Str::uuid();
+                        $request->session()->now('ui_flash_event_id', $id);
+                    }
+                    return $id;
+                },
+                // Validation responses also need event identity when partial reloads retain errors.
+                'validation_id' => fn() => $request->session()->has('errors')
+                    ? (string) \Illuminate\Support\Str::uuid() : null,
                 'success' => fn() => $request->session()->get('success'),
                 'error' => fn() => $request->session()->get('error'),
             ],

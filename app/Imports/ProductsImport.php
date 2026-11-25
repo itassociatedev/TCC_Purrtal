@@ -7,8 +7,11 @@ use App\Models\Supplier;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
-class ProductsImport implements ToModel, WithHeadingRow
+class ProductsImport implements ToModel, WithHeadingRow, \Maatwebsite\Excel\Concerns\WithValidation, \Maatwebsite\Excel\Concerns\SkipsEmptyRows
 {
+    public function __construct(private int $headerRow = 1) {}
+    public function headingRow(): int { return $this->headerRow; }
+    public function rules(): array { return ['supplier_name'=>'required|exists:suppliers,name', 'product_name'=>'required|string|max:255', 'unit'=>'required|string|max:100', 'price'=>'required|numeric|min:0']; }
     public function model(array $row)
     {
         // 🟢 SAFETY NET: Skip completely blank Excel rows to prevent crashes

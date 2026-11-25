@@ -53,7 +53,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
     // ==========================================
     // FILTER STATE & LOGIC
     // ==========================================
-    const [filterSearch, setFilterSearch] = useState('');
+    const [filterSearch, updateFilterSearch] = useState(() => new URLSearchParams(window.location.search).get('search') || '');
+    const setFilterSearch = value => { const url = new URL(window.location.href); url.searchParams.delete('person'); url.searchParams.delete('search'); window.history.replaceState({}, '', url); updateFilterSearch(value); };
     const [filterDepartment, setFilterDepartment] = useState('');
     const [filterBranch, setFilterBranch] = useState('');
     const [filterPosition, setFilterPosition] = useState('');
@@ -105,6 +106,8 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
         .filter(employee => {
             const searchTerm = filterSearch.trim().toLowerCase();
 
+            const notificationPerson = new URLSearchParams(window.location.search).get('person');
+            const matchesPerson = !notificationPerson || String(employee.id) === notificationPerson;
             const matchesSearch = searchTerm === '' ||
                 (employee.name || '').toLowerCase().includes(searchTerm) ||
                 (employee.email || '').toLowerCase().includes(searchTerm) ||
@@ -119,7 +122,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
             const matchesPosition = filterPosition === '' || employee.position?.name === filterPosition;
             const matchesStatus = filterStatus === '' || employee.status === filterStatus;
 
-            return matchesSearch && matchesDept && matchesBranch && matchesPosition && matchesStatus;
+            return matchesPerson && matchesSearch && matchesDept && matchesBranch && matchesPosition && matchesStatus;
         })
         .sort((a, b) => {
             const aValue = getSortValue(a, sortField).toLowerCase();
@@ -1066,6 +1069,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
             }
         >
             <Head title="Employee Management" />
+            {canManageEmployees && <details className="mx-6 mt-4 rounded-lg border border-gray-200 bg-white p-3 text-sm"><summary className="cursor-pointer font-semibold text-gray-700">Employee import format</summary><p className="mt-2">XLSX columns: Name, Email, Department, Position, Branch. Use existing department, position and branch names exactly. One employee per row. Existing employee emails must not be duplicated.</p><a className="mt-2 inline-block text-indigo-700" href={route('admin.employees.template')}>Download official template</a></details>}
 
             {/* Desktop: the page fits the window and the table fills the remaining height */}
             <div className="md:h-[calc(100vh-13.5rem)] md:flex md:flex-col">
@@ -1088,13 +1092,14 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                         <SecondaryButton className="!py-2 flex-shrink-0" disabled={!canManageEmployees} onClick={() => canManageEmployees && setRoleModalOpen(true)} title={!canManageEmployees ? 'Edit permission required' : ''}>
                             Edit Roles
                         </SecondaryButton>
+                        <div className="clinic-file-actions">
                         <a
                             href={canManageEmployees ? route('admin.employees.template') : '#'}
                             onClick={(e) => {
                                 if (!canManageEmployees) e.preventDefault();
                                 else triggerToast('Downloading Excel template...', 'success');
                             }}
-                            className={`inline-flex items-center px-4 py-2 border rounded-md font-black text-xs uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150 shadow-sm flex-shrink-0 ${
+                            className={`clinic-file-action inline-flex items-center px-4 py-2 border rounded-md font-black text-xs uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150 shadow-sm flex-shrink-0 ${
                                 canManageEmployees
                                     ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
                                     : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
@@ -1109,14 +1114,14 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 type="file"
                                 id="excel-upload-emp"
                                 className="hidden"
-                                accept=".xlsx, .xls, .csv"
+                                accept=".xlsx"
                                 onChange={handleFileUpload}
                                 disabled={!canManageEmployees}
                             />
                             <button
                                 onClick={() => canManageEmployees && document.getElementById('excel-upload-emp').click()}
                                 disabled={importProcessing || !canManageEmployees}
-                                className={`inline-flex items-center px-4 py-2 border rounded-md font-black text-xs uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-25 transition ease-in-out duration-150 shadow-sm flex-shrink-0 ${
+                                className={`clinic-file-action inline-flex items-center px-4 py-2 border rounded-md font-black text-xs uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-25 transition ease-in-out duration-150 shadow-sm flex-shrink-0 ${
                                     canManageEmployees
                                         ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
                                         : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
@@ -1139,7 +1144,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                                 if (!canManageEmployees) e.preventDefault();
                                 else triggerToast('Preparing export. Download will start shortly...', 'success');
                             }}
-                            className={`inline-flex items-center px-4 py-2 border rounded-md font-black text-xs uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150 shadow-sm flex-shrink-0 ${
+                            className={`clinic-file-action inline-flex items-center px-4 py-2 border rounded-md font-black text-xs uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150 shadow-sm flex-shrink-0 ${
                                 canManageEmployees
                                     ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'
                                     : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
@@ -1148,6 +1153,7 @@ export default function EmployeeManagement({ auth, users = [], departments = [],
                         >
                             📥 Export
                         </a>
+                        </div>
 
                         {/* BULK ACTIONS DROPDOWN */}
                         {selectedUsers.length > 0 && canViewEmployees && (

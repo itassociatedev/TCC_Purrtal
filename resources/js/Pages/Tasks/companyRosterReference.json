@@ -1,0 +1,770 @@
+[
+  {
+    "name": "Mary Grace Espinoza, CHRP",
+    "position": "HR Manager",
+    "branch": null,
+    "team": "Human Resources Department"
+  },
+  {
+    "name": "Sophia Angela Asido, RPM",
+    "position": "Human Resources Assistant",
+    "branch": null,
+    "team": "Human Resources Department"
+  },
+  {
+    "name": "Prensesa Juangco",
+    "position": "Clinic Operations Manager - Makati",
+    "branch": "Makati",
+    "team": "Operations Manager"
+  },
+  {
+    "name": "Mary Grace Acidella",
+    "position": "Clinic Operations Manager - Alabang",
+    "branch": "Alabang",
+    "team": "Operations Manager"
+  },
+  {
+    "name": "Marianne Luz Longasa",
+    "position": "Clinic Operations Manager - Greenhills",
+    "branch": "Greenhills",
+    "team": "Operations Manager"
+  },
+  {
+    "name": "Dr. Carlos Miguel Martinez",
+    "position": "Chief Veterinarian",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Dr. Trifena Marier Burayag",
+    "position": "Senior Veterinarian Assistant Team Leader",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Dr. Arjhay Lapas",
+    "position": "Señior Veterinarian",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Dr. Ara Danica Mandia",
+    "position": "Junior Veterinarian",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Dr. Natasha Therese Santos",
+    "position": "Junior Veterinarian",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Jenine Ann Naig",
+    "position": "Veterinary Technician Team Leader",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Crizmar Lucky Tuapen",
+    "position": "Veterinary Technician Assistant Team Leader",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Lyka Mae Bamba",
+    "position": "Veterinary Technician I",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Ma. Pilar Morales",
+    "position": "Veterinary Technician I",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Charisse Nicole Masuba",
+    "position": "Veterinary Technician I",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Diona Sandot",
+    "position": "Veterinary Technician I",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Elizabeth Mainit",
+    "position": "Veterinary Technician I",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Alejandro Guiam",
+    "position": "Veterinary Technician I",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Gester Reyes",
+    "position": "Veterinary Technician I",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Jackson Briones",
+    "position": "Veterinary Technician I",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Jomarie Vitriolo",
+    "position": "Veterinary Technician I",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Mikka Gleane Estabaya",
+    "position": "Veterinary Technician I",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Reynald Esuivel",
+    "position": "Veterinary Technician I",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Wynona Gannad",
+    "position": "Veterinary Technician I",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Mary Joy Espejo",
+    "position": "Veterinary Technician I",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "MC Daniel Fabregas",
+    "position": "Veterinary Technician I",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Jeric Ivan Nueva",
+    "position": "Veterinary Technician I",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Abraham Bernas",
+    "position": "Veterinary Technician I",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Maria Elena David",
+    "position": "Clinic Assistant Team Leader",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Bem Michael Segovia",
+    "position": "Clinic Assistant",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Jeffrey Del Rosario",
+    "position": "Clinic Assistant",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "John Leo Abitria",
+    "position": "Clinic Assistant",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Joshoua Escoto",
+    "position": "Clinic Assistant",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Kevin Paul Peñaflor",
+    "position": "Clinic Assistant",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Reymar Dela Cruz",
+    "position": "Clinic Assistant",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Ma. Leonora Parungao",
+    "position": "Clinic Assistant",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Lorenzo Araneta",
+    "position": "Clinic Assistant",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Shaquille Delos Santos",
+    "position": "Clinic Assistant",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Vincent Cuevas",
+    "position": "Clinic Assistant",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Analyn Bajar",
+    "position": "Clinic Assistant",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Alwin Roranes",
+    "position": "Clinic Assistant",
+    "branch": "Makati",
+    "team": "Makati Medical Team"
+  },
+  {
+    "name": "Jehandy Qiuinampay",
+    "position": "Cashier Team Leader",
+    "branch": "Makati",
+    "team": "Makati Operations Team"
+  },
+  {
+    "name": "Ma. Eleine Edad",
+    "position": "Cashier",
+    "branch": "Makati",
+    "team": "Makati Operations Team"
+  },
+  {
+    "name": "Mica Bajar",
+    "position": "Billing Assistant",
+    "branch": "Makati",
+    "team": "Makati Operations Team"
+  },
+  {
+    "name": "Ross Anne Pio",
+    "position": "Front Desk Associate",
+    "branch": "Makati",
+    "team": "Makati Operations Team"
+  },
+  {
+    "name": "Ruby Ann Nuñez",
+    "position": "Front Desk Associate",
+    "branch": "Makati",
+    "team": "Makati Operations Team"
+  },
+  {
+    "name": "Ma. Joeliza Pechera",
+    "position": "Front Desk Associate",
+    "branch": "Makati",
+    "team": "Makati Operations Team"
+  },
+  {
+    "name": "Dr. Michelle Mame",
+    "position": "Chief Veterinarian",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Dr. Joshua Terence Duyag",
+    "position": "Senior Veterinarian",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Dr. Angelica Eugenio",
+    "position": "Junior Veterinarian Team Leader",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Dr. Aixian Leslie Ling",
+    "position": "Junior Veterinarian",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Cyrine Mae Soriano",
+    "position": "Veterinary Technician Team Leader",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Krisha Rivera",
+    "position": "Veterinary Technician II",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Teofel Kaye Cariaga",
+    "position": "Veterinary Technician I",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Abegail Nitura",
+    "position": "Veterinary Technician I",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Ma. Niña Elaine Soriano",
+    "position": "Veterinary Technician I",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Kim Kenneth Eduria",
+    "position": "Veterinary Technician II",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Francine Cimatu",
+    "position": "Veterinary Technician I",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Jhon Heart Cuevas",
+    "position": "Veterinary Technician I",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Crystal Jade Gutierrez",
+    "position": "Veterinary Technician I",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Aaron Labaguis",
+    "position": "Veterinary Technician I",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Aimee Mar Honrejas",
+    "position": "Veterinary Technician I",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Rona Solis",
+    "position": "Veterinary Technician I",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Mark Anthony Cañeso",
+    "position": "Clinic Assistant Team Leader",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Romelyn Bajar",
+    "position": "Housekeeping Team Leader",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Julius Nathanael Baldivia",
+    "position": "Clinic Assistant",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Kim Loma",
+    "position": "Clinic Assistant",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Arvin Baluyo",
+    "position": "Clinic Assistant",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Ceferino Macinas, Jr.",
+    "position": "Clinic Assistant",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Reymark Binamira",
+    "position": "Clinic Assistant",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Omar Tamparong",
+    "position": "Groomer",
+    "branch": "Alabang",
+    "team": "Alabang Medical Operations Team"
+  },
+  {
+    "name": "Cecilia Varela",
+    "position": "Cashier Team Leader",
+    "branch": "Alabang",
+    "team": "Alabang Operations Team"
+  },
+  {
+    "name": "Luzcel Angelie Longasa",
+    "position": "Front Desk Associate / Cashier",
+    "branch": "Alabang",
+    "team": "Alabang Operations Team"
+  },
+  {
+    "name": "Marriane Zaraga",
+    "position": "Front Desk Associate / Cashier",
+    "branch": "Alabang",
+    "team": "Alabang Operations Team"
+  },
+  {
+    "name": "Dr. Beverly Serdiñola-Agustin",
+    "position": "Chief Veterinarian",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Dr. Mac Leo Pagal",
+    "position": "Junior Veterinarian",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Dr. Anthony Moses II",
+    "position": "Part Time Veterinarian",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Kenneth Joshua De Leon",
+    "position": "Veterinary Technician Team Leader",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Rejoice Santelices",
+    "position": "Veterinary Technician II",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Mharhei Benico",
+    "position": "Veterinary Technician I",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "John Lery Malto",
+    "position": "Veterinary Technician I",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Niño Elideros",
+    "position": "Veterinary Technician I",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Carlo Angelo Samillano",
+    "position": "Veterinary Technician I",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Hani Jewelee Magtahas",
+    "position": "Veterinary Technician I",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "John Kevin Mayor",
+    "position": "Veterinary Technician I",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Reymel Dela Cruz",
+    "position": "Veterinary Technician I",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Kelly Grace C. Kimayong",
+    "position": "Veterinary Technician I",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Dwanielle Terese Joyce Rendal",
+    "position": "Veterinary Technician I",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Mark Jonel Remolacio",
+    "position": "Clinic Assistant Team Leader",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Anna Mae Morato",
+    "position": "Housekeeping Team Leader",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Arsenio Payla, Jr.",
+    "position": "Clinic Assistant",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Aljon Manjaris",
+    "position": "Clinic Assistant",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Angel Jeff Tubiera",
+    "position": "Clinic Assistant",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Elizcris Sabile",
+    "position": "Clinic Assistant",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Tonito Maquiñana, Jr.",
+    "position": "Clinic Assistant and Groomer",
+    "branch": "Greenhills",
+    "team": "Greenhills Medical Operations Team"
+  },
+  {
+    "name": "Maricar Dela Cruz",
+    "position": "Front Desk Team Leader",
+    "branch": "Greenhills",
+    "team": "Greenhills Operations team"
+  },
+  {
+    "name": "Ray Ruiz",
+    "position": "Front Desk Associate / Cashier",
+    "branch": "Greenhills",
+    "team": "Greenhills Operations team"
+  },
+  {
+    "name": "Lore Jeane Zaraga",
+    "position": "Front Desk Associate / Cashier",
+    "branch": "Greenhills",
+    "team": "Greenhills Operations team"
+  },
+  {
+    "name": "Sharlhyn Tolentino",
+    "position": "Sales and Marketing Manager - GMA",
+    "branch": null,
+    "team": "Sales and Marketing Department - GMA"
+  },
+  {
+    "name": "Chantal Casta",
+    "position": "Sales and Marketing Officer",
+    "branch": null,
+    "team": "Sales and Marketing Department - GMA"
+  },
+  {
+    "name": "Mark Joseph Santos",
+    "position": "Company Driver",
+    "branch": null,
+    "team": "Company Driver & Security Guards"
+  },
+  {
+    "name": "Felix Moslares",
+    "position": "Security Guard- Makati",
+    "branch": "Makati",
+    "team": "Company Driver & Security Guards"
+  },
+  {
+    "name": "Gerardo Tolentino",
+    "position": "Security Guard- Makati",
+    "branch": "Makati",
+    "team": "Company Driver & Security Guards"
+  },
+  {
+    "name": "Mario Alumbro",
+    "position": "Security Guard - Alabang",
+    "branch": "Alabang",
+    "team": "Company Driver & Security Guards"
+  },
+  {
+    "name": "Michael Seriosa",
+    "position": "Security Guard - Alabang",
+    "branch": "Alabang",
+    "team": "Company Driver & Security Guards"
+  },
+  {
+    "name": "Jeffrey Biñar",
+    "position": "Security Guard - Greenhills",
+    "branch": "Greenhills",
+    "team": "Company Driver & Security Guards"
+  },
+  {
+    "name": "Robert Tacotaco",
+    "position": "Security Guard - Greenhills",
+    "branch": "Greenhills",
+    "team": "Company Driver & Security Guards"
+  },
+  {
+    "name": "Rex Aragon",
+    "position": "Security Guard - Reliever",
+    "branch": null,
+    "team": "Company Driver & Security Guards"
+  },
+  {
+    "name": "Dave Capuno",
+    "position": "Operations and Finance Coordination Lead",
+    "branch": null,
+    "team": "Finance and Audit Team"
+  },
+  {
+    "name": "Reuben Mikko Capuno",
+    "position": "Internal Auditor",
+    "branch": null,
+    "team": "Finance and Audit Team"
+  },
+  {
+    "name": "Charlyn Legaspi",
+    "position": "Finance and Audit Assistant",
+    "branch": null,
+    "team": "Finance and Audit Team"
+  },
+  {
+    "name": "Dezhara Aster De Jesus",
+    "position": "Finance Supervisor",
+    "branch": null,
+    "team": "Finance and Audit Team"
+  },
+  {
+    "name": "Zyrra Oliva",
+    "position": "General Accounting",
+    "branch": null,
+    "team": "Finance and Audit Team"
+  },
+  {
+    "name": "Donald Saberon",
+    "position": "Procurement Supervisor",
+    "branch": null,
+    "team": "Procurement and Inventory Team"
+  },
+  {
+    "name": "Jonalyn Pacinio",
+    "position": "Procurement Assistant - GMA",
+    "branch": null,
+    "team": "Procurement and Inventory Team"
+  },
+  {
+    "name": "Robert Liton",
+    "position": "Inventory Supervisor - Makati",
+    "branch": "Makati",
+    "team": "Procurement and Inventory Team"
+  },
+  {
+    "name": "Angelito Zapanta",
+    "position": "Inventory Assistant - Makati",
+    "branch": "Makati",
+    "team": "Procurement and Inventory Team"
+  },
+  {
+    "name": "Khate Valverde",
+    "position": "Inventory Assistant - Makati",
+    "branch": "Makati",
+    "team": "Procurement and Inventory Team"
+  },
+  {
+    "name": "Patrick Mimay",
+    "position": "Inventory Supervisor - Alabang",
+    "branch": "Alabang",
+    "team": "Procurement and Inventory Team"
+  },
+  {
+    "name": "James Carlo Soria",
+    "position": "Inventory Assistant - Alabang",
+    "branch": "Alabang",
+    "team": "Procurement and Inventory Team"
+  },
+  {
+    "name": "Kendrick Calope",
+    "position": "Inventory Assistant - Greenhills",
+    "branch": "Greenhills",
+    "team": "Procurement and Inventory Team"
+  },
+  {
+    "name": "Nicasio Margallo",
+    "position": "Inventory Assistant - Greenhills",
+    "branch": "Greenhills",
+    "team": "Procurement and Inventory Team"
+  },
+  {
+    "name": "Mark Jay Ricalde",
+    "position": "IT Supervisor",
+    "branch": null,
+    "team": "IT Department"
+  },
+  {
+    "name": "John Paul Marfil",
+    "position": "IT Associate",
+    "branch": null,
+    "team": "IT Department"
+  },
+  {
+    "name": "Aldrin Dimaapi",
+    "position": "IT Associate",
+    "branch": null,
+    "team": "IT Department"
+  },
+  {
+    "name": "Luis Gabriel Maloles",
+    "position": "IT Intern",
+    "branch": null,
+    "team": "IT Department"
+  },
+  {
+    "name": "Patrick David Santos",
+    "position": "IT Intern",
+    "branch": null,
+    "team": "IT Department"
+  },
+  {
+    "name": "Carlo Jamiero Miel",
+    "position": "IT Intern",
+    "branch": null,
+    "team": "IT Department"
+  }
+]

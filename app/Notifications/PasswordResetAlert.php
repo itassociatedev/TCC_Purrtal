@@ -24,11 +24,12 @@ class PasswordResetAlert extends Notification
     public function toArray($notifiable)
     {
         return [
+            'user_id' => $this->user->id,
             'message' => '🔐 Password Reset Request',
             'user_email' => $this->user->name . ' requested a reset.',
-            
-            
-            'action_url' => route('admin.employees') 
+
+
+            'action_url' => route('admin.employees', ['person' => $this->user->id, 'search' => $this->user->email])
         ];
     }
 }

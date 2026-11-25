@@ -576,6 +576,7 @@ export const getDutyMealLinks = (auth) => {
         });
     }
 
+    if (canEditModule(auth, 'duty_meal_setup_roster')) links.push({label:'Duty Meal Logs',href:route('admin.duty-meals.logs.index'),active:route().current('admin.duty-meals.logs.*')});
     return links;
 };
 
@@ -834,7 +835,8 @@ export const getAssetLinks = (auth) => {
 export const getFirstAttendanceRoute = (auth) => {
     if (canViewModule(auth, 'attendance_overview')) return route('attendance.overview');
     if (canViewModule(auth, 'attendance_calendar')) return route('attendance.calendar');
-    if (canViewModule(auth, 'attendance_schedule_view')) return route('attendance.schedule-view');
+    // Schedule View lives inside Setup Schedule (view-only)
+    if (canViewModule(auth, 'attendance_schedule_view')) return route('attendance.setup-schedule');
     if (canEditModule(auth, 'attendance_setup')) return route('attendance.setup-schedule');
     
     // 🟢 FIXED: If they have no access to anything, return null so the UI knows not to route them!

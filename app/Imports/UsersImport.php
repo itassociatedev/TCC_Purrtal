@@ -10,8 +10,11 @@ use Illuminate\Support\Facades\Hash;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 
-class UsersImport implements ToModel, WithHeadingRow
+class UsersImport implements ToModel, WithHeadingRow, \Maatwebsite\Excel\Concerns\WithValidation, \Maatwebsite\Excel\Concerns\SkipsEmptyRows
 {
+    public function __construct(private int $headerRow = 1) {}
+    public function headingRow(): int { return $this->headerRow; }
+    public function rules(): array { return ['name'=>'required|string|max:255', 'email'=>'required|email|max:255', 'department'=>'required|exists:departments,name', 'position'=>'required|exists:positions,name', 'branch'=>'required|string']; }
     public function model(array $row)
     {
         // Skip empty rows or rows without an email
@@ -30,7 +33,8 @@ class UsersImport implements ToModel, WithHeadingRow
                 'name' => trim($row['name']),
                 'department_id' => $department ? $department->id : null,
                 'position_id' => $position ? $position->id : null,
-                'password' => Hash::make('password123'),
+                // Updating an employee must not reset their existing password.
+                ...(User::where('email', trim($row['email']))->exists() ? [] : ['password'=>null, 'status'=>'Pending Setup']),
                 'is_rotating' => 0, // Default values for the rest
                 'device_limit' => 1,
             ]

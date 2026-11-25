@@ -42,8 +42,8 @@ class SupplierController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:suppliers,name',
-            'contact_person' => 'nullable|string|max:255', 
-            'contact_number' => 'nullable|string|max:255', 
+            'contact_person' => 'nullable|string|max:255',
+            'contact_number' => 'nullable|string|max:255',
             'address' => 'nullable|string|max:255',
             'tin' => 'nullable|string|max:255',
         ]);
@@ -64,8 +64,8 @@ class SupplierController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:suppliers,name,' . $supplier->id,
-            'contact_person' => 'nullable|string|max:255', 
-            'contact_number' => 'nullable|string|max:255', 
+            'contact_person' => 'nullable|string|max:255',
+            'contact_number' => 'nullable|string|max:255',
             'address' => 'nullable|string|max:255',
             'tin' => 'nullable|string|max:255',
         ]);
@@ -161,39 +161,38 @@ class SupplierController extends Controller
 
     public function downloadTemplate()
     {
-        $headers = [
-            "Content-type"        => "text/csv",
-            "Content-Disposition" => "attachment; filename=suppliers_template.csv",
-            "Pragma"              => "no-cache",
-            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
-            "Expires"             => "0"
-        ];
-
-        $columns = ['name', 'contact_person', 'contact_number', 'address', 'tin'];
-
-        $callback = function() use($columns) {
-            $file = fopen('php://output', 'w');
-            fputcsv($file, $columns);
-            fclose($file);
-        };
-
-        return response()->stream($callback, 200, $headers);
+        return response()->streamDownload(function () {
+            $book = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            $book->getActiveSheet()->fromArray([['name', 'contact_person', 'contact_number', 'address', 'tin']]);
+            \App\Support\WorkbookLayout::prepare($book);
+                (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save('php://output');
+            $book->disconnectWorksheets();
+        }, 'suppliers_template.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
 
     public function import(Request $request)
     {
         $request->validate([
-            'file' => 'required|file|mimes:csv,txt|max:2048',
+            'file' => 'required|file|mimes:xlsx|max:2048',
         ]);
 
         $file = $request->file('file');
-        $handle = fopen($file->getPathname(), "r");
-        $header = fgetcsv($handle); 
+        $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($file->getPathname());
+        $rows = \App\Support\WorkbookLayout::rows($book->getSheet(0));
+        $headerRow = \App\Support\WorkbookLayout::bounds($book->getSheet(0))[1] ?? 1;
+        $headings = array_map(fn($value)=>strtolower(trim((string)$value)),array_shift($rows) ?? []);
+        $expected=['name','contact_person','contact_number','address','tin'];
+        if($headings!==$expected) { $book->disconnectWorksheets(); throw \Illuminate\Validation\ValidationException::withMessages(['file'=>'Supplier headings must be: '.implode(', ',$expected).'.']); }
+        foreach($rows as $index=>$values) {
+            if(!array_filter($values,fn($value)=>$value!==null && $value!==''))continue;
+            $validator=\Illuminate\Support\Facades\Validator::make(array_combine($expected,array_slice(array_pad($values,5,''),0,5)),['name'=>'required|string|max:255','contact_person'=>'nullable|string|max:255','contact_number'=>'nullable|string|max:100','address'=>'nullable|string|max:1000','tin'=>'nullable|string|max:100']);
+            if($validator->fails()){ $book->disconnectWorksheets(); throw \Illuminate\Validation\ValidationException::withMessages(['file'=>'Row '.($headerRow+$index+1).': '.implode(' ',$validator->errors()->all())]); }
+        }
 
         $importedCount = 0;
         $skippedCount = 0;
 
-        while (($row = fgetcsv($handle)) !== false) {
+        foreach ($rows as $row) {
             if (empty(trim($row[0]))) {
                 $skippedCount++;
                 continue;
@@ -214,8 +213,8 @@ class SupplierController extends Controller
             ]);
             $importedCount++;
         }
-        
-        fclose($handle);
+
+        $book->disconnectWorksheets();
 
         return back()->with('success', "Import complete: $importedCount added, $skippedCount skipped (duplicates or missing names).");
     }

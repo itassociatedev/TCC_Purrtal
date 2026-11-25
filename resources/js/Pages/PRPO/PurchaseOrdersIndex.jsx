@@ -1,3 +1,5 @@
+import MobileRecordTiles from '@/Components/MobileRecordTiles';
+import ModuleWorkbookTools from '@/Components/ModuleWorkbookTools';
 import ConfirmModal from '@/Components/ConfirmModal';
 import Modal from '@/Components/Modal';
 import TrackingStepper from '@/Components/TrackingStepper';
@@ -539,7 +541,9 @@ const handleDeleteSelectedPRs = () => {
 
     return (
         <SidebarLayout activeModule="PR/PO Module" sidebarLinks={sidebarLinks}>
+            <MobileRecordTiles />
             <Head title="Purchase Orders" />
+<ModuleWorkbookTools name="purchase-orders.xlsx" columns={['po_number','supplier','status','total_amount','created_at']} rows={filteredPOs.map(item=>[item.po_number,item.supplier?.name,item.status,item.total_amount,item.created_at])} />
             <div className="mx-auto max-w-[95%] py-6 relative px-4 sm:px-6 lg:px-8">
                 <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between">
                     <div>
@@ -673,7 +677,7 @@ const handleDeleteSelectedPRs = () => {
                 </div>
                 <div className="mb-8 bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl overflow-x-auto border border-indigo-100">
 
-                    <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
+                    <table className="mobile-record-tiles min-w-full divide-y divide-gray-200 text-sm text-left">
                         <thead className="bg-gray-100">
                             <tr>
                                 <th className="px-4 py-3 text-center w-12 border-r border-gray-200">
@@ -878,7 +882,7 @@ const handleDeleteSelectedPRs = () => {
                 </div>
 
                 <div className="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200 text-sm text-left">
+                    <table className="mobile-record-tiles min-w-full divide-y divide-gray-200 text-sm text-left">
                         <thead className="bg-gray-50">
                             <tr>
                                 <th className="px-4 py-3 text-center w-12 border-r border-gray-200">
@@ -1108,7 +1112,7 @@ const handleDeleteSelectedPRs = () => {
                                                 )}
 
                                                 <div className="overflow-x-auto rounded-lg border border-gray-200 w-full">
-                                                    <table className="min-w-full divide-y divide-gray-200 text-sm text-left table-auto">
+                                                    <table className="mobile-record-tiles min-w-full divide-y divide-gray-200 text-sm text-left table-auto">
                                                 <thead className="bg-gray-100">
                                                     <tr>
                                                         <th className="px-4 py-3 font-semibold whitespace-nowrap">Product Name</th>
@@ -1232,7 +1236,7 @@ const handleDeleteSelectedPRs = () => {
 
                                         <h4 className="mb-2 font-bold text-gray-900 border-b pb-1">Requested Items</h4>
                                         <div className="overflow-x-auto rounded-lg border border-gray-200 mb-6 w-full">
-                                            <table className="w-full divide-y divide-gray-200 text-sm text-left table-auto">
+                                            <table className="mobile-record-tiles w-full divide-y divide-gray-200 text-sm text-left table-auto">
                                                 <thead className="bg-gray-100">
                                                     <tr>
                                                         <th className="px-4 py-3 font-semibold whitespace-nowrap">Product Name</th>

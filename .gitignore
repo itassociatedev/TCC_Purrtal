@@ -13,6 +13,9 @@
 /.zed
 /auth.json
 /node_modules
+**/node_modules/
+/outputs/
+/TCC_Purrtal/
 /public/hot
 /public/storage
 /public/build

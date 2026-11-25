@@ -86,10 +86,13 @@ class AuthenticatedSessionController extends Controller
                     // Lock the account
                     $user->update(['status' => 'Disabled']);
 
-                    // Find Admins and send Database Notification
+                    // Notify Admins and IT staff so account recovery requests
+                    // appear in the IT notifications menu as well.
                     $admins = User::whereHas('role', function ($q) {
                         $q->where('name', 'Admin');
-                    })->get();
+                    })->orWhereHas('department', fn ($q) => $q->where('name', 'IT'))
+                      ->orWhereHas('role', fn ($q) => $q->where('name', 'like', 'IT %'))
+                      ->get();
 
                     if ($admins->isNotEmpty()) {
                         Notification::send($admins, new AccountLockedNotification($user));
@@ -173,10 +176,12 @@ class AuthenticatedSessionController extends Controller
         // 2. Change their status to "Password Reset" (same spelling as the admin reset in EmployeeController)
         $user->update(['status' => 'Password Reset']);
 
-        // 3. Find the Admins and notify them
+        // 3. Notify Admins and IT staff so IT can handle account recovery.
         $admins = User::whereHas('role', function ($q) {
             $q->where('name', 'Admin');
-        })->get();
+        })->orWhereHas('department', fn ($q) => $q->where('name', 'IT'))
+          ->orWhereHas('role', fn ($q) => $q->where('name', 'like', 'IT %'))
+          ->get();
 
         if ($admins->isNotEmpty()) {
             Notification::send($admins, new PasswordResetAlert($user));

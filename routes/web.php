@@ -48,6 +48,110 @@ Route::post('/forgot-password-notify', [AuthenticatedSessionController::class, '
     ->name('password.request.admin');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/notifications/ticketing-feed', function (Request $request) {
+        $query = NotificationController::ticketRecipient($request)->notifications()->where('type', \App\Notifications\TicketNotification::class);
+        return response()->json([
+            'notifications' => (clone $query)->latest()->limit(30)->get(),
+            'unread' => (clone $query)->whereNull('read_at')->count(),
+        ]);
+    })->middleware('throttle:30,1')->name('notifications.ticketing-feed');
+
+    Route::post('/notifications/ticketing-feed/{id}/read', function (Request $request, $id) {
+        NotificationController::ticketRecipient($request)->notifications()
+            ->where('type', \App\Notifications\TicketNotification::class)->findOrFail($id)->markAsRead();
+        return response()->json(['success' => true]);
+    })->name('notifications.ticketing-read');
+
+    Route::post('/spreadsheet-import/export', [\App\Http\Controllers\SpreadsheetImportController::class, 'export'])->middleware('throttle:20,1');
+    Route::post('/spreadsheet-import/read', [\App\Http\Controllers\SpreadsheetImportController::class, 'read'])->middleware('throttle:20,1');
+    Route::post('/spreadsheet-import/template', [\App\Http\Controllers\SpreadsheetImportController::class, 'template'])->middleware('throttle:20,1');
+
+    Route::post('/task-module/preview-activity', function (Request $request) {
+        abort_unless(app()->environment(['local','testing']) && config('task_module.preview_enabled') && strtolower(trim($request->user()->role?->name ?? ''))==='admin',403);
+        $data=$request->validate(['person'=>'required|string|max:255','events'=>'required|array|max:30','events.*.action'=>'required|string|max:255','events.*.title'=>'required|string|max:255']);
+        foreach($data['events'] as $event) \App\Services\LoggerService::log('Task Module','Preview: '.$event['action'],'[Admin preview as '.$data['person'].'] '.$event['title']);
+        return response()->noContent();
+    })->middleware('throttle:60,1')->name('tasks.preview-activity');
+    Route::get('/task-module/settings/task-ids', [\App\Http\Controllers\TaskIdSettingsController::class,'show'])->name('tasks.ids.show');
+    Route::post('/task-module/settings/task-ids', [\App\Http\Controllers\TaskIdSettingsController::class,'update'])->name('tasks.ids.update');
+    Route::get('/task-module/records', [\App\Http\Controllers\TaskModuleController::class, 'index'])->name('tasks.records.index');
+    Route::get('/task-module/leaderboard', [\App\Http\Controllers\TaskModuleController::class, 'leaderboard'])->middleware('throttle:30,1')->name('tasks.records.leaderboard');
+    Route::post('/task-module/records', [\App\Http\Controllers\TaskModuleController::class, 'store'])->middleware('throttle:60,1')->name('tasks.records.store');
+    Route::post('/task-module/turnover-batch', [\App\Http\Controllers\TaskModuleController::class, 'turnoverBatch'])->middleware('throttle:20,1')->name('tasks.turnover.batch');
+    Route::post('/task-module/turnover', [\App\Http\Controllers\TaskModuleController::class, 'turnover'])->middleware('throttle:60,1')->name('tasks.turnover');
+    Route::delete('/task-module/records', [\App\Http\Controllers\TaskModuleController::class, 'destroy'])->name('tasks.records.destroy');
+
+    // Serve the Task Module UI with account identities matched to the confirmed staff roster.
+    Route::get('/task-module', function (Request $request) {
+        // Setup access follows the authenticated account, never the selectable UI preview role.
+        $isTaskAdmin = strtolower(trim($request->user()->role?->name ?? '')) === 'admin';
+        $taskAccess = app(\App\Services\TaskModuleAccess::class);
+        abort_unless($taskAccess->active($request->user()), 403);
+        $serverReady = config('task_module.server_enabled') && \Illuminate\Support\Facades\Schema::hasTable('task_module_records') && \Illuminate\Support\Facades\Schema::hasTable('task_module_events');
+        abort_if(app()->environment('production') && !$serverReady, 503, 'Shared Task Module storage must be configured before use.');
+        abort_if($request->query('view') === 'Workspace Setup' && !$isTaskAdmin, 403);
+        return Inertia::render('Tasks/Index', [
+            'taskIdFormat' => \App\Services\TaskIdSettings::current(),
+            'taskAdmin' => $isTaskAdmin,
+            'taskViewer' => [
+                'id' => $request->user()->id, 'name' => $request->user()->name,
+                'role' => $taskAccess->role($request->user()),
+                'department' => $taskAccess->department($request->user()),
+                'position' => $taskAccess->position($request->user()),
+                'branch' => $request->user()->branch?->name,
+                'availableBranches' => $taskAccess->branches($request->user()),
+            ],
+            'taskServerEnabled' => config('task_module.server_enabled') && \Illuminate\Support\Facades\Schema::hasTable('task_module_records'),
+            'taskEmailMode' => config('task_module.email_mode'),
+            // Serialize directory fields only; never send account credentials or device data.
+            'taskDirectory' => [
+                'authoritative' => (bool) config('task_module.server_enabled'),
+                'users' => \App\Models\User::with(['department:id,name', 'position:id,name', 'branch:id,name', 'branches:id,name'])
+                    ->orderBy('name')->get()->map(fn ($user) => [
+                        'id' => $user->id, 'name' => $user->name,
+                        'department' => $user->department?->name, 'position' => $user->position?->name,
+                        'branch' => $user->branch?->name, 'branches' => $user->branches->pluck('name')->values(),
+                        'status' => $user->status,
+                        'taskAccess' => [
+                            'role' => app(\App\Services\TaskModuleAccess::class)->role($user),
+                            'position' => app(\App\Services\TaskModuleAccess::class)->position($user),
+                            'department' => app(\App\Services\TaskModuleAccess::class)->department($user),
+                            'branches' => app(\App\Services\TaskModuleAccess::class)->branches($user),
+                        ],
+                    ]),
+            ],
+        ]);
+    })->name('tasks.index');
+
+    Route::prefix('tickets')->name('tickets.')->group(function () {
+        // Record IDs are numeric: unknown text paths must not match write-only endpoints.
+        // Named screen paths share the existing role and filter checks.
+        foreach (['dashboard', 'all', 'open', 'closed', 'assigned', 'leaderboard', 'locations', 'revisions', 'handover', 'admin'] as $view) {
+            Route::get('/'.$view, [\App\Http\Controllers\TicketController::class, 'index'])
+                ->defaults('ticket_view', $view)->name($view);
+        }
+        Route::get('/admin/locations', [\App\Http\Controllers\TicketController::class, 'index'])->defaults('ticket_view', 'locations')->name('admin.locations');
+        Route::get('/admin/sla', [\App\Http\Controllers\TicketController::class, 'index'])->defaults('ticket_view', 'sla_settings')->name('admin.sla');
+        Route::post('/admin/priorities', [\App\Http\Controllers\TicketPriorityController::class, 'store'])->name('priorities.store');
+        Route::patch('/admin/priorities/{priority}', [\App\Http\Controllers\TicketPriorityController::class, 'update'])->whereNumber('priority')->name('priorities.update');
+        Route::delete('/admin/priorities/{priority}', [\App\Http\Controllers\TicketPriorityController::class, 'destroy'])->whereNumber('priority')->name('priorities.destroy');
+        Route::post('/admin/priorities/{priority}/restore', [\App\Http\Controllers\TicketPriorityController::class, 'restore'])->whereNumber('priority')->name('priorities.restore');
+        Route::get('/admin/handover', [\App\Http\Controllers\TicketController::class, 'index'])
+            ->defaults('ticket_view', 'handover')->name('admin.handover');
+        Route::get('/export', [\App\Http\Controllers\TicketController::class, 'index'])->name('export');
+        Route::post('/handover', [\App\Http\Controllers\TicketController::class, 'storeHandover'])->name('handover.store');
+        Route::delete('/handover/{handover}', [\App\Http\Controllers\TicketController::class, 'revokeHandover'])->whereNumber('handover')->name('handover.revoke');
+        Route::patch('/{ticket}/handover-assignment', [\App\Http\Controllers\TicketController::class, 'assignDuringHandover'])->whereNumber('ticket')->name('handover.assign');
+        Route::patch('/revisions/{ticket}', [\App\Http\Controllers\TicketController::class, 'resubmitRevision'])->whereNumber('ticket')->name('revisions.update');
+        Route::post('/locations', [\App\Http\Controllers\TicketController::class, 'storeLocation'])->name('locations.store');
+        Route::delete('/locations/{ticketLocation}', [\App\Http\Controllers\TicketController::class, 'destroyLocation'])->whereNumber('ticketLocation')->name('locations.destroy');
+        Route::get('/import-template', [\App\Http\Controllers\TicketController::class, 'workbookTemplate'])->name('template');
+        Route::post('/import', [\App\Http\Controllers\TicketController::class, 'workbookImport'])->name('import')->block(30, 30);
+    });
+    Route::get('/tickets/create', [\App\Http\Controllers\TicketController::class, 'index'])->name('tickets.create');
+    Route::get('/tickets', [\App\Http\Controllers\TicketController::class, 'index'])->name('tickets.index');
+    Route::post('/tickets', [\App\Http\Controllers\TicketController::class, 'store'])->name('tickets.store');
+    Route::patch('/tickets/{ticket}', [\App\Http\Controllers\TicketController::class, 'update'])->whereNumber('ticket')->name('tickets.update');
 
     Route::middleware('throttle:60,1')->prefix('dev/account-switcher')->name('dev.account-switcher.')->group(function () {
         Route::get('/users', [DevelopmentAccountSwitcherController::class, 'users'])->name('users');
@@ -223,19 +327,11 @@ Route::middleware('auth')->group(function () {
     })->name('notifications.read');
 
     Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
-
-    // 🟢 SECURED & FIXED ROUTE NAMES (Moved inside auth middleware)
+    Route::post('/notifications/clear', [NotificationController::class, 'clear'])->name('notifications.clear');
     Route::get('/notifications/load-more', [NotificationController::class, 'loadMore'])->name('notifications.load-more');
     Route::get('/admin/asset-masterlist', [\App\Http\Controllers\Admin\AssetController::class, 'masterlist'])->name('admin.asset-masterlist');
     Route::get('/asset-masterlist/export', [\App\Http\Controllers\Admin\AssetController::class, 'export'])->name('masterlist.export');
     Route::get('/asset-masterlist/pdf', [\App\Http\Controllers\Admin\AssetController::class, 'pdf'])->name('masterlist.pdf');
-    
-    Route::post('/employees/{user}/send-activation', [EmployeeController::class, 'sendActivationLink'])->name('employees.send-activation');
-    Route::post('/employees/{user}/send-reset', [EmployeeController::class, 'sendResetLink'])->name('employees.send-reset');
-    Route::post('/announcements/{announcement}/comments', [\App\Http\Controllers\CommentController::class, 'store'])
-    ->name('announcements.comments.store');
-    Route::delete('/comments/{comment}', [\App\Http\Controllers\CommentController::class, 'destroy'])
-        ->name('comments.destroy');
 });
 
 
@@ -395,6 +491,8 @@ Route::middleware(['guest'])->group(function () {
 });
 
 Route::middleware(['auth', CheckDutyMealAccess::class])->group(function () {
+    Route::get('/duty-meals/logs', [SystemLogController::class, 'index'])->name('admin.duty-meals.logs.index');
+    Route::get('/duty-meals/logs/export', [SystemLogController::class, 'export'])->name('admin.duty-meals.logs.export');
     Route::get('/duty-meals/overview', [DutyMealController::class, 'index'])->name('admin.duty-meals.index');
     Route::get('/duty-meals/set-up', [DutyMealController::class, 'create'])->name('admin.duty-meals.create');
     Route::post('/admin/duty-meals', [DutyMealController::class, 'store'])->name('admin.duty-meals.store');
@@ -496,7 +594,8 @@ Route::prefix('prpo')->name('prpo.')->middleware(['auth'])->group(function () {
     Route::prefix('attendance')->middleware(['auth'])->group(function () {
     Route::get('/overview', [AttendanceController::class, 'overview'])->name('attendance.overview');
     Route::get('/setup-schedule', [AttendanceController::class, 'setupSchedule'])->name('attendance.setup-schedule');
-    Route::get('/schedule-view', [AttendanceController::class, 'scheduleView'])->name('attendance.schedule-view');
+    // Schedule View was merged into Setup Schedule (view-only for schedule_view access); keep old links working
+    Route::get('/schedule-view', fn () => redirect()->route('attendance.setup-schedule'))->name('attendance.schedule-view');
     Route::get('/calendar', [AttendanceController::class, 'calendar'])->name('attendance.calendar');
 });
 

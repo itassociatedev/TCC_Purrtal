@@ -1,9 +1,12 @@
+import { mergeNotificationList } from '@/Components/notificationList.mjs';
+import DisplaySettings from '@/Components/DisplaySettings';
 import ApplicationLogo from '@/Components/ApplicationLogo';
 import Dropdown from '@/Components/Dropdown';
 import FlashMessage from '@/Components/FlashMessage';
+import { readRolePreview, rolePreviewStorageKey } from '@/Components/rolePreview.mjs';
 import { Link, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
-import { useEffect, useState } from 'react';
+import { cloneElement, useEffect, useRef, useState } from 'react';
 import { hasHRModuleAccess, moduleHasAccess, hasPermission, canViewModuleCard, getFirstAttendanceRoute } from '@/Config/navigation';
 
 export default function SidebarLayout({
@@ -12,6 +15,8 @@ export default function SidebarLayout({
     sidebarLinks = [],
     activeModule = 'Dashboard',
     headerClassName = '',
+    notificationSlot = null,
+    previewProfile = null,
     onTriggerAddModal = null, 
 }) {
 
@@ -31,8 +36,69 @@ export default function SidebarLayout({
     return date.toLocaleDateString();
     };
 
-    const { auth } = usePage().props;
-    const devAccountSwitcher = usePage().props.devAccountSwitcher;
+    const { auth, taskPreviewEnabled = false, devAccountSwitcher } = usePage().props;
+    const [settingsOpen,setSettingsOpen]=useState(false);
+    const [installPrompt, setInstallPrompt] = useState(null);
+    const [supportsHomeScreenInstall, setSupportsHomeScreenInstall] = useState(false);
+    const [isAppInstalled, setIsAppInstalled] = useState(false);
+    useEffect(() => {
+        const standalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        const isAppleMobile = /iPhone|iPad|iPod/.test(window.navigator.userAgent)
+            || (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
+        setIsAppInstalled(Boolean(standalone));
+        setSupportsHomeScreenInstall(isAppleMobile);
+
+        const captureInstallPrompt = (event) => {
+            event.preventDefault();
+            setInstallPrompt(event);
+        };
+        const markInstalled = () => {
+            setIsAppInstalled(true);
+            setInstallPrompt(null);
+        };
+
+        window.addEventListener('beforeinstallprompt', captureInstallPrompt);
+        window.addEventListener('appinstalled', markInstalled);
+        if (window.isSecureContext && 'serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+        }
+
+        return () => {
+            window.removeEventListener('beforeinstallprompt', captureInstallPrompt);
+            window.removeEventListener('appinstalled', markInstalled);
+        };
+    }, []);
+    const handleInstallApp = async () => {
+        if (installPrompt) {
+            await installPrompt.prompt();
+            const choice = await installPrompt.userChoice;
+            if (choice?.outcome === 'accepted' || choice?.outcome === 'dismissed') setInstallPrompt(null);
+            return;
+        }
+
+        if (supportsHomeScreenInstall && window.confirm('Would you like to add The Cat Clinic Purrtal to your Home Screen?')) {
+            window.alert('In the Share menu, choose “Add to Home Screen,” then confirm.');
+        }
+    };
+    const [storedRolePreview, setGlobalRolePreview] = useState(() => readRolePreview(auth.user?.id));
+    const globalRolePreview = taskPreviewEnabled ? storedRolePreview : null;
+    const previewKey = rolePreviewStorageKey(auth.user?.id);
+    useEffect(() => {
+        const syncPreview = event => setGlobalRolePreview(event?.detail ?? readRolePreview(auth.user?.id));
+        window.addEventListener('tcc-role-preview-change', syncPreview);
+        window.addEventListener('storage', syncPreview);
+        return () => {
+            window.removeEventListener('tcc-role-preview-change', syncPreview);
+            window.removeEventListener('storage', syncPreview);
+        };
+    }, [previewKey, auth.user?.id]);
+    const displayedProfile = globalRolePreview?.active ? globalRolePreview : taskPreviewEnabled ? previewProfile : null;
+    const moduleDepartment = displayedProfile?.department?.name || displayedProfile?.department || auth.user?.department?.name;
+    // Actual IT navigation follows the server's position classifier; task previews retain their department context.
+    const isItUser = globalRolePreview?.active
+        ? ['it', 'information technology'].includes(String(moduleDepartment || '').trim().toLowerCase())
+        : ['leader', 'member'].includes(auth.user?.ticketing_role);
+
 
     const safeSidebarLinks = Array.isArray(sidebarLinks) ? sidebarLinks : [];
     const safeNotifications = Array.isArray(auth?.notifications) ? auth.notifications : [];
@@ -55,7 +121,8 @@ export default function SidebarLayout({
     const isAudit = roleAndPosition.includes('audit') || roleAndPosition.includes('accountability') || roleAndPosition.includes('view only');
     
     // 🟢 NEW: Unified condition to toggle Accountability/Assets module visibility globally
-    const hasAccountabilities = auth?.has_department_assets || (auth?.user?.assets && auth.user.assets.length > 0) || isSuperAdmin || isAudit || canEnterAssets;
+    const hasAccountabilities = auth?.has_assets_schema !== false
+        && (auth?.has_department_assets || (auth?.user?.assets && auth.user.assets.length > 0) || isSuperAdmin || isAudit || canEnterAssets);
 
     const hasAnyAdminPermission = () => [
         'admin_overview',
@@ -125,7 +192,35 @@ export default function SidebarLayout({
     const [localNotifications, setLocalNotifications] = useState(safeNotifications);
     const [localUnreadCount, setLocalUnreadCount] = useState(auth?.unreadNotificationsCount || 0);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
-    const totalNotificationsCount = auth?.totalNotificationsCount || 0;
+    const [ticketFeed, setTicketFeed] = useState(null);
+    // Ignore polling responses started before a notification mutation.
+    const ticketFeedRevision = useRef(0);
+    const pendingNotificationReads = useRef(new Set());
+    const ticketPreviewPerson = userRole === 'admin' && displayedProfile?.active ? displayedProfile.name : null;
+    const ticketFeedParams = ticketPreviewPerson ? { preview_person: ticketPreviewPerson } : {};
+    useEffect(() => {
+        setTicketFeed(null);
+        if (!auth?.user?.id) return;
+        let stopped = false;
+        const refresh = async () => {
+            if (document.hidden || pendingNotificationReads.current.size) return;
+            try {
+                const revision = ticketFeedRevision.current;
+                const response = await axios.get(route('notifications.ticketing-feed'), { params: ticketFeedParams });
+                if (!stopped && revision === ticketFeedRevision.current) setTicketFeed(response.data);
+            } catch (error) { console.error('Unable to refresh IT notifications', error); }
+        };
+        refresh();
+        const timer = setInterval(refresh, 10000);
+        window.addEventListener('focus', refresh);
+        return () => { stopped = true; clearInterval(timer); window.removeEventListener('focus', refresh); };
+    }, [isItUser, auth?.user?.id, ticketPreviewPerson]);
+    // Ticket notifications never enter the regular portal list or badge.
+    const itNotifications = ticketFeed?.notifications || (ticketPreviewPerson ? [] : auth.ticketNotifications) || [];
+    const itUnreadCount = ticketFeed?.unread ?? (ticketPreviewPerson ? 0 : auth.ticketUnreadNotificationsCount) ?? itNotifications.filter(item => !item.read_at).length;
+
+    // 🟢 Calculate hasMore dynamically
+    const [totalNotificationsCount, setTotalNotificationsCount] = useState(auth.totalNotificationsCount || 0);
     const hasMore = totalNotificationsCount > localNotifications.length;
 
     const loadMoreNotifications = async (e) => {
@@ -140,7 +235,7 @@ export default function SidebarLayout({
             const newNotifications = response.data.notifications || [];
 
             // Append the older notifications to our existing list
-            setLocalNotifications(prev => [...prev, ...newNotifications]);
+            setLocalNotifications(prev => mergeNotificationList(prev, newNotifications));
         } catch (error) {
             console.error("Failed to load older notifications", error);
         } finally {
@@ -149,18 +244,51 @@ export default function SidebarLayout({
     };
 
     useEffect(() => {
-        if (localNotifications.length <= safeNotifications.length) setLocalNotifications(safeNotifications);
-        setLocalUnreadCount(auth?.unreadNotificationsCount || 0);
-    }, [auth?.notifications, auth?.unreadNotificationsCount]);
+        // Refresh newest alerts without duplicating IDs or dropping already loaded older rows.
+        setLocalNotifications(prev => mergeNotificationList(prev, auth.notifications || [], {
+            total: auth.totalNotificationsCount ?? (auth.notifications || []).length, refresh: true,
+        }));
+        setLocalUnreadCount(auth.unreadNotificationsCount || 0);
+        setTotalNotificationsCount(auth.totalNotificationsCount || 0);
+    }, [auth.notifications, auth.unreadNotificationsCount, auth.totalNotificationsCount]);
 
-    const markAsRead = (notificationId, url) => {
-        const notification = localNotifications.find(n => n.id === notificationId);
+    const markAsRead = async (notificationId, url) => {
+        // A rapid repeat click must not decrement a badge or send the same read twice.
+        if (pendingNotificationReads.current.has(notificationId)) return;
+        const notification = itNotifications.find(n => n.id === notificationId) || localNotifications.find(n => n.id === notificationId);
         if (notification && !notification.read_at) {
-            setLocalNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n));
+            const isTicketNotice = itNotifications.some(item => item.id === notificationId);
+            pendingNotificationReads.current.add(notificationId);
+            ticketFeedRevision.current++;
+            try {
+                await axios.post(route(isTicketNotice ? 'notifications.ticketing-read' : 'notifications.read', notificationId), isTicketNotice ? ticketFeedParams : {});
+                const readAt = new Date().toISOString();
+                if (isTicketNotice) {
+                    // Seed from shared props when the first poll has not returned yet.
+                    setTicketFeed(previous => {
+                        const feed = previous || { notifications: itNotifications, unread: itUnreadCount };
+                        const unread = feed.notifications.some(item => item.id === notificationId && !item.read_at);
+                        return { ...feed,
+                            notifications: feed.notifications.map(item => item.id === notificationId ? { ...item, read_at: readAt } : item),
+                            unread: Math.max(0, feed.unread - (unread ? 1 : 0)),
+                        };
+                    });
+                } else {
+                    setLocalNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, read_at: readAt } : n));
             setLocalUnreadCount(prev => Math.max(0, prev - 1));
-            axios.post(route('notifications.read', notificationId));
         }
-        if (url) router.visit(url);
+            } catch {
+                window.dispatchEvent(new CustomEvent('flash-toast', { detail: { message: 'Unable to mark this notification as read. Please try again.', type: 'error' } }));
+                return;
+            } finally {
+                pendingNotificationReads.current.delete(notificationId);
+                // Invalidate reads begun during this mutation as well as before it.
+                ticketFeedRevision.current++;
+            }
+        }
+        // Older stored notices also deep-link using their existing numeric ticket ID.
+        if (url) router.visit(notification?.data?.ticket_id
+            ? route('tickets.all', { selected_ticket: notification.data.ticket_id }) : url);
     };
 
     const user = auth?.user;
@@ -215,8 +343,11 @@ export default function SidebarLayout({
     const showDocumentQuickLink = canViewModuleCard(auth, 'documents');
     const showCalendarQuickLink = canViewModuleCard(auth, 'attendance_calendar');
     const showPersonalMealsQuickLink = canViewModuleCard(auth, 'duty_meal_personal');
+    // Non-IT staff can reach IT Support below Asset Management. IT staff use
+    // their dedicated support notifications in the top bar instead.
+    const showITSupportQuickLink = !isItUser;
 
-    const hasAnyQuickLinks = showDocumentQuickLink || showCalendarQuickLink || showPersonalMealsQuickLink;
+    const hasAnyQuickLinks = showDocumentQuickLink || showCalendarQuickLink || showPersonalMealsQuickLink || showITSupportQuickLink;
 
     // 🟢 NEW: Check if the user is currently on the Dashboard
     const isDashboard = route().current('dashboard');
@@ -236,9 +367,30 @@ export default function SidebarLayout({
     };
 
     const routeToDutyMeal = getFirstDutyMealRoute();
+    const canShowAdminModule = hasAnyAdminPermission()
+        && (!globalRolePreview?.active || globalRolePreview.showAdminAccess === true);
+    const hasHrModule = hasHRModuleAccess(auth);
+    const hasPrpoModule = moduleHasAccess(auth, 'prpo_');
+    const hasAttendanceModule = moduleHasAccess(auth, 'attendance');
+    const isAccountabilityAdmin = isSuperAdmin || isAudit;
+    const administrationModuleCount = [
+        canShowAdminModule,
+        hasHrModule,
+        hasPrpoModule,
+        hasAccountabilities && isAccountabilityAdmin,
+    ].filter(Boolean).length;
+    const staffModuleCount = [
+        canAccessDutyMealModule,
+        hasAttendanceModule,
+        hasAccountabilities && !isAccountabilityAdmin,
+    ].filter(Boolean).length;
+    const moduleGroupCount = administrationModuleCount + staffModuleCount;
 
     const currentModuleLabel =
-        activeModule === 'Admin'
+        // IT staff get a department-specific task module name; everyone else sees the shared module name.
+        activeModule === 'Tasks'
+            ? (isItUser ? 'IT Task Module' : 'Task Module')
+            : activeModule === 'Admin'
             ? 'Admin Module'
                         : activeModule === 'Assets'
                             ? (isSuperAdmin ? 'Accountability Module' : 'My Accountability')
@@ -254,6 +406,8 @@ export default function SidebarLayout({
                   ? 'Select Module'
                   : activeModule === 'PR/PO Module'
                     ? 'PR/PO Module'
+                    : activeModule === 'IT Ticketing Module'
+                      ? (isItUser ? 'IT Task Module' : 'IT Support')
                     : 'Select Module';
 
     // Determines if we are on the main overview/dashboard to conditionally render Quick Links and Resources
@@ -393,28 +547,50 @@ export default function SidebarLayout({
         return iconSvg[link.label] || <div className="h-4 w-4 rounded bg-gray-200" />;
     };
 
-
-    const markAllAsRead = (e) => {
+    const clearPortalNotifications = async () => {
+        ticketFeedRevision.current++;
+        try {
+            await axios.post(route('notifications.clear'));
+            setLocalNotifications([]);
+            setLocalUnreadCount(0);
+            setTotalNotificationsCount(0);
+        } finally { ticketFeedRevision.current++; }
+    };
+    const markAllAsRead = async (e) => {
         e.preventDefault();
         e.stopPropagation();
-
         if (localUnreadCount === 0) return;
-
-        // 1. Instantly update UI: Mark all unread as read and reset count to 0
-        setLocalNotifications(prev => prev.map(n =>
-            !n.read_at ? { ...n, read_at: new Date().toISOString() } : n
-        ));
+        ticketFeedRevision.current++;
+        try {
+            // Failed requests leave notices unread so the action can be retried.
+            await axios.post(route('notifications.mark-all-read'));
+            const read_at = new Date().toISOString();
+            setLocalNotifications(prev => prev.map(n => !n.read_at ? { ...n, read_at } : n));
         setLocalUnreadCount(0);
 
-        // 2. Silently tell the backend
-        axios.post(route('notifications.mark-all-read'));
+        } catch (error) {
+            console.error('Unable to mark notifications as read', error);
+        } finally { ticketFeedRevision.current++; }
     };
     return (
-        <div className="flex h-screen overflow-hidden bg-gray-100">
+        <div className="clinic-shell flex h-screen overflow-hidden bg-gray-100">
             <FlashMessage />
-            {isMobileSidebarOpen && <div className="fixed inset-0 z-40 bg-black/50 sm:hidden" onClick={() => setIsMobileSidebarOpen(false)} />}
+            {settingsOpen&&<DisplaySettings onClose={()=>setSettingsOpen(false)}/>}
 
-            <aside className={`fixed inset-y-0 left-0 z-50 w-64 transform bg-white border-r border-gray-200 transition-transform duration-300 ease-in-out sm:translate-x-0 sm:static sm:inset-0 ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            {/* ✅ FIXED: Overlay raised to z-40 so it covers the header properly */}
+            {isMobileSidebarOpen && (
+                <div
+                    className="fixed inset-0 z-40 bg-black/50 sm:hidden"
+                    onClick={() => setIsMobileSidebarOpen(false)}
+                />
+            )}
+
+            {/* ✅ FIXED: Sidebar raised to z-50 to float above everything else on mobile */}
+            <aside
+                className={`clinic-sidebar fixed inset-y-0 left-0 z-50 w-64 transform bg-white border-r border-gray-200 transition-transform duration-300 ease-in-out sm:translate-x-0 sm:static sm:inset-0 ${
+                    isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+                }`}
+            >
                 <div className="flex h-20 items-center justify-center border-b border-gray-100 px-6">
                     <Link prefetch cacheFor="5s" href={route('dashboard')} className="-ml-6 inline-flex items-center gap-0">
                         <ApplicationLogo className="block h-14 w-auto fill-current text-gray-800 sm:h-16" />
@@ -422,15 +598,75 @@ export default function SidebarLayout({
                     </Link>
                 </div>
 
-                <div className="overflow-y-auto px-4 py-6 text-sm font-medium">
-                    {!['General', 'Profile'].includes(activeModule) && (
-                        <div className="mb-4">
-                            <Link prefetch cacheFor="5s" href={route('dashboard')} className="flex items-center gap-2 rounded-lg px-4 py-2 text-black hover:bg-gray-100 hover:text-black transition ease-in-out duration-150">
-                                {iconSvg.Overview} Dashboard
-                            </Link>
-                        </div>
+                <div className="clinic-sidebar-module">{/* Module Selection Dropdown */}
+                        <Dropdown>
+                            <Dropdown.Trigger>
+                                <button type="button" className="clinic-module-trigger" aria-label={'Switch module: '+currentModuleLabel}>
+                                    <span className="clinic-module-icon" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+                                    <span className="clinic-module-label"><strong>{currentModuleLabel}</strong></span>
+                                    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+                                </button>
+                            </Dropdown.Trigger>
+
+                            <Dropdown.Content align="left" width="48">
+                                    <Dropdown.Link href={route('dashboard')}>Portal Home</Dropdown.Link>
+                                    <div className="mx-4 my-1 border-t border-slate-100" aria-hidden="true" />
+                                    {!isItUser && <div className="clinic-module-section-label" role="heading" aria-level="3">Work</div>}
+                                    <Dropdown.Link href={route('tasks.index')}>{isItUser ? 'IT Task Module' : 'Task Module'}</Dropdown.Link>
+                                    {moduleGroupCount > 0 && <>
+                                        <div className="mx-4 my-1 border-t border-slate-100" aria-hidden="true" />
+                                        {moduleGroupCount > 1 && <div className="clinic-module-section-label" role="heading" aria-level="3">Administration</div>}
+                                    </>}
+                                    {canShowAdminModule && (
+                                        <Dropdown.Link href={getFirstAdminRoute()}>
+                                            Admin Module
+                                        </Dropdown.Link>
                     )}
 
+                                    {/* HR and PR/PO stay grouped with authorized administration modules. */}
+                                    { hasHrModule && (
+                                        <Dropdown.Link href={route('hr.index')}>HR Module</Dropdown.Link>
+                                    ) }
+
+                                    { hasPrpoModule && (
+                                        <Dropdown.Link href={getFirstPrpoRoute()}>
+                                            PR/PO Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                    {hasAccountabilities && isAccountabilityAdmin && (
+                                        <Dropdown.Link href={isSuperAdmin ? route('admin.assets.index') : (canEnterAssets ? route('admin.assets.entry') : route('admin.asset-masterlist'))}>
+                                            {isSuperAdmin ? 'Accountability Module' : (canEnterAssets ? 'Asset Entry' : 'Asset Masterlist')}
+                                        </Dropdown.Link>
+                                    )}
+
+                                    {!isItUser && staffModuleCount > 0 && <>
+                                        <div className="mx-4 my-1 border-t border-slate-100" aria-hidden="true" />
+                                        {staffModuleCount > 1 && <div className="clinic-module-section-label" role="heading" aria-level="3">Staff tools</div>}
+                                    </>}
+
+                                    {/* Routes users to their first available Duty Meal page. */}
+                                    { canAccessDutyMealModule && routeToDutyMeal && (
+                                        <Dropdown.Link href={routeToDutyMeal}>
+                                            Duty Meal Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                    {hasAccountabilities && !isAccountabilityAdmin && (
+                                        <Dropdown.Link href={canEnterAssets ? route('admin.assets.entry') : route('staff.assets.index')}>
+                                            {canEnterAssets ? 'Asset Entry' : 'My Accountability'}
+                                        </Dropdown.Link>
+                                    )}
+
+                                    {hasAttendanceModule && (
+                                        <Dropdown.Link href={getFirstAttendanceRoute(auth)}>
+                                            Attendance Module
+                                        </Dropdown.Link>
+                                    )}
+
+                                </Dropdown.Content>
+                        </Dropdown></div>
+                <div className="clinic-sidebar-navigation overflow-y-auto px-4 py-6 text-sm font-medium">
                     {priorityLink && (
                         <div className="mb-4">
                             <Link prefetch cacheFor="5s" href={priorityLink.href} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 ${priorityLink.active ? 'bg-gray-100 font-bold text-gray-900' : ''}`}>
@@ -504,6 +740,22 @@ export default function SidebarLayout({
                                         </Link>
                                     </li>
                                 )}
+                                {showITSupportQuickLink && (
+                                    <li>
+                                        <Link prefetch cacheFor="5s"
+                                            href={route('tickets.dashboard')}
+                                            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition ${
+                                                route().current('tickets.*') ? 'bg-indigo-50 font-bold text-indigo-700' : ''
+                                            }`}
+                                        >
+                                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 13v-2a9 9 0 0118 0v2" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13h2v6H5a2 2 0 01-2-2v-2a2 2 0 012-2zm12 0h2a2 2 0 012 2v2a2 2 0 01-2 2h-2v-6zM17 19a4 4 0 01-4 3h-2" />
+                                            </svg>
+                                            <span>IT Support</span>
+                                        </Link>
+                                    </li>
+                                )}
                             </ul>
                         </div>
                     )}
@@ -532,10 +784,12 @@ export default function SidebarLayout({
                         </>
                     )}
 
-                    {/* ONLY RENDER RESOURCES IF ON MAIN DASHBOARD */}
-                    {isMainDashboard && (
-                        <div className="mb-4 mt-8">
-                            <div className="mb-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Resources</div>
+                    {/* 🟢 RESOURCES SECTION */}
+                    {['General', 'Profile'].includes(activeModule) && (
+                        <div className="mt-8 mb-4">
+                            <div className="mb-4 text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                Resources
+                            </div>
                             <ul className="space-y-2">
                                 <li>
                                     <a href="/resources/internal-links" className="flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900">
@@ -571,11 +825,18 @@ export default function SidebarLayout({
                 `}</style>
 
                 {/* ✅ FIXED: Lowered Header to z-30 so the sidebar and overlay cover it when open */}
-                <header className="relative z-30 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-3 sm:px-6">
-                    <button onClick={() => setIsMobileSidebarOpen(true)} className="sm:hidden text-gray-500 hover:text-gray-700">
-                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                <header className="clinic-topbar relative z-30 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-3 sm:px-6">
+                    {/* Mobile Hamburger Menu */}
+                    <button
+                        onClick={() => setIsMobileSidebarOpen(true)}
+                        className="text-gray-500 hover:text-gray-700 focus:outline-none sm:hidden"
+                    >
+                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
                     </button>
 
+                    <div className="clinic-workspace-label"><span>The Cat Clinic</span><strong>{activeModule==='General'?'Staff portal':activeModule}</strong></div>
                     {/* Right Side Header Items - Reduced gap on mobile */}
                     <div className="flex flex-1 items-center justify-end gap-1.5 sm:gap-3">
                         {devAccountSwitcher?.enabled && (
@@ -601,7 +862,16 @@ export default function SidebarLayout({
 
                         {/* 🔽 Wrapped Notifications Dropdown 🔽 */}
                         <div className="mobile-notification-fix">
-                            <Dropdown>
+                            {notificationSlot ? cloneElement(notificationSlot, {
+                                portalNotifications: localNotifications,
+                                portalUnreadCount: localUnreadCount,
+                                onPortalRead: markAsRead,
+                                onPortalReadAll: markAllAsRead,
+                                onPortalClear: clearPortalNotifications,
+                                onPortalLoadMore: loadMoreNotifications,
+                                portalHasMore: hasMore,
+                                portalLoading: isLoadingMore,
+                            }) : <Dropdown>
                                 <Dropdown.Trigger>
                                     <button
                                         type="button"
@@ -613,8 +883,8 @@ export default function SidebarLayout({
                                         </svg>
 
                                         {localUnreadCount > 0 && (
-                                            <span className="absolute right-0 top-0 sm:right-1 sm:top-1 flex h-3.5 w-3.5 sm:h-4 sm:w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] sm:text-[10px] font-bold text-white ring-2 ring-white">
-                                                {localUnreadCount}
+                                            <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
+                                                {localUnreadCount > 99 ? '99+' : localUnreadCount}
                                             </span>
                                         )}
                                     </button>
@@ -676,74 +946,33 @@ export default function SidebarLayout({
                                         </>
                                     )}
                                 </Dropdown.Content>
-                            </Dropdown>
+                            </Dropdown>}
                         </div>
 
-                        {/* Module Selection Dropdown */}
-                        <Dropdown>
+                        {auth?.user && <Dropdown>
                             <Dropdown.Trigger>
-                                <button className="inline-flex min-h-[36px] sm:min-h-[42px] items-center gap-1 sm:gap-2 rounded-full border border-slate-200 bg-white/90 px-2.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus:outline-none">
-
-                                    {/* Hide text on mobile */}
-                                    <span className="hidden sm:block">{currentModuleLabel}</span>
-
-                                    {/* Show grid icon on mobile instead */}
-                                    <svg className="h-4 w-4 sm:hidden text-slate-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+                                <button type="button" aria-label="IT support notifications" title="IT support notifications" className="relative inline-flex h-[36px] w-[36px] sm:h-[42px] sm:w-[42px] items-center justify-center rounded-full border border-slate-200 bg-white/90 text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300">
+                                    <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 13v-2a9 9 0 0118 0v2" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13h2v6H5a2 2 0 01-2-2v-2a2 2 0 012-2zm12 0h2a2 2 0 012 2v2a2 2 0 01-2 2h-2v-6zM17 19a4 4 0 01-4 3h-2" />
                                     </svg>
-
-                                    <svg className="h-3 w-3 sm:h-4 sm:w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                                    </svg>
+                                    <span aria-hidden="true" className="absolute -right-1 -top-1 inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-indigo-600 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-white">{itUnreadCount > 99 ? '99+' : itUnreadCount || 'IT'}</span>
                                 </button>
                             </Dropdown.Trigger>
-                            <Dropdown.Content>
-                                    {hasAnyAdminPermission() && (
-                                        <Dropdown.Link href={getFirstAdminRoute()}>
-                                            Admin Module
-                                        </Dropdown.Link>
-                                    )}
-
-                                    {/* HR Module: show only when user has HR-related permissions or is Admin */}
-                                    { hasHRModuleAccess(auth) && (
-                                        <Dropdown.Link href={route('hr.index')}>HR Module</Dropdown.Link>
-                                    ) }
-
-                                    { moduleHasAccess(usePage().props.auth, 'prpo_') && (
-                                        <Dropdown.Link href={getFirstPrpoRoute()}>
-                                            PR/PO Module
-                                        </Dropdown.Link>
-                                    )}
-
-                                    {/* 🟢 FIXED: Properly routes users dynamically to the first Duty Meal module they have access to */}
-                                    { canAccessDutyMealModule && routeToDutyMeal && (
-                                        <Dropdown.Link href={routeToDutyMeal}>
-                                            Duty Meal Module
-                                        </Dropdown.Link>
-                                    )}
-
-                                    {moduleHasAccess(auth, 'attendance') && (
-                                        <Dropdown.Link href={getFirstAttendanceRoute(auth)}>
-                                            Attendance Module
-                                        </Dropdown.Link>
-                                    )}
-
-                                    {/* 🟢 CONDITIONALLY HIDE ACCOUNTABILITY LINK IF 0 DEPT ASSETS */}
-                                    {hasAccountabilities && (
-                                        <Dropdown.Link href={isSuperAdmin ? route('admin.assets.index') : (canEnterAssets ? route('admin.assets.entry') : (isAudit ? route('admin.asset-masterlist') : route('staff.assets.index')))}>
-                                            {isSuperAdmin ? 'Accountability Module' : (canEnterAssets ? 'Asset Entry' : (isAudit ? 'Asset Masterlist' : 'My Accountability'))}
-                                        </Dropdown.Link>
-                                    )}
-
+                            <Dropdown.Content align="right" width="80">
+                                <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-between gap-3"><strong className="text-sm text-gray-800">IT notifications</strong>{itUnreadCount > 0 && <button type="button" className="text-xs text-indigo-600" onClick={() => itNotifications.filter(item => !item.read_at).forEach(item => markAsRead(item.id))}>Mark all read</button>}</div>
+                                {itNotifications.length ? itNotifications.slice(0, 8).map(item => <button key={item.id} type="button" onClick={() => markAsRead(item.id, item.data?.action_url || route('tickets.dashboard'))} className={`block w-full px-4 py-3 text-left border-b border-gray-50 hover:bg-gray-50 ${item.read_at ? '' : 'bg-indigo-50/60'}`}><span className="block text-sm font-medium text-gray-800">{item.data?.message || 'IT support update'}</span><span className="mt-1 block text-xs text-gray-500">{item.data?.user_email || item.data?.details || 'Open IT support to review this request.'}</span></button>) : <p className="px-4 py-5 text-sm text-gray-500">No IT support notifications yet.</p>}
+                                <Link href={route('tickets.dashboard')} className="block px-4 py-3 text-sm font-medium text-indigo-600 hover:bg-gray-50">Open IT Support</Link>
                             </Dropdown.Content>
-                        </Dropdown>
+                        </Dropdown>}
 
+                        {/* User Dropdown */}
                         <Dropdown>
                             <Dropdown.Trigger>
                                 <button className="inline-flex min-h-[36px] sm:min-h-[42px] items-center gap-1 sm:gap-2 rounded-full border border-slate-200 bg-white/90 px-2.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 focus:outline-none">
 
                                     {/* Hide text on mobile, truncate if it gets too long on desktop */}
-                                    <span className="hidden sm:block max-w-[100px] lg:max-w-[150px] truncate">{user?.name}</span>
+                                    <span className="hidden sm:block max-w-[100px] lg:max-w-[150px] truncate">{displayedProfile?.name || user?.name}</span>
 
                                     {/* Show simple user icon on mobile instead */}
                                     <svg className="h-4 w-4 sm:hidden text-slate-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
@@ -757,14 +986,25 @@ export default function SidebarLayout({
                             </Dropdown.Trigger>
                             <Dropdown.Content>
                                 <Dropdown.Link href={route('profile.edit')}>Profile</Dropdown.Link>
+                                <button type="button" className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100" onClick={()=>setSettingsOpen(true)}>Settings</button>
+                                {!isAppInstalled && (installPrompt || supportsHomeScreenInstall) && (
+                                    <button type="button" className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100" onClick={handleInstallApp}>
+                                        Add app to device
+                                    </button>
+                                )}
                                 <Dropdown.Link href={route('logout')} method="post" as="button">Log Out</Dropdown.Link>
                             </Dropdown.Content>
                         </Dropdown>
                     </div>
                 </header>
-                <main className="flex-1 overflow-y-auto bg-gray-100 p-4 sm:p-6 lg:p-8">
-                    {header && <div className={`mb-6 rounded-lg bg-white p-4 shadow-sm ${headerClassName}`}>{header}</div>}
-                    {children}
+
+                <main className="clinic-content flex-1 overflow-y-auto bg-gray-100 p-4 sm:p-6 lg:p-8">
+                    {header && (
+                        <div className={`clinic-page-heading mb-3 rounded-lg bg-white p-4 shadow-sm sm:mb-6 ${headerClassName}`.trim()}>
+                            {header}
+                        </div>
+                    )}
+                    <div className="clinic-page-body">{children}</div>
                 </main>
             </div>
         </div>

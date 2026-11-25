@@ -1,3 +1,24 @@
+# TCC Purrtal
+
+## Ticketing system documentation
+
+Current implementation reference, audited 19 November 2026:
+
+- [Ticketing guide](TICKETING.md): screens, permissions, lifecycle, fields, filters, XLSX, schema and operations.
+- [SLA reference](SLA_IMPLEMENTATION.md): targets, timing, hour-based priority settings, milestone preservation, legacy pause resumption, alerts and compliance.
+- [Frontend/backend code map](TICKETING_CODE_MAP.md): source files, entry points, migrations and tests.
+- [Change history](TICKETING_CHANGELOG.md): implemented changes and superseded behavior.
+
+Latest documented behavior: supervisor-managed priorities use support hours; additional priorities populate ticket controls automatically, use default styling, and can be removed by supervisors: unused priorities are deleted, used ones archived and restorable. Historical references and at least one active priority are preserved. SLA pausing is unavailable to every role.
+
+Ticket access now follows positions: IT Team Leader gets the supervisor workflow, other IT positions get the member workflow, and other/missing positions get the employee workflow. The Executive Vice President position retains leaderboard viewing regardless of portal role. The obsolete IT-specific database roles were removed and test accounts use employee plus their IT position.
+
+Recent updates also cover clickable workload filters with resolver attribution, separate IT notification feeds, selected-ticket deep links, closure notifications, and focused regression scripts.
+
+Keep these documents updated with ticketing code changes; the guide includes the maintenance checklist. The original framework information follows.
+
+---
+
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">

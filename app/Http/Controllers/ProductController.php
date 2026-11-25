@@ -128,15 +128,15 @@ public function update(Request $request, Product $product)
         // Import products from uploaded spreadsheet (XLSX/CSV)
         $request->validate([
             // 🟢 Allowed txt to prevent strict CSV MIME checks from blocking uploads
-            'import_file' => 'required|mimes:xlsx,xls,csv,txt|max:10240',
+            'import_file' => 'required|mimes:xlsx|max:10240',
         ]);
 
         try {
-            Excel::import(new ProductsImport, $request->file('import_file'));
+            Excel::import(new ProductsImport(\App\Support\WorkbookLayout::headingRow($request->file('import_file')->getRealPath())), $request->file('import_file'));
             return back()->with('success', 'Products imported successfully!');
         } catch (\Exception $e) {
             // 🟢 NOW DISPLAYS THE EXACT SYSTEM ERROR MESSAGE!
-            return back()->with('error', 'Import Failed: ' . $e->getMessage());
+            return back()->with('error', \App\Support\ImportFeedback::message($e));
         }
     }
 

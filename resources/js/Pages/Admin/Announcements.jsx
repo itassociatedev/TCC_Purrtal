@@ -718,6 +718,7 @@ export default function Announcements({ auth, announcements = [], branches = [],
         >
             <Head title="Announcements & Notices" />
 
+
             <style>{`
                 .hide-scroll::-webkit-scrollbar {
                     display: none;

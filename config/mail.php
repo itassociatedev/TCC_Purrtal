@@ -36,6 +36,12 @@ return [
     */
 
     'mailers' => [
+        'task-preview' => ['transport'=>'log','channel'=>'task-mail'],
+        'task-gmail' => [
+            'transport'=>'smtp', 'scheme'=>'smtp', 'host'=>'smtp.gmail.com', 'port'=>587,
+            'username'=>env('TASK_GMAIL_USERNAME'), 'password'=>env('TASK_GMAIL_APP_PASSWORD'),
+            'timeout'=>20,
+        ],
 
         'smtp' => [
             'transport' => 'smtp',

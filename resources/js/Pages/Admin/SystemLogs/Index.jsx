@@ -1,10 +1,10 @@
 import Pagination from '@/Components/Pagination';
-import { getAdminLinks } from "@/Config/navigation";
+import { getAdminLinks, getDutyMealLinks } from "@/Config/navigation";
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import { Head, router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 
-export default function SystemLogsIndex({ auth, logs, filters }) {
+export default function SystemLogsIndex({ auth, logs, filters, dutyLogs=false, modules=[] }) {
     const [search, setSearch] = useState(filters.search || '');
     const [moduleFilter, setModuleFilter] = useState(filters.module || '');
     const [actionFilter, setActionFilter] = useState(filters.action || '');
@@ -83,7 +83,7 @@ export default function SystemLogsIndex({ auth, logs, filters }) {
         e.preventDefault();
 
         router.get(
-            route('admin.logs.index'),
+            route(dutyLogs?'admin.duty-meals.logs.index':'admin.logs.index'),
             {
                 search,
                 module: moduleFilter,
@@ -116,7 +116,7 @@ export default function SystemLogsIndex({ auth, logs, filters }) {
             end_date: mmddyyyyToISO(endDate),
         }).toString();
         
-        window.location.href = route('admin.logs.export') + '?' + params;
+        window.location.href = route(dutyLogs?'admin.duty-meals.logs.export':'admin.logs.export') + '?' + params;
     };
 
     const getStatusBadge = (status) => {
@@ -135,9 +135,9 @@ export default function SystemLogsIndex({ auth, logs, filters }) {
 
     return (
         <SidebarLayout
-            activeModule="Admin"
-            sidebarLinks={getAdminLinks(auth)}
-            header={<h2 className="text-xl font-semibold leading-tight text-gray-800">System Logs & Security</h2>}
+            activeModule={dutyLogs?"Duty Meal":"Admin"}
+            sidebarLinks={dutyLogs?getDutyMealLinks(auth):getAdminLinks(auth)}
+            header={<h2 className="text-xl font-semibold leading-tight text-gray-800">{dutyLogs?'Duty Meal Logs':'System Logs & Security'}</h2>}
         >
             <Head title="System Logs" />
 
@@ -162,19 +162,8 @@ export default function SystemLogsIndex({ auth, logs, filters }) {
                             value={moduleFilter}
                             onChange={(e) => setModuleFilter(e.target.value)}
                         >
-                            <option value="">All Modules</option>
-                            <option value="Authentication">Authentication</option>
-                            <option value="Employee Management">Employee Management</option>
-                            <option value="Organizational Chart">Organizational Chart</option>
-                            <option value="Announcements">Announcements</option>
-                            <option value="Company Content">Company Content</option>
-                            <option value="Document Repository">Document Repository</option>
-                            <option value="HR Module">HR Module</option>
-                            <option value="Manpower Requests">Manpower Requests</option>
-                            <option value="Feedback">Feedback</option>
-                            <option value="PR/PO Module">PR/PO Module</option>
-                            <option value="Duty Meal Module">Duty Meal Module</option>
-                            <option value="Profile">Profile</option>
+                            <option value="">{dutyLogs?'All Duty Meal logs':'All modules'}</option>
+                            {[...new Set([...modules.filter(name=>dutyLogs||(!['Auth','Authentication'].includes(name)&&!name.startsWith('Duty Meal'))),...(!dutyLogs?['Authentication','Duty Meal Module','Task Module']:[])])].sort().map(name=><option key={name} value={name}>{name}</option>)}
                         </select>
 
                         {/* ACTIONS */}
@@ -264,7 +253,7 @@ export default function SystemLogsIndex({ auth, logs, filters }) {
                         <button 
                             type="button" 
                             onClick={handleExport}
-                            className="border border-gray-300 bg-white hover:bg-gray-50 transition duration-150 text-gray-700 px-4 py-2 rounded-md shadow-sm font-medium flex items-center gap-2 text-sm"
+                            className="clinic-file-action border border-gray-300 bg-white hover:bg-gray-50 transition duration-150 text-gray-700 px-4 py-2 rounded-md shadow-sm font-medium flex items-center gap-2 text-sm"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -313,7 +302,7 @@ export default function SystemLogsIndex({ auth, logs, filters }) {
                             
                             {logs.data.length === 0 && (
                                 <tr>
-                                    <td colSpan="6" className="px-6 py-8 text-center text-gray-500 bg-gray-50">
+                                    <td colSpan={6} className="px-6 py-8 text-center text-gray-500 bg-gray-50">
                                         <div className="flex flex-col items-center justify-center">
                                             <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                                             No logs found matching your criteria.

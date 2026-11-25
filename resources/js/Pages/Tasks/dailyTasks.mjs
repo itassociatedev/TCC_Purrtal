@@ -1,0 +1,89 @@
+import {ensureRecurringTasks} from './recurringTasks.mjs';
+import {ensurePeriodicNarratives} from './narrativePeriods.mjs';
+import { consolidateOpeningReports } from './sharedOpeningReports.mjs';
+import { ensureWeeklyTasks } from './weeklyReports.mjs';
+import { scheduledBranch } from './workSchedule.mjs';
+import { reportTemplates } from './reportTemplates.mjs';
+// Daily instances follow the clinic's Philippine calendar date, even on a device in another timezone.
+export function clinicDate(date = new Date()) {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date).map(part => [part.type, part.value]));
+    return `${parts.year}-${parts.month}-${parts.day}`;
+}
+export const isDailyTemplate = task => (['it-opening-rounds', 'narrative-report', 'daily-operations'].includes(task.template) || task.template?.startsWith('daily-custom-'));
+const dailyKey = task => `${task.template}:${encodeURIComponent(task.sharedBranchReport || task.template === 'it-opening-rounds' ? task.branch : task.assignee)}:${task.scheduledDate || task.due}`;
+// Dashboard totals and cards use the same active templates; historical/paused reports stay in task history.
+export const dashboardDailyTasks = (tasks, day, templateIds) => tasks.filter(task => isDailyTemplate(task)
+    && (!task.recurrence||task.recurrence==='daily') && (task.scheduledDate || task.due) === day && templateIds.includes(task.template));
+
+// Generate only today's work when opened; preserve all previous instances, drafts, photos, and review states.
+export function ensureDailyTasks(tasks, config, day) {
+    let changed = false;
+    // Remove only untouched automatic reports assigned to the wrong department by the old schedule.
+    const activeNames = new Set([...config.employees,...(config.teamLeaders||[]),...(config.roleHolders||[]),...(config.operationsManagers||[])].map(person => person.name));
+    const retained = tasks.filter(task => {
+        const wrongDepartment = (['it-opening-rounds', 'narrative-report'].includes(task.template) && task.department !== config.itDepartment && !(task.template === 'narrative-report' && task.assigneeRole)) || (task.template === 'daily-operations' && task.department !== (config.receptionDepartment || 'Reception'));
+        const untouched = task.recurrence === 'daily' && task.status === 'Not Started' && !task.submission && !task.rounds && !task.narrative && !task.operations && !task.customReport && !task.history?.length;
+        const definition = reportTemplates(config).find(report => report.id === task.template);
+        const modeChanged = task.template?.startsWith('daily-custom-') && definition && Boolean(task.sharedBranchReport) !== (definition.assignmentMode === 'shared-branch');
+        const removedEmployee = !task.sharedBranchReport && isDailyTemplate(task) && task.template !== 'it-opening-rounds' && !activeNames.has(task.assignee);
+        return !((wrongDepartment || removedEmployee || modeChanged) && untouched);
+    });
+    changed = retained.length !== tasks.length;
+    const result = retained.map(task => {
+        if (!isDailyTemplate(task)||['weekly','monthly'].includes(task.recurrence)) return task;
+        const retired = !task.sharedBranchReport && task.template !== 'it-opening-rounds' && !activeNames.has(task.assignee);
+        if (Boolean(task.retiredDailyAssignment) !== retired) { task = {...task, retiredDailyAssignment:retired}; changed=true; }
+        const key = dailyKey(task);
+        if (task.recurrence === 'daily' && task.dailyKey === key && task.scheduledDate) return task;
+        changed = true;
+        return { ...task, recurrence: 'daily', scheduledDate: task.scheduledDate || task.due, dailyKey: key };
+    });
+    const keys = new Set(result.filter(isDailyTemplate).map(task => task.dailyKey));
+    let id = Math.max(1000, ...result.map(task => Number(task.id) || 0));
+    for (const employee of config.employees) {
+        if (scheduledBranch(employee, day) === 'Off') continue;
+        const templates = reportTemplates(config).filter(report => report.enabled && report.department === employee.department).map(report => report.id);
+        for (const template of templates) {
+            // Use the dated assignment; a temporary branch never carries over to an unscheduled day.
+            const branch = scheduledBranch(employee, day);
+            const definition = reportTemplates(config).find(report => report.id === template);
+            const shared = definition.assignmentMode === 'shared-branch';
+            const task = { id: ++id, template, ...(template === 'it-opening-rounds' ? {sharedBranchReport:true} : {}), assignee: template === 'it-opening-rounds' ? 'IT team' : employee.name, branch, department: employee.department, due: day, scheduledDate: day, recurrence: 'daily', status: 'Not Started', kind: 'Daily task', title: template === 'it-opening-rounds' ? 'Opening Rounds' : template === 'daily-operations' ? 'Reception Report' : 'Narrative Report', priority: template === 'it-opening-rounds' ? config.priorities[0] : config.priorities[Math.min(1, config.priorities.length - 1)], description: template === 'it-opening-rounds' ? 'Complete the daily system checks before clinic operations begin.' : template === 'daily-operations' ? 'Record doctor loads, procedures, wellness visits, and confinement movements for the day.' : 'Summarize today’s work, accomplishments, issues, and follow-up actions.', submission: '', link: '', remarks: '' };
+
+            if (shared) { task.sharedBranchReport = true; task.assignee = employee.department + ' team'; }
+            task.title = definition.name;
+            task.description = definition.description;
+            task.reportDefinition = structuredClone(definition);
+            task.dailyKey = dailyKey(task);
+            if (!keys.has(task.dailyKey)) { result.push(task); keys.add(task.dailyKey); changed = true; }
+        }
+    }
+    const opening = reportTemplates(config).find(report => report.id === 'it-opening-rounds' && report.enabled);
+    if (opening) for (const branch of config.branches) {
+        const key = dailyKey({template:opening.id,branch,scheduledDate:day});
+        if (!keys.has(key)) { result.push({id:++id,template:opening.id,title:opening.name,description:opening.description,reportDefinition:structuredClone(opening),assignee:'IT team',sharedBranchReport:true,branch,department:config.itDepartment,due:day,scheduledDate:day,recurrence:'daily',dailyKey:key,status:'Not Started',kind:'Daily task',priority:config.priorities[0],submission:'',link:'',remarks:''}); keys.add(key); }
+    }
+    const shared = consolidateOpeningReports(result);
+    return ensureRecurringTasks(ensurePeriodicNarratives(ensureWeeklyTasks(JSON.stringify(shared) === JSON.stringify(tasks) ? tasks : shared, config, day),config,day),day);
+}
+
+export function formatNarrative(report,task={}) {
+ const frequency=task.recurrence==='weekly'?'Weekly':task.recurrence==='monthly'?'Monthly':'Daily';
+ return frequency+' Narrative Report\n'+(task.periodStart?task.periodStart+' to '+task.periodEnd:'Date: '+report.date)+'\nBranch: '+report.branch+'\nDepartment: '+report.department+'\n\nSUMMARY\n(Tasks Completed)\n'+(report.summary||'No completed tasks recorded.')+'\n\nISSUES / PROBLEMS\n'+(report.issues?.trim()||'None')+'\n\nSOLUTIONS\n'+(report.solutions?.trim()||'None')+'\n\nFOLLOW-UPS\n'+(report.followUps?.trim()||report.nextSteps?.trim()||'None');
+}
+export function validateNarrative(report, branches, scheduledDate) {
+    if (!branches.includes(report.branch)) return 'Choose an allowed work branch.';
+    if (report.date !== scheduledDate) return 'Use the scheduled date of this daily task.';
+    if (!report.summary?.trim()) return 'Add a summary of the day before submitting.';
+    return '';
+}
+
+// Build dashboard cards from permitted definitions plus visible report records.
+export function dashboardReportTypes(types, tasks, day) {
+    const result = new Map(types.map(type => [type[0], type]));
+    for (const task of tasks) {
+        if (!isDailyTemplate(task) || (task.recurrence && task.recurrence !== 'daily') || (task.scheduledDate || task.due) !== day || task.retiredDailyAssignment) continue;
+        if (!result.has(task.template)) result.set(task.template, [task.template, task.reportDefinition?.name || task.title, task.reportDefinition?.description || task.description || '', task.department]);
+    }
+    return [...result.values()];
+}
