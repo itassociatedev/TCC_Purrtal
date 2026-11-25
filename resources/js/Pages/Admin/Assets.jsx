@@ -1011,7 +1011,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
             <div className="py-6 sm:py-12">
                 <div className="max-w-[100rem] mx-auto sm:px-6 lg:px-8">
 
-                    <div className="relative z-30 bg-white rounded-xl shadow-sm border border-gray-200 mb-6 overflow-visible">
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 overflow-visible">
                         <div className="flex items-center gap-2 px-4 pt-3 border-b border-gray-200" role="tablist" aria-label="Asset views">
                             <button type="button" role="tab" aria-selected={activeTab === 'overview'} onClick={() => { setActiveTab('overview'); setCurrentPage(1); }} className={`px-4 py-2 rounded-t-lg text-xs font-black uppercase tracking-wider transition border-b-2 ${activeTab === 'overview' ? 'bg-indigo-50 text-indigo-700 border-indigo-600' : 'text-gray-500 border-transparent hover:bg-gray-50'}`}>Overview</button>
                             <button type="button" role="tab" aria-selected={activeTab === 'assetList'} onClick={() => { setActiveTab('assetList'); setCurrentPage(1); }} className={`px-4 py-2 rounded-t-lg text-xs font-black uppercase tracking-wider transition border-b-2 ${activeTab === 'assetList' ? 'bg-indigo-50 text-indigo-700 border-indigo-600' : 'text-gray-500 border-transparent hover:bg-gray-50'}`}>Asset List</button>
