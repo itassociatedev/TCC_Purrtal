@@ -38,3 +38,12 @@ it('makes tags safe to use as file names', function () {
         ->and(AssetTagGenerator::fileSafe('GH-00004/00022 CCTV'))->toBe('GH-00004-00022-CCTV')
         ->and(AssetTagGenerator::fileSafe('  ../x  '))->toBe('x');
 });
+
+it('expands a range tag into its individual tags and leaves normal tags alone', function () {
+    expect(AssetTagGenerator::expandRange('GH-00004-00006'))->toBe(['GH-00004', 'GH-00005', 'GH-00006'])
+        ->and(AssetTagGenerator::expandRange('GH-00206-208'))->toBe(['GH-00206', 'GH-00207', 'GH-00208'])
+        ->and(AssetTagGenerator::expandRange('GH-00212-14'))->toBe(['GH-00212', 'GH-00213', 'GH-00214'])
+        ->and(AssetTagGenerator::expandRange('GH-00456'))->toBe([])
+        ->and(AssetTagGenerator::expandRange('ALB-2022-000042'))->toBe([])
+        ->and(AssetTagGenerator::format('gh', 456))->toBe('GH-00456');
+});

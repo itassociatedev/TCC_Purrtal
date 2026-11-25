@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from '@inertiajs/react';
 import Modal from '@/Components/Modal';
 import PrimaryButton from '@/Components/PrimaryButton';
@@ -15,7 +15,7 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
         category: '',
         classification: '',
         department: '',
-        branch: '',
+        branch: 'Makati',
         area: '',
         assigned_personnel: '',
         purchase_date: '',
@@ -32,9 +32,25 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
         image: null,
     });
 
+    useEffect(() => {
+        if (!show) return undefined;
+        if (!form.data.branch) { form.setData('asset_tag', ''); return undefined; }
+        let cancelled = false;
+        fetch(route('admin.assets.next-tag', { branch: form.data.branch, count: Math.min(50, Math.max(1, parseInt(form.data.qty, 10) || 1)) }), { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+            .then(response => (response.ok ? response.json() : { tag: null }))
+            .then(result => {
+                if (cancelled) return;
+                const tags = result.tags || [];
+                form.setData('asset_tag', tags.length > 1 ? tags[0] + ' to ' + tags[tags.length - 1] : (tags[0] || ''));
+            })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, [show, form.data.branch, form.data.qty]);
+
     const handleSubmit = (e) => {
         e.preventDefault();
         setIsSubmitting(true);
+        form.transform(payload => ({ ...payload, asset_tag: '' }));
         form.post(route('admin.assets.store'), {
             preserveScroll: true,
             onSuccess: () => {
@@ -68,8 +84,8 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Asset Tag</label>
-                                <TextInput value={form.data.asset_tag} onChange={e => form.setData('asset_tag', e.target.value)} className="mt-1 w-full" placeholder="Leave blank to auto-generate (e.g., GH-00378)" />
-                                <p className="mt-1 text-xs text-gray-500">If blank, the next tag for the selected branch is assigned automatically.</p>
+                                <TextInput value={form.data.asset_tag} readOnly tabIndex={-1} className="mt-1 w-full font-mono bg-gray-100 text-gray-500 cursor-not-allowed" placeholder="Choose a branch to generate a tag" />
+                                <p className="mt-1 text-xs text-gray-500">Assigned automatically from the branch. A quantity of 2 or more creates that many separate assets, one tag each (up to 50).</p>
                             </div>
                         </div>
 
@@ -168,7 +184,7 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
                                     type="number"
                                     min="1"
                                     value={form.data.qty}
-                                    onChange={e => form.setData('qty', parseInt(e.target.value) || 1)}
+                                    onChange={e => form.setData('qty', Math.min(50, Math.max(1, parseInt(e.target.value) || 1)))}
                                     className="mt-1 w-full"
                                 />
                             </div>

@@ -38,8 +38,8 @@ class AssetTagGenerator
         return null;
     }
 
-    /** Next free tag for a branch code, counting saved assets and new assets still waiting for photo approval. */
-    public function next(string $code): string
+    /** Highest tag number in use for a branch code (saved assets and new assets still waiting for photo approval). */
+    public function highest(string $code): int
     {
         $tags = Asset::where('asset_tag', 'like', $code.'-%')->pluck('asset_tag')->all();
 
@@ -50,7 +50,53 @@ class AssetTagGenerator
             ->filter()
             ->all();
 
-        return self::nextFromTags($code, array_merge($tags, $pending));
+        $highest = 0;
+        foreach (array_merge($tags, $pending) as $tag) {
+            $highest = max($highest, self::highestNumber($code, (string) $tag));
+        }
+
+        return $highest;
+    }
+
+    /** Next free tag for a branch code, counting saved assets and new assets still waiting for photo approval. */
+    public function next(string $code): string
+    {
+        return self::format($code, $this->highest($code) + 1);
+    }
+
+    /** The next $count consecutive tags for a branch code (GH-00456, GH-00457, ...). */
+    public function nextMany(string $code, int $count): array
+    {
+        $highest = $this->highest($code);
+
+        return array_map(fn (int $i) => self::format($code, $highest + $i), range(1, max(1, $count)));
+    }
+
+    public static function format(string $code, int $number): string
+    {
+        return sprintf('%s-%05d', strtoupper($code), $number);
+    }
+
+    /**
+     * Individual tags for a range tag: GH-00004-00022 gives GH-00004 ... GH-00022 (abbreviated ends such as
+     * GH-00206-208 work too). Returns an empty array when the tag is not a range.
+     *
+     * @return array<int, string>
+     */
+    public static function expandRange(string $tag): array
+    {
+        if (! preg_match('/^([A-Za-z]+)-(\d+)-(\d+)$/', trim($tag), $match)) {
+            return [];
+        }
+        $end = self::highestNumber($match[1], trim($tag));
+        $start = (int) $match[2];
+        if ($end <= $start || $end - $start >= 500) {
+            return [];
+        }
+
+        $width = strlen($match[2]);
+
+        return array_map(fn (int $n) => strtoupper($match[1]).'-'.str_pad((string) $n, $width, '0', STR_PAD_LEFT), range($start, $end));
     }
 
     public static function nextFromTags(string $code, iterable $tags): string

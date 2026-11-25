@@ -359,6 +359,8 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
 
     Route::get('/assets', [\App\Http\Controllers\Admin\AssetController::class, 'index'])->name('.assets.index');
     Route::get('/asset-entry', [\App\Http\Controllers\Admin\AssetController::class, 'entry'])->name('.assets.entry');
+    Route::match(['get', 'post'], '/assets/export-excel', [\App\Http\Controllers\Admin\AssetController::class, 'exportExcel'])->name('.assets.export-excel');
+    Route::get('/assets/next-tag', [\App\Http\Controllers\Admin\AssetController::class, 'nextTag'])->name('.assets.next-tag');
     Route::post('/assets', [\App\Http\Controllers\Admin\AssetController::class, 'store'])->name('.assets.store');
     Route::put('/assets/{asset}', [\App\Http\Controllers\Admin\AssetController::class, 'update'])->name('.assets.update');
     Route::delete('/assets/{asset}', [\App\Http\Controllers\Admin\AssetController::class, 'destroy'])->name('.assets.destroy');
