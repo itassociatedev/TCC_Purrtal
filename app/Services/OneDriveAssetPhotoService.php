@@ -18,13 +18,11 @@ class OneDriveAssetPhotoService
         }
 
         $extension = strtolower(preg_replace('/[^a-z0-9]/i', '', $extension) ?: 'jpg');
-        // The final name is the asset tag (GH-00034.jpg). The upload first goes to a
-        // temporary versioned name so a replacement never overwrites the current approved
-        // image; call rename() with `final_filename` once the approval has committed and
-        // the previous image is removed.
-        $stem = AssetTagGenerator::fileSafe((string) $asset->asset_tag) ?: 'asset-'.$asset->id;
-        $finalFilename = $stem.'.'.$extension;
-        $filename = $stem.'.pending-'.$revision.'.'.$extension;
+        // Upload to a new, deterministic versioned name. The previous approved
+        // image stays intact until the database approval commits successfully.
+        $assetTag = preg_replace('/[^a-z0-9._-]+/i', '-', trim((string) $asset->asset_tag)) ?? '';
+        $assetTag = trim($assetTag, '.-_');
+        $filename = ($assetTag !== '' ? $assetTag : 'asset-'.$asset->id).'-'.$revision.'.'.$extension;
         $folder = trim((string) ($config['folder_path'] ?? ''), '/').'/'.trim((string) $branchFolder, '/');
         $path = collect(array_filter([$folder, $filename]))
             ->flatMap(fn (string $part) => explode('/', $part))
@@ -32,33 +30,16 @@ class OneDriveAssetPhotoService
             ->implode('/');
 
         $response = Http::withToken($this->token())
-            ->withHeaders(['Content-Type' => $mimeType])
-            ->put($this->driveRoot($config).'/root:/'.$path.':/content', $contents)
+            ->withBody($contents, $mimeType)
+            ->put($this->driveRoot($config).'/root:/'.$path.':/content')
             ->throw();
 
         return [
             'item_id' => $response->json('id'),
             'url' => $response->json('webUrl'),
             'filename' => $filename,
-            'final_filename' => $finalFilename,
             'branch_code' => $branchCode,
         ];
-    }
-
-    /** Give an uploaded item its final file name (the item id, which the database stores, does not change). */
-    public function rename(string $itemId, string $filename): void
-    {
-        $config = config('services.onedrive');
-        if ((blank($config['site_id'] ?? null) && blank($config['user_id'] ?? null)) || blank($itemId) || blank($filename)) {
-            return;
-        }
-
-        Http::withToken($this->token())
-            ->patch($this->driveRoot($config).'/items/'.rawurlencode($itemId), [
-                'name' => $filename,
-                '@microsoft.graph.conflictBehavior' => 'fail',
-            ])
-            ->throw();
     }
 
     public function download(string $itemId): array
