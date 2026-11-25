@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from '@inertiajs/react';
 import Modal from '@/Components/Modal';
 import PrimaryButton from '@/Components/PrimaryButton';
@@ -15,7 +15,7 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
         category: '',
         classification: '',
         department: '',
-        branch: '',
+        branch: 'Makati',
         area: '',
         assigned_personnel: '',
         purchase_date: '',
@@ -28,12 +28,29 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
         model_no: '',
         serial_no: '',
         color: '',
+        remarks: '',
         image: null,
     });
+
+    useEffect(() => {
+        if (!show) return undefined;
+        if (!form.data.branch) { form.setData('asset_tag', ''); return undefined; }
+        let cancelled = false;
+        fetch(route('admin.assets.next-tag', { branch: form.data.branch, count: Math.min(50, Math.max(1, parseInt(form.data.qty, 10) || 1)) }), { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+            .then(response => (response.ok ? response.json() : { tag: null }))
+            .then(result => {
+                if (cancelled) return;
+                const tags = result.tags || [];
+                form.setData('asset_tag', tags.length > 1 ? tags[0] + ' to ' + tags[tags.length - 1] : (tags[0] || ''));
+            })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, [show, form.data.branch, form.data.qty]);
 
     const handleSubmit = (e) => {
         e.preventDefault();
         setIsSubmitting(true);
+        form.transform(payload => ({ ...payload, asset_tag: '' }));
         form.post(route('admin.assets.store'), {
             preserveScroll: true,
             onSuccess: () => {
@@ -66,8 +83,9 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
                                 <TextInput value={form.data.name} onChange={e => form.setData('name', e.target.value)} className="mt-1 w-full" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Asset Tag *</label>
-                                <TextInput value={form.data.asset_tag} onChange={e => form.setData('asset_tag', e.target.value)} className="mt-1 w-full" placeholder="e.g., AST-12345" />
+                                <label className="block text-sm font-medium text-gray-700">Asset Tag</label>
+                                <TextInput value={form.data.asset_tag} readOnly tabIndex={-1} className="mt-1 w-full font-mono bg-gray-100 text-gray-500 cursor-not-allowed" placeholder="Choose a branch to generate a tag" />
+                                <p className="mt-1 text-xs text-gray-500">Assigned automatically from the branch. A quantity of 2 or more creates that many separate assets, one tag each (up to 50).</p>
                             </div>
                         </div>
 
@@ -89,7 +107,8 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Branch</label>
-                                <TextInput value={form.data.branch} onChange={e => form.setData('branch', e.target.value)} className="mt-1 w-full" />
+                                <TextInput value={form.data.branch} onChange={e => form.setData('branch', e.target.value)} className="mt-1 w-full" list="asset-branch-options" placeholder="Greenhills, Makati or Alabang" />
+                                <datalist id="asset-branch-options"><option value="Greenhills" /><option value="Makati" /><option value="Alabang" /></datalist>
                             </div>
                         </div>
 
@@ -165,7 +184,7 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
                                     type="number"
                                     min="1"
                                     value={form.data.qty}
-                                    onChange={e => form.setData('qty', parseInt(e.target.value) || 1)}
+                                    onChange={e => form.setData('qty', Math.min(50, Math.max(1, parseInt(e.target.value) || 1)))}
                                     className="mt-1 w-full"
                                 />
                             </div>
@@ -197,6 +216,11 @@ export default function AddAssetModal({ show, onClose, suppliers, departments, b
                                 <label className="block text-sm font-medium text-gray-700">Color</label>
                                 <TextInput value={form.data.color} onChange={e => form.setData('color', e.target.value)} className="mt-1 w-full" />
                             </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Remarks</label>
+                            <textarea rows={3} maxLength={1000} value={form.data.remarks} onChange={e => form.setData('remarks', e.target.value)} className="mt-1 w-full border-gray-300 rounded-md shadow-sm text-sm" placeholder="Optional notes about this asset" />
                         </div>
 
                         <div>

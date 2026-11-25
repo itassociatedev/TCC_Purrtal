@@ -35,7 +35,7 @@ class AssetImportBatchController extends Controller
                 $asset = $item->asset;
                 abort_if(!$asset, 422, "Reversal blocked because asset item {$item->id} no longer exists.");
 
-                if (hash('sha256', json_encode($asset->only(array_keys($asset->getAttributes())), JSON_UNESCAPED_UNICODE)) !== $item->after_hash) {
+                if (hash('sha256', json_encode($asset->getAttributes(), JSON_UNESCAPED_UNICODE)) !== $item->after_hash) {
                     abort(422, "Reversal blocked because asset {$asset->asset_tag} changed after this import.");
                 }
 

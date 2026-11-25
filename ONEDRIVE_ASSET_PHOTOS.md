@@ -4,7 +4,9 @@ Asset records submitted with a photo remain drafts until IT approves them. Repla
 
 After approval, the app uploads the image to the configured OneDrive branch folder. It stores the Graph drive-item ID and browser URL as metadata; the asset's image path points to an authenticated app endpoint that streams the image from OneDrive when the UI or export requests it. Approved image bytes are not kept on the web server. Pending images are kept only in Laravel's private storage at `storage/app/private/asset-photos/pending`.
 
-The filename is based on immutable asset and submission IDs (for example `asset-123-456.jpg`). Each approved replacement is uploaded as a new version; after the database update succeeds, the prior Graph item is removed. This prevents a rejected or failed replacement from overwriting the current approved file.
+The filename is the asset tag plus the submission ID (for example `GH-00034-456.jpg`; characters that are unsafe in file names become `-`, and `asset-<id>` is used if the asset has no tag). Each approved replacement is uploaded as a new version; after the database update succeeds, the prior Graph item is removed. This prevents a rejected or failed replacement from overwriting the current approved file. The database stores the Graph item ID, so editing an asset tag later does not break an existing photo.
+
+Asset tags: when Add Asset or an Excel/CSV import has no tag, the next number for the branch is assigned (for example `GH-00378`; `AssetTagGenerator`). If the branch cannot be matched in an import, the old random `AST-` placeholder is still used.
 
 ## Branch folder mapping
 

@@ -346,7 +346,7 @@ class AccountabilityPdfService
     }
 
     /** @return array{string, int, int} JPEG bytes, width and height */
-    private function logoJpeg(): array
+    public function logoJpeg(): array
     {
         $path = resource_path('js/Assets/tcc_logo.png');
         if (! extension_loaded('gd')) {

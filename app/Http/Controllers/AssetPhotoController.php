@@ -189,9 +189,12 @@ class AssetPhotoController extends Controller
                     if ($locked->submission_type === 'asset_update') {
                         $assetData = $locked->asset_data ?? [];
                         unset($assetData['image_path'], $assetData['photo_path'], $assetData['id'], $assetData['created_at'], $assetData['updated_at']);
+                        // An empty user_id only means "unassign" if the asset had a linked user before.
+                        // Imported assets keep the employee as text only and must stay assigned.
+                        $previousUserId = $asset->user_id;
                         $asset->fill($assetData);
                         $this->applyDerivedAssetFields($asset);
-                        if (array_key_exists('user_id', $assetData)) {
+                        if (array_key_exists('user_id', $assetData) && ($assetData['user_id'] || $previousUserId)) {
                             $assignedId = $assetData['user_id'] ? (int) $assetData['user_id'] : null;
                             $asset->accountability_type = 'personal';
                             $asset->user_id = $assignedId;

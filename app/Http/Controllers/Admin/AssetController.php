@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Asset;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Services\AssetTagGenerator;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Log;
@@ -23,6 +24,7 @@ use App\Models\AssetPhotoSubmission;
 use App\Support\AssetAccess;
 use Illuminate\Support\Str;
 use App\Services\AccountabilityPdfService;
+use Illuminate\Validation\ValidationException;
 
 class AssetController extends Controller
 {
@@ -106,13 +108,44 @@ class AssetController extends Controller
         ]);
     }
 
+    /** Excel masterlist (Asset Roll layout) for the assets the user is looking at; ids come from the overview table. */
+    public function exportExcel(Request $request)
+    {
+        $ids = collect($request->input('ids', []))->map(fn ($id) => (int) $id)->filter()->unique()->values();
+        abort_if($ids->isEmpty(), 422, 'No assets were selected for the export.');
+
+        $assets = Asset::with(['user', 'supplier', 'accountableUsers', 'photoSubmissions'])
+            ->whereIn('id', $ids)
+            ->get()
+            ->sort(fn ($a, $b) => strnatcasecmp((string) $a->asset_tag, (string) $b->asset_tag))
+            ->values();
+
+        try {
+            SystemLog::create(['user_id' => Auth::id(), 'action' => 'Export', 'module' => 'Asset Management Module', 'description' => 'Exported '.$assets->count().' asset(s) to the Excel masterlist.', 'ip_address' => $request->ip(), 'user_agent' => $request->userAgent()]);
+        } catch (\Throwable $e) {
+            Log::info('Asset Excel export by user '.Auth::id());
+        }
+
+        return app(\App\Services\AssetMasterlistWorkbook::class)->download($assets, 'asset-masterlist-'.now()->format('Y-m-d').'.xlsx');
+    }
+
+    /** Preview of the tag a new asset in this branch would get (used by the Add Asset form). */
+    public function nextTag(Request $request)
+    {
+        $code = AssetTagGenerator::codeForBranch((string) $request->query('branch'));
+        $count = min(50, max(1, (int) $request->query('count', 1)));
+        $tags = $code ? app(AssetTagGenerator::class)->nextMany($code, $count) : [];
+
+        return response()->json(['tag' => $tags[0] ?? null, 'tags' => $tags, 'code' => $code]);
+    }
+
     public function store(Request $request)
     {
         abort_unless(AssetAccess::canEnter($request->user()), 403);
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'asset_tag' => 'required|string|max:255|unique:assets',
+            'asset_tag' => 'nullable|string|max:255|unique:assets',
             'category' => 'nullable|string|max:255',
             'classification' => 'nullable|string|max:255',
             'department' => 'nullable|string|max:255',
@@ -126,47 +159,94 @@ class AssetController extends Controller
             'deviation' => 'nullable|string|max:255',
             'condition' => 'required|string|max:255',
             'unit_value' => 'nullable|numeric|min:0',
-            'qty' => 'nullable|integer|min:1',
+            'qty' => 'nullable|integer|min:1|max:50',
+            'units' => 'nullable|array|max:50',
+            'units.*.serial_no' => 'nullable|string|max:255',
+            'units.*.model_no' => 'nullable|string|max:255',
+            'units.*.color' => 'nullable|string|max:255',
+            'units.*.remarks' => 'nullable|string|max:1000',
+            'units.*.condition' => 'nullable|string|max:255',
+            'units.*.image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
             'asset_status' => 'required|string|max:255',
             'model_no' => 'nullable|string|max:255',
             'serial_no' => 'nullable|string|max:255',
             'color' => 'nullable|string|max:255',
+            'remarks' => 'nullable|string|max:1000',
             'user_id' => 'nullable|exists:users,id',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120', // 泙 Validates image
-        ]);
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120', //泙 Validates image
+        ], ['qty.max' => 'You can add at most 50 assets at a time.']);
 
-        $asset = new Asset();
-        $asset->fill(collect($validated)->except('image')->all());
+        // Quantity 1 creates one asset. Quantity 2 or more creates that many separate assets (qty 1 each) with
+        // consecutive tags (GH-00456, GH-00457). Name and the other shared details are copied; serial, model, color,
+        // remarks, condition and the photo can differ per unit (submitted as units[i]).
+        $count = max(1, (int) ($validated['qty'] ?? 1));
+        $units = $validated['units'] ?? [];
+        $shared = collect($validated)->except(['image', 'units', 'asset_tag', 'qty'])->all();
+        $typedTag = trim((string) ($validated['asset_tag'] ?? ''));
 
-        // 泙 HANDLE IMAGE SAVE
-        if (!empty($asset->purchase_date) && !empty($asset->warranty_expiration)) {
-            $pDate = strtotime($asset->purchase_date);
-            $wDate = strtotime($asset->warranty_expiration);
-            $diff = round(($wDate - $pDate) / 86400);
-            $asset->deviation = $diff . ' Days';
-        }
-
-        $asset->total_value = ($asset->unit_value * $asset->qty);
-
-        if ($request->hasFile('image')) {
-            $duplicatePendingTag = AssetPhotoSubmission::where('submission_type', 'new_asset')
-                ->where('status', 'pending')->get()
-                ->contains(fn ($submission) => strcasecmp((string) ($submission->asset_data['asset_tag'] ?? ''), (string) $asset->asset_tag) === 0);
-            if ($duplicatePendingTag) {
-                return back()->withErrors(['asset_tag' => 'This asset tag is already waiting for IT approval.']);
+        if ($count === 1 && $typedTag !== '') {
+            $tags = [$typedTag];
+        } else {
+            $branchCode = AssetTagGenerator::codeForBranch($validated['branch'] ?? null);
+            if (! $branchCode) {
+                return back()->withErrors(['asset_tag' => 'Choose Greenhills, Makati or Alabang as the branch so asset tags can be generated.']);
             }
-
-            $this->stageAssetPhoto($request, null, 'new_asset', $asset->getAttributes());
-
-            return back()->with('success', 'Asset details and photo were submitted for IT review. The asset will appear after approval.');
+            $generator = app(AssetTagGenerator::class);
+            $tags = $count === 1 ? [$generator->next($branchCode)] : $generator->nextMany($branchCode, $count);
         }
 
-        $asset->save();
+        $deviation = null;
+        if (! empty($shared['purchase_date']) && ! empty($shared['warranty_expiration'])) {
+            $deviation = round((strtotime($shared['warranty_expiration']) - strtotime($shared['purchase_date'])) / 86400).' Days';
+        }
 
-        return back()->with('success', 'Asset created successfully.');
+        $pendingTags = AssetPhotoSubmission::where('submission_type', 'new_asset')->where('status', 'pending')->get()
+            ->map(fn ($submission) => strtolower((string) ($submission->asset_data['asset_tag'] ?? '')))->all();
+
+        $saved = [];
+        $staged = [];
+        DB::transaction(function () use ($request, $count, $units, $shared, $tags, $deviation, $pendingTags, &$saved, &$staged) {
+            foreach ($tags as $i => $tag) {
+                $asset = new Asset();
+                $asset->fill($shared);
+                $asset->asset_tag = $tag;
+                foreach (['serial_no', 'model_no', 'color', 'remarks', 'condition'] as $field) {
+                    if (isset($units[$i]) && array_key_exists($field, $units[$i]) && ($field !== 'condition' || filled($units[$i][$field]))) {
+                        $asset->{$field} = $units[$i][$field];
+                    }
+                }
+                if ($deviation !== null) {
+                    $asset->deviation = $deviation;
+                }
+                // unit_value is optional in the form but the column is NOT NULL.
+                $asset->unit_value = $asset->unit_value ?? 0;
+                $asset->qty = 1;
+                $asset->total_value = $asset->unit_value;
+
+                $file = $count === 1 ? $request->file('image') : $request->file("units.$i.image");
+                if ($file) {
+                    if (in_array(strtolower($tag), $pendingTags, true)) {
+                        throw ValidationException::withMessages(['asset_tag' => "Asset tag {$tag} is already waiting for IT approval."]);
+                    }
+                    $this->stageAssetPhoto($request, null, 'new_asset', $asset->getAttributes(), $file);
+                    $staged[] = $tag;
+                } else {
+                    $asset->save();
+                    $saved[] = $tag;
+                }
+            }
+        });
+
+        $message = count($saved) === 1 && ! $staged
+            ? 'Asset created successfully with tag '.$saved[0].'.'
+            : ($saved ? count($saved).' asset(s) created: '.implode(', ', $saved).'. ' : '');
+        if ($staged) {
+            $message .= 'Submitted for IT review with photo: '.implode(', ', $staged).'. They will appear after approval.';
+        }
+
+        return back()->with('success', trim($message));
     }
-
-    public function update(Request $request, Asset $asset)
+public function update(Request $request, Asset $asset)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -190,6 +270,7 @@ class AssetController extends Controller
             'model_no' => 'nullable|string|max:255',
             'serial_no' => 'nullable|string|max:255',
             'color' => 'nullable|string|max:255',
+            'remarks' => 'nullable|string|max:1000',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
         ]);
 
@@ -209,9 +290,12 @@ class AssetController extends Controller
             return back()->with('success', 'Asset changes and photo were submitted for IT review. Current asset details remain unchanged until approval.');
         }
 
+        // Imported assets keep the employee only as text (assigned_personnel) with no linked user.
+        // Remember that, so saving an edit does not read the empty user_id as "unassign".
+        $previousUserId = $asset->user_id;
         $asset->fill($request->except('image'));
 
-        // 泙 HANDLE IMAGE UPDATE
+        //泙 HANDLE IMAGE UPDATE
         if (!empty($asset->purchase_date) && !empty($asset->warranty_expiration)) {
             $pDate = strtotime($asset->purchase_date);
             $wDate = strtotime($asset->warranty_expiration);
@@ -225,7 +309,7 @@ class AssetController extends Controller
         // Keep the legacy single-assignee transfer form in sync with the
         // many-to-many accountability records. Shared assignments use the
         // dedicated accountability editor.
-        if ($request->has('user_id')) {
+        if ($request->has('user_id') && ($request->input('user_id') || $previousUserId)) {
             $assignedId = $request->input('user_id') ? (int) $request->input('user_id') : null;
             $asset->accountability_type = 'personal';
             $asset->user_id = $assignedId;
@@ -412,7 +496,8 @@ class AssetController extends Controller
             // carry their own branch value (e.g. the Project Brave masterfile).
             foreach (array_slice($rows, 0, $headerRowIndex) as $metadataRow) {
                 foreach ($metadataRow as $column => $value) {
-                    if (self::normalizeImportHeader($value) === 'branch') {
+                    // The masterfile label is "Branch:" (with a colon) followed by the branch name in the next cell.
+                    if (rtrim(self::normalizeImportHeader($value), ' :') === 'branch') {
                         $workbookBranch = trim((string) ($metadataRow[$column + 1] ?? '')) ?: null;
                         break 2;
                     }
@@ -426,12 +511,19 @@ class AssetController extends Controller
             $fallbackBranch = trim((string) $request->input('fallback_branch')) ?: null;
 
             DB::transaction(function () use ($rows, $headers, $batch, $branchCodes, $workbookBranch, $fallbackBranch, &$created, &$updated) {
-                foreach ($rows as $values) {
-                    $row = array_combine($headers, array_pad(array_slice($values, 0, count($headers)), count($headers), null));
+                $assocRows = array_map(fn ($values) => array_combine($headers, array_pad(array_slice($values, 0, count($headers)), count($headers), null)), $rows);
+                foreach ($this->expandImportRows($assocRows, $workbookBranch ?: $fallbackBranch) as $row) {
                     $tag = trim((string) ($row['tag'] ?? $row['asset tag'] ?? $row['assettag'] ?? $row['asset_tag'] ?? ''));
                     $name = trim((string) ($row['name'] ?? $row['asset name'] ?? $row['asst name'] ?? ''));
                     if ($tag === '' && $name === '') continue;
-                    if ($tag === '') $tag = 'AST-' . strtoupper(substr(hash('sha256', $name . microtime(true)), 0, 8));
+                    if ($tag === '') {
+                        // No tag in the workbook: use the next branch number (GH-00378) when the branch
+                        // is known; otherwise keep the old random placeholder so the row still imports.
+                        $tagBranchCode = AssetTagGenerator::codeForBranch(trim((string) ($row['branch'] ?? '')) ?: $workbookBranch ?: $fallbackBranch);
+                        $tag = $tagBranchCode
+                            ? app(AssetTagGenerator::class)->next($tagBranchCode)
+                            : 'AST-' . strtoupper(substr(hash('sha256', $name . microtime(true)), 0, 8));
+                    }
 
                     $prefix = strtolower((string) preg_replace('/-.*/', '', $tag));
                     $branch = self::branchFromAssetTag($tag, $branchCodes)
@@ -460,7 +552,7 @@ class AssetController extends Controller
                     ]);
                     $asset->total_value = $asset->qty * $asset->unit_value;
                     $asset->save();
-                    $afterHash = hash('sha256', json_encode($asset->getAttributes(), JSON_UNESCAPED_UNICODE));
+                    $afterHash = hash('sha256', json_encode($asset->fresh()->getAttributes(), JSON_UNESCAPED_UNICODE));
                     $batch->items()->create(['asset_id' => $asset->id, 'created_by_batch' => $isNew, 'before_values' => $before, 'after_hash' => $afterHash]);
                     $isNew ? $created++ : $updated++;
                 }
@@ -472,6 +564,79 @@ class AssetController extends Controller
             Log::error('Asset workbook import failed', ['exception' => $e]);
             return back()->withErrors(['file' => 'Import failed: ' . $e->getMessage()]);
         }
+    }
+
+    /**
+     * One asset per unit, like the Add Asset form: a row with quantity 3 becomes three rows with quantity 1 and
+     * consecutive tags. Blank tags continue from the branch's highest number, a range tag (GH-00004-00022) becomes
+     * its individual tags, and a single tag with quantity N keeps that tag and takes the next N-1 numbers.
+     *
+     * @param  array<int, array<string, mixed>>  $rows  Rows keyed by lower-case header.
+     */
+    private function expandImportRows(array $rows, ?string $defaultBranch): array
+    {
+        $generator = app(AssetTagGenerator::class);
+        $cursor = [];
+        $reserve = function (string $code, int $count) use ($generator, &$cursor): array {
+            $cursor[$code] ??= $generator->highest($code);
+            $tags = [];
+            for ($i = 0; $i < $count; $i++) {
+                $tags[] = AssetTagGenerator::format($code, ++$cursor[$code]);
+            }
+
+            return $tags;
+        };
+        $tagKeys = ['tag', 'asset tag', 'assettag', 'asset_tag'];
+        $out = [];
+
+        foreach ($rows as $row) {
+            $tag = '';
+            foreach ($tagKeys as $key) {
+                $tag = trim((string) ($row[$key] ?? ''));
+                if ($tag !== '') break;
+            }
+            $qty = max(1, (int) preg_replace('/[^0-9]/', '', (string) ($row['qty'] ?? $row['quantity'] ?? '1')));
+            $range = $tag !== '' ? AssetTagGenerator::expandRange($tag) : [];
+            if ($qty === 1 && ! $range) {
+                $out[] = $row;
+                continue;
+            }
+
+            $code = null;
+            if ($tag !== '' && preg_match('/^(GH|MKT|ALB)\b/i', $tag, $m)) {
+                $code = strtoupper($m[1]);
+            }
+            $code ??= AssetTagGenerator::codeForBranch(trim((string) ($row['branch'] ?? '')) ?: $defaultBranch);
+
+            if ($range) {
+                $tags = $range;
+            } elseif ($tag === '') {
+                $tags = $code ? $reserve($code, $qty) : array_fill(0, $qty, '');
+            } else {
+                if ($code && preg_match('/^'.preg_quote($code, '/').'-(\d+)$/i', $tag, $m)) {
+                    // Keep counting from the given tag: GH-00500 with quantity 2 gives GH-00500 and GH-00501.
+                    $first = (int) $m[1];
+                    $tags = array_map(fn (int $n) => AssetTagGenerator::format($code, $n), range($first, $first + $qty - 1));
+                    $tags[0] = $tag;
+                    $cursor[$code] = max($cursor[$code] ?? $generator->highest($code), $first + $qty - 1);
+                } else {
+                    $tags = $code ? array_merge([$tag], $reserve($code, $qty - 1)) : [$tag];
+                }
+            }
+
+            foreach ($tags as $unitTag) {
+                $copy = $row;
+                foreach ($tagKeys as $key) {
+                    if (array_key_exists($key, $copy)) $copy[$key] = $unitTag;
+                }
+                foreach (['qty', 'quantity'] as $key) {
+                    if (array_key_exists($key, $copy)) $copy[$key] = 1;
+                }
+                $out[] = $copy;
+            }
+        }
+
+        return $out;
     }
 
     private static function normalizeImportHeader($header): string
@@ -565,6 +730,7 @@ class AssetController extends Controller
 
             $importedCount = 0;
 
+            $csvRows = [];
             foreach ($lines as $line) {
                 if (empty(trim($line))) continue;
 
@@ -576,7 +742,10 @@ class AssetController extends Controller
                     $data = array_slice($data, 0, count($headers));
                 }
 
-                $row = array_combine($headers, $data);
+                $csvRows[] = array_combine($headers, $data);
+            }
+
+            foreach ($this->expandImportRows($csvRows, null) as $row) {
 
                 $assetName = trim($row['asset name'] ?? $row['asst name'] ?? '');
                 $assetTag = trim($row['asset tag'] ?? $row['assettag'] ?? $row['asset_tag'] ?? '');
@@ -584,7 +753,10 @@ class AssetController extends Controller
                 if (empty($assetTag) && empty($assetName)) continue;
 
                 if (empty($assetTag)) {
-                    $assetTag = 'AST-' . strtoupper(substr(md5(uniqid()), 0, 6));
+                    $tagBranchCode = AssetTagGenerator::codeForBranch(trim($row['branch'] ?? ''));
+                    $assetTag = $tagBranchCode
+                        ? app(AssetTagGenerator::class)->next($tagBranchCode)
+                        : 'AST-' . strtoupper(substr(md5(uniqid()), 0, 6));
                 }
                 if (empty($assetName)) {
                     $assetName = 'Unnamed Asset';
@@ -798,11 +970,50 @@ class AssetController extends Controller
         $ids = collect($request->input('ids', []))->map(fn ($id) => (int) $id)->filter()->unique()->values();
         abort_if($ids->isEmpty(), 422, 'No assets were selected for the PDF.');
 
-        $assets = Asset::with(['user', 'supplier', 'accountableUsers', 'photoSubmissions'])->whereIn('id', $ids)->orderBy('asset_tag')->get();
+        $assets = Asset::with(['user.department', 'user.branches', 'accountableUsers.department', 'accountableUsers.branches'])
+            ->whereIn('id', $ids)
+            ->get()
+            ->sort(fn ($a, $b) => strnatcasecmp((string) $a->asset_tag, (string) $b->asset_tag))
+            ->values();
 
-        return response()->view('exports.asset-masterlist-pdf', [
-            'assets' => $assets,
-            'generatedAt' => now(),
+        // Group by accountable employee: asset_user pivot rows, plus assets.user_id when it has no pivot row.
+        $employees = [];
+        $unassigned = collect();
+        foreach ($assets as $asset) {
+            $people = $asset->accountableUsers->keyBy('id');
+            if ($asset->user && ! $people->has($asset->user->id)) {
+                $people->put($asset->user->id, $asset->user);
+            }
+            if ($people->isEmpty()) {
+                $unassigned->push($asset);
+
+                continue;
+            }
+            foreach ($people as $person) {
+                $type = $person->pivot?->accountability_type ?? $asset->accountability_type ?? 'personal';
+                $employees[$person->id] ??= ['user' => $person, 'personal' => collect(), 'shared' => collect(), 'lead' => []];
+                $employees[$person->id][$type === 'shared' ? 'shared' : 'personal']->push($asset);
+                if ($person->pivot?->is_team_leader) {
+                    $employees[$person->id]['lead'][$asset->id] = true;
+                }
+            }
+        }
+
+        $forms = collect($employees)
+            ->map(function ($form) {
+                // Shared assets this employee leads come first; tag order is otherwise kept.
+                $form['shared'] = $form['shared']->sortBy(fn ($asset) => isset($form['lead'][$asset->id]) ? 0 : 1)->values();
+
+                return $form;
+            })
+            ->sortBy(fn ($form) => mb_strtolower((string) $form['user']->name))
+            ->values();
+
+        $pdf = app(\App\Services\AssetAccountabilityFormPdfService::class)->render($forms, $unassigned);
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="asset-accountability-forms-'.now()->format('Ymd').'.pdf"',
         ]);
     }
 
@@ -924,9 +1135,9 @@ class AssetController extends Controller
         return back()->with('success', 'Import batch deleted.');
     }
 
-    private function stageAssetPhoto(Request $request, ?int $assetId, string $type, array $assetData): void
+    private function stageAssetPhoto(Request $request, ?int $assetId, string $type, array $assetData, ?\Illuminate\Http\UploadedFile $file = null): void
     {
-        $file = $request->file('image');
+        $file ??= $request->file('image');
         $contents = $this->compressedJpeg($file);
         $image = @getimagesizefromstring($contents);
         $extensions = [IMAGETYPE_JPEG => 'jpg', IMAGETYPE_PNG => 'png', IMAGETYPE_WEBP => 'webp'];

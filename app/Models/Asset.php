@@ -32,6 +32,7 @@ class Asset extends Model
         'model_no',
         'serial_no',
         'color',
+        'remarks',
         'photo_path',
         'image_path',
         'accountability_form',
