@@ -30,7 +30,7 @@ const leaderPriority = (user) => {
     return 3;
 };
 
-export default function Assets({ auth, assets, suppliers, branches, users, departments, leaderUserIds = [], rejectedPhotoSubmissions = [], canReviewPhotos = false }) {
+export default function Assets({ auth, assets, suppliers, branches, users, departments, leaderUserIds = [] }) {
     const assetLinks = typeof getAssetLinks === 'function' ? getAssetLinks(auth) : [];
     const { system } = usePage().props;
 
@@ -52,7 +52,6 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     const safeUsers = getArray(users);
     const safeSuppliers = getArray(suppliers);
     const safeDepartments = getArray(departments);
-    const safeRejectedSubmissions = getArray(rejectedPhotoSubmissions);
 
     let safeBranches = getArray(branches);
     if (safeBranches.length === 0) safeBranches = getArray(system?.branches);
@@ -91,9 +90,6 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     // CUSTOM SYSTEM ALERT MODAL STATE
     const [alertDialog, setAlertDialog] = useState({ isOpen: false, title: '', message: '', type: 'success' });
     const closeAlert = () => setAlertDialog(prev => ({ ...prev, isOpen: false }));
-
-    // PHOTO DECLINED HISTORY MODAL STATE
-    const [isPhotoHistoryModalOpen, setIsPhotoHistoryModalOpen] = useState(false);
 
     const safeAssets = isSuperAdmin
         ? rawAssets
@@ -179,16 +175,20 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     const classifications = ['Capex', 'Non-Capex', 'Consumable'];
     const conditions = ['Good', 'Broken', 'For Repair', 'Defective', 'For checking', 'Missing'];
 
-    const [search, setSearch] = useState('');
-    const [filterCategory, setFilterCategory] = useState('');
-    const [filterDept, setFilterDept] = useState('');
-    const [filterBranch, setFilterBranch] = useState(''); 
-    const [filterCondition, setFilterCondition] = useState(''); 
-    const [filterWarranty, setFilterWarranty] = useState(''); 
-    const [filterPersonnel, setFilterPersonnel] = useState('');
-    const [dateRangeType, setDateRangeType] = useState('All Time');
-    const [customStartDate, setCustomStartDate] = useState('');
-    const [customEndDate, setCustomEndDate] = useState('');
+    const createFilterState = () => ({
+        search: '', filterCategory: '', filterDept: '', filterBranch: '', filterCondition: '',
+        filterWarranty: '', filterPersonnel: '', dateRangeType: 'All Time', customStartDate: '', customEndDate: '',
+    });
+    const [activeTab, setActiveTab] = useState('overview');
+    const [filters, setFilters] = useState(createFilterState);
+    const activeFilters = filters;
+    const updateActiveFilter = (key, value) => {
+        setFilters(previous => ({ ...previous, [key]: value }));
+    };
+    const {
+        search, filterCategory, filterDept, filterBranch, filterCondition, filterWarranty,
+        filterPersonnel, dateRangeType, customStartDate, customEndDate,
+    } = activeFilters;
     
     const [selectedAssets, setSelectedAssets] = useState([]);
     const [showOnlySelected, setShowOnlySelected] = useState(false);
@@ -425,6 +425,46 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         return true;
     };
 
+    const matchesAssetFilters = (asset, filters) => {
+        if (!asset) return false;
+
+        const searchTerm = getSafeStr(filters.search);
+        const matchesSearch = !searchTerm || [
+            asset?.name,
+            asset?.asset_tag,
+            asset?.serial_no,
+            asset?.model_no,
+            asset?.user?.name || asset?.assigned_personnel,
+        ].some(value => getSafeStr(value).includes(searchTerm));
+
+        const selectedBranch = getSafeStr(filters.filterBranch);
+        const assetBranch = getSafeStr(getBranchValue(asset?.branch));
+        const matchesBranch = !selectedBranch
+            || (selectedBranch === 'unassigned' ? !assetBranch : assetBranch === selectedBranch);
+
+        const matchesCategory = !filters.filterCategory
+            || getSafeStr(asset?.category) === getSafeStr(filters.filterCategory);
+        const matchesDept = !filters.filterDept
+            || getSafeStr(asset?.department) === getSafeStr(filters.filterDept);
+        const matchesCondition = !filters.filterCondition
+            || getSafeStr(asset?.condition) === getSafeStr(filters.filterCondition);
+        const matchesPersonnel = !filters.filterPersonnel
+            || (filters.filterPersonnel === '__unassigned__'
+                ? !getSafeStr(asset?.user?.name || asset?.assigned_personnel)
+                : getSafeStr(asset?.user?.name || asset?.assigned_personnel) === getSafeStr(filters.filterPersonnel));
+        const matchesDate = isDateInRange(asset, filters.dateRangeType, filters.customStartDate, filters.customEndDate);
+
+        let matchesWarranty = true;
+        if (filters.filterWarranty === 'Valid') {
+            matchesWarranty = Boolean(asset?.warranty_expiration) && !isWarrantyExpired(asset.warranty_expiration);
+        } else if (filters.filterWarranty === 'Expired') {
+            matchesWarranty = isWarrantyExpired(asset.warranty_expiration);
+        }
+
+        return matchesSearch && matchesBranch && matchesCategory && matchesDept
+            && matchesCondition && matchesPersonnel && matchesDate && matchesWarranty;
+    };
+
     const stats = useMemo(() => {
         let totalItems = 0; let totalValue = 0; let needsMaintenance = 0; let totalCurrentValue = 0; let totalAccumulatedDepreciation = 0;
         const branchBreakdown = {};
@@ -439,23 +479,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         safeAssets.forEach(asset => {
             if (!asset) return; 
 
-            const searchTerm = getSafeStr(search);
-            const matchesSearch = [asset?.name, asset?.asset_tag, asset?.serial_no, asset?.model_no, asset?.user?.name || asset?.assigned_personnel]
-                .some(value => getSafeStr(value).includes(searchTerm));
-            const matchesBranch = filterBranch ? (filterBranch === 'Unassigned' ? !getBranchValue(asset?.branch) : getBranchValue(asset?.branch) === filterBranch) : true;
-            const matchesCategory = filterCategory ? asset?.category === filterCategory : true;
-            const matchesDept = filterDept ? asset?.department === filterDept : true;
-            const matchesCondition = filterCondition ? asset?.condition === filterCondition : true;
-            const matchesDate = isDateInRange(asset, dateRangeType, customStartDate, customEndDate);
-            
-            let matchesWarranty = true;
-            if (filterWarranty === 'Valid') { matchesWarranty = asset.warranty_expiration && !isWarrantyExpired(asset.warranty_expiration); } 
-            else if (filterWarranty === 'Expired') { matchesWarranty = isWarrantyExpired(asset.warranty_expiration); }
-
-            const safeAssetPersonnel = getSafeStr(asset?.user?.name || asset?.assigned_personnel);
-            const matchesPersonnel = filterPersonnel ? (filterPersonnel === '__unassigned__' ? !safeAssetPersonnel : safeAssetPersonnel === getSafeStr(filterPersonnel)) : true;
-
-            if (!(matchesSearch && matchesBranch && matchesCategory && matchesDept && matchesDate && matchesCondition && matchesWarranty && matchesPersonnel)) return;
+            if (!matchesAssetFilters(asset, activeFilters)) return;
 
             const qty = Number(asset?.qty || 1);
             let val = 0;
@@ -488,39 +512,11 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
         const assignedCount = uniquePersonnel.size;
 
         return { totalItems, totalValue, totalCurrentValue, totalAccumulatedDepreciation, assignedCount, needsMaintenance, branchBreakdown, conditionBreakdown };
-    }, [safeAssets, safeBranches, search, filterBranch, filterCategory, filterDept, filterWarranty, dateRangeType, customStartDate, customEndDate, filterCondition, filterPersonnel]);
+    }, [safeAssets, safeBranches, activeFilters]);
 
     const filteredAssets = useMemo(() => {
-        return safeAssets.filter(asset => {
-            if (!asset) return false; 
-            
-            const searchTerm = getSafeStr(search);
-            const safeName = getSafeStr(asset?.name);
-            const safeTag = getSafeStr(asset?.asset_tag);
-            const safeSerial = getSafeStr(asset?.serial_no);
-            const safeModel = getSafeStr(asset?.model_no);
-            const safePersonnel = getSafeStr(asset?.user?.name || asset?.assigned_personnel);
-
-            const matchesSearch = safeName.includes(searchTerm) || 
-                                  safeTag.includes(searchTerm) || 
-                                  safeSerial.includes(searchTerm) || 
-                                  safeModel.includes(searchTerm) || 
-                                  safePersonnel.includes(searchTerm);
-                                  
-            const matchesCategory = filterCategory ? asset?.category === filterCategory : true;
-            const matchesDept = filterDept ? asset?.department === filterDept : true;
-            const matchesBranch = filterBranch ? (filterBranch === 'Unassigned' ? !getBranchValue(asset?.branch) : getBranchValue(asset?.branch) === filterBranch) : true;
-            const matchesCondition = filterCondition ? asset?.condition === filterCondition : true;
-            const matchesDate = isDateInRange(asset, dateRangeType, customStartDate, customEndDate);
-            const matchesPersonnel = filterPersonnel ? (filterPersonnel === '__unassigned__' ? !safePersonnel : safePersonnel === getSafeStr(filterPersonnel)) : true;
-            
-            let matchesWarranty = true;
-            if (filterWarranty === 'Valid') { matchesWarranty = asset.warranty_expiration && !isWarrantyExpired(asset.warranty_expiration); } 
-            else if (filterWarranty === 'Expired') { matchesWarranty = isWarrantyExpired(asset.warranty_expiration); }
-
-            return matchesSearch && matchesCategory && matchesDept && matchesBranch && matchesDate && matchesCondition && matchesWarranty && matchesPersonnel;
-        });
-    }, [safeAssets, search, filterCategory, filterDept, filterBranch, filterWarranty, dateRangeType, customStartDate, customEndDate, filterCondition, filterPersonnel]);
+        return safeAssets.filter(asset => matchesAssetFilters(asset, activeFilters));
+    }, [safeAssets, activeFilters]);
 
     const displayedAssets = useMemo(() => {
         let processed = [...filteredAssets];
@@ -601,11 +597,91 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
     };
 
     const clearAllFilters = () => {
-        setSearch(''); setFilterCategory(''); setFilterDept(''); setFilterBranch('');
-        setFilterCondition(''); setFilterWarranty(''); setFilterPersonnel('');
-        setDateRangeType('All Time'); setCustomStartDate(''); setCustomEndDate('');
+        setFilters(createFilterState());
         setCurrentPage(1);
     };
+
+    const renderColumnSelector = () => (
+        <div ref={dropdownRef} className="relative">
+            <SecondaryButton onClick={openColumnDropdown} className="!border-gray-300 text-gray-700 bg-white hover:bg-gray-50 shadow-sm py-2 justify-center gap-2 whitespace-nowrap h-full">
+                <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>
+                Columns
+            </SecondaryButton>
+            {showColumnDropdown && (
+                <div onMouseDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()} className="absolute left-0 mt-2 w-64 bg-white border border-gray-200 rounded-md shadow-xl z-50 p-2 max-h-[32rem] flex flex-col">
+                    <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 px-2 pb-1 border-b flex justify-between items-center">
+                        <span>Display Columns</span>
+                        <button type="button" onClick={toggleAllColumns} className={`text-[10px] uppercase tracking-wider font-bold ${allColumnsSelected ? 'text-gray-500 hover:text-gray-700' : 'text-indigo-600 hover:text-indigo-800'}`}>
+                            {allColumnsSelected ? 'Deselect All' : 'Select All'}
+                        </button>
+                    </div>
+                    <div className="overflow-y-auto flex-1">
+                        {Object.keys(tempVisibleColumns).map(col => (
+                            <label key={col} className="flex items-center px-2 py-1.5 hover:bg-indigo-50 rounded cursor-pointer text-sm text-gray-700 font-medium transition-colors">
+                                <input type="checkbox" className="rounded border-gray-300 text-indigo-600 shadow-sm mr-3 focus:ring-indigo-500 h-4 w-4" checked={Boolean(tempVisibleColumns[col])} onChange={e => setTempVisibleColumns(prev => ({ ...prev, [col]: e.target.checked }))} />
+                                {columnLabels[col]}
+                            </label>
+                        ))}
+                    </div>
+                    <div className="border-t border-gray-200 pt-2 mt-2 px-2">
+                        <PrimaryButton type="button" onClick={applyColumnFilters} className="w-full justify-center !py-1.5 text-xs font-black uppercase tracking-wider">Confirm Filter</PrimaryButton>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+
+    const renderFilterPanel = () => (
+        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 items-end">
+            <div className="w-full">
+                <InputLabel value="Date Range" className="font-black tracking-tighter text-xs" />
+                <select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={dateRangeType} onChange={e => { updateActiveFilter('dateRangeType', e.target.value); setCurrentPage(1); if (e.target.value !== 'Custom Range') { updateActiveFilter('customStartDate', ''); updateActiveFilter('customEndDate', ''); } }}>
+                    <option value="All Time">All Time</option><option value="Today">Today</option><option value="This Week">This Week</option><option value="This Month">This Month</option><option value="This Year">This Year</option><option value="Custom Range">Custom Range</option>
+                </select>
+            </div>
+            {dateRangeType === 'Custom Range' && (
+                <div className="col-span-1 sm:col-span-2 flex items-end gap-2">
+                    <div className="min-w-0 flex-1"><InputLabel value="From" className="font-black tracking-tighter text-xs" /><input type="date" className="mt-1 block w-full min-w-0 border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={customStartDate} onChange={e => { updateActiveFilter('customStartDate', e.target.value); setCurrentPage(1); }} /></div>
+                    <div className="min-w-0 flex-1"><InputLabel value="To" className="font-black tracking-tighter text-xs" /><input type="date" className="mt-1 block w-full min-w-0 border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={customEndDate} onChange={e => { updateActiveFilter('customEndDate', e.target.value); setCurrentPage(1); }} /></div>
+                </div>
+            )}
+            <div className="w-full">
+                <InputLabel value="Assigned To" className="font-black tracking-tighter text-xs" />
+                <select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterPersonnel} onChange={e => { updateActiveFilter('filterPersonnel', e.target.value); setCurrentPage(1); }}>
+                    <option value="">All Personnel</option>
+                    <option value="__unassigned__">Unassigned</option>
+                    {allPersonnel.map((p, idx) => <option key={idx} value={p}>{p}</option>)}
+                </select>
+            </div>
+            <div className="w-full"><InputLabel value="Condition" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterCondition} onChange={e => { updateActiveFilter('filterCondition', e.target.value); setCurrentPage(1); }}><option value="">All</option>{conditions.map(condition => <option key={condition} value={condition}>{condition}</option>)}</select></div>
+            <div className="w-full"><InputLabel value="Branch" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterBranch} onChange={e => { updateActiveFilter('filterBranch', e.target.value); setCurrentPage(1); }}><option value="">All Branches</option>{branchOptions.map((branch, idx) => <option key={idx} value={branch}>{branch}</option>)}</select></div>
+            <div className="w-full"><InputLabel value="Category" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterCategory} onChange={e => { updateActiveFilter('filterCategory', e.target.value); setCurrentPage(1); }}><option value="">All Categories</option>{allCategories.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+            {isSuperAdmin && (
+                <div className="w-full">
+                    <InputLabel value="Department" className="font-black tracking-tighter text-xs" />
+                    <select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterDept} onChange={e => { updateActiveFilter('filterDept', e.target.value); setCurrentPage(1); }}>
+                        <option value="">All Depts</option>
+                        {allDepartments.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                </div>
+            )}
+            <button type="button" onClick={clearAllFilters} title="Remove All Filters" className="w-full min-w-0 truncate text-xs font-black uppercase tracking-wider text-gray-600 hover:text-indigo-800 bg-white px-4 py-2 rounded shadow-sm border border-gray-300">Remove All Filters</button>
+            </div>
+            {activeTab === 'assetList' && (
+                <div className="flex flex-wrap gap-4 items-end mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex-1 min-w-[240px]"><InputLabel value="Search Assets" className="font-black tracking-tighter text-xs" /><TextInput className="w-full mt-1 text-xs font-bold" placeholder="Search by name, tag, serial, model, or personnel..." value={search} onChange={e => { updateActiveFilter('search', e.target.value); setCurrentPage(1); }} /></div>
+                    <div className="w-36">
+                        <InputLabel value="Warranty" className="font-black tracking-tighter text-xs" />
+                        <select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterWarranty} onChange={e => { updateActiveFilter('filterWarranty', e.target.value); setCurrentPage(1); }}>
+                            <option value="">All</option><option value="Valid">Valid Warranty</option><option value="Expired">Expired</option>
+                        </select>
+                    </div>
+                    {renderColumnSelector()}
+                </div>
+            )}
+        </div>
+    );
 
     const openAddModal = () => { setIsEditMode(false); reset(); setImagePreview(null); clearErrors(); setIsModalOpen(true); };
     const closeModal = () => { setIsModalOpen(false); setImagePreview(null); reset(); };
@@ -906,59 +982,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                     </h2>
                     
                     <div className="flex flex-col lg:flex-row items-center gap-3 w-full xl:w-auto">
-                        <div className="flex items-center bg-white border border-gray-300 rounded-md shadow-sm px-3 py-1.5 w-full lg:w-auto">
-                            <svg className="w-4 h-4 text-indigo-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                            <select className="border-none p-0 text-sm font-bold text-gray-700 focus:ring-0 bg-transparent pr-8 cursor-pointer" value={dateRangeType} onChange={e => { setDateRangeType(e.target.value); if (e.target.value !== 'Custom Range') { setCustomStartDate(''); setCustomEndDate(''); }}}>
-                                <option value="All Time">All Time</option><option value="Today">Today</option><option value="This Week">This Week</option><option value="This Month">This Month</option><option value="This Year">This Year</option><option value="Custom Range">Custom Range</option>
-                            </select>
-                        </div>
-                        {dateRangeType === 'Custom Range' && (
-                            <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-md shadow-sm px-2 py-1.5 w-full lg:w-auto animate-fade-in-down">
-                                <input type="date" className="border-none p-0 text-sm font-bold text-gray-700 focus:ring-0 bg-transparent w-32" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} />
-                                <span className="text-gray-300 font-black">-</span>
-                                <input type="date" className="border-none p-0 text-sm font-bold text-gray-700 focus:ring-0 bg-transparent w-32" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} />
-                            </div>
-                        )}
-
                         <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto mt-2 sm:mt-0 relative">
-                            <div ref={dropdownRef} className="relative">
-                                <SecondaryButton onClick={openColumnDropdown} className="!border-gray-300 text-gray-700 bg-white hover:bg-gray-50 shadow-sm py-2 justify-center gap-2 whitespace-nowrap h-full">
-                                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" /></svg>
-                                    Columns
-                                </SecondaryButton>
-                                
-                                {showColumnDropdown && (
-                                    <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-md shadow-xl z-50 p-2 max-h-[32rem] flex flex-col">
-                                        <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 px-2 pb-1 border-b flex justify-between items-center">
-                                            <span>Display Columns</span>
-                                            <button 
-                                                type="button" 
-                                                onClick={toggleAllColumns} 
-                                                className={`text-[10px] uppercase tracking-wider font-bold ${allColumnsSelected ? 'text-gray-500 hover:text-gray-700' : 'text-indigo-600 hover:text-indigo-800'}`}
-                                            >
-                                                {allColumnsSelected ? 'Deselect All' : 'Select All'}
-                                            </button>
-                                        </div>
-                                        <div className="overflow-y-auto flex-1">
-                                            {Object.keys(tempVisibleColumns).map(col => (
-                                                <label key={col} className="flex items-center px-2 py-1.5 hover:bg-indigo-50 rounded cursor-pointer text-sm text-gray-700 font-medium transition-colors">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        className="rounded border-gray-300 text-indigo-600 shadow-sm mr-3 focus:ring-indigo-500 h-4 w-4" 
-                                                        checked={tempVisibleColumns[col]} 
-                                                        onChange={() => setTempVisibleColumns(prev => ({ ...prev, [col]: !prev[col] }))} 
-                                                    />
-                                                    {columnLabels[col]}
-                                                </label>
-                                            ))}
-                                        </div>
-                                        <div className="border-t border-gray-200 pt-2 mt-2 px-2">
-                                            <PrimaryButton type="button" onClick={applyColumnFilters} className="w-full justify-center !py-1.5 text-xs font-black uppercase tracking-wider">Confirm Filter</PrimaryButton>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
                             {canManageAssets && (
                                 <>
                                     <a href={route('admin.assets.template')} download="Asset_Template.xlsx" className="inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-md font-bold text-[10px] text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none transition ease-in-out duration-150 justify-center gap-2 whitespace-nowrap">
@@ -974,18 +998,6 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                                     </button>
                                 </>
                             )}
-                            {(canManageAssets || safeRejectedSubmissions.length > 0) && (
-                                <>
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsPhotoHistoryModalOpen(true)}
-                                            className="inline-flex items-center px-4 py-2 bg-white border border-red-300 rounded-md font-bold text-[10px] text-red-700 uppercase tracking-widest shadow-sm hover:bg-red-50 focus:outline-none transition ease-in-out duration-150 justify-center gap-2 whitespace-nowrap"
-                                        >
-                                            <svg className="w-4 h-4 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-                                            Photo History ({safeRejectedSubmissions.length})
-                                        </button>
-                                </>
-                            )}
                             <SecondaryButton onClick={handlePdfOutput} className="!border-gray-300 text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 shadow-sm py-2 justify-center gap-2 whitespace-nowrap">
                                 <svg className="w-4 h-4 text-indigo-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
                                 Asset PDF
@@ -999,40 +1011,52 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
             <div className="py-6 sm:py-12">
                 <div className="max-w-[100rem] mx-auto sm:px-6 lg:px-8">
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-6">
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-center gap-4">
-                            <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg></div>
-                            <div><p className="text-[11px] font-black text-gray-500 uppercase tracking-tighter">Total Assets</p><p className="text-2xl font-black text-gray-900">{stats.totalItems}</p></div>
+                    <div className="relative z-30 bg-white rounded-xl shadow-sm border border-gray-200 mb-6 overflow-visible">
+                        <div className="flex items-center gap-2 px-4 pt-3 border-b border-gray-200" role="tablist" aria-label="Asset views">
+                            <button type="button" role="tab" aria-selected={activeTab === 'overview'} onClick={() => { setActiveTab('overview'); setCurrentPage(1); }} className={`px-4 py-2 rounded-t-lg text-xs font-black uppercase tracking-wider transition border-b-2 ${activeTab === 'overview' ? 'bg-indigo-50 text-indigo-700 border-indigo-600' : 'text-gray-500 border-transparent hover:bg-gray-50'}`}>Overview</button>
+                            <button type="button" role="tab" aria-selected={activeTab === 'assetList'} onClick={() => { setActiveTab('assetList'); setCurrentPage(1); }} className={`px-4 py-2 rounded-t-lg text-xs font-black uppercase tracking-wider transition border-b-2 ${activeTab === 'assetList' ? 'bg-indigo-50 text-indigo-700 border-indigo-600' : 'text-gray-500 border-transparent hover:bg-gray-50'}`}>Asset List</button>
                         </div>
-                        <div className="bg-white rounded-xl shadow-sm border border-emerald-50 p-6 flex items-center gap-4">
+                        <div className="p-4">
+                            {activeTab === 'overview' && renderFilterPanel()}
+                            {activeTab === 'assetList' && renderFilterPanel()}
+                        </div>
+                    </div>
+
+                    {activeTab === 'overview' && <>
+                    <div className="grid gap-6 mb-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))' }}>
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-wrap items-center gap-4 min-w-0">
+                            <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg></div>
+                            <div className="min-w-0"><p className="text-[11px] font-black text-gray-500 uppercase tracking-tighter break-words">Total Assets</p><p className="text-2xl font-black text-gray-900 break-words">{stats.totalItems}</p></div>
+                        </div>
+                        <div className="bg-white rounded-xl shadow-sm border border-emerald-50 p-6 flex flex-wrap items-center gap-4 min-w-0">
                             <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
                             <div><p className="text-[11px] font-black text-gray-500 uppercase tracking-tighter">Original Value</p><p className="text-xl font-black text-gray-900">₱ {stats.totalValue.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</p></div>
                         </div>
 
-                        <div className="bg-white rounded-xl shadow-sm border border-red-100 p-6 flex items-center gap-4 relative overflow-hidden">
+                        <div className="bg-white rounded-xl shadow-sm border border-red-100 p-6 flex flex-wrap items-center gap-4 relative overflow-hidden min-w-0">
                             <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-red-50 flex items-center justify-center text-red-600">
                                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" /></svg>
                             </div>
-                            <div className="z-10">
+                            <div className="z-10 min-w-0">
                                 <p className="text-[11px] font-black text-gray-500 uppercase tracking-tighter">Acc. Depreciation</p>
                                 <p className="text-xl font-black text-gray-900">₱ {stats.totalAccumulatedDepreciation.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</p>
                             </div>
                         </div>
                         
-                        <div className="bg-white rounded-xl shadow-sm border border-emerald-300 p-6 flex items-center gap-4 relative overflow-hidden">
+                        <div className="bg-white rounded-xl shadow-sm border border-emerald-300 p-6 flex flex-wrap items-center gap-4 relative overflow-hidden min-w-0">
                             <div className="absolute -right-4 -top-4 w-16 h-16 bg-emerald-50 rounded-full opacity-50"></div>
                             <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg></div>
                             <div className="z-10"><p className="text-[11px] font-black text-emerald-600 uppercase tracking-tighter">Current Book Value</p><p className="text-xl font-black text-gray-900">₱ {stats.totalCurrentValue.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</p></div>
                         </div>
 
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-center gap-4">
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-wrap items-center gap-4 min-w-0">
                             <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.856-1.487M15 10a3 3 0 11-6 0 3 3 0 016 0zM16 16a5 5 0 10-10 0" /></svg></div>
-                            <div><p className="text-[11px] font-black text-gray-500 uppercase tracking-tighter">Assigned Personnel</p><p className="text-2xl font-black text-gray-900">{stats.assignedCount}</p></div>
+                            <div className="min-w-0"><p className="text-[11px] font-black text-gray-500 uppercase tracking-tighter break-words">Assigned Personnel</p><p className="text-2xl font-black text-gray-900 break-words">{stats.assignedCount}</p></div>
                         </div>
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col justify-center relative">
-                            <div className="flex items-center gap-4 mb-3">
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex flex-col justify-center relative min-w-0">
+                            <div className="flex flex-wrap items-center gap-4 mb-3">
                                 <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-red-50 flex items-center justify-center text-red-600"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg></div>
-                                <div><p className="text-[11px] font-black text-gray-500 uppercase tracking-tighter">Needs Action</p><p className="text-2xl font-black text-gray-900">{stats.needsMaintenance}</p></div>
+                                <div className="min-w-0"><p className="text-[11px] font-black text-gray-500 uppercase tracking-tighter break-words">Needs Action</p><p className="text-2xl font-black text-gray-900 break-words">{stats.needsMaintenance}</p></div>
                             </div>
                             <div className="flex gap-3 text-[9px] font-black uppercase tracking-widest border-t border-gray-50 pt-2">
                                 <span className="text-red-500">Broken: {stats.conditionBreakdown?.['Broken'] || 0}</span>
@@ -1084,47 +1108,10 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                             </div>
                         </div>
                     </div>
+                    </>}
 
-                    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6 flex flex-wrap gap-4 items-end">
-                        <div className="flex-1 min-w-[200px]"><InputLabel value="Search Assets" className="font-black tracking-tighter text-xs" /><TextInput className="w-full mt-1 text-xs font-bold" placeholder="Search by name, tag, serial, model, or personnel..." value={search} onChange={e => setSearch(e.target.value)} /></div>
-
-                        <div className="w-36">
-                            <InputLabel value="Assigned To" className="font-black tracking-tighter text-xs" />
-                            <select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterPersonnel} onChange={e => { setFilterPersonnel(e.target.value); setCurrentPage(1); }}>
-                                <option value="">All Personnel</option>
-                                <option value="__unassigned__">Unassigned</option>
-                                {allPersonnel.map((p, idx) => <option key={idx} value={p}>{p}</option>)}
-                            </select>
-                        </div>
-
-                        <div className="w-36">
-                            <InputLabel value="Warranty" className="font-black tracking-tighter text-xs" />
-                            <select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterWarranty} onChange={e => setFilterWarranty(e.target.value)}>
-                                <option value="">All</option>
-                                <option value="Valid">Valid Warranty</option>
-                                <option value="Expired">Expired</option>
-                            </select>
-                        </div>
-                        
-                        <div className="w-36"><InputLabel value="Condition" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterCondition} onChange={e => setFilterCondition(e.target.value)}><option value="">All</option>{conditions.map(condition => <option key={condition} value={condition}>{condition}</option>)}</select></div>
-                        <div className="w-36"><InputLabel value="Branch" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterBranch} onChange={e => { setFilterBranch(e.target.value); setCurrentPage(1); }}><option value="">All Branches</option>{branchOptions.map((branch, idx) => <option key={idx} value={branch}>{branch}</option>)}</select></div>
-                        <div className="w-36"><InputLabel value="Category" className="font-black tracking-tighter text-xs" /><select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}><option value="">All Categories</option>{allCategories.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                        
-                        {isSuperAdmin && (
-                            <div className="w-36">
-                                <InputLabel value="Department" className="font-black tracking-tighter text-xs" />
-                                <select className="mt-1 block w-full border-gray-300 rounded-md shadow-sm text-xs font-bold py-2" value={filterDept} onChange={e => setFilterDept(e.target.value)}>
-                                    <option value="">All Depts</option>
-                                    {allDepartments.map(d => <option key={d} value={d}>{d}</option>)}
-                                </select>
-                            </div>
-                        )}
-                    </div>
-
+                    {activeTab === 'assetList' && <>
                     <div className="flex items-center gap-3 mb-6 mt-2 border-b border-gray-200 pb-4">
-                        <button type="button" onClick={clearAllFilters} className="text-xs font-black uppercase tracking-wider text-gray-600 hover:text-indigo-800 bg-white px-4 py-2 rounded shadow-sm border border-gray-300">
-                            Remove All Filters
-                        </button>
                         {!isAudit && (
                             <>
                                 <button type="button" onClick={handleToggleSelectAll} className="text-xs font-black uppercase tracking-wider text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-4 py-2 rounded shadow-sm border border-indigo-200">
@@ -1330,6 +1317,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                             </div>
                         </div>
                     </div>
+                    </>}
                     
                 </div>
             </div>
@@ -2009,51 +1997,6 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
                         </div>
                     )}
                     <div className="mt-6 flex justify-end border-t pt-4"><PrimaryButton type="button" onClick={() => setIsSavedImportsOpen(false)}>Close</PrimaryButton></div>
-                </div>
-            </Modal>
-
-            {/* PHOTO DECLINED HISTORY MODAL */}
-            <Modal show={isPhotoHistoryModalOpen} onClose={() => setIsPhotoHistoryModalOpen(false)} maxWidth="lg">
-                <div className="p-6">
-                    <div className="flex justify-between items-center mb-6 border-b pb-4">
-                        <h2 className="text-xl font-black text-gray-900">Photo Declined History</h2>
-                    </div>
-                    {safeRejectedSubmissions.length === 0 ? (
-                        <div className="text-center py-12">
-                            <svg className="mx-auto h-12 w-12 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                            <p className="mt-4 text-gray-500 font-medium">No declined photo submissions</p>
-                            <p className="mt-1 text-sm text-gray-400">No rejected photo submissions are currently available.</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                            {safeRejectedSubmissions.map(item => (
-                                <div key={item.id} className="bg-red-50 border border-red-200 rounded-lg p-4">
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-3 mb-2">
-                                                <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded text-sm">{item.asset?.asset_tag}</span>
-                                                <span className="font-bold text-gray-900">{item.asset?.name}</span>
-                                            </div>
-                                            <p className="text-sm text-gray-600">{item.rejection_reason || 'No rejection message was provided.'}</p>
-                                            <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
-                                                <span>Submitted by: {item.submitter?.name || '—'}</span>
-                                                <span>Submitted: {safeFormatDate(item.submitted_at || item.created_at)}</span>
-                                                <span>Reviewed: {safeFormatDate(item.reviewed_at)}</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex h-16 w-24 items-center justify-center rounded border border-red-200 bg-white px-2 text-center text-[10px] text-gray-500">
-                                            Rejected image deleted
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                    <div className="mt-6 flex justify-end">
-                        <PrimaryButton onClick={() => setIsPhotoHistoryModalOpen(false)} className="font-black uppercase tracking-wider text-xs">
-                            Close
-                        </PrimaryButton>
-                    </div>
                 </div>
             </Modal>
 
