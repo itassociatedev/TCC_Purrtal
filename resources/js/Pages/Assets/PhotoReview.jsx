@@ -54,7 +54,7 @@ export default function PhotoReview({ pendingSubmissions, rejectedSubmissions, p
 
     return <SidebarLayout activeModule="Assets" sidebarLinks={assetLinks} header={<h2 className="font-semibold text-xl text-gray-800">Asset Review</h2>}>
         <Head title="Asset Review" />
-        <div className="min-h-[calc(100dvh-8rem)] pb-[calc(env(safe-area-inset-bottom)+2rem)] py-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="min-h-[calc(100dvh-8rem)] pt-2 pb-[calc(env(safe-area-inset-bottom)+2rem)] max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="p-6 border-b space-y-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -18,7 +18,7 @@ export default function PhotoCapture({ assets = [], rejectedSubmissions = [], ne
 
     return <SidebarLayout activeModule="Assets" sidebarLinks={getAssetLinks(auth)} header={<h2 className="font-semibold text-xl text-gray-800">Asset Photo Capture</h2>}>
         <Head title="Asset Photo Capture" />
-        <div className="min-h-[calc(100dvh-8rem)] pb-[calc(env(safe-area-inset-bottom)+2rem)] py-8 max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div className="min-h-[calc(100dvh-8rem)] pt-2 pb-[calc(env(safe-area-inset-bottom)+2rem)] max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
             <form onSubmit={submit} className="bg-white rounded-xl shadow-sm border p-6 space-y-5">
                 <div><h1 className="text-lg font-black">Submit an asset photo</h1><p className="text-sm text-gray-500">Use the phone camera or choose an existing image. Photos remain private until IT approves them.</p></div>
                 {successMessage && <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">{successMessage}</div>}

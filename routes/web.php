@@ -454,6 +454,8 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
     Route::post('/assets/log-export', [\App\Http\Controllers\Admin\AssetController::class, 'logExport'])->name('.assets.log-export');
 
     Route::get('/assets', [\App\Http\Controllers\Admin\AssetController::class, 'index'])->name('.assets.index');
+    Route::get('/assets/stickers', [\App\Http\Controllers\Admin\AssetController::class, 'stickers'])->name('.assets.stickers');
+    Route::get('/assets/stickers/pdf', [\App\Http\Controllers\Admin\AssetController::class, 'stickerPdf'])->name('.assets.stickers.pdf');
     Route::get('/asset-entry', [\App\Http\Controllers\Admin\AssetController::class, 'entry'])->name('.assets.entry');
     Route::match(['get', 'post'], '/assets/export-excel', [\App\Http\Controllers\Admin\AssetController::class, 'exportExcel'])->name('.assets.export-excel');
     Route::get('/assets/next-tag', [\App\Http\Controllers\Admin\AssetController::class, 'nextTag'])->name('.assets.next-tag');

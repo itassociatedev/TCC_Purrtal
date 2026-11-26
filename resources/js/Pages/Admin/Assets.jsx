@@ -1091,7 +1091,7 @@ export default function Assets({ auth, assets, suppliers, branches, users, depar
             }
         >
             <Head title={isSuperAdmin ? "Asset Management" : "My Accountability"} />
-            <div className="py-6 sm:py-12">
+            <div className="pt-2 pb-6 sm:pb-12">
                 <div className="max-w-[100rem] mx-auto sm:px-6 lg:px-8">
 
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 overflow-visible">
