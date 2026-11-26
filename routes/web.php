@@ -358,6 +358,8 @@ Route::middleware(['auth', AdminMiddleware::class])->prefix('admin')->name('admi
     Route::post('/assets/log-export', [\App\Http\Controllers\Admin\AssetController::class, 'logExport'])->name('.assets.log-export');
 
     Route::get('/assets', [\App\Http\Controllers\Admin\AssetController::class, 'index'])->name('.assets.index');
+    Route::get('/assets/stickers', [\App\Http\Controllers\Admin\AssetController::class, 'stickers'])->name('.assets.stickers');
+    Route::get('/assets/stickers/pdf', [\App\Http\Controllers\Admin\AssetController::class, 'stickerPdf'])->name('.assets.stickers.pdf');
     Route::get('/asset-entry', [\App\Http\Controllers\Admin\AssetController::class, 'entry'])->name('.assets.entry');
     Route::post('/assets', [\App\Http\Controllers\Admin\AssetController::class, 'store'])->name('.assets.store');
     Route::put('/assets/{asset}', [\App\Http\Controllers\Admin\AssetController::class, 'update'])->name('.assets.update');

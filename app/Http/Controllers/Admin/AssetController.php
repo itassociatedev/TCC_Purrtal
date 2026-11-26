@@ -23,6 +23,7 @@ use App\Models\AssetPhotoSubmission;
 use App\Support\AssetAccess;
 use Illuminate\Support\Str;
 use App\Services\AccountabilityPdfService;
+use App\Services\AssetStickerPdfService;
 
 class AssetController extends Controller
 {
@@ -103,6 +104,37 @@ class AssetController extends Controller
         
         return Inertia::render('Admin/AssetMasterlist', [
             'assets' => $assets,
+        ]);
+    }
+
+    public function stickers()
+    {
+        abort_unless(\App\Support\AssetAccess::canPrintAssetStickers(Auth::user()), 403);
+
+        return Inertia::render('Admin/AssetStickers', [
+            'assets' => Asset::select(['id', 'name', 'asset_tag', 'branch', 'department'])
+                ->orderBy('asset_tag')
+                ->get(),
+        ]);
+    }
+
+    public function stickerPdf(Request $request, AssetStickerPdfService $stickerPdf)
+    {
+        abort_unless(\App\Support\AssetAccess::canPrintAssetStickers(Auth::user()), 403);
+
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'distinct', 'exists:assets,id'],
+        ]);
+
+        $assets = Asset::select(['id', 'name', 'asset_tag'])
+            ->whereIn('id', $validated['ids'])
+            ->orderBy('asset_tag')
+            ->get();
+
+        return response($stickerPdf->render($assets), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="asset-stickers.pdf"',
         ]);
     }
 

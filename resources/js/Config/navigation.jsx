@@ -784,6 +784,7 @@ export const getAssetLinks = (auth) => {
         || /(^|\s)it(\s|$)/i.test(`${userRole} ${userPosition}`);
     const isItIntern = isIT && (userRole.includes('intern') || userRole.includes('trainee') || userPosition.includes('intern') || userPosition.includes('trainee'));
     const canEnterAssets = isFullManager || isIT || ['inventory', 'procurement', 'audit'].some(value => userDepartment.includes(value) || userRole.includes(value));
+    const canPrintAssetStickers = isIT || userDepartment.includes('inventory') || userRole.includes('inventory') || userPosition.includes('inventory');
 
     const links = [];
 
@@ -792,14 +793,14 @@ export const getAssetLinks = (auth) => {
         links.push({
             label: 'Asset Overview',
             href: route('admin.assets.index'),
-            active: route().current('admin.assets.*'),
+            active: route().current('admin.assets.index'),
         });
     }
 
     if (isFullManager) {
         links.push({
             label: 'Add Asset',
-            href: '#',
+            href: `${route('admin.assets.entry')}?openAdd=1`,
             active: false,
             isAction: true,
         });
@@ -824,6 +825,14 @@ export const getAssetLinks = (auth) => {
             label: 'Asset Photo Capture',
             href: route('asset-photos.capture'),
             active: route().current('asset-photos.capture'),
+        });
+    }
+
+    if (canPrintAssetStickers) {
+        links.push({
+            label: 'Print Asset Stickers',
+            href: route('admin.assets.stickers'),
+            active: route().current('admin.assets.stickers*'),
         });
     }
 

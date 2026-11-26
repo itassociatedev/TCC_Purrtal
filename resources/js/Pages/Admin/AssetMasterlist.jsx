@@ -440,7 +440,7 @@ export default function AssetMasterlist({ auth, assets }) {
             }
         >
             <Head title="Accountability Module" />
-            <div className="py-6 sm:py-12">
+            <div className="pt-2 pb-6 sm:pb-12">
                 <div className="max-w-[100rem] mx-auto sm:px-6 lg:px-8">
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-6">

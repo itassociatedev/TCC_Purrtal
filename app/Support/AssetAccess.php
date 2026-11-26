@@ -55,6 +55,16 @@ class AssetAccess
         return self::isIt($user);
     }
 
+    public static function canPrintAssetStickers($user): bool
+    {
+        $department = self::value($user?->department?->name);
+        $role = self::value($user?->role?->name);
+        $position = self::value($user?->position?->name);
+
+        return self::isIt($user)
+            || self::containsAny($department . ' ' . $role . ' ' . $position, ['inventory']);
+    }
+
     public static function canViewOverview($user): bool
     {
         return self::isFullManager($user) || (self::isIt($user) && !self::isItIntern($user));

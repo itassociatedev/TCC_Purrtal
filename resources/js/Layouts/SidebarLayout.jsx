@@ -258,6 +258,7 @@ export default function SidebarLayout({
 
     // Determines if we are on the main overview/dashboard to conditionally render Quick Links and Resources
     const isMainDashboard = ['General', 'Dashboard'].includes(activeModule);
+    const isAccountabilityModule = ['Assets', 'Asset Masterlist'].includes(activeModule);
 
     const priorityLinkLabel = activeModule === 'HR' || activeModule === 'HR MENU' ? 'HR Admin Overview' : activeModule === 'HR ADMIN' ? 'HR Module Overview' : null;
     const priorityLink = priorityLinkLabel ? safeSidebarLinks.find((link) => link?.label === priorityLinkLabel) : null;
@@ -315,6 +316,7 @@ export default function SidebarLayout({
         'Add Asset': (<svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>),
         'Asset Entry': (<svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-13Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M8 8h8M8 12h8M8 16h4" /></svg>),
         'Asset Photo Capture': (<svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M4 7h3l1.5-2h7L17 7h3v12H4V7Z" /><circle cx="12" cy="13" r="3.5" /></svg>),
+        'Print Asset Stickers': (<svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6z" /><path strokeLinecap="round" strokeLinejoin="round" d="M18 12h.01" /></svg>),
         'Asset Review': (<svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="m5 12 4 4L19 6" /><path strokeLinecap="round" strokeLinejoin="round" d="M4 4h16v16H4z" /></svg>),
         'Photo History': (<svg className="h-4 w-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l2.5 2.5M20 12a8 8 0 1 1-2.34-5.66" /><path strokeLinecap="round" strokeLinejoin="round" d="M20 4v5h-5" /></svg>),
         // Icons restored from the block that was commented out in the Oct 25 merge
@@ -517,7 +519,7 @@ export default function SidebarLayout({
                                     return (
                                     <li key={index}>
                                         {link.isAction ? (
-                                            <button type="button" onClick={(e) => { e.preventDefault(); if ((link.label === 'Add Asset' || link.label === 'Asset Entry') && onTriggerAddModal) onTriggerAddModal(); }} className={`w-full flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition ease-in-out duration-150`}>
+                                            <button type="button" onClick={(e) => { e.preventDefault(); if (link.label !== 'Add Asset' && link.label !== 'Asset Entry') return; if (onTriggerAddModal) onTriggerAddModal(); else if (link.href && link.href !== '#') router.visit(link.href); }} className={`w-full flex items-center gap-2 rounded-lg px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition ease-in-out duration-150`}>
                                                 {renderSidebarIcon(link)} <span>{link.label}</span>
                                             </button>
                                         ) : (
@@ -763,7 +765,7 @@ export default function SidebarLayout({
                     </div>
                 </header>
                 <main className="flex-1 overflow-y-auto bg-gray-100 p-4 sm:p-6 lg:p-8">
-                    {header && <div className={`mb-6 rounded-lg bg-white p-4 shadow-sm ${headerClassName}`}>{header}</div>}
+                    {header && <div className={`${isAccountabilityModule ? 'mb-2' : 'mb-6'} rounded-lg bg-white p-4 shadow-sm ${headerClassName}`}>{header}</div>}
                     {children}
                 </main>
             </div>

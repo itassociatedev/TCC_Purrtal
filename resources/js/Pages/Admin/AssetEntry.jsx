@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import SidebarLayout from '@/Layouts/SidebarLayout';
 import PrimaryButton from '@/Components/PrimaryButton';
@@ -13,6 +13,12 @@ export default function AssetEntry({ assets = [], suppliers = [], departments = 
     const [showAddModal, setShowAddModal] = useState(false);
     const canAdd = canAddAssetRecords || assetPerms.canAddAssetRecords || false;
     const canEnter = canEnterAssets || assetPerms.canViewAssetManagement || false;
+
+    useEffect(() => {
+        if (canAdd && new URLSearchParams(window.location.search).get('openAdd') === '1') {
+            setShowAddModal(true);
+        }
+    }, [canAdd]);
 
     // Form for photo submission
     const [search, setSearch] = useState('');
@@ -48,7 +54,7 @@ export default function AssetEntry({ assets = [], suppliers = [], departments = 
     if (!canEnter) {
         return <SidebarLayout activeModule="Assets" sidebarLinks={assetLinks} header={<h2 className="font-semibold text-xl text-gray-800">Asset Entry</h2>}>
             <Head title="Asset Entry" />
-            <div className="min-h-[calc(100dvh-8rem)] pb-[calc(env(safe-area-inset-bottom)+2rem)] py-8 px-4 sm:px-6 lg:px-8">
+            <div className="min-h-[calc(100dvh-8rem)] pt-2 pb-[calc(env(safe-area-inset-bottom)+2rem)] px-4 sm:px-6 lg:px-8">
                 <section className="mx-auto max-w-4xl rounded-2xl border border-gray-100 bg-gray-50 p-6 shadow-sm">
                     <h1 className="text-xl font-black text-gray-900">Asset Entry</h1>
                     <p className="mt-2 text-sm text-gray-500">You do not have permission to access asset entry. Contact your administrator for access.</p>
@@ -57,9 +63,9 @@ export default function AssetEntry({ assets = [], suppliers = [], departments = 
         </SidebarLayout>;
     }
 
-    return <SidebarLayout activeModule="Assets" sidebarLinks={assetLinks} header={<h2 className="font-semibold text-xl text-gray-800">Asset Entry</h2>}>
+    return <SidebarLayout activeModule="Assets" sidebarLinks={assetLinks} onTriggerAddModal={canAdd ? () => setShowAddModal(true) : null} header={<h2 className="font-semibold text-xl text-gray-800">Asset Entry</h2>}>
         <Head title="Asset Entry" />
-        <div className="min-h-[calc(100dvh-8rem)] pb-[calc(env(safe-area-inset-bottom)+2rem)] py-8 max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div className="min-h-[calc(100dvh-8rem)] pt-2 pb-[calc(env(safe-area-inset-bottom)+2rem)] max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
             {/* Authorized entry users can add a new record to the shared inventory. */}
             {canAdd && (
                 <section className="rounded-2xl border border-indigo-100 bg-white p-6 shadow-sm">
